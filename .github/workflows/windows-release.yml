@@ -125,7 +125,19 @@ jobs:
           -o ./publish `
           --no-restore
 
+    - name: Check signing secrets
+      id: check_signing
+      shell: pwsh
+      run: |
+        if ("${{ secrets.CERTUM_USERNAME }}" -and "${{ secrets.CERTUM_OTP_TOKEN }}") {
+          echo "has_cert=true" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+        } else {
+          echo "has_cert=false" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          Write-Host "::warning::Code signing secrets not configured. Building unsigned."
+        }
+
     - name: Login, Compile, and Sign
+      if: steps.check_signing.outputs.has_cert == 'true'
       shell: pwsh
       env:
         SIGN_USERNAME: ${{ secrets.CERTUM_USERNAME }}
@@ -134,6 +146,17 @@ jobs:
         python -m pip install --upgrade pip
         pip install pyotp
         python -u tools/sign_and_pack.py ./publish tools/installer.iss
+
+    - name: Pack without signing
+      if: steps.check_signing.outputs.has_cert != 'true'
+      shell: pwsh
+      run: |
+        $iscc = Get-Command iscc -ErrorAction SilentlyContinue
+        if ($iscc) {
+          iscc /DMyAppVersion="$env:VERSION" tools/installer.iss
+        } else {
+          Write-Host "::warning::Inno Setup not found, skipping installer creation."
+        }
 
     - name: Create release zip
       shell: pwsh
