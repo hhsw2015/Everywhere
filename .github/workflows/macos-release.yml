@@ -56,27 +56,34 @@ jobs:
       with:
         global-json-file: global.json
 
+    - name: Check signing secrets
+      id: check_signing
+      run: |
+        if [ -n "${{ secrets.MACOS_CERTIFICATE_BASE64 }}" ] && [ -n "${{ secrets.MACOS_CERTIFICATE_PWD }}" ]; then
+          echo "has_cert=true" >> $GITHUB_OUTPUT
+        else
+          echo "has_cert=false" >> $GITHUB_OUTPUT
+          echo "::warning::Code signing certificate not configured. Building unsigned."
+        fi
+
     - name: Import Code Signing Certificate
+      if: steps.check_signing.outputs.has_cert == 'true'
       env:
         P12_BASE64: ${{ secrets.MACOS_CERTIFICATE_BASE64 }}
         P12_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PWD }}
       run: |
-        # Create a temporary keychain
         KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
         security create-keychain -p "" $KEYCHAIN_PATH
         security set-keychain-settings -lut 21600 $KEYCHAIN_PATH
         security unlock-keychain -p "" $KEYCHAIN_PATH
 
-        # Decode the P12 file
         CERT_PATH=$RUNNER_TEMP/certificate.p12
         echo "$P12_BASE64" | base64 --decode -o $CERT_PATH
 
-        # Download Apple Worldwide Developer Relations Certification Authority
         curl -fLo $RUNNER_TEMP/AppleRootCA-G2.cer https://www.apple.com/certificateauthority/AppleRootCA-G2.cer
         curl -fLo $RUNNER_TEMP/AppleRootCA-G3.cer https://www.apple.com/certificateauthority/AppleRootCA-G3.cer
         curl -fLo $RUNNER_TEMP/DeveloperIDG2CA.cer https://www.apple.com/certificateauthority/DeveloperIDG2CA.cer
 
-        # Import the P12 and the Intermediate Certificate
         security import $CERT_PATH -P "$P12_PASSWORD" -A -t cert -f pkcs12 -k $KEYCHAIN_PATH
         security import $RUNNER_TEMP/AppleRootCA-G2.cer -k $KEYCHAIN_PATH -T /usr/bin/codesign -T /usr/bin/productbuild || echo "AppleRootCA-G2 import failed or already exists"
         security import $RUNNER_TEMP/AppleRootCA-G3.cer -k $KEYCHAIN_PATH -T /usr/bin/codesign -T /usr/bin/productbuild || echo "AppleRootCA-G3 import failed or already exists"
@@ -94,20 +101,24 @@ jobs:
 
     - name: Publish
       env:
-        CODE_SIGN_KEY: ${{ secrets.CODE_SIGN_KEY }}
-        PACKAGE_SIGNING_KEY: ${{ secrets.PACKAGE_SIGNING_KEY }}
+        CODE_SIGN_KEY: ${{ steps.check_signing.outputs.has_cert == 'true' && secrets.CODE_SIGN_KEY || '' }}
+        PACKAGE_SIGNING_KEY: ${{ steps.check_signing.outputs.has_cert == 'true' && secrets.PACKAGE_SIGNING_KEY || '' }}
         SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
         CLIENT_ID: ${{ secrets.CLIENT_ID }}
         AI_GATEWAY_BASE_URL: ${{ vars.AI_GATEWAY_BASE_URL }}
         ACCOUNT_BASE_URL: ${{ vars.ACCOUNT_BASE_URL }}
         CLOUD_SYNC_BASE_URL: ${{ vars.CLOUD_SYNC_BASE_URL }}
       run: |
-        dotnet publish src/Everywhere.Mac/Everywhere.Mac.csproj \
+        SIGN_ARGS=""
+        if [ -n "$CODE_SIGN_KEY" ]; then
+          SIGN_ARGS="/p:CodesignKey=\"$CODE_SIGN_KEY\" /p:PackageSigningKey=\"$PACKAGE_SIGNING_KEY\""
+        fi
+
+        eval dotnet publish src/Everywhere.Mac/Everywhere.Mac.csproj \
           -c Release \
           -r ${{ matrix.runtime }} \
           /p:RuntimeIdentifier=${{ matrix.runtime }} \
-          /p:CodesignKey="$CODE_SIGN_KEY" \
-          /p:PackageSigningKey="$PACKAGE_SIGNING_KEY" \
+          $SIGN_ARGS \
           /p:Version="$VERSION" \
           /p:SentryDsn="$SENTRY_DSN" \
           /p:ClientId="$CLIENT_ID" \
@@ -119,21 +130,21 @@ jobs:
           --no-restore
 
     - name: Notarize App
+      if: steps.check_signing.outputs.has_cert == 'true'
       env:
         APPLE_ID: ${{ secrets.APPLE_ID }}
         APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         APPLE_PWD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
       run: |
-        # Find the generated PKG file in the publish output directory
         PKG_PATH=$(find ./publish -name "Everywhere-*.pkg" | head -n 1)
-        
+
         if [ -z "$PKG_PATH" ]; then
           echo "Error: .pkg file not found in ./publish!"
           exit 1
         fi
 
         echo "Found package: $PKG_PATH"
-        
+
         echo "Notarizing..."
         xcrun notarytool submit "$PKG_PATH" \
           --apple-id "$APPLE_ID" \
@@ -143,8 +154,18 @@ jobs:
 
         echo "Stapling..."
         xcrun stapler staple "$PKG_PATH"
-        
-        # Move to a known location for upload
+
+        mkdir -p ./release_assets
+        mv "$PKG_PATH" ./release_assets/Everywhere-${{ matrix.asset_name }}-v${{ env.VERSION }}.pkg
+
+    - name: Prepare unsigned release asset
+      if: steps.check_signing.outputs.has_cert != 'true'
+      run: |
+        PKG_PATH=$(find ./publish -name "Everywhere-*.pkg" | head -n 1)
+        if [ -z "$PKG_PATH" ]; then
+          echo "Error: .pkg file not found in ./publish!"
+          exit 1
+        fi
         mkdir -p ./release_assets
         mv "$PKG_PATH" ./release_assets/Everywhere-${{ matrix.asset_name }}-v${{ env.VERSION }}.pkg
 
