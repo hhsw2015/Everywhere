@@ -94,7 +94,7 @@ jobs:
         security list-keychain -d user -s $KEYCHAIN_PATH
 
     - name: Install Workloads
-      run: dotnet workload restore src/Everywhere.Mac/Everywhere.Mac.csproj
+      run: dotnet workload restore src/Everywhere.Mac/Everywhere.Mac.csproj --version 10.0.202
 
     - name: Restore
       run: |
