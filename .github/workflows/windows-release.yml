@@ -5,6 +5,11 @@ on:
     tags:
       - 'v*.*.*'
   workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag (e.g. v1.2.3). Must exist on the repo.'
+        required: true
+        type: string
 
 jobs:
   build-and-release:
@@ -17,26 +22,22 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v6
       with:
+        ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
         fetch-depth: 0
         submodules: true
         lfs: true
 
-    - name: Verify Tag (Manual Trigger)
+    - name: Set version from input (Manual Trigger)
       if: github.event_name == 'workflow_dispatch'
       shell: pwsh
       run: |
-        $tag = git describe --exact-match --tags HEAD 2>$null
-        if ($LASTEXITCODE -ne 0) {
-          Write-Error "Error: Current commit is not tagged."
-          exit 1
-        }
+        $tag = "${{ inputs.tag }}"
         if ($tag -notmatch '^v\d+\.\d+\.\d+') {
-          Write-Error "Error: Current commit tag '$tag' does not match vX.X.X format."
+          Write-Error "Error: Input tag '$tag' does not match vX.X.X format."
           exit 1
         }
-        Write-Host "Found valid tag: $tag"
-        echo "VERSION=$($tag -replace '^v','')" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-        echo "GITHUB_REF=refs/tags/$tag" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+        $version = $tag -replace '^v', ''
+        echo "VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
     
     - name: Get version from tag
       if: github.event_name != 'workflow_dispatch'

@@ -38,14 +38,25 @@ jobs:
           python -m pip install --upgrade pip
           pip install openai defusedxml
 
+      - name: Check API Key
+        id: check_key
+        run: |
+          if [ -z "${{ secrets.OPENAI_API_KEY }}" ]; then
+            echo "skip=true" >> $GITHUB_OUTPUT
+            echo "::warning::OPENAI_API_KEY secret is not configured. Skipping i18n sync."
+          else
+            echo "skip=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: Run i18n Sync Script
+        if: steps.check_key.outputs.skip != 'true'
         run: |
           python ./tools/sync_i18n.py --base-url "https://api.openai.com/v1" --model-id "gpt-4o-mini"
         env:
-          # Pass API key as an environment variable for security
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
 
       - name: Create Pull Request with Translations
+        if: steps.check_key.outputs.skip != 'true'
         uses: peter-evans/create-pull-request@v6
         with:
           token: ${{ secrets.GITHUB_TOKEN }}

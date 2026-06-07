@@ -5,6 +5,11 @@ on:
     tags:
       - 'v*.*.*'
   workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag (e.g. v1.2.3). Must exist on the repo.'
+        required: true
+        type: string
 
 jobs:
   build-mac:
@@ -25,22 +30,20 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v6
       with:
+        ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
         fetch-depth: 0
         submodules: true
         lfs: true
 
-    - name: Verify Tag (Manual Trigger)
+    - name: Set version from input (Manual Trigger)
       if: github.event_name == 'workflow_dispatch'
       run: |
-        TAG=$(git describe --exact-match --tags HEAD 2>/dev/null || echo "")
+        TAG="${{ inputs.tag }}"
         if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+ ]]; then
-          echo "Error: Current commit is not tagged with a valid version (vX.X.X)."
-          echo "Current tag: $TAG"
+          echo "Error: Input tag '$TAG' is not a valid version (vX.X.X)."
           exit 1
         fi
-        echo "Found valid tag: $TAG"
         echo "VERSION=${TAG#v}" >> $GITHUB_ENV
-        echo "GITHUB_REF=refs/tags/$TAG" >> $GITHUB_ENV
 
     - name: Get version from tag
       if: github.event_name != 'workflow_dispatch'
