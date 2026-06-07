@@ -11,6 +11,9 @@ on:
         required: true
         type: string
 
+permissions:
+  contents: write
+
 jobs:
   build-linux:
     strategy:
@@ -77,7 +80,7 @@ jobs:
           -c Release \
           -r ${{ matrix.runtime }} \
           -o ./publish \
-          -p:Version="$env:VERSION" \
+          -p:Version="$VERSION" \
           /p:SentryDsn="$SENTRY_DSN" \
           /p:ClientId="$CLIENT_ID" \
           /p:AIGatewayBaseUrl="$AI_GATEWAY_BASE_URL" \
