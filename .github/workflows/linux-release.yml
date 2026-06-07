@@ -55,6 +55,9 @@ jobs:
       with:
         dotnet-version: 10.0.x
 
+    - name: Install Workloads
+      run: dotnet workload restore src/Everywhere.Linux/Everywhere.Linux.csproj
+
     - name: Restore
       run: |
         dotnet restore Everywhere.Linux.slnx \
