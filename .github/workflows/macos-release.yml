@@ -117,6 +117,8 @@ jobs:
         SIGN_ARGS=""
         if [ -n "$CODE_SIGN_KEY" ]; then
           SIGN_ARGS="/p:CodesignKey=\"$CODE_SIGN_KEY\" /p:PackageSigningKey=\"$PACKAGE_SIGNING_KEY\""
+        else
+          SIGN_ARGS="/p:CodesignKey=- /p:PackageSigningKey="
         fi
 
         eval dotnet publish src/Everywhere.Mac/Everywhere.Mac.csproj \
@@ -166,13 +168,15 @@ jobs:
     - name: Prepare unsigned release asset
       if: steps.check_signing.outputs.has_cert != 'true'
       run: |
-        PKG_PATH=$(find ./publish -name "Everywhere-*.pkg" | head -n 1)
-        if [ -z "$PKG_PATH" ]; then
-          echo "Error: .pkg file not found in ./publish!"
-          exit 1
-        fi
         mkdir -p ./release_assets
-        mv "$PKG_PATH" ./release_assets/Everywhere-${{ matrix.asset_name }}-v${{ env.VERSION }}.pkg
+        APP_PATH=$(find ./publish -name "*.app" -type d | head -n 1)
+        if [ -n "$APP_PATH" ]; then
+          cd ./publish
+          zip -r ../release_assets/Everywhere-${{ matrix.asset_name }}-v${{ env.VERSION }}.zip "$(basename "$APP_PATH")"
+        else
+          cd ./publish
+          zip -r ../release_assets/Everywhere-${{ matrix.asset_name }}-v${{ env.VERSION }}.zip .
+        fi
 
     - name: Upload Release Assets
       uses: softprops/action-gh-release@v3
@@ -180,4 +184,4 @@ jobs:
         draft: true
         make_latest: false
         tag_name: v${{ env.VERSION }}
-        files: ./release_assets/*.pkg
+        files: ./release_assets/*
