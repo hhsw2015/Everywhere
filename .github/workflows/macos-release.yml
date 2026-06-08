@@ -96,7 +96,7 @@ jobs:
     - name: Install Workloads
       run: |
         dotnet workload update --version 10.0.202
-        dotnet workload restore src/Everywhere.Mac/Everywhere.Mac.csproj
+        dotnet workload install macos --skip-manifest-update
 
     - name: Restore
       run: |
