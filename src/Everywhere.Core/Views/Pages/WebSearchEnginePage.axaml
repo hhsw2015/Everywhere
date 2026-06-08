@@ -7,19 +7,22 @@
   xmlns:vm="clr-namespace:Everywhere.ViewModels" x:DataType="vm:WebSearchEnginePageViewModel"
   ClipToBounds="False">
   <shadui:NavigationView
-    MaxWidth="1600"
+    Padding="24,0,24,20" HeaderMaxWidth="1000"
     PageTransition="{x:Null}"
     PaneWidth="240" ScrollViewer.HorizontalScrollBarVisibility="Disabled"
     SelectedItem="{Binding SelectedWebSearchEngineProvider, Mode=TwoWay}">
     <shadui:NavigationView.Styles>
-      <Style Selector="Button#SetDefaultButton:disabled">
-        <Setter Property="Content" Value="{I18N {x:Static LocaleKey.WebSearchPage_SetDefaultButton_AlreadyDefaultContent}}"/>
+      <Style Selector="Button#SetDefaultButton">
+        <Setter Property="Content" Value="{I18N {x:Static LocaleKey.WebSearchPage_SetDefaultButton_Content}}"/>
+        <Style Selector="^:disabled">
+          <Setter Property="Content" Value="{I18N {x:Static LocaleKey.WebSearchPage_SetDefaultButton_AlreadyDefaultContent}}"/>
+        </Style>
       </Style>
     </shadui:NavigationView.Styles>
 
     <shadui:NavigationView.PaneHeader>
       <TextBlock
-        Classes="h4" Margin="0,6,0,12"
+        Classes="h4" Margin="0,18,0,8"
         VerticalAlignment="Center"
         Text="{I18N {x:Static LocaleKey.WebSearchPage_Title}}"
         TextTrimming="CharacterEllipsis"/>
@@ -27,8 +30,7 @@
 
     <shadui:NavigationView.PaneContent>
       <ListBox
-        Classes="Draggable" Padding="0"
-        BorderThickness="0"
+        Padding="0" BorderThickness="0"
         ItemsSource="{Binding WebSearchEngineProviders}"
         ScrollViewer.HorizontalScrollBarVisibility="Disabled"
         SelectedItem="{Binding SelectedWebSearchEngineProvider, Mode=TwoWay}">
@@ -76,6 +78,7 @@
 
     <shadui:NavigationView.Header>
       <Grid
+        Height="36" Margin="0,14,0,14"
         ColumnDefinitions="Auto,Auto,Auto,*,Auto" ColumnSpacing="4"
         IsVisible="{Binding SelectedWebSearchEngineProvider, Converter={x:Static ObjectConverters.IsNotNull}}">
         <Image
@@ -105,10 +108,10 @@
 
         <Button
           x:Name="SetDefaultButton" Classes="Primary"
-          Grid.Column="4" Margin="0,0,12,8"
-          VerticalAlignment="Center"
+          Grid.Column="4" VerticalAlignment="Center"
+          shadui:ButtonAssist.Icon="{LucideIconContent CircleCheck}"
           Command="{Binding SetDefaultCommand}"
-          Content="{I18N {x:Static LocaleKey.WebSearchPage_SetDefaultButton_Content}}"/>
+          CornerRadius="{DynamicResource FullCornerRadius}"/>
       </Grid>
     </shadui:NavigationView.Header>
 
@@ -116,7 +119,7 @@
       <DataTemplate DataType="c:IWebSearchEngineProvider">
         <ScrollViewer HorizontalScrollBarVisibility="Disabled">
           <v:SettingsItemsControl
-            Margin="0,0,12,0"
+            MaxWidth="1000" Margin="0,16,0,0"
             ItemsSource="{Binding SettingsItems, FallbackValue={x:Null}}"/>
         </ScrollViewer>
       </DataTemplate>

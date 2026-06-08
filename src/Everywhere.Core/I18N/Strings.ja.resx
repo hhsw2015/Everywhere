@@ -918,13 +918,13 @@
     <data name="CustomAssistantPage_CreateNewCustomAssistantButton_Content" xml:space="preserve">
         <value>作成</value>
     </data>
-    <data name="CustomAssistant_Name_Header" xml:space="preserve">
+    <data name="CustomAssistant_EmptyName_Watermark" xml:space="preserve">
         <value>名前</value>
     </data>
     <data name="CustomAssistant_Name_Description" xml:space="preserve">
         <value>アシスタントの名前を指定します。表示と区別のためにのみ使用されます。</value>
     </data>
-    <data name="CustomAssistant_Description_Header" xml:space="preserve">
+    <data name="CustomAssistant_EmptyDescription_Watermark" xml:space="preserve">
         <value>説明</value>
     </data>
     <data name="CustomAssistant_Description_Description" xml:space="preserve">
@@ -2716,6 +2716,12 @@
     <data name="TerminalView_ErrorToolTip_Tip" xml:space="preserve">
         <value>コマンドは {0} にて実行を開始し、{1} 秒後に失敗しました。終了コードは {2} です</value>
     </data>
+    <data name="Windows_BuiltInChatPlugin_Everything_SearchFiles_Description" xml:space="preserve">
+        <value>Everything を使用してファイルを検索します。</value>
+    </data>
+    <data name="Common_Advanced" xml:space="preserve">
+        <value>詳細</value>
+    </data>
     <data name="TerminalView_TerminalNoLongerAvailable" xml:space="preserve">
         <value>ターミナルはもはや利用できません</value>
     </data>
@@ -2841,5 +2847,26 @@
     </data>
     <data name="GoogleOptions_ThinkingLevel_Description" xml:space="preserve">
         <value>Gemini 3 モデルの思考の深さ。例：minimal、low、medium または high。</value>
+    </data>
+    <data name="SoftwareSettings_UpdateChannel_Header" xml:space="preserve">
+        <value>更新チャネル</value>
+    </data>
+    <data name="SoftwareSettings_UpdateChannel_Description" xml:space="preserve">
+        <value>非安定版チャネルには、新機能やバグ修正が最初に提供されますが、安定性に欠ける場合があります。</value>
+    </data>
+    <data name="ChatWindowSettings_Group_Attachment" xml:space="preserve">
+        <value>添付</value>
+    </data>
+    <data name="ChatWindowSettings_Group_Behavior" xml:space="preserve">
+        <value>動作</value>
+    </data>
+    <data name="ChatWindowSettings_Group_Display" xml:space="preserve">
+        <value>表示</value>
+    </data>
+    <data name="ChatPluginPage_McpFunctionsEmptyContent_EmptyListInstruction" xml:space="preserve">
+        <value>ツールリストを取得するには実行してください</value>
+    </data>
+    <data name="CodeBlock_ToggleTextWrap_Tip" xml:space="preserve">
+        <value>テキストの折り返しを切り替え</value>
     </data>
 </root>

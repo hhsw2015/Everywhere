@@ -918,13 +918,13 @@ La mia intelligenza è fornita da un grande modello linguistico e ho bisogno del
     <data name="CustomAssistantPage_CreateNewCustomAssistantButton_Content" xml:space="preserve">
         <value>Crea</value>
     </data>
-    <data name="CustomAssistant_Name_Header" xml:space="preserve">
+    <data name="CustomAssistant_EmptyName_Watermark" xml:space="preserve">
         <value>Nome</value>
     </data>
     <data name="CustomAssistant_Name_Description" xml:space="preserve">
         <value>Specifica il nome dell'assistente, usato solo per scopi di visualizzazione e differenziazione.</value>
     </data>
-    <data name="CustomAssistant_Description_Header" xml:space="preserve">
+    <data name="CustomAssistant_EmptyDescription_Watermark" xml:space="preserve">
         <value>Descrizione</value>
     </data>
     <data name="CustomAssistant_Description_Description" xml:space="preserve">
@@ -2716,6 +2716,12 @@ Data di rilascio: {2}</value>
     <data name="TerminalView_ErrorToolTip_Tip" xml:space="preserve">
         <value>Il comando è stato avviato il {0} ed è fallito dopo {1} secondi, codice di uscita {2}</value>
     </data>
+    <data name="Windows_BuiltInChatPlugin_Everything_SearchFiles_Description" xml:space="preserve">
+        <value>Cerca file con Everything.</value>
+    </data>
+    <data name="Common_Advanced" xml:space="preserve">
+        <value>Avanzate</value>
+    </data>
     <data name="TerminalView_TerminalNoLongerAvailable" xml:space="preserve">
         <value>Il terminale non è più disponibile</value>
     </data>
@@ -2841,5 +2847,26 @@ Data di rilascio: {2}</value>
     </data>
     <data name="GoogleOptions_ThinkingLevel_Description" xml:space="preserve">
         <value>Profondità del pensiero per il modello Gemini 3, ad esempio minimo, basso, medio o alto.</value>
+    </data>
+    <data name="SoftwareSettings_UpdateChannel_Header" xml:space="preserve">
+        <value>Canale Di Aggiornamento</value>
+    </data>
+    <data name="SoftwareSettings_UpdateChannel_Description" xml:space="preserve">
+        <value>Il canale non stabile include nuove funzionalità e correzioni di bug in anteprima, ma potrebbe non essere sufficientemente stabile.</value>
+    </data>
+    <data name="ChatWindowSettings_Group_Attachment" xml:space="preserve">
+        <value>Allegati</value>
+    </data>
+    <data name="ChatWindowSettings_Group_Behavior" xml:space="preserve">
+        <value>Comportamento</value>
+    </data>
+    <data name="ChatWindowSettings_Group_Display" xml:space="preserve">
+        <value>Visualizzazione</value>
+    </data>
+    <data name="ChatPluginPage_McpFunctionsEmptyContent_EmptyListInstruction" xml:space="preserve">
+        <value>Esegui per ottenere l'elenco degli strumenti</value>
+    </data>
+    <data name="CodeBlock_ToggleTextWrap_Tip" xml:space="preserve">
+        <value>Attiva/disattiva il ritorno a capo</value>
     </data>
 </root>

@@ -917,13 +917,13 @@ Zekam büyük dil modeli tarafından sağlanıyor, senin yardımınla yapıland�
     <data name="CustomAssistantPage_CreateNewCustomAssistantButton_Content" xml:space="preserve">
         <value>Oluştur</value>
     </data>
-    <data name="CustomAssistant_Name_Header" xml:space="preserve">
+    <data name="CustomAssistant_EmptyName_Watermark" xml:space="preserve">
         <value>İsim</value>
     </data>
     <data name="CustomAssistant_Name_Description" xml:space="preserve">
         <value>Asistanın adını belirtin; yalnızca görüntüleme ve ayırt etme amacıyla kullanılır.</value>
     </data>
-    <data name="CustomAssistant_Description_Header" xml:space="preserve">
+    <data name="CustomAssistant_EmptyDescription_Watermark" xml:space="preserve">
         <value>Açıklama</value>
     </data>
     <data name="CustomAssistant_Description_Description" xml:space="preserve">
@@ -2715,6 +2715,12 @@ Yayın tarihi: {2}</value>
     <data name="TerminalView_ErrorToolTip_Tip" xml:space="preserve">
         <value>Komut {0} tarihinde başladı, {1} saniye sonra başarısız oldu, çıkış kodu {2}</value>
     </data>
+    <data name="Windows_BuiltInChatPlugin_Everything_SearchFiles_Description" xml:space="preserve">
+        <value>Everything ile dosyaları ara.</value>
+    </data>
+    <data name="Common_Advanced" xml:space="preserve">
+        <value>Gelişmiş</value>
+    </data>
     <data name="TerminalView_TerminalNoLongerAvailable" xml:space="preserve">
         <value>Terminal Artık Kullanılamıyor</value>
     </data>
@@ -2840,5 +2846,26 @@ Yayın tarihi: {2}</value>
     </data>
     <data name="GoogleOptions_ThinkingLevel_Description" xml:space="preserve">
         <value>Gemini 3 modelinin düşünme derinliği, örneğin minimal, düşük, orta veya yüksek.</value>
+    </data>
+    <data name="SoftwareSettings_UpdateChannel_Header" xml:space="preserve">
+        <value>Güncelleme Kanalı</value>
+    </data>
+    <data name="SoftwareSettings_UpdateChannel_Description" xml:space="preserve">
+        <value>Kararlı olmayan kanal, yeni özelliklerin ve hata düzeltmelerinin ilk kez sunulduğu yerdir, ancak yeterince stabil olmayabilir.</value>
+    </data>
+    <data name="ChatWindowSettings_Group_Attachment" xml:space="preserve">
+        <value>Ekler</value>
+    </data>
+    <data name="ChatWindowSettings_Group_Behavior" xml:space="preserve">
+        <value>Davranış</value>
+    </data>
+    <data name="ChatWindowSettings_Group_Display" xml:space="preserve">
+        <value>Görüntü</value>
+    </data>
+    <data name="ChatPluginPage_McpFunctionsEmptyContent_EmptyListInstruction" xml:space="preserve">
+        <value>Araç listesini almak için çalıştırın</value>
+    </data>
+    <data name="CodeBlock_ToggleTextWrap_Tip" xml:space="preserve">
+        <value>Metin satır sonunu değiştir</value>
     </data>
 </root>

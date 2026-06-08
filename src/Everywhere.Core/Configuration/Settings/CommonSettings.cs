@@ -35,18 +35,21 @@ public sealed partial class CommonSettings : SettingsBase, ISettingsCategory
     [DynamicResourceKey(
         LocaleKey.SoftwareSettings_SoftwareUpdate_Header,
         LocaleKey.SoftwareSettings_SoftwareUpdate_Description)]
+    [SettingsItem(Group = "_")]
     public SettingsControl<SoftwareUpdateControl> SoftwareUpdate { get; } = new();
 
     [ObservableProperty]
     [DynamicResourceKey(
         LocaleKey.SoftwareSettings_IsAutomaticUpdateCheckEnabled_Header,
         LocaleKey.SoftwareSettings_IsAutomaticUpdateCheckEnabled_Description)]
+    [SettingsItem(Group = "_")]
     public partial bool IsAutomaticUpdateCheckEnabled { get; set; } = true;
 
     [ObservableProperty]
     [DynamicResourceKey(
         LocaleKey.SoftwareSettings_UpdateChannel_Header,
         LocaleKey.SoftwareSettings_UpdateChannel_Description)]
+    [SettingsItem(Group = LocaleKey.Common_Advanced)]
     public partial UpdateChannel UpdateChannel { get; set; } = UpdateChannel.Unknown;
 
 #if WINDOWS
@@ -59,7 +62,7 @@ public sealed partial class CommonSettings : SettingsBase, ISettingsCategory
     [DynamicResourceKey(
         LocaleKey.SoftwareSettings_RestartAsAdministrator_Header,
         LocaleKey.SoftwareSettings_RestartAsAdministrator_Description)]
-    [SettingsItem(IsVisibleBindingPath = $"!{nameof(IsAdministrator)}")]
+    [SettingsItem(IsVisibleBindingPath = $"!{nameof(IsAdministrator)}", Group = "_")]
     [SupportedOSPlatform("windows")]
     public SettingsControl<RestartAsAdministratorControl> RestartAsAdministrator { get; } = new();
 
@@ -67,7 +70,7 @@ public sealed partial class CommonSettings : SettingsBase, ISettingsCategory
     [DynamicResourceKey(
         LocaleKey.SoftwareSettings_IsStartupEnabled_Header,
         LocaleKey.SoftwareSettings_IsStartupEnabled_Description)]
-    [SettingsItem(IsEnabledBindingPath = $"{nameof(IsAdministrator)} || !{nameof(IsAdministratorStartupEnabled)}")]
+    [SettingsItem(IsEnabledBindingPath = $"{nameof(IsAdministrator)} || !{nameof(IsAdministratorStartupEnabled)}", Group = "_")]
     [SupportedOSPlatform("windows")]
     public bool IsStartupEnabled
     {
@@ -106,7 +109,7 @@ public sealed partial class CommonSettings : SettingsBase, ISettingsCategory
     [DynamicResourceKey(
         LocaleKey.SoftwareSettings_IsAdministratorStartupEnabled_Header,
         LocaleKey.SoftwareSettings_IsAdministratorStartupEnabled_Description)]
-    [SettingsItem(IsVisibleBindingPath = nameof(IsStartupEnabled), IsEnabledBindingPath = nameof(IsAdministrator))]
+    [SettingsItem(IsVisibleBindingPath = nameof(IsStartupEnabled), IsEnabledBindingPath = nameof(IsAdministrator), Group = "_")]
     [SupportedOSPlatform("windows")]
     public bool IsAdministratorStartupEnabled
     {
@@ -137,6 +140,7 @@ public sealed partial class CommonSettings : SettingsBase, ISettingsCategory
     [DynamicResourceKey(
         LocaleKey.SoftwareSettings_IsUserStartupEnabled_Header,
         LocaleKey.SoftwareSettings_IsUserStartupEnabled_Description)]
+    [SettingsItem(Group = "_")]
     public bool IsUserStartupEnabled
     {
         get => NativeHelper.IsUserStartupEnabled;
@@ -160,6 +164,7 @@ public sealed partial class CommonSettings : SettingsBase, ISettingsCategory
     [DynamicResourceKey(
         LocaleKey.SoftwareSettings_DiagnosticData_Header,
         LocaleKey.SoftwareSettings_DiagnosticData_Description)]
+    [SettingsItem(Group = "_")]
     public bool DiagnosticData
     {
         get => !Telemetry.SendOnlyNecessaryData;
@@ -174,5 +179,6 @@ public sealed partial class CommonSettings : SettingsBase, ISettingsCategory
     [DynamicResourceKey(
         LocaleKey.SoftwareSettings_DebugFeatures_Header,
         LocaleKey.SoftwareSettings_DebugFeatures_Description)]
+    [SettingsItem(Group = LocaleKey.Common_Advanced)]
     public SettingsControl<DebugFeaturesControl> DebugFeatures { get; } = new();
 }

@@ -918,13 +918,13 @@ Mi inteligencia está impulsada por un modelo de lenguaje grande, y necesito que
     <data name="CustomAssistantPage_CreateNewCustomAssistantButton_Content" xml:space="preserve">
         <value>Crear</value>
     </data>
-    <data name="CustomAssistant_Name_Header" xml:space="preserve">
+    <data name="CustomAssistant_EmptyName_Watermark" xml:space="preserve">
         <value>Nombre</value>
     </data>
     <data name="CustomAssistant_Name_Description" xml:space="preserve">
         <value>Especifica el nombre del asistente, usado únicamente para propósitos de visualización y diferenciación.</value>
     </data>
-    <data name="CustomAssistant_Description_Header" xml:space="preserve">
+    <data name="CustomAssistant_EmptyDescription_Watermark" xml:space="preserve">
         <value>Descripción</value>
     </data>
     <data name="CustomAssistant_Description_Description" xml:space="preserve">
@@ -2716,6 +2716,12 @@ Fecha de lanzamiento: {2}</value>
     <data name="TerminalView_ErrorToolTip_Tip" xml:space="preserve">
         <value>El comando comenzó a ejecutarse en {0} y falló después de {1} segundos, código de salida {2}</value>
     </data>
+    <data name="Windows_BuiltInChatPlugin_Everything_SearchFiles_Description" xml:space="preserve">
+        <value>Usa Everything para buscar archivos.</value>
+    </data>
+    <data name="Common_Advanced" xml:space="preserve">
+        <value>Avanzado</value>
+    </data>
     <data name="TerminalView_TerminalNoLongerAvailable" xml:space="preserve">
         <value>El terminal ya no está disponible</value>
     </data>
@@ -2841,5 +2847,26 @@ Fecha de lanzamiento: {2}</value>
     </data>
     <data name="GoogleOptions_ThinkingLevel_Description" xml:space="preserve">
         <value>Profundidad de pensamiento del modelo Gemini 3, como mínimo, bajo, medio o alto.</value>
+    </data>
+    <data name="SoftwareSettings_UpdateChannel_Header" xml:space="preserve">
+        <value>Canal De Actualización</value>
+    </data>
+    <data name="SoftwareSettings_UpdateChannel_Description" xml:space="preserve">
+        <value>El canal de versión inestable incluye nuevas funciones y correcciones de errores lanzadas primero, pero puede no ser lo suficientemente estable.</value>
+    </data>
+    <data name="ChatWindowSettings_Group_Attachment" xml:space="preserve">
+        <value>Adjunto</value>
+    </data>
+    <data name="ChatWindowSettings_Group_Behavior" xml:space="preserve">
+        <value>Comportamiento</value>
+    </data>
+    <data name="ChatWindowSettings_Group_Display" xml:space="preserve">
+        <value>Mostrar</value>
+    </data>
+    <data name="ChatPluginPage_McpFunctionsEmptyContent_EmptyListInstruction" xml:space="preserve">
+        <value>Ejecuta para obtener la lista de herramientas</value>
+    </data>
+    <data name="CodeBlock_ToggleTextWrap_Tip" xml:space="preserve">
+        <value>Alternar ajuste de texto</value>
     </data>
 </root>

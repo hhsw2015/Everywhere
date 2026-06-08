@@ -918,13 +918,13 @@ My intelligence is powered by large language models, and I need your help to con
     <data name="CustomAssistantPage_CreateNewCustomAssistantButton_Content" xml:space="preserve">
         <value>Create</value>
     </data>
-    <data name="CustomAssistant_Name_Header" xml:space="preserve">
+    <data name="CustomAssistant_EmptyName_Watermark" xml:space="preserve">
         <value>Name</value>
     </data>
     <data name="CustomAssistant_Name_Description" xml:space="preserve">
         <value>Specify the name of the assistant for display and differentiation purposes.</value>
     </data>
-    <data name="CustomAssistant_Description_Header" xml:space="preserve">
+    <data name="CustomAssistant_EmptyDescription_Watermark" xml:space="preserve">
         <value>Description</value>
     </data>
     <data name="CustomAssistant_Description_Description" xml:space="preserve">
@@ -2716,6 +2716,12 @@ Release date: {2}</value>
     <data name="TerminalView_ErrorToolTip_Tip" xml:space="preserve">
         <value>Command started at {0}, failed after {1} seconds with exit code {2}</value>
     </data>
+    <data name="Windows_BuiltInChatPlugin_Everything_SearchFiles_Description" xml:space="preserve">
+        <value>Search files using Everything search engine.</value>
+    </data>
+    <data name="Common_Advanced" xml:space="preserve">
+        <value>Advanced</value>
+    </data>
     <data name="TerminalView_TerminalNoLongerAvailable" xml:space="preserve">
         <value>Terminal No Longer Available</value>
     </data>
@@ -2843,9 +2849,24 @@ Release date: {2}</value>
         <value>For Gemini 3 models, set thinking depth such as minimal, low, medium, or high.</value>
     </data>
     <data name="SoftwareSettings_UpdateChannel_Header" xml:space="preserve">
-        <value />
+        <value>Update Channel</value>
     </data>
     <data name="SoftwareSettings_UpdateChannel_Description" xml:space="preserve">
-        <value />
+        <value>The unstable channel includes new features and bug fixes released first, but may not be stable.</value>
+    </data>
+    <data name="ChatWindowSettings_Group_Attachment" xml:space="preserve">
+        <value>Attachments</value>
+    </data>
+    <data name="ChatWindowSettings_Group_Behavior" xml:space="preserve">
+        <value>Behavior</value>
+    </data>
+    <data name="ChatWindowSettings_Group_Display" xml:space="preserve">
+        <value>Display</value>
+    </data>
+    <data name="ChatPluginPage_McpFunctionsEmptyContent_EmptyListInstruction" xml:space="preserve">
+        <value>Run to get the tool list</value>
+    </data>
+    <data name="CodeBlock_ToggleTextWrap_Tip" xml:space="preserve">
+        <value>Toggle Text Wrap</value>
     </data>
 </root>

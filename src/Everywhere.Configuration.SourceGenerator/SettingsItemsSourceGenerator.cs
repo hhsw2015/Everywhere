@@ -107,9 +107,41 @@ public sealed class SettingsItemsSourceGenerator : IIncrementalGenerator
                     sb.AppendLine("if (field is not null) return field;").AppendLine();
                     sb.AppendLine("field = new global::Everywhere.Configuration.SettingsItems();");
 
-                    foreach (var meta in members.Where(meta => !string.IsNullOrWhiteSpace(meta.HeaderKey)))
+                    foreach (var g in members.Where(meta => !string.IsNullOrWhiteSpace(meta.HeaderKey)).GroupBy(meta => meta.Group))
                     {
-                        EmitItemRecursive(ctx, sb, meta, $"item_{meta.Name.Replace(".", "_")}", meta.Name, "field");
+                        if (g.Key is { } groupName)
+                        {
+                            var groupVar = $"group_{EscapeVarName(groupName)}";
+                            sb.AppendLine($"var {groupVar} = new global::Everywhere.Configuration.SettingsGroupItem");
+                            sb.AppendLine("{");
+                            using (sb.Indent())
+                            {
+                                sb.AppendLine($"GroupName = \"{EscapeStringForCode(groupName)}\",");
+                                sb.AppendLine($"HeaderKey = new global::Everywhere.I18N.DirectResourceKey(\"{EscapeStringForCode(groupName)}\"),");
+                            }
+                            sb.AppendLine("};");
+                            sb.AppendLine();
+
+                            // Collect children into a list and assign to Children property
+                            var childrenVar = $"{groupVar}_children";
+                            sb.AppendLine($"var {childrenVar} = new global::Everywhere.Configuration.SettingsItems();");
+
+                            foreach (var meta in g)
+                            {
+                                EmitItemRecursive(ctx, sb, meta, $"item_{meta.Name.Replace(".", "_")}", meta.Name, childrenVar);
+                            }
+
+                            sb.AppendLine($"{groupVar}.Children = {childrenVar};");
+                            sb.AppendLine($"field.Add({groupVar});");
+                            sb.AppendLine();
+                        }
+                        else
+                        {
+                            foreach (var meta in g)
+                            {
+                                EmitItemRecursive(ctx, sb, meta, $"item_{meta.Name.Replace(".", "_")}", meta.Name, "field");
+                            }
+                        }
                     }
 
                     sb.AppendLine("return field;");
@@ -421,7 +453,7 @@ public sealed class SettingsItemsSourceGenerator : IIncrementalGenerator
             sb.AppendLine("});");
 
             ApplyHeaderAndDescription(sb, wrapperItemName, metadata);
-            ApplySettingsItemDocumentUrl(sb, wrapperItemName, metadata);
+            ApplySettingsItemAttributes(sb, wrapperItemName, metadata);
 
             // Replace itemName with the wrapper
             itemName = wrapperItemName;
@@ -461,6 +493,13 @@ public sealed class SettingsItemsSourceGenerator : IIncrementalGenerator
         @"DynamicResourceKey\s*\(\s*(?<headerKey>[^,)\r\n]+)(\s*,\s*(?<descriptionKey>[^)\r\n]+))?\s*\)",
         RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.ExplicitCapture | RegexOptions.Singleline);
 
+    /// <summary>
+    /// Matches group name in SettingsItem(Group = LocaleKey.SomeGroup)
+    /// </summary>
+    private static readonly Regex GroupKeyRegex = new(
+        @"Group\s*=\s*LocaleKey\.(?<groupKey>\w+)",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.ExplicitCapture | RegexOptions.Singleline);
+
     private static PropertyMetadata BuildPropertyMetadata(ISymbol symbol, ISymbol attributeOwner, string name, ITypeSymbol? type = null)
     {
         type ??= ((IPropertySymbol)symbol).Type;
@@ -470,7 +509,22 @@ public sealed class SettingsItemsSourceGenerator : IIncrementalGenerator
         var match = code is not null ? DynamicResourceKeyRegex.Match(code) : null;
         var headerKey = match?.Groups["headerKey"].Value.Trim() ?? string.Empty;
         var descriptionKey = match?.Groups["descriptionKey"].Success == true ? match.Groups["descriptionKey"].Value.Trim() : null;
-        return new PropertyMetadata(symbol, attributeOwner, name, kind, type, headerKey, descriptionKey);
+        var settingsItemAttribute = attributeOwner.GetAttribute(KnownAttributes.SettingsItem);
+        var group = settingsItemAttribute?.GetNamedArgument("Group") switch
+        {
+            { Kind: TypedConstantKind.Error } => settingsItemAttribute.ApplicationSyntaxReference?.GetSyntax().ToString() switch
+            {
+                { } syntax => GroupKeyRegex.Match(syntax) switch
+                {
+                    { Success: true } groupMatch => groupMatch.Groups["groupKey"].Value.Trim().Trim('"'),
+                    _ => null
+                },
+                _ => null,
+            },
+            { IsNull: false, Value: string g } => g,
+            _ => null
+        };
+        return new PropertyMetadata(symbol, attributeOwner, name, kind, type, headerKey, descriptionKey, group);
     }
 
     private static void ApplyTypeSpecificMetadata(IndentedStringBuilder sb, string itemName, in PropertyMetadata metadata)
@@ -563,8 +617,9 @@ public sealed class SettingsItemsSourceGenerator : IIncrementalGenerator
         if (settingsItemAttribute.GetNamedArgument("Classes") is { IsNull: false, Values: { Length: > 0 } classesArray })
         {
             var classes = classesArray
-                .Where(c => c.Value is string)
-                .Select(c => $"\"{c.Value!.ToString()!.Replace("\"", "\\\"")}\"");
+                .Select(c => c.Value?.ToString())
+                .OfType<string>()
+                .Select(v => $"\"{v.Replace("\"", "\\\"")}\"");
             sb.AppendLine($"{itemName}.Classes.AddRange(new string[] {{ {string.Join(", ", classes)} }});");
         }
 
@@ -573,7 +628,10 @@ public sealed class SettingsItemsSourceGenerator : IIncrementalGenerator
             sb.AppendLine($"{itemName}.IsExperimental = {isExperimental.ToString().ToLowerInvariant()};");
         }
 
-        ApplySettingsItemDocumentUrl(sb, itemName, metadata);
+        if (settingsItemAttribute.GetNamedArgument("DocumentUrl") is { IsNull: false, Value: string documentUrl })
+        {
+            sb.AppendLine($"{itemName}.DocumentUrl = {ToLiteral(documentUrl)};");
+        }
 
         if (settingsItemAttribute.GetNamedArgument("IsEnabledBindingPath") is { IsNull: false, Value: string isEnabledBindingPath })
         {
@@ -586,17 +644,6 @@ public sealed class SettingsItemsSourceGenerator : IIncrementalGenerator
             sb.Append($"{itemName}[!global::Everywhere.Configuration.SettingsItem.IsVisibleProperty] = ");
             EmitBinding(sb, isVisibleBindingPath, BindingMode.OneWay).AppendLine(";");
         }
-    }
-
-    private static void ApplySettingsItemDocumentUrl(
-        IndentedStringBuilder sb,
-        string itemName,
-        in PropertyMetadata metadata)
-    {
-        if (metadata.AttributeOwner.GetAttribute(KnownAttributes.SettingsItem) is not { } settingsItemAttribute) return;
-        if (settingsItemAttribute.GetNamedArgument("DocumentUrl") is not { IsNull: false, Value: string documentUrl }) return;
-
-        sb.AppendLine($"{itemName}.DocumentUrl = {ToLiteral(documentUrl)};");
     }
 
     private static void ApplySettingsItems(
@@ -829,22 +876,32 @@ public sealed class SettingsItemsSourceGenerator : IIncrementalGenerator
         return value switch
         {
             null => "null",
-            string s => $"\"{EscapeString(s)}\"",
+            string s => $"\"{EscapeStringForCode(s)}\"",
             bool b => b ? "true" : "false",
             double d => $"{d.ToString("R", CultureInfo.InvariantCulture)}d",
             float f => $"{f.ToString("R", CultureInfo.InvariantCulture)}f",
             _ => value.ToString()
         };
+    }
 
-        static string EscapeString(string str)
+    private static string EscapeStringForCode(string str)
+    {
+        return str
+            .Replace("\\", @"\\")
+            .Replace("\"", "\\\"")
+            .Replace("\n", "\\n")
+            .Replace("\r", "\\r")
+            .Replace("\t", "\\t");
+    }
+
+    private static string EscapeVarName(string name)
+    {
+        var sb = new StringBuilder();
+        foreach (var c in name)
         {
-            return str
-                .Replace("\\", @"\\")
-                .Replace("\"", "\\\"")
-                .Replace("\n", "\\n")
-                .Replace("\r", "\\r")
-                .Replace("\t", "\\t");
+            sb.Append(char.IsLetterOrDigit(c) || c == '_' ? c : '_');
         }
+        return sb.ToString();
     }
 
     private static ItemKind Classify(ISymbol symbol, ITypeSymbol type)
@@ -996,7 +1053,8 @@ public sealed class SettingsItemsSourceGenerator : IIncrementalGenerator
         ItemKind Kind,
         ITypeSymbol Type,
         string HeaderKey,
-        string? DescriptionKey
+        string? DescriptionKey,
+        string? Group
     );
 
     private enum BindingMode

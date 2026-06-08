@@ -917,13 +917,13 @@ Meine Intelligenz wird von einem großen Sprachmodell bereitgestellt, und ich be
     <data name="CustomAssistantPage_CreateNewCustomAssistantButton_Content" xml:space="preserve">
         <value>Erstellen</value>
     </data>
-    <data name="CustomAssistant_Name_Header" xml:space="preserve">
+    <data name="CustomAssistant_EmptyName_Watermark" xml:space="preserve">
         <value>Name</value>
     </data>
     <data name="CustomAssistant_Name_Description" xml:space="preserve">
         <value>Geben Sie den Namen des Assistenten an, der ausschließlich zu Anzeige- und Unterscheidungszwecken verwendet wird.</value>
     </data>
-    <data name="CustomAssistant_Description_Header" xml:space="preserve">
+    <data name="CustomAssistant_EmptyDescription_Watermark" xml:space="preserve">
         <value>Beschreibung</value>
     </data>
     <data name="CustomAssistant_Description_Description" xml:space="preserve">
@@ -2715,6 +2715,12 @@ Veröffentlichungsdatum: {2}</value>
     <data name="TerminalView_ErrorToolTip_Tip" xml:space="preserve">
         <value>Befehl begann um {0}, fehlgeschlagen nach {1} Sekunden, Rückgabewert: {2}</value>
     </data>
+    <data name="Windows_BuiltInChatPlugin_Everything_SearchFiles_Description" xml:space="preserve">
+        <value>Verwenden Sie Everything, um Dateien zu suchen.</value>
+    </data>
+    <data name="Common_Advanced" xml:space="preserve">
+        <value>Erweitert</value>
+    </data>
     <data name="TerminalView_TerminalNoLongerAvailable" xml:space="preserve">
         <value>Terminal nicht mehr verfügbar</value>
     </data>
@@ -2840,5 +2846,26 @@ Veröffentlichungsdatum: {2}</value>
     </data>
     <data name="GoogleOptions_ThinkingLevel_Description" xml:space="preserve">
         <value>Denktiefe des Gemini 3 Modells, z. B. minimal, niedrig, mittel oder hoch.</value>
+    </data>
+    <data name="SoftwareSettings_UpdateChannel_Header" xml:space="preserve">
+        <value>Aktualisierungskanal</value>
+    </data>
+    <data name="SoftwareSettings_UpdateChannel_Description" xml:space="preserve">
+        <value>Der instabile Kanal enthält neue Funktionen und Fehlerbehebungen, die zuerst veröffentlicht werden, könnte jedoch weniger stabil sein.</value>
+    </data>
+    <data name="ChatWindowSettings_Group_Attachment" xml:space="preserve">
+        <value>Anhänge</value>
+    </data>
+    <data name="ChatWindowSettings_Group_Behavior" xml:space="preserve">
+        <value>Verhalten</value>
+    </data>
+    <data name="ChatWindowSettings_Group_Display" xml:space="preserve">
+        <value>Anzeige</value>
+    </data>
+    <data name="ChatPluginPage_McpFunctionsEmptyContent_EmptyListInstruction" xml:space="preserve">
+        <value>Führen Sie aus, um die Werkzeugliste zu erhalten</value>
+    </data>
+    <data name="CodeBlock_ToggleTextWrap_Tip" xml:space="preserve">
+        <value>Textumbruch umschalten</value>
     </data>
 </root>
