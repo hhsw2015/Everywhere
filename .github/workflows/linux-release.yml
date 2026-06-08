@@ -82,9 +82,8 @@ jobs:
 
     - name: Build deb
       run: |
-        dotnet tool install --global dotnet-deb
-        cd src/Everywhere.Linux
-        dotnet deb -c Release -r ${{ matrix.runtime }} -o ../../ /p:Version=${{ env.VERSION }}
+        chmod +x ./src/Everywhere.Linux/packaging_deb.sh
+        ./src/Everywhere.Linux/packaging_deb.sh ${{ matrix.runtime }} ${{ env.VERSION }} ./publish
 
     - name: Build AppImage
       run: |
