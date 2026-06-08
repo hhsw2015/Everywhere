@@ -115,6 +115,9 @@ public class App : Application, IRecipient<ApplicationMessage>
             DefaultBitmapDecoder.Shared
         ];
 
+        FileBasedAsyncImageLoaderCache.CacheDirectory = RuntimeConstants.EnsureCacheFolderPath("img");
+        AsyncImageLoader.DefaultCache = FileBasedAsyncImageLoaderCache.Shared;
+
         MarkdownNode.Register<MathInlineNode>();
         MarkdownNode.Register<MathBlockNode>();
 
