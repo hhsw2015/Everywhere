@@ -7,9 +7,7 @@ namespace Everywhere.Linux.Common;
 
 public sealed partial class LinuxUpdateHandler : IPlatformUpdateHandler
 {
-    public string OsIdentifier => RuntimeInformation.ProcessArchitecture == Architecture.Arm64 ? "linux-arm64" : "linux-x64";
-
-    private static string OsString => RuntimeInformation.ProcessArchitecture == Architecture.Arm64 ? "Linux-arm64" : "Linux-x64";
+    public string OsIdentifier => RuntimeInformation.ProcessArchitecture == Architecture.Arm64 ? "Linux-arm64" : "Linux-x64";
 
     private static string OsDistro
     {
@@ -55,7 +53,7 @@ public sealed partial class LinuxUpdateHandler : IPlatformUpdateHandler
         {
             return null; // Unsupported package type
         }
-        var assetNameSuffix = $"-{OsString}-v{versionString}.{assetType}";
+        var assetNameSuffix = $"-{OsIdentifier}-v{versionString}.{assetType}";
 
         return assets.FirstOrDefault(a => a.Name.EndsWith(assetNameSuffix, StringComparison.OrdinalIgnoreCase));
     }
@@ -93,10 +91,10 @@ public sealed partial class LinuxUpdateHandler : IPlatformUpdateHandler
         return Task.CompletedTask;
     }
 
-    public bool TryParseUpdatePackageVersion(string fileName, out Version? version)
+    public bool TryParseUpdatePackageVersion(string fileName, out SemanticVersion? version)
     {
         var match = VersionRegex().Match(fileName);
-        if (match.Success && Version.TryParse(match.Groups["version"].Value, out version))
+        if (match.Success && SemanticVersion.TryParse(match.Groups["version"].Value, out version))
         {
             return true;
         }
@@ -105,6 +103,6 @@ public sealed partial class LinuxUpdateHandler : IPlatformUpdateHandler
         return false;
     }
 
-    [GeneratedRegex(@"-v(?<version>\d+\.\d+\.\d+(\.\d+)?)\.(deb|rpm)$", RegexOptions.IgnoreCase | RegexOptions.Compiled, "zh-CN")]
+    [GeneratedRegex(@"-v(?<version>\d+\.\d+\.\d+(?:\.\d+)?(?:-[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*)?)\.(deb|rpm)$", RegexOptions.IgnoreCase | RegexOptions.Compiled, "zh-CN")]
     private static partial Regex VersionRegex();
 }

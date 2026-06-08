@@ -4,7 +4,10 @@ namespace Everywhere.Common;
 
 public interface ISoftwareUpdater : INotifyPropertyChanged
 {
-    Version CurrentVersion { get; }
+    /// <summary>
+    /// Gets the effective update channel used for update checks.
+    /// </summary>
+    UpdateChannel UpdateChannel { get; }
 
     /// <summary>
     /// Gets a value indicating whether an update is available.

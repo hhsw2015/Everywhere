@@ -43,6 +43,12 @@ public sealed partial class CommonSettings : SettingsBase, ISettingsCategory
         LocaleKey.SoftwareSettings_IsAutomaticUpdateCheckEnabled_Description)]
     public partial bool IsAutomaticUpdateCheckEnabled { get; set; } = true;
 
+    [ObservableProperty]
+    [DynamicResourceKey(
+        LocaleKey.SoftwareSettings_UpdateChannel_Header,
+        LocaleKey.SoftwareSettings_UpdateChannel_Description)]
+    public partial UpdateChannel UpdateChannel { get; set; } = UpdateChannel.Unknown;
+
 #if WINDOWS
     [JsonIgnore]
     [SettingsItemIgnore]

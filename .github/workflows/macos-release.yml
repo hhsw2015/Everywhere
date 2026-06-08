@@ -1,4 +1,4 @@
-﻿name: (macOS) Build and Release
+name: (macOS) Build and Release
 
 on:
   push:
@@ -38,21 +38,13 @@ jobs:
         submodules: true
         lfs: true
 
-    - name: Set version from input (Manual Trigger)
-      if: github.event_name == 'workflow_dispatch'
-      run: |
-        TAG="${{ inputs.tag }}"
-        if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+ ]]; then
-          echo "Error: Input tag '$TAG' is not a valid version (vX.X.X)."
-          exit 1
-        fi
-        echo "VERSION=${TAG#v}" >> $GITHUB_ENV
+    - name: Setup Node
+      uses: actions/setup-node@v4
+      with:
+        node-version: '22'
 
-    - name: Get version from tag
-      if: github.event_name != 'workflow_dispatch'
-      id: get_version
-      run: |
-        echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_ENV
+    - name: Resolve version
+      run: node scripts/resolve-release-tag.mjs "$GITHUB_REF_NAME"
 
     - name: Setup .NET
       uses: actions/setup-dotnet@v5
@@ -126,7 +118,8 @@ jobs:
           -r ${{ matrix.runtime }} \
           /p:RuntimeIdentifier=${{ matrix.runtime }} \
           $SIGN_ARGS \
-          /p:Version="$VERSION" \
+          /p:Version="$VERSION_PREFIX" \
+          /p:SemanticVersion="$SEMANTIC_VERSION" \
           /p:SentryDsn="$SENTRY_DSN" \
           /p:ClientId="$CLIENT_ID" \
           /p:AIGatewayBaseUrl="$AI_GATEWAY_BASE_URL" \
@@ -184,5 +177,7 @@ jobs:
       with:
         draft: true
         make_latest: false
-        tag_name: v${{ env.VERSION }}
+        prerelease: ${{ env.PRERELEASE }}
+        generate_release_notes: ${{ env.PRERELEASE }}
+        tag_name: ${{ env.RELEASE_TAG }}
         files: ./release_assets/*

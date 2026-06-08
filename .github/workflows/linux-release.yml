@@ -1,4 +1,4 @@
-﻿name: (Linux) Build and Release
+name: (Linux) Build and Release
 
 on:
   push:
@@ -37,21 +37,13 @@ jobs:
         submodules: true
         lfs: true
 
-    - name: Set version from input (Manual Trigger)
-      if: github.event_name == 'workflow_dispatch'
-      run: |
-        TAG="${{ inputs.tag }}"
-        if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+ ]]; then
-          echo "Error: Input tag '$TAG' is not a valid version (vX.X.X)."
-          exit 1
-        fi
-        echo "VERSION=${TAG#v}" >> $GITHUB_ENV
+    - name: Setup Node
+      uses: actions/setup-node@v4
+      with:
+        node-version: '22'
 
-    - name: Get version from tag
-      if: github.event_name != 'workflow_dispatch'
-      id: get_version
-      run: |
-        echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_ENV
+    - name: Resolve version
+      run: node scripts/resolve-release-tag.mjs "$GITHUB_REF_NAME"
 
     - name: Setup .NET
       uses: actions/setup-dotnet@v5.2.0
@@ -68,8 +60,6 @@ jobs:
 
     - name: Publish
       env:
-        CODE_SIGN_KEY: ${{ secrets.CODE_SIGN_KEY }}
-        PACKAGE_SIGNING_KEY: ${{ secrets.PACKAGE_SIGNING_KEY }}
         SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
         CLIENT_ID: ${{ secrets.CLIENT_ID }}
         AI_GATEWAY_BASE_URL: ${{ vars.AI_GATEWAY_BASE_URL }}
@@ -80,7 +70,8 @@ jobs:
           -c Release \
           -r ${{ matrix.runtime }} \
           -o ./publish \
-          -p:Version="$VERSION" \
+          -p:Version="$VERSION_PREFIX" \
+          -p:SemanticVersion="$SEMANTIC_VERSION" \
           /p:SentryDsn="$SENTRY_DSN" \
           /p:ClientId="$CLIENT_ID" \
           /p:AIGatewayBaseUrl="$AI_GATEWAY_BASE_URL" \
@@ -89,20 +80,11 @@ jobs:
           --self-contained true \
           --no-restore
 
-    - name: Build Deb Package
+    - name: Build deb
       run: |
-        chmod +x ./src/Everywhere.Linux/packaging_deb.sh
-        ./src/Everywhere.Linux/packaging_deb.sh ${{ matrix.runtime }} ${{ env.VERSION }} ./publish
-
-    - name: Install AppImage Build Dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y squashfs-tools libfuse2
-
-    - name: Create Archive
-      run: |
-        sudo apt-get update && sudo apt-get install -y zstd
-        tar -I 'zstd -19 -T0' -cf Everywhere-${{ matrix.asset_name }}-v${{ env.VERSION }}.tar.zst -C ./publish .
+        dotnet tool install --global dotnet-deb
+        cd src/Everywhere.Linux
+        dotnet deb -c Release -r ${{ matrix.runtime }} -o ../../ /p:Version=${{ env.VERSION }}
 
     - name: Build AppImage
       run: |
@@ -114,6 +96,9 @@ jobs:
       with:
         draft: true
         make_latest: false
+        prerelease: ${{ env.PRERELEASE }}
+        generate_release_notes: ${{ env.PRERELEASE }}
+        tag_name: ${{ env.RELEASE_TAG }}
         files: |
           Everywhere-${{ matrix.asset_name }}-v${{ env.VERSION }}.deb
           Releases/Everywhere-${{ matrix.asset_name }}-v${{ env.VERSION }}.AppImage
