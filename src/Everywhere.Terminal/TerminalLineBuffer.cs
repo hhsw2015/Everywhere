@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Text;
 
 namespace Everywhere.Terminal;
@@ -32,7 +33,7 @@ public sealed class TerminalLineBuffer : IReadOnlyList<TerminalLine>
         MaxLines = maxLines;
     }
 
-    internal event EventHandler? Changed;
+    public event EventHandler? Changed;
 
     public int MaxLines { get; }
 
@@ -355,7 +356,7 @@ public sealed class TerminalLineBuffer : IReadOnlyList<TerminalLine>
         }
     }
 
-    internal List<TerminalLine> CopyLines(int? maxVisibleLines, out long version)
+    public List<TerminalLine> CopyLines(int? maxVisibleLines, out long version)
     {
         if (maxVisibleLines <= 0)
         {

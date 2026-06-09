@@ -1,6 +1,4 @@
-using Everywhere.Terminal;
-
-namespace Everywhere.Core.Tests.Terminal;
+namespace Everywhere.Terminal.Tests;
 
 /// <summary>
 /// Unit tests for <see cref="OutputCleaner"/> — pure functions with no side effects.

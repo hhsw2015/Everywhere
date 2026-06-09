@@ -18,7 +18,7 @@ public sealed class TerminalRun(string commandLine, int maxOutputLines = Termina
 
     public int? ExitCode { get; private set; }
 
-    internal Task Completion => _completion.Task;
+    public Task Completion => _completion.Task;
 
     public Task WaitAsync(CancellationToken cancellationToken = default)
     {

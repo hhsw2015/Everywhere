@@ -1,7 +1,6 @@
 using System.Text;
-using Everywhere.Terminal;
 
-namespace Everywhere.Core.Tests.Terminal;
+namespace Everywhere.Terminal.Tests;
 
 /// <summary>
 /// Unit tests for <see cref="PtyTextDecoder"/> — incremental UTF-8 decoding

@@ -1,6 +1,4 @@
-using Everywhere.Terminal;
-
-namespace Everywhere.Core.Tests.Terminal;
+namespace Everywhere.Terminal.Tests;
 
 [TestFixture]
 public class TerminalLineBufferTests

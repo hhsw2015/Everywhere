@@ -18,11 +18,11 @@ jobs:
     - name: Setup Node
       uses: actions/setup-node@v4
       with:
-        node-version: '22'
+        node-version: '24'
 
     - name: Notify update server
       env:
-        UPDATE_SERVER_URL: ${{ secrets.UPDATE_SERVER_URL }}
-        EVERYWHERE_RELEASE_ADMIN_SECRET: ${{ secrets.EVERYWHERE_RELEASE_ADMIN_SECRET }}
+        UPDATE_SERVER_URL: ${{ vars.UPDATE_SERVER_URL }}
+        RELEASE_ADMIN_SECRET: ${{ secrets.RELEASE_ADMIN_SECRET }}
         GITHUB_TOKEN: ${{ github.token }}
       run: node scripts/update-server-publish.mjs

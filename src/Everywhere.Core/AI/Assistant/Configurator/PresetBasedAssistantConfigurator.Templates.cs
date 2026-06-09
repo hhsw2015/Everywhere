@@ -184,6 +184,17 @@ partial class PresetBasedAssistantConfigurator
             [
                 new ModelDefinitionTemplate
                 {
+                    ModelId = "claude-opus-4-8",
+                    Name = "Claude Opus 4.8",
+                    SupportsToolCall = true,
+                    SupportsTemperature = false,
+                    InputModalities = Modalities.Text | Modalities.Image | Modalities.Pdf,
+                    OutputModalities = Modalities.Text,
+                    ContextLimit = 1_000_000,
+                    OutputLimit = 128_000
+                },
+                new ModelDefinitionTemplate
+                {
                     ModelId = "claude-opus-4-7",
                     Name = "Claude Opus 4.7",
                     SupportsToolCall = true,
@@ -293,6 +304,17 @@ partial class PresetBasedAssistantConfigurator
             [
                 new ModelDefinitionTemplate
                 {
+                    ModelId = "gemini-3.5-flash",
+                    Name = "Gemini 3.5 Flash",
+                    SupportsToolCall = true,
+                    InputModalities = Modalities.Text | Modalities.Image | Modalities.Audio | Modalities.Video | Modalities.Pdf,
+                    OutputModalities = Modalities.Text,
+                    ContextLimit = 1_048_576,
+                    OutputLimit = 65_536,
+                    IsDefault = true
+                },
+                new ModelDefinitionTemplate
+                {
                     ModelId = "gemini-3.1-pro-preview",
                     Name = "Gemini 3.1 Pro Preview",
                     SupportsToolCall = true,
@@ -310,7 +332,6 @@ partial class PresetBasedAssistantConfigurator
                     OutputModalities = Modalities.Text,
                     ContextLimit = 1_048_576,
                     OutputLimit = 65_536,
-                    IsDefault = true,
                     Specializations = ModelSpecializations.ContextCompression
                 },
                 new ModelDefinitionTemplate
@@ -439,14 +460,24 @@ partial class PresetBasedAssistantConfigurator
             [
                 new ModelDefinitionTemplate
                 {
+                    ModelId = "MiniMax-M3",
+                    Name = "MiniMax-M3",
+                    SupportsToolCall = true,
+                    InputModalities = Modalities.Text |  Modalities.Image | Modalities.Video,
+                    OutputModalities = Modalities.Text,
+                    ContextLimit = 1_000_000,
+                    OutputLimit = 128_000,
+                    IsDefault = true
+                },
+                new ModelDefinitionTemplate
+                {
                     ModelId = "MiniMax-M2.7",
                     Name = "MiniMax-M2.7",
                     SupportsToolCall = true,
                     InputModalities = Modalities.Text,
                     OutputModalities = Modalities.Text,
                     ContextLimit = 204_800,
-                    OutputLimit = 131_072,
-                    IsDefault = true
+                    OutputLimit = 131_072
                 },
                 new ModelDefinitionTemplate
                 {

@@ -1,5 +1,4 @@
 using System.Text;
-using Everywhere.Terminal;
 using Microsoft.Extensions.Logging;
 using NSubstitute;
 using Porta.Pty;
@@ -7,7 +6,7 @@ using Serilog;
 using Serilog.Core;
 using ILogger = Microsoft.Extensions.Logging.ILogger;
 
-namespace Everywhere.Core.Tests.Terminal;
+namespace Everywhere.Terminal.Tests;
 
 /// <summary>
 /// Integration tests for PTY execution strategies (Rich and None) and real shell command execution.

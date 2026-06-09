@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import { parseReleaseTag } from "./release-tag.mjs";
 
-const requiredEnv = ["UPDATE_SERVER_URL", "EVERYWHERE_RELEASE_ADMIN_SECRET", "GITHUB_EVENT_PATH", "GITHUB_TOKEN"];
+const requiredEnv = ["UPDATE_SERVER_URL", "RELEASE_ADMIN_SECRET", "GITHUB_EVENT_PATH", "GITHUB_TOKEN"];
 for (const name of requiredEnv) {
   if (!process.env[name]) {
     throw new Error(`${name} is required.`);
@@ -81,7 +81,7 @@ const timestamp = new Date().toISOString();
 const body = JSON.stringify(metadata);
 const signedPayload = [method, pathname, timestamp, body].join("\n");
 const signature = crypto
-  .createHmac("sha256", process.env.EVERYWHERE_RELEASE_ADMIN_SECRET)
+  .createHmac("sha256", process.env.RELEASE_ADMIN_SECRET)
   .update(signedPayload)
   .digest("hex");
 
