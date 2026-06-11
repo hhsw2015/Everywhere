@@ -95,16 +95,13 @@
         <value>Установите горячую клавишу для вызова окна чата в любое время.</value>
     </data>
     <data name="Assistant_Temperature_Header" xml:space="preserve">
-        <value>Температура (“Креативность”)</value>
+        <value>Temperature</value>
     </data>
     <data name="Assistant_Temperature_Description" xml:space="preserve">
-        <value>Как правило, чем выше значение, тем более креативные и воображаемые ответы. Чем ниже значение, тем более строгими будут ответы. Значения выше 1.0 могут привести к искажению вывода в некоторых моделях. Рекомендуется не изменять top_p одновременно. Если возникли ошибки, попробуйте восстановить значения по умолчанию.</value>
+        <value>Более высокие значения (например, 0.8) делают вывод более случайным, в то время как более низкие значения (например, 0.2) делают его более целенаправленным и определенным. Мы обычно рекомендуем настраивать этот параметр или параметр top_p, но не оба одновременно.</value>
     </data>
     <data name="Assistant_TopP_Header" xml:space="preserve">
-        <value>top_p (“Открытость Мысли”)</value>
-    </data>
-    <data name="Assistant_TopP_Description" xml:space="preserve">
-        <value>Контролирует разнообразие текстов, генерируемых моделью. Обычно, чем выше значение, тем больше потенциальных ответов принимает модель, чем ниже - тем более вероятный ответ будет выбран. Рекомендуется не изменять температуру одновременно. Если возникли ошибки, попробуйте восстановить значения по умолчанию.</value>
+        <value>top_p</value>
     </data>
     <data name="WebSearchEnginePluginSettings_SelectedProvider_Description" xml:space="preserve">
         <value>Выберите поставщика услуг для поисковых систем.</value>
@@ -2773,10 +2770,10 @@
     <data name="OpenAIOptions_ThinkingType_Description" xml:space="preserve">
         <value>Необязательный нестандартный переключатель совместимости OpenAI, например, enabled или disabled. По умолчанию оставьте пустым.</value>
     </data>
-    <data name="OpenAIOptions_ReasoningEffortLevel_Header" xml:space="preserve">
+    <data name="OpenAIOptions_ReasoningEffort_Header" xml:space="preserve">
         <value>Уровень усилия размышлений (reasoning_effort)</value>
     </data>
-    <data name="OpenAIOptions_ReasoningEffortLevel_Description" xml:space="preserve">
+    <data name="OpenAIOptions_ReasoningEffort_Description" xml:space="preserve">
         <value>Необязательный уровень силы размышлений модели. Поддерживаемые значения зависят от модели, по умолчанию оставьте пустым.</value>
     </data>
     <data name="OpenAIResponsesOptions_ReasoningEffort_Header" xml:space="preserve">
@@ -2868,5 +2865,26 @@
     </data>
     <data name="CodeBlock_ToggleTextWrap_Tip" xml:space="preserve">
         <value>Переключить перенос текста</value>
+    </data>
+    <data name="Assistant_PresencePenalty_Header" xml:space="preserve">
+        <value>presence_penalty</value>
+    </data>
+    <data name="Assistant_PresencePenalty_Description" xml:space="preserve">
+        <value>Положительное значение наказывает за появление новых слов в текущем тексте, увеличивая вероятность обсуждения новой темы моделью.</value>
+    </data>
+    <data name="Assistant_TopP_Description" xml:space="preserve">
+        <value>Метод, альтернативный температурному семплированию, называется «ядровое семплирование», при котором модель учитывает только токены с вероятностной массой в верхней части top_p. Таким образом, 0.1 означает, что учитываются только токены с вероятностной массой в верхних 10%.</value>
+    </data>
+    <data name="Assistant_FrequencyPenalty_Header" xml:space="preserve">
+        <value>frequency_penalty</value>
+    </data>
+    <data name="Assistant_FrequencyPenalty_Description" xml:space="preserve">
+        <value>Положительное значение наказывает за частоту появления новых слов в текущем тексте, снижая вероятность того, что модель будет повторять одну и ту же строку.</value>
+    </data>
+    <data name="Assistant_TopK_Header" xml:space="preserve">
+        <value>top_k</value>
+    </data>
+    <data name="Assistant_TopK_Description" xml:space="preserve">
+        <value>Для каждого последующего токена семплирование происходит только из K лучших вариантов.</value>
     </data>
 </root>

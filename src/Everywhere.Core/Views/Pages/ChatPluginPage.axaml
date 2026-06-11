@@ -232,7 +232,7 @@
           IsVisible="{Binding SelectedMcpPlugin, Converter={x:Static ObjectConverters.IsNotNull}}"
           Orientation="Horizontal" Spacing="6">
           <Button
-            Classes="Primary"
+            Classes="Secondary"
             shadui:ButtonAssist.Icon="{LucideIconContent Kind=Play}"
             shadui:ButtonAssist.ShowProgress="{Binding IsBusy}"
             Command="{Binding StartMcpPluginCommand}"
@@ -242,7 +242,7 @@
             Foreground="{DynamicResource SuccessColor}"
             IsVisible="{Binding !SelectedMcpPlugin?.IsRunning, TargetNullValue={x:False}}"/>
           <Button
-            Classes="Primary"
+            Classes="Secondary"
             shadui:ButtonAssist.Icon="{LucideIconContent Kind=Square}"
             shadui:ButtonAssist.ShowProgress="{Binding IsBusy}"
             Command="{Binding StopMcpPluginCommand}"

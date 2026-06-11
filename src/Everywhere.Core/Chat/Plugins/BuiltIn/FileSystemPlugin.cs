@@ -297,7 +297,7 @@ public sealed class FileSystemPlugin : BuiltInChatPlugin
                     if (matches.Count == 0) return;
 
                     var localResults = new List<string>();
-                    var locations = new HashSet<ChatPluginFileReference.Location>();
+                    var locations = new HashSet<ChatPluginFileReferenceLocation>();
 
                     foreach (Match match in matches)
                     {
@@ -306,8 +306,7 @@ public sealed class FileSystemPlugin : BuiltInChatPlugin
                         var lineStart = content.LastIndexOf('\n', match.Index) + 1;
                         var lineNumber = content.AsSpan(0, match.Index).Count('\n') + 1;
                         var columnNumber = match.Index - lineStart + 1;
-
-                        locations.Add(new ChatPluginFileReference.Location(lineNumber, columnNumber));
+                        locations.Add(new ChatPluginFileReferenceLocation(lineNumber, columnNumber));
 
                         var start = Math.Max(0, match.Index - maxCharsBetweenMatches);
                         var end = Math.Min(content.Length, match.Index + match.Length + maxCharsBetweenMatches);

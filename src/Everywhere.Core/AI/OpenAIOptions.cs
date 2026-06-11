@@ -25,8 +25,47 @@ public sealed partial class OpenAIOptions : ObservableObject
 
     [ObservableProperty]
     [DynamicResourceKey(
-        LocaleKey.OpenAIOptions_ReasoningEffortLevel_Header,
-        LocaleKey.OpenAIOptions_ReasoningEffortLevel_Description)]
-    [SettingsItem(Group = "_", DocumentUrl = "https://platform.openai.com/docs/api-reference/chat/create-chat-completion")]
-    public partial string? ReasoningEffortLevel { get; set; }
+        LocaleKey.OpenAIOptions_ReasoningEffort_Header,
+        LocaleKey.OpenAIOptions_ReasoningEffort_Description)]
+    [SettingsItem(
+        Group = "_",
+        DocumentUrl =
+            "https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create#(resource)%20chat.completions%20%3E%20(method)%20create%20%3E%20(params)%200.non_streaming%20%3E%20(param)%20reasoning_effort%20%3E%20(schema)")]
+    public partial string? ReasoningEffort { get; set; }
+
+    [DynamicResourceKey(
+        LocaleKey.Assistant_Temperature_Header,
+        LocaleKey.Assistant_Temperature_Description)]
+    [SettingsItem(
+        Group = "_",
+        DocumentUrl =
+            "https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create#(resource)%20chat.completions%20%3E%20(method)%20create%20%3E%20(params)%200.non_streaming%20%3E%20(param)%20temperature%20%3E%20(schema)")]
+    public string? Temperature { get; set; }
+
+    [DynamicResourceKey(
+        LocaleKey.Assistant_TopP_Header,
+        LocaleKey.Assistant_TopP_Description)]
+    [SettingsItem(
+        Group = "_",
+        DocumentUrl =
+            "https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create#(resource)%20chat.completions%20%3E%20(method)%20create%20%3E%20(params)%200.non_streaming%20%3E%20(param)%20top_p%20%3E%20(schema)")]
+    public string? TopP { get; set; }
+
+    [DynamicResourceKey(
+        LocaleKey.Assistant_PresencePenalty_Header,
+        LocaleKey.Assistant_PresencePenalty_Description)]
+    [SettingsItem(
+        Group = "_",
+        DocumentUrl =
+            "https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create#(resource)%20chat.completions%20%3E%20(method)%20create%20%3E%20(params)%200.non_streaming%20%3E%20(param)%20presence_penalty%20%3E%20(schema)")]
+    public string? PresencePenalty { get; set; }
+
+    [DynamicResourceKey(
+        LocaleKey.Assistant_FrequencyPenalty_Header,
+        LocaleKey.Assistant_FrequencyPenalty_Description)]
+    [SettingsItem(
+        Group = "_",
+        DocumentUrl =
+            "https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create#(resource)%20chat.completions%20%3E%20(method)%20create%20%3E%20(params)%200.non_streaming%20%3E%20(param)%20frequency_penalty%20%3E%20(schema)")]
+    public string? FrequencyPenalty { get; set; }
 }

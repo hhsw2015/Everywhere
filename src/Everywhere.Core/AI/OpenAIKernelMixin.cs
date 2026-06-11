@@ -148,7 +148,11 @@ public class OpenAIKernelMixin : KernelMixin
 
             return new ChatCompletionOptions
             {
-                ReasoningEffortLevel = options.ReasoningEffortLevel switch
+                Temperature = float.TryParse(options.Temperature, out var temperature) ? temperature : null,
+                TopP = float.TryParse(options.TopP, out var topP) ? topP : null,
+                PresencePenalty = float.TryParse(options.PresencePenalty, out var presencePenalty) ? presencePenalty : null,
+                FrequencyPenalty = float.TryParse(options.FrequencyPenalty, out var frequencyPenalty) ? frequencyPenalty : null,
+                ReasoningEffortLevel = options.ReasoningEffort switch
                 {
                     { Length: > 0 } reasoningEffort => new ChatReasoningEffortLevel?(reasoningEffort),
                     _ => null

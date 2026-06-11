@@ -78,7 +78,7 @@ public sealed class OpenAIResponsesKernelMixin : KernelMixin
             }
         }
 
-        private CreateResponseOptions? RawRepresentationFactory(IChatClient _)
+        private CreateResponseOptions RawRepresentationFactory(IChatClient _)
         {
             var options = owner._options;
             var reasoningEffortLevel = options.ReasoningEffort switch
@@ -91,14 +91,10 @@ public sealed class OpenAIResponsesKernelMixin : KernelMixin
                 { Length: > 0 } => new ResponseReasoningSummaryVerbosity(options.ReasoningSummary),
                 _ => (ResponseReasoningSummaryVerbosity?)null
             };
-
-            if (reasoningEffortLevel is null && reasoningSummaryVerbosity is null)
-            {
-                return null;
-            }
-
             return new CreateResponseOptions
             {
+                Temperature = float.TryParse(options.Temperature, out var temperature) ? temperature : null,
+                TopP = float.TryParse(options.TopP, out var topP) ? topP : null,
                 ReasoningOptions = new ResponseReasoningOptions
                 {
                     ReasoningEffortLevel = reasoningEffortLevel,

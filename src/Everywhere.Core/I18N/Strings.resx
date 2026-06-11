@@ -95,16 +95,13 @@
         <value>Set a shortcut to invoke the chat window at any time.</value>
     </data>
     <data name="Assistant_Temperature_Header" xml:space="preserve">
-        <value>Temperature</value>
+        <value>temperature</value>
     </data>
     <data name="Assistant_Temperature_Description" xml:space="preserve">
-        <value>Generally, a higher value results in more creative and imaginative responses, while a lower value tends to be more precise. Some models may produce garbled output if the value exceeds 1.0. It is usually recommended not to change top_p simultaneously. If you encounter errors, try reverting to default values.</value>
+        <value>Higher values like 0.8 will make the output more random, while lower values like 0.2 will make it more focused and deterministic. We generally recommend altering this or top_p but not both.</value>
     </data>
     <data name="Assistant_TopP_Header" xml:space="preserve">
-        <value>Top P</value>
-    </data>
-    <data name="Assistant_TopP_Description" xml:space="preserve">
-        <value>Controls the diversity of the model's output text. Typically, a higher value allows the model to accept more potential responses, while a lower value leans towards the most likely answer. It is usually recommended not to change temperature simultaneously. If you encounter errors, try reverting to default values.</value>
+        <value>top_p</value>
     </data>
     <data name="WebSearchEnginePluginSettings_SelectedProvider_Description" xml:space="preserve">
         <value>Select the service provider for web search engines.</value>
@@ -2773,10 +2770,10 @@ Release date: {2}</value>
     <data name="OpenAIOptions_ThinkingType_Description" xml:space="preserve">
         <value>Optional non-standard OpenAI-compatible switch such as enabled or disabled. Leave blank for default.</value>
     </data>
-    <data name="OpenAIOptions_ReasoningEffortLevel_Header" xml:space="preserve">
+    <data name="OpenAIOptions_ReasoningEffort_Header" xml:space="preserve">
         <value>Reasoning Effort (reasoning_effort)</value>
     </data>
-    <data name="OpenAIOptions_ReasoningEffortLevel_Description" xml:space="preserve">
+    <data name="OpenAIOptions_ReasoningEffort_Description" xml:space="preserve">
         <value>Optional effort level for reasoning models. Supported values are model-dependent; Leave blank for default.</value>
     </data>
     <data name="OpenAIResponsesOptions_ReasoningEffort_Header" xml:space="preserve">
@@ -2868,5 +2865,26 @@ Release date: {2}</value>
     </data>
     <data name="CodeBlock_ToggleTextWrap_Tip" xml:space="preserve">
         <value>Toggle Text Wrap</value>
+    </data>
+    <data name="Assistant_PresencePenalty_Header" xml:space="preserve">
+        <value>presence_penalty</value>
+    </data>
+    <data name="Assistant_PresencePenalty_Description" xml:space="preserve">
+        <value>Positive values penalize new tokens based on whether they appear in the text so far, increasing the model’s likelihood to talk about new topics.</value>
+    </data>
+    <data name="Assistant_TopP_Description" xml:space="preserve">
+        <value>An alternative to sampling with temperature, called nucleus sampling, where the model considers the results of the tokens with top_p probability mass. So 0.1 means only the tokens comprising the top 10% probability mass are considered.</value>
+    </data>
+    <data name="Assistant_FrequencyPenalty_Header" xml:space="preserve">
+        <value>frequency_penalty</value>
+    </data>
+    <data name="Assistant_FrequencyPenalty_Description" xml:space="preserve">
+        <value>Positive values penalize new tokens based on their existing frequency in the text so far, decreasing the model’s likelihood to repeat the same line verbatim.</value>
+    </data>
+    <data name="Assistant_TopK_Header" xml:space="preserve">
+        <value>top_k</value>
+    </data>
+    <data name="Assistant_TopK_Description" xml:space="preserve">
+        <value>Only sample from the top K options for each subsequent token.</value>
     </data>
 </root>

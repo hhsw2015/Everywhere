@@ -95,16 +95,13 @@
         <value>いつでもチャットウィンドウを呼び出すためのショートカットを設定します。</value>
     </data>
     <data name="Assistant_Temperature_Header" xml:space="preserve">
-        <value>温度（“創造性の活発さ”）</value>
+        <value>temperature</value>
     </data>
     <data name="Assistant_Temperature_Description" xml:space="preserve">
-        <value>通常、数値が高いほど回答が創造的で想像力に富み、数値が低いほど厳密になります。一部のモデルでは1.0を超える数値が出力の乱れを引き起こす可能性があります。通常、top_pを同時に変更しないことをお勧めします。エラーが発生した場合は、デフォルト値に戻してみてください。</value>
+        <value>高い値（例：0.8）は出力をよりランダムにし、低い値（例：0.2）はより特定的で確定的にします。このパラメータまたは top_p パラメータを調整することをお勧めしますが、両方を同時に調整しないでください。</value>
     </data>
     <data name="Assistant_TopP_Header" xml:space="preserve">
-        <value>top_p（“思考の開放度”）</value>
-    </data>
-    <data name="Assistant_TopP_Description" xml:space="preserve">
-        <value>モデルの出力テキストの多様性を制御します。通常、数値が高いほどモデルはより多くの潜在的な回答を受け入れ、数値が低いほど最も可能性の高い回答を選択します。通常、温度を同時に変更しないことをお勧めします。エラーが発生した場合は、デフォルト値に戻してみてください。</value>
+        <value>top_p</value>
     </data>
     <data name="WebSearchEnginePluginSettings_SelectedProvider_Description" xml:space="preserve">
         <value>ウェブ検索エンジンのサービスプロバイダーを選択します。</value>
@@ -2773,10 +2770,10 @@
     <data name="OpenAIOptions_ThinkingType_Description" xml:space="preserve">
         <value>オプションの OpenAI 互換非標準スイッチ、例えば enabled または disabled。デフォルトは空白のままにしてください。</value>
     </data>
-    <data name="OpenAIOptions_ReasoningEffortLevel_Header" xml:space="preserve">
+    <data name="OpenAIOptions_ReasoningEffort_Header" xml:space="preserve">
         <value>推論強度 (reasoning_effort)</value>
     </data>
-    <data name="OpenAIOptions_ReasoningEffortLevel_Description" xml:space="preserve">
+    <data name="OpenAIOptions_ReasoningEffort_Description" xml:space="preserve">
         <value>推論モデルのオプションの強度レベル。サポートされる値はモデルによって異なり、デフォルトは空白のままにしてください。</value>
     </data>
     <data name="OpenAIResponsesOptions_ReasoningEffort_Header" xml:space="preserve">
@@ -2868,5 +2865,26 @@
     </data>
     <data name="CodeBlock_ToggleTextWrap_Tip" xml:space="preserve">
         <value>テキストの折り返しを切り替え</value>
+    </data>
+    <data name="Assistant_PresencePenalty_Header" xml:space="preserve">
+        <value>presence_penalty</value>
+    </data>
+    <data name="Assistant_PresencePenalty_Description" xml:space="preserve">
+        <value>正の値は新しい単語が現在のテキストに出現するかどうかに基づいて罰則を与え、新しいテーマについてのモデルの議論の可能性を高めます。</value>
+    </data>
+    <data name="Assistant_TopP_Description" xml:space="preserve">
+        <value>温度サンプリングの代替手法は「コアサンプリング」と呼ばれ、モデルは確率質量が上位 top_p のトークンのみを考慮します。したがって、0.1 は確率質量が上位 10% のトークンのみを考慮することを意味します。</value>
+    </data>
+    <data name="Assistant_FrequencyPenalty_Header" xml:space="preserve">
+        <value>frequency_penalty</value>
+    </data>
+    <data name="Assistant_FrequencyPenalty_Description" xml:space="preserve">
+        <value>正の値は新しい単語の現在のテキスト内での出現頻度に基づいて罰則を与え、モデルが同じ行を繰り返す可能性を減らします。</value>
+    </data>
+    <data name="Assistant_TopK_Header" xml:space="preserve">
+        <value>top_k</value>
+    </data>
+    <data name="Assistant_TopK_Description" xml:space="preserve">
+        <value>次の各トークンについて、上位 K のオプションからのみサンプリングします。</value>
     </data>
 </root>

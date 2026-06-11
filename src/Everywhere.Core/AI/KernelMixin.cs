@@ -23,8 +23,6 @@ public abstract class KernelMixin(Assistant assistant, ModelConnection connectio
 
     public bool SupportsToolCall { get; } = assistant.SupportsToolCall;
 
-    public bool SupportsTemperature { get; } = assistant.SupportsTemperature;
-
     public Modalities InputModalities { get; } = assistant.InputModalities;
 
     public Modalities OutputModalities { get; } = assistant.OutputModalities;
@@ -36,12 +34,6 @@ public abstract class KernelMixin(Assistant assistant, ModelConnection connectio
     public ModelSpecializations Specializations { get; } = assistant.Specializations;
 
     public DateOnly? DeprecationDate { get; } = assistant.DeprecationDate;
-
-    protected double? Temperature { get; } =
-        assistant is { SupportsTemperature: true, Temperature.IsCustomValueSet: true } ? assistant.Temperature.ActualValue : null;
-
-    protected double? TopP { get; } =
-        assistant is { SupportsTemperature: true, TopP.IsCustomValueSet: true } ? assistant.TopP.ActualValue : null;
 
     public abstract IChatCompletionService ChatCompletionService { get; }
 
@@ -56,26 +48,10 @@ public abstract class KernelMixin(Assistant assistant, ModelConnection connectio
     /// </summary>
     /// <param name="functionChoiceBehavior"></param>
     /// <returns></returns>
-    public virtual PromptExecutionSettings GetPromptExecutionSettings(FunctionChoiceBehavior? functionChoiceBehavior = null)
+    public virtual PromptExecutionSettings GetPromptExecutionSettings(FunctionChoiceBehavior? functionChoiceBehavior = null) => new()
     {
-        var result = new PromptExecutionSettings
-        {
-            FunctionChoiceBehavior = functionChoiceBehavior
-        };
-
-        SetPromptExecutionSettingsExtensionData(result, Temperature, "temperature");
-        SetPromptExecutionSettingsExtensionData(result, TopP, "top_p");
-
-        return result;
-
-        static void SetPromptExecutionSettingsExtensionData(PromptExecutionSettings settings, double? value, string propertyName)
-        {
-            if (!value.HasValue) return;
-
-            settings.ExtensionData ??= new Dictionary<string, object>();
-            settings.ExtensionData[propertyName] = value.Value;
-        }
-    }
+        FunctionChoiceBehavior = functionChoiceBehavior
+    };
 
     public async Task CheckConnectivityAsync(CancellationToken cancellationToken = default)
     {

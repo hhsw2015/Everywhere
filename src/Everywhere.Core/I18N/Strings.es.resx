@@ -95,16 +95,13 @@
         <value>Establece un atajo para invocar la ventana de chat en cualquier momento.</value>
     </data>
     <data name="Assistant_Temperature_Header" xml:space="preserve">
-        <value>Temperatura (“Creatividad”)</value>
+        <value>temperature</value>
     </data>
     <data name="Assistant_Temperature_Description" xml:space="preserve">
-        <value>Generalmente, un valor más alto resulta en respuestas más creativas e imaginativas, mientras que un valor más bajo tiende a ser más riguroso. Algunos modelos con valores superiores a 1.0 pueden producir salidas ilegibles. Se recomienda no cambiar top_p al mismo tiempo. Si encuentras errores, intenta restaurar los valores predeterminados.</value>
+        <value>Un valor más alto (como 0.8) hará que los resultados sean más aleatorios, mientras que un valor más bajo (como 0.2) los hará más específicos y deterministas. Normalmente recomendamos ajustar este parámetro o el parámetro top_p, pero no ambos al mismo tiempo.</value>
     </data>
     <data name="Assistant_TopP_Header" xml:space="preserve">
-        <value>top_p (“Apertura Mental”)</value>
-    </data>
-    <data name="Assistant_TopP_Description" xml:space="preserve">
-        <value>Controla la diversidad del texto de salida del modelo. Generalmente, un valor más alto permite más respuestas potenciales, mientras que un valor más bajo se inclina hacia la respuesta más probable. Se recomienda no cambiar la temperatura al mismo tiempo. Si encuentras errores, intenta restaurar los valores predeterminados.</value>
+        <value>top_p</value>
     </data>
     <data name="WebSearchEnginePluginSettings_SelectedProvider_Description" xml:space="preserve">
         <value>Seleccione el proveedor de servicios para los motores de búsqueda web.</value>
@@ -2773,10 +2770,10 @@ Fecha de lanzamiento: {2}</value>
     <data name="OpenAIOptions_ThinkingType_Description" xml:space="preserve">
         <value>Interruptor no estándar opcional compatible con OpenAI, como enabled o disabled. Déjalo vacío por defecto.</value>
     </data>
-    <data name="OpenAIOptions_ReasoningEffortLevel_Header" xml:space="preserve">
+    <data name="OpenAIOptions_ReasoningEffort_Header" xml:space="preserve">
         <value>Nivel de Esfuerzo de Razonamiento (reasoning_effort)</value>
     </data>
-    <data name="OpenAIOptions_ReasoningEffortLevel_Description" xml:space="preserve">
+    <data name="OpenAIOptions_ReasoningEffort_Description" xml:space="preserve">
         <value>Nivel de intensidad opcional para el modelo de razonamiento. Los valores admitidos dependen del modelo, déjalo vacío por defecto.</value>
     </data>
     <data name="OpenAIResponsesOptions_ReasoningEffort_Header" xml:space="preserve">
@@ -2868,5 +2865,26 @@ Fecha de lanzamiento: {2}</value>
     </data>
     <data name="CodeBlock_ToggleTextWrap_Tip" xml:space="preserve">
         <value>Alternar ajuste de texto</value>
+    </data>
+    <data name="Assistant_PresencePenalty_Header" xml:space="preserve">
+        <value>presence_penalty</value>
+    </data>
+    <data name="Assistant_PresencePenalty_Description" xml:space="preserve">
+        <value>Un valor positivo penaliza las palabras nuevas según su aparición en el texto actual, aumentando la probabilidad de que el modelo discuta nuevos temas.</value>
+    </data>
+    <data name="Assistant_TopP_Description" xml:space="preserve">
+        <value>Un método alternativo de muestreo de temperatura se llama 'muestreo de núcleo', donde el modelo solo considera los tokens con la masa de probabilidad en el top_p. Por lo tanto, 0.1 significa que solo se consideran los tokens en el top 10% de la masa de probabilidad.</value>
+    </data>
+    <data name="Assistant_FrequencyPenalty_Header" xml:space="preserve">
+        <value>frequency_penalty</value>
+    </data>
+    <data name="Assistant_FrequencyPenalty_Description" xml:space="preserve">
+        <value>Un valor positivo penaliza las palabras nuevas según su frecuencia de aparición en el texto actual, reduciendo la probabilidad de que el modelo repita la misma línea sin cambios.</value>
+    </data>
+    <data name="Assistant_TopK_Header" xml:space="preserve">
+        <value>top_k</value>
+    </data>
+    <data name="Assistant_TopK_Description" xml:space="preserve">
+        <value>Para cada token subsiguiente, se muestrea solo de las opciones en el top K.</value>
     </data>
 </root>

@@ -95,16 +95,13 @@
         <value>언제든지 채팅 창을 호출할 수 있는 단축키를 설정합니다.</value>
     </data>
     <data name="Assistant_Temperature_Header" xml:space="preserve">
-        <value>온도 (“창의성 수준”)</value>
+        <value>temperature</value>
     </data>
     <data name="Assistant_Temperature_Description" xml:space="preserve">
-        <value>일반적으로 값이 높을수록 답변이 더 창의적이고 상상력이 풍부하며, 값이 낮을수록 더 엄격해집니다. 일부 모델에서 값이 1.0을 초과하면 출력이 깨질 수 있습니다. 보통 top_p를 동시에 변경하지 않는 것이 좋습니다. 오류가 발생하면 기본값으로 복원해 보세요.</value>
+        <value>높은 값(예: 0.8)은 출력 결과를 더 무작위적으로 만들고, 낮은 값(예: 0.2)은 더 집중적이고 확실하게 만듭니다. 일반적으로 이 매개변수나 top_p 매개변수를 조정할 것을 권장하지만 두 가지를 동시에 조정하지는 마세요.</value>
     </data>
     <data name="Assistant_TopP_Header" xml:space="preserve">
-        <value>top_p (“사고 개방성”)</value>
-    </data>
-    <data name="Assistant_TopP_Description" xml:space="preserve">
-        <value>모델 출력 텍스트의 다양성을 제어하는 데 사용됩니다. 일반적으로 값이 높을수록 모델이 더 많은 잠재적 답변을 수용하고, 값이 낮을수록 가장 가능성이 높은 답변을 선호합니다. 보통 온도를 동시에 변경하지 않는 것이 좋습니다. 오류가 발생하면 기본값으로 복원해 보세요.</value>
+        <value>top_p</value>
     </data>
     <data name="WebSearchEnginePluginSettings_SelectedProvider_Description" xml:space="preserve">
         <value>웹 검색 엔진의 서비스 제공자를 선택하세요.</value>
@@ -2773,10 +2770,10 @@
     <data name="OpenAIOptions_ThinkingType_Description" xml:space="preserve">
         <value>선택적 OpenAI 호환 비표준 스위치, 예: enabled 또는 disabled. 기본값은 비워 두세요.</value>
     </data>
-    <data name="OpenAIOptions_ReasoningEffortLevel_Header" xml:space="preserve">
+    <data name="OpenAIOptions_ReasoningEffort_Header" xml:space="preserve">
         <value>추론 강도 (reasoning_effort)</value>
     </data>
-    <data name="OpenAIOptions_ReasoningEffortLevel_Description" xml:space="preserve">
+    <data name="OpenAIOptions_ReasoningEffort_Description" xml:space="preserve">
         <value>추론 모델의 선택적 강도 수준. 지원되는 값은 모델에 따라 다르며, 기본값은 비워 두세요.</value>
     </data>
     <data name="OpenAIResponsesOptions_ReasoningEffort_Header" xml:space="preserve">
@@ -2868,5 +2865,26 @@
     </data>
     <data name="CodeBlock_ToggleTextWrap_Tip" xml:space="preserve">
         <value>텍스트 줄 바꿈 전환</value>
+    </data>
+    <data name="Assistant_PresencePenalty_Header" xml:space="preserve">
+        <value>presence_penalty</value>
+    </data>
+    <data name="Assistant_PresencePenalty_Description" xml:space="preserve">
+        <value>양수 값은 현재 텍스트에 새로운 단어가 나타나는지 여부에 따라 벌점을 부여하여 모델이 새로운 주제를 논의할 가능성을 높입니다.</value>
+    </data>
+    <data name="Assistant_TopP_Description" xml:space="preserve">
+        <value>온도 샘플링의 대안 방법인 '핵심 샘플링'에서는 모델이 확률 질량이 상위 top_p에 해당하는 토큰만 고려합니다. 따라서 0.1은 확률 질량이 상위 10%에 해당하는 토큰만 고려함을 의미합니다.</value>
+    </data>
+    <data name="Assistant_FrequencyPenalty_Header" xml:space="preserve">
+        <value>frequency_penalty</value>
+    </data>
+    <data name="Assistant_FrequencyPenalty_Description" xml:space="preserve">
+        <value>양수 값은 현재 텍스트에서 새로운 단어의 출현 빈도에 따라 벌점을 부여하여 모델이 동일한 줄을 반복할 확률을 낮춥니다.</value>
+    </data>
+    <data name="Assistant_TopK_Header" xml:space="preserve">
+        <value>top_k</value>
+    </data>
+    <data name="Assistant_TopK_Description" xml:space="preserve">
+        <value>후속 각 토큰에 대해 상위 K의 옵션 중에서만 샘플링합니다.</value>
     </data>
 </root>

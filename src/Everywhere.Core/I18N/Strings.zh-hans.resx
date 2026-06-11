@@ -95,16 +95,13 @@
         <value>设置一个快捷键，在任何时候按下即可唤出聊天窗口。</value>
     </data>
     <data name="Assistant_Temperature_Header" xml:space="preserve">
-        <value>temperature (“创意活跃度”)</value>
+        <value>temperature</value>
     </data>
     <data name="Assistant_Temperature_Description" xml:space="preserve">
-        <value>通常情况下，数值越高，回答越具创造力和想象力，数值越低，则越趋严谨。部分模型数值超过 1.0 可能导致输出乱码。通常建议不要同时更改 top_p。如果遇到错误，请尝试还原默认值。</value>
+        <value>较高的数值（如 0.8）会使输出结果更具随机性，而较低的数值（如 0.2）则会使其更具针对性且更具确定性。我们通常建议调整此参数或 top_p 参数，但不要同时调整两者。</value>
     </data>
     <data name="Assistant_TopP_Header" xml:space="preserve">
-        <value>top_p (“思维开放度”)</value>
-    </data>
-    <data name="Assistant_TopP_Description" xml:space="preserve">
-        <value>用于控制模型输出文本的多样性。通常情况下，数值越高，模型会接受更多潜在回答，数值越低，则更倾向于最可能的回答。通常建议不要同时更改 temperature。如果遇到错误，请尝试还原默认值。</value>
+        <value>top_p</value>
     </data>
     <data name="WebSearchEnginePluginSettings_SelectedProvider_Description" xml:space="preserve">
         <value>选择用于网络搜索引擎的服务提供商。</value>
@@ -2774,10 +2771,10 @@
     <data name="OpenAIOptions_ThinkingType_Description" xml:space="preserve">
         <value>可选的 OpenAI 兼容非标准开关，例如 enabled 或 disabled。默认请留空。</value>
     </data>
-    <data name="OpenAIOptions_ReasoningEffortLevel_Header" xml:space="preserve">
+    <data name="OpenAIOptions_ReasoningEffort_Header" xml:space="preserve">
         <value>推理强度 (reasoning_effort)</value>
     </data>
-    <data name="OpenAIOptions_ReasoningEffortLevel_Description" xml:space="preserve">
+    <data name="OpenAIOptions_ReasoningEffort_Description" xml:space="preserve">
         <value>推理模型的可选强度级别。支持值取决于模型，默认请留空。</value>
     </data>
     <data name="OpenAIResponsesOptions_ReasoningEffort_Header" xml:space="preserve">
@@ -2869,5 +2866,26 @@
     </data>
     <data name="CodeBlock_ToggleTextWrap_Tip" xml:space="preserve">
         <value>切换文本换行</value>
+    </data>
+    <data name="Assistant_PresencePenalty_Header" xml:space="preserve">
+        <value>presence_penalty</value>
+    </data>
+    <data name="Assistant_PresencePenalty_Description" xml:space="preserve">
+        <value>正值会根据新词是否出现在当前文本中对其进行惩罚，从而提高模型讨论新主题的可能性。</value>
+    </data>
+    <data name="Assistant_TopP_Description" xml:space="preserve">
+        <value>一种替代温度采样的方法称为“核心采样”，该方法中模型仅考虑概率质量排名前 top_p 的令牌。因此，0.1 表示仅考虑概率质量排名前 10% 的令牌。</value>
+    </data>
+    <data name="Assistant_FrequencyPenalty_Header" xml:space="preserve">
+        <value>frequency_penalty</value>
+    </data>
+    <data name="Assistant_FrequencyPenalty_Description" xml:space="preserve">
+        <value>正值会根据新词在当前文本中的出现频率对其进行惩罚，从而降低模型原封不动重复同一行的概率。</value>
+    </data>
+    <data name="Assistant_TopK_Header" xml:space="preserve">
+        <value>top_k</value>
+    </data>
+    <data name="Assistant_TopK_Description" xml:space="preserve">
+        <value>对于后续的每个令牌，仅从排名前 K 的选项中进行采样。</value>
     </data>
 </root>

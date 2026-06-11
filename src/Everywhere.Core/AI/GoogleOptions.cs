@@ -26,4 +26,22 @@ public sealed partial class GoogleOptions : ObservableObject
         LocaleKey.GoogleOptions_ThinkingBudget_Description)]
     [SettingsItem(Group = "_", DocumentUrl = "https://ai.google.dev/gemini-api/docs/thinking#set-budget")]
     public partial string? ThinkingBudget { get; set; }
+
+    [DynamicResourceKey(
+        LocaleKey.Assistant_Temperature_Header,
+        LocaleKey.Assistant_Temperature_Description)]
+    [SettingsItem(Group = "_", DocumentUrl = "https://ai.google.dev/api/models#Model")]
+    public string? Temperature { get; set; }
+
+    [DynamicResourceKey(
+        LocaleKey.Assistant_TopP_Header,
+        LocaleKey.Assistant_TopP_Description)]
+    [SettingsItem(Group = "_", DocumentUrl = "https://ai.google.dev/api/models#Model")]
+    public string? TopP { get; set; }
+
+    [DynamicResourceKey(
+        LocaleKey.Assistant_TopK_Header,
+        LocaleKey.Assistant_TopK_Description)]
+    [SettingsItem(Group = "_", DocumentUrl = "https://ai.google.dev/api/models#Model")]
+    public string? TopK { get; set; }
 }

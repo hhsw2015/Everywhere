@@ -119,7 +119,7 @@
       <DataTemplate DataType="c:IWebSearchEngineProvider">
         <ScrollViewer HorizontalScrollBarVisibility="Disabled">
           <v:SettingsItemsControl
-            MaxWidth="1000" Margin="0,16,0,0"
+            MaxWidth="1000"
             ItemsSource="{Binding SettingsItems, FallbackValue={x:Null}}"/>
         </ScrollViewer>
       </DataTemplate>

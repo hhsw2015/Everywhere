@@ -276,6 +276,7 @@ public sealed partial class OptionalApiKeyWebSearchEngineProvider(
     [DynamicResourceKey(
         LocaleKey.WebSearchEngineProvider_EndPoint_Header,
         LocaleKey.WebSearchEngineProvider_EndPoint_Description)]
+    [SettingsItem(Group = "_")]
     public required Customizable<string> EndPoint { get; init; }
 
     [ObservableProperty]
@@ -286,6 +287,7 @@ public sealed partial class OptionalApiKeyWebSearchEngineProvider(
     [DynamicResourceKey(
         LocaleKey.WebSearchEngineProvider_ApiKey_Header_Optional,
         LocaleKey.WebSearchEngineProvider_ApiKey_Description)]
+    [SettingsItem(Group = "_")]
     public SettingsControl<ApiKeyComboBox> ApiKeyControl => new(
         new ApiKeyComboBox(apiKeys)
         {

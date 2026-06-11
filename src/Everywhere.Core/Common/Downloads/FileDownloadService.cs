@@ -65,7 +65,16 @@ public sealed class FileDownloadService(
 
                 if (!await IsExistingFileValidAsync(tempPath, request, cancellationToken).ConfigureAwait(false))
                 {
-                    File.Delete(tempPath);
+                    try
+                    {
+                        File.Delete(tempPath);
+                    }
+                    catch (Exception ex)
+                    {
+                        // Ignore deletion failure; the file will be overwritten on the next attempt or left for manual cleanup if all sources fail.
+                        logger.LogWarning(ex, "Failed to delete invalid temp file.");
+                    }
+
                     throw new InvalidOperationException($"Downloaded file failed validation: {Path.GetFileName(request.DestinationPath)}.");
                 }
 

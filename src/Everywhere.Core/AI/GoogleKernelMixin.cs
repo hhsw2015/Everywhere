@@ -45,8 +45,9 @@ public sealed class GoogleKernelMixin : KernelMixin
 
         return new GeminiPromptExecutionSettings
         {
-            Temperature = Temperature,
-            TopP = TopP,
+            Temperature = double.TryParse(_options.Temperature, out var temperature) ? temperature : null,
+            TopP = double.TryParse(_options.TopP, out var topP) ? topP : null,
+            TopK = int.TryParse(_options.TopK, out var topK) ? topK : null,
             ToolCallBehavior = toolCallBehavior,
             ThinkingConfig = GetThinkingConfig()
         };

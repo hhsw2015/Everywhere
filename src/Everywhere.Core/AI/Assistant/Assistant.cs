@@ -35,10 +35,6 @@ public abstract partial class Assistant : ObservableValidator, IModelDefinition
 
     [ObservableProperty]
     [SettingsItemIgnore]
-    public partial bool SupportsTemperature { get; set; } = true;
-
-    [ObservableProperty]
-    [SettingsItemIgnore]
     public partial Modalities InputModalities { get; set; }
 
     [ObservableProperty]
@@ -95,20 +91,6 @@ public abstract partial class Assistant : ObservableValidator, IModelDefinition
     [SettingsIntegerItem(IsSliderVisible = false)]
     [DefaultValue(20)]
     public partial int RequestTimeoutSeconds { get; set; } = 20;
-
-    [DynamicResourceKey(
-        LocaleKey.Assistant_Temperature_Header,
-        LocaleKey.Assistant_Temperature_Description)]
-    [SettingsItem(IsVisibleBindingPath = nameof(SupportsTemperature), Group = LocaleKey.Common_Advanced)]
-    [SettingsDoubleItem(Min = 0.0, Max = 2.0, Step = 0.01)]
-    public Customizable<double> Temperature { get; } = new(1.0);
-
-    [DynamicResourceKey(
-        LocaleKey.Assistant_TopP_Header,
-        LocaleKey.Assistant_TopP_Description)]
-    [SettingsItem(IsVisibleBindingPath = nameof(SupportsTemperature), Group = LocaleKey.Common_Advanced)]
-    [SettingsDoubleItem(Min = 0.0, Max = 1.0, Step = 0.01)]
-    public Customizable<double> TopP { get; } = new(0.9);
 
     public bool IsOpenAI => Schema == ModelProviderSchema.OpenAI;
 
@@ -186,7 +168,6 @@ public abstract partial class Assistant : ObservableValidator, IModelDefinition
         {
             ModelId = modelDefinitionTemplate.ModelId;
             SupportsToolCall = modelDefinitionTemplate.SupportsToolCall;
-            SupportsTemperature = modelDefinitionTemplate.SupportsTemperature;
             InputModalities = modelDefinitionTemplate.InputModalities;
             OutputModalities = modelDefinitionTemplate.OutputModalities;
             ContextLimit = modelDefinitionTemplate.ContextLimit;
@@ -198,7 +179,6 @@ public abstract partial class Assistant : ObservableValidator, IModelDefinition
         {
             ModelId = string.Empty;
             SupportsToolCall = false;
-            SupportsTemperature = true;
             InputModalities = default;
             OutputModalities = default;
             ContextLimit = 0;

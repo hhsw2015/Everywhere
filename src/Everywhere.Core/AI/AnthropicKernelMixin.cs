@@ -61,9 +61,9 @@ public sealed partial class AnthropicKernelMixin : KernelMixin
         {
             options ??= new ChatOptions();
             options.RawRepresentationFactory = RawRepresentationFactory;
-
-            if (_owner.Temperature is { } temperature) options.Temperature = (float)temperature;
-            if (_owner.TopP is { } topP) options.TopP = (float)topP;
+            options.Temperature = float.TryParse(_owner._options.Temperature, out var temperature) ? temperature : null;
+            options.TopP = float.TryParse(_owner._options.TopP, out var topP) ? topP : null;
+            options.TopK = int.TryParse(_owner._options.TopK, out var topK) ? topK : null;
         }
 
         private MessageCreateParams RawRepresentationFactory(IChatClient _)
@@ -163,7 +163,7 @@ public sealed partial class AnthropicKernelMixin : KernelMixin
             return major > 4 || major == 4 && minor >= 6;
         }
 
-        [GeneratedRegex(@"claude-(?:(?:opus|sonnet|haiku)-)?(?<major>\d+)(?:[.-](?<minor>\d)(?=$|[@\-:.]))?(?:-(?:opus|sonnet|haiku))?", RegexOptions.IgnoreCase)]
+        [GeneratedRegex(@"claude-(?:(?:fable|opus|sonnet|haiku)-)?(?<major>\d+)(?:[.-](?<minor>\d)(?=$|[@\-:.]))?(?:-(?:fable|opus|sonnet|haiku))?", RegexOptions.IgnoreCase)]
         private static partial Regex ClaudeVersionRegex();
     }
 }

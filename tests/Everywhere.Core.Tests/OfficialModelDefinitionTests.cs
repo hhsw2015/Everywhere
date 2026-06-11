@@ -11,7 +11,6 @@ public class OfficialModelDefinitionTests
     public void Reconcile_EmptyCloudList_KeepsCurrentSelectionSnapshot()
     {
         var assistant = CreateAssistant("old-model");
-        assistant.SupportsTemperature = false;
         assistant.ContextLimit = 4096;
         assistant.DeprecationDate = new DateOnly(2026, 6, 1);
 
@@ -21,7 +20,6 @@ public class OfficialModelDefinitionTests
         {
             Assert.That(result.IsSelectedModelUnavailable, Is.False);
             Assert.That(result.SelectedItem?.ModelId, Is.EqualTo("old-model"));
-            Assert.That(result.SelectedItem?.SupportsTemperature, Is.False);
             Assert.That(result.SelectedItem?.ContextLimit, Is.EqualTo(4096));
             Assert.That(result.SelectedItem?.DeprecationDate, Is.EqualTo(new DateOnly(2026, 6, 1)));
         }
@@ -96,7 +94,6 @@ public class OfficialModelDefinitionTests
         var template = CreateModel(
             "model-a",
             supportsToolCall: true,
-            supportsTemperature: false,
             contextLimit: 1234,
             outputLimit: 567,
             specializations: ModelSpecializations.TitleGeneration,
@@ -108,7 +105,6 @@ public class OfficialModelDefinitionTests
         {
             Assert.That(assistant.ModelId, Is.EqualTo("model-a"));
             Assert.That(assistant.SupportsToolCall, Is.True);
-            Assert.That(assistant.SupportsTemperature, Is.False);
             Assert.That(assistant.ContextLimit, Is.EqualTo(1234));
             Assert.That(assistant.OutputLimit, Is.EqualTo(567));
             Assert.That(assistant.Specializations, Is.EqualTo(ModelSpecializations.TitleGeneration));
@@ -263,7 +259,6 @@ public class OfficialModelDefinitionTests
             ConfiguratorType = AssistantConfiguratorType.Official,
             ModelId = modelId,
             SupportsToolCall = false,
-            SupportsTemperature = true,
             InputModalities = Modalities.Text,
             OutputModalities = Modalities.Text,
             ContextLimit = 1000,
@@ -275,7 +270,6 @@ public class OfficialModelDefinitionTests
     private static ModelDefinitionTemplate CreateModel(
         string modelId,
         bool supportsToolCall = false,
-        bool supportsTemperature = true,
         int contextLimit = 1000,
         int outputLimit = 100,
         ModelSpecializations specializations = ModelSpecializations.Default,
@@ -285,7 +279,6 @@ public class OfficialModelDefinitionTests
             ModelId = modelId,
             Name = modelId,
             SupportsToolCall = supportsToolCall,
-            SupportsTemperature = supportsTemperature,
             InputModalities = Modalities.Text,
             OutputModalities = Modalities.Text,
             ContextLimit = contextLimit,

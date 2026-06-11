@@ -51,4 +51,22 @@ public sealed partial class AnthropicOptions : ObservableObject
         LocaleKey.AnthropicOptions_CacheControl_Description)]
     [SettingsItem(Group = "_", DocumentUrl = "https://platform.claude.com/docs/en/build-with-claude/prompt-caching")]
     public partial AnthropicRequestCacheControl CacheControl { get; set; } = AnthropicRequestCacheControl.Ephemeral;
+
+    [DynamicResourceKey(
+        LocaleKey.Assistant_Temperature_Header,
+        LocaleKey.Assistant_Temperature_Description)]
+    [SettingsItem(Group = "_", DocumentUrl = "https://platform.claude.com/docs/en/api/beta/messages/create#create.temperature")]
+    public string? Temperature { get; set; }
+
+    [DynamicResourceKey(
+        LocaleKey.Assistant_TopP_Header,
+        LocaleKey.Assistant_TopP_Description)]
+    [SettingsItem(Group = "_", DocumentUrl = "https://platform.claude.com/docs/en/api/beta/messages/create#create.top_p")]
+    public string? TopP { get; set; }
+
+    [DynamicResourceKey(
+        LocaleKey.Assistant_TopK_Header,
+        LocaleKey.Assistant_TopK_Description)]
+    [SettingsItem(Group = "_", DocumentUrl = "https://platform.claude.com/docs/en/api/beta/messages/create#create.top_k")]
+    public string? TopK { get; set; }
 }

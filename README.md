@@ -3,7 +3,7 @@
 <a href="https://github.com/Sylinko/Everywhere/blob/main/README-zh-cn.md">前往中文版本 »</a>
 
 <div align="center">
-  <img src="https://raw.githubusercontent.com/Sylinko/Everywhere/refs/heads/main/img/banner.webp" alt="Banner"/>
+  <img src="https://github.com/user-attachments/assets/fdc68ffd-9660-4185-a236-6ec985c00e88" alt="Banner"/>
 
   <h1>Every moment, Every place. Your AI - <code>Everywhere</code></h1>
 
@@ -226,6 +226,8 @@ This project is released under the Business Source License 1.1. See the [LICENSE
 ## 🤩 Special Thanks
 
 The Code Signing Certificate for this project is generously sponsored by [Certum China](https://www.certumcodesign.cn/), continuing their great contribution to the open-source community.
+
+Thanks [pasical](https://github.com/pasical) for the banner kawaii logo design.
 
 ## 📈 Star History
 

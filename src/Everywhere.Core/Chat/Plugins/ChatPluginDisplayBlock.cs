@@ -141,7 +141,7 @@ public sealed partial class ChatPluginProgressDisplayBlock(IDynamicResourceKey h
 public partial class ChatPluginFileReference(
     string fullPath,
     IDynamicResourceKey? displayNameKey = null,
-    IReadOnlySet<ChatPluginFileReference.Location>? locations = null
+    IReadOnlySet<ChatPluginFileReferenceLocation>? locations = null
 )
 {
     [Key(0)]
@@ -151,7 +151,7 @@ public partial class ChatPluginFileReference(
     public IDynamicResourceKey? DisplayNameKey { get; } = displayNameKey;
 
     [Key(2)]
-    public IReadOnlySet<Location>? Locations { get; } = locations;
+    public IReadOnlySet<ChatPluginFileReferenceLocation>? Locations { get; } = locations;
 
     [IgnoreMember]
     public Task<LucideIconKind> IconAsync => Task.Run(() =>
@@ -175,9 +175,17 @@ public partial class ChatPluginFileReference(
     {
         ServiceLocator.Resolve<INativeHelper>().OpenFileLocation(FullPath);
     }
-
-    public readonly record struct Location(int Line, int Column);
 }
+
+/// <summary>
+/// Represents a specific location within a file reference with line and column number.
+/// </summary>
+/// <param name="Line"></param>
+/// <param name="Column"></param>
+[MessagePackObject(AllowPrivate = true, OnlyIncludeKeyedMembers = true)]
+public readonly partial record struct ChatPluginFileReferenceLocation(
+    [property: Key(0)] int Line,
+    [property: Key(1)] int Column);
 
 [MessagePackObject(AllowPrivate = true, OnlyIncludeKeyedMembers = true)]
 public sealed partial class ChatPluginFileReferencesDisplayBlock(params IReadOnlyList<ChatPluginFileReference> references) : ChatPluginDisplayBlock

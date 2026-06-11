@@ -18,7 +18,7 @@
           LastUpdateCheckDate="{Binding Settings.Common.LastUpdateCheckTime, RelativeSource={RelativeSource TemplatedParent}, Mode=OneWay, Converter={x:Static vc:DateTimeOffsetLocalizeConverter.Shared}}"
           LastUpdateCheckTitle="{I18N {x:Static LocaleKey.CommonSettings_SoftwareUpdate_LastUpdateCheckTitle_Text}}"
           NeverCheckedTitle="{I18N {x:Static LocaleKey.CommonSettings_SoftwareUpdate_NeverChecked_Text}}"
-          NewVersion="{Binding SoftwareUpdater.LatestUpdate, RelativeSource={RelativeSource TemplatedParent}}"
+          NewVersion="{Binding SoftwareUpdater.LatestUpdate?.Version, RelativeSource={RelativeSource TemplatedParent}}"
           UpdateAvailableTitle="{I18N {x:Static LocaleKey.CommonSettings_SoftwareUpdate_UpdateAvailableTitle_Text}}"
           UpdateAvailableVersionTitle="{I18N {x:Static LocaleKey.CommonSettings_SoftwareUpdate_UpdateAvailableVersionTitle_Text}}"
           UpdateNotAvailableTitle="{I18N {x:Static LocaleKey.CommonSettings_SoftwareUpdate_UpdateNotAvailableTitle_Text}}"/>
