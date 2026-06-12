@@ -54,6 +54,12 @@ public sealed partial record ModelDefinitionTemplate : IModelDefinition
     // public bool SupportsTemperature { get; init; }
 
     /// <summary>
+    /// Official Models Only.
+    /// </summary>
+    [Key(16)]
+    public bool IsQuotaLimited { get; init; }
+
+    /// <summary>
     /// Gets or sets the default model in a model provider.
     /// This indicates the best (powerful but economical) model in the provider.
     /// </summary>

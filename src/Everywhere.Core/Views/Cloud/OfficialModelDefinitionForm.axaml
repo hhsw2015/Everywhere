@@ -279,6 +279,24 @@
                       <v:ModalitiesPresenter Modalities="{Binding SelectedItem.InputModalities, RelativeSource={RelativeSource TemplatedParent}, FallbackValue={x:Null}}"/>
                     </Border>
                     <Border
+                      Classes="Header" Grid.Row="1"
+                      Grid.Column="0">
+                      <StackPanel
+                        Orientation="Horizontal" Spacing="4">
+                        <TextBlock Text="{I18N {x:Static LocaleKey.OfficialAssistant_IsQuotaLimitFree_Header}}"/>
+                        <LucideIcon
+                          IsVisible="{Binding SelectedItem, Converter={x:Static ObjectConverters.IsNotNull}, RelativeSource={RelativeSource TemplatedParent}}"
+                          Kind="CircleQuestionMark"
+                          Size="{DynamicResource FontSizeS}"
+                          ToolTip.Placement="Top"
+                          ToolTip.Tip="{I18N {x:Static LocaleKey.OfficialAssistant_IsQuotaLimitFree_ToolTip}}"/>
+                      </StackPanel>
+                    </Border>
+                    <Border
+                      Grid.Row="1" Grid.Column="1">
+                      <TextBlock Text="{Binding !SelectedItem.IsQuotaLimited, Converter={x:Static vc:BooleanToEmojiConverter.Shared}, RelativeSource={RelativeSource TemplatedParent}, FallbackValue={x:Null}}"/>
+                    </Border>
+                    <Border
                       Classes="Header" Grid.Row="2"
                       Grid.Column="0">
                       <TextBlock Text="{I18N {x:Static LocaleKey.CustomAssistant_ReleaseDate_Header}}"/>

@@ -533,8 +533,8 @@
     <data name="CustomAssistant_SupportsReasoning_Description" xml:space="preserve">
         <value>模型支持先思考再回答。如果模型不支持，开启此选项可能会导致对话时出现错误。注意此选项只会影响 Everywhere 如何处理模型响应，不能控制模型是否真的启用思考。对于可以动态开关思考的模型，请开启此选项之后，在下方的“启用思考”选项作进一步调整。</value>
     </data>
-    <data name="CustomAssistant_SupportsReasoning_Header" xml:space="preserve">
-        <value>深度思考</value>
+    <data name="OfficialAssistant_IsQuotaLimitFree_Header" xml:space="preserve">
+        <value>不受配额限制</value>
     </data>
     <data name="Assistant_SupportsImage_Header" xml:space="preserve">
         <value>图像输入支持</value>
@@ -842,6 +842,42 @@
     </data>
     <data name="KernelMixinFactory_UnsupportedModelProviderSchema" xml:space="preserve">
         <value>不支持的模型提供商 API 协议。</value>
+    </data>
+    <data name="KernelMixinFactory_OfficialError_InvalidRequest" xml:space="preserve">
+        <value>官方服务无法处理此请求。请检查请求内容或稍后重试。</value>
+    </data>
+    <data name="KernelMixinFactory_OfficialError_Authentication" xml:space="preserve">
+        <value>官方服务登录状态无效或已过期。请重新登录。</value>
+    </data>
+    <data name="KernelMixinFactory_OfficialError_ModelUnavailable" xml:space="preserve">
+        <value>所选官方模型不可用。请切换到其他模型。</value>
+    </data>
+    <data name="KernelMixinFactory_OfficialError_BillingAccountNotFound" xml:space="preserve">
+        <value>未找到你的官方服务账户信息。请重新登录或联系支持。</value>
+    </data>
+    <data name="KernelMixinFactory_OfficialError_AccountSuspended" xml:space="preserve">
+        <value>你的官方服务账户已被暂停。请联系支持了解更多信息。</value>
+    </data>
+    <data name="KernelMixinFactory_OfficialError_RequestTooLarge" xml:space="preserve">
+        <value>请求内容超出官方服务限制。请减少输入内容或附件后重试。</value>
+    </data>
+    <data name="KernelMixinFactory_OfficialError_RateLimitApi" xml:space="preserve">
+        <value>官方服务请求过于频繁。请稍等片刻后重试。</value>
+    </data>
+    <data name="KernelMixinFactory_OfficialError_RateLimitLlmBurst" xml:space="preserve">
+        <value>短时间内模型请求过多。请稍等片刻后重试。</value>
+    </data>
+    <data name="KernelMixinFactory_OfficialError_RateLimitLlm2h" xml:space="preserve">
+        <value>已达到 2 小时窗口内的模型请求限制。请稍后重试。</value>
+    </data>
+    <data name="KernelMixinFactory_OfficialError_RateLimitLlm24h" xml:space="preserve">
+        <value>已达到每日模型请求限制。请稍后重试。</value>
+    </data>
+    <data name="KernelMixinFactory_OfficialError_RateLimitExpensiveModel5h" xml:space="preserve">
+        <value>已达到 5 小时窗口内的高消耗模型请求限制。请稍后重试或切换模型。</value>
+    </data>
+    <data name="KernelMixinFactory_OfficialError_RateLimitExpensiveModel7d" xml:space="preserve">
+        <value>已达到 7 天窗口内的高消耗模型请求限制。请稍后重试或切换模型。</value>
     </data>
     <data name="ChatWindowViewModel_QuickActions_Solve" xml:space="preserve">
         <value>解决</value>
@@ -2887,5 +2923,122 @@
     </data>
     <data name="Assistant_TopK_Description" xml:space="preserve">
         <value>对于后续的每个令牌，仅从排名前 K 的选项中进行采样。</value>
+    </data>
+    <data name="SkillPage_Title" xml:space="preserve">
+        <value>Skills</value>
+    </data>
+    <data name="SkillPage_Description" xml:space="preserve">
+        <value>管理和配置 Everywhere 可以使用的 Skills。</value>
+    </data>
+    <data name="SkillPage_RescanButton_ToolTip" xml:space="preserve">
+        <value>重新扫描 Skills</value>
+    </data>
+    <data name="SkillPage_SourceFilter_All" xml:space="preserve">
+        <value>全部来源</value>
+    </data>
+    <data name="SkillPage_SearchBox_Watermark" xml:space="preserve">
+        <value>搜索 Skills...</value>
+    </data>
+    <data name="SkillPage_ClearSearchButton_ToolTip" xml:space="preserve">
+        <value>清空搜索</value>
+    </data>
+    <data name="SkillPage_CountText" xml:space="preserve">
+        <value>共 {0} 个 Skill</value>
+    </data>
+    <data name="SkillPage_EnableSwitch_ToolTip" xml:space="preserve">
+        <value>启用或禁用此 Skill。这只会影响 Everywhere 自身的行为。</value>
+    </data>
+    <data name="SkillPage_NoMatchingSkills" xml:space="preserve">
+        <value>没有匹配的 Skills</value>
+    </data>
+    <data name="SkillPage_NoSkillsFound" xml:space="preserve">
+        <value>没有找到 Skills</value>
+    </data>
+    <data name="SkillPage_OpenButton_Content" xml:space="preserve">
+        <value>打开</value>
+    </data>
+    <data name="SkillPage_OpenFileLocationButton_ToolTip" xml:space="preserve">
+        <value>打开文件位置</value>
+    </data>
+    <data name="SkillPage_OpenSourceFolderButton_ToolTip" xml:space="preserve">
+        <value>打开来源文件夹</value>
+    </data>
+    <data name="SkillPage_SourceGroupNoSkills" xml:space="preserve">
+        <value>此来源中没有 Skills。打开文件夹即可添加。</value>
+    </data>
+    <data name="SkillPage_Status_Enabled" xml:space="preserve">
+        <value>已启用</value>
+    </data>
+    <data name="SkillPage_Status_Disabled" xml:space="preserve">
+        <value>已禁用</value>
+    </data>
+    <data name="SkillPage_Status_Error" xml:space="preserve">
+        <value>加载失败</value>
+    </data>
+    <data name="SkillPage_Tab_Overview" xml:space="preserve">
+        <value>概览</value>
+    </data>
+    <data name="SkillPage_Tab_SkillMarkdownPreview" xml:space="preserve">
+        <value>SKILL.md 预览</value>
+    </data>
+    <data name="SkillPage_Tab_Metadata" xml:space="preserve">
+        <value>元数据</value>
+    </data>
+    <data name="SkillPage_BasicInformationCard_Title" xml:space="preserve">
+        <value>基本信息</value>
+    </data>
+    <data name="SkillPage_DescriptionCard_Title" xml:space="preserve">
+        <value>技能描述</value>
+    </data>
+    <data name="SkillPage_DescriptionEmpty" xml:space="preserve">
+        <value>该 Skill 没有提供描述。</value>
+    </data>
+    <data name="SkillPage_MarkdownPreviewMode_Preview" xml:space="preserve">
+        <value>预览</value>
+    </data>
+    <data name="SkillPage_MarkdownPreviewMode_Raw" xml:space="preserve">
+        <value>原文</value>
+    </data>
+    <data name="SkillPage_MarkdownEmpty" xml:space="preserve">
+        <value>SKILL.md 没有内容。</value>
+    </data>
+    <data name="SkillPage_EmptyContent_SelectInstruction" xml:space="preserve">
+        <value>选择一个 Skill 以查看详情。</value>
+    </data>
+    <data name="SkillPage_Field_Id" xml:space="preserve">
+        <value>ID</value>
+    </data>
+    <data name="SkillPage_Field_Source" xml:space="preserve">
+        <value>来源</value>
+    </data>
+    <data name="SkillPage_Field_File" xml:space="preserve">
+        <value>文件</value>
+    </data>
+    <data name="SkillPage_Field_License" xml:space="preserve">
+        <value>许可证</value>
+    </data>
+    <data name="SkillPage_Field_Compatibility" xml:space="preserve">
+        <value>兼容性</value>
+    </data>
+    <data name="SkillPage_Field_Author" xml:space="preserve">
+        <value>作者</value>
+    </data>
+    <data name="SkillPage_Field_Version" xml:space="preserve">
+        <value>版本</value>
+    </data>
+    <data name="SkillPage_RescanSuccessToast_Title" xml:space="preserve">
+        <value>Skills 已重新扫描。</value>
+    </data>
+    <data name="SkillPage_RescanFailedToast_Title" xml:space="preserve">
+        <value>无法重新扫描 Skills。</value>
+    </data>
+    <data name="SkillPage_OpenFileLocationFailedToast_Title" xml:space="preserve">
+        <value>无法打开文件位置。</value>
+    </data>
+    <data name="SkillPage_UpdateStatusFailedToast_Title" xml:space="preserve">
+        <value>无法更新 Skill 状态。</value>
+    </data>
+    <data name="OfficialAssistant_IsQuotaLimitFree_ToolTip" xml:space="preserve">
+        <value>指示当前模型是否受 5 小时和每周配额的限制</value>
     </data>
 </root>

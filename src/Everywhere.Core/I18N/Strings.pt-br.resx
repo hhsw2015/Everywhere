@@ -533,8 +533,8 @@
     <data name="CustomAssistant_SupportsReasoning_Description" xml:space="preserve">
         <value>O modelo suporta pensar antes de responder. Se o modelo não suportar, ativar esta opção pode causar erros durante a conversa. Note que esta opção apenas afetará como o Everywhere lida com as respostas do modelo, não controla se o modelo realmente ativará o raciocínio. Para modelos que podem alternar dinamicamente o raciocínio, ative esta opção e faça ajustes adicionais na opção 'Ativar Raciocínio' abaixo.</value>
     </data>
-    <data name="CustomAssistant_SupportsReasoning_Header" xml:space="preserve">
-        <value>Raciocínio Profundo</value>
+    <data name="OfficialAssistant_IsQuotaLimitFree_Header" xml:space="preserve">
+        <value>Sem Limite de Quota</value>
     </data>
     <data name="Assistant_SupportsImage_Header" xml:space="preserve">
         <value>Suporte a Entrada de Imagem</value>
@@ -842,6 +842,42 @@ Minha inteligência é alimentada por um grande modelo de linguagem, e preciso d
     </data>
     <data name="KernelMixinFactory_UnsupportedModelProviderSchema" xml:space="preserve">
         <value>Protocolo da API do provedor de modelo não suportado.</value>
+    </data>
+    <data name="KernelMixinFactory_OfficialError_InvalidRequest" xml:space="preserve">
+        <value>O serviço oficial não pode processar este pedido. Verifique o conteúdo do pedido ou tente novamente mais tarde.</value>
+    </data>
+    <data name="KernelMixinFactory_OfficialError_Authentication" xml:space="preserve">
+        <value>O estado de login do serviço oficial é inválido ou expirou. Por favor, faça login novamente.</value>
+    </data>
+    <data name="KernelMixinFactory_OfficialError_ModelUnavailable" xml:space="preserve">
+        <value>O modelo oficial selecionado não está disponível. Por favor, mude para outro modelo.</value>
+    </data>
+    <data name="KernelMixinFactory_OfficialError_BillingAccountNotFound" xml:space="preserve">
+        <value>Não foi encontrada a informação da sua conta de serviço oficial. Por favor, faça login novamente ou entre em contato com o suporte.</value>
+    </data>
+    <data name="KernelMixinFactory_OfficialError_AccountSuspended" xml:space="preserve">
+        <value>Sua conta de serviço oficial foi suspensa. Entre em contato com o suporte para mais informações.</value>
+    </data>
+    <data name="KernelMixinFactory_OfficialError_RequestTooLarge" xml:space="preserve">
+        <value>O conteúdo do pedido excede os limites do serviço oficial. Por favor, reduza o conteúdo ou os anexos e tente novamente.</value>
+    </data>
+    <data name="KernelMixinFactory_OfficialError_RateLimitApi" xml:space="preserve">
+        <value>Os pedidos ao serviço oficial estão muito frequentes. Por favor, aguarde um momento e tente novamente.</value>
+    </data>
+    <data name="KernelMixinFactory_OfficialError_RateLimitLlmBurst" xml:space="preserve">
+        <value>Muitos pedidos ao modelo em um curto período de tempo. Por favor, aguarde um momento e tente novamente.</value>
+    </data>
+    <data name="KernelMixinFactory_OfficialError_RateLimitLlm2h" xml:space="preserve">
+        <value>Limite de pedidos ao modelo atingido na janela de 2 horas. Por favor, tente novamente mais tarde.</value>
+    </data>
+    <data name="KernelMixinFactory_OfficialError_RateLimitLlm24h" xml:space="preserve">
+        <value>Limite diário de pedidos ao modelo atingido. Por favor, tente novamente mais tarde.</value>
+    </data>
+    <data name="KernelMixinFactory_OfficialError_RateLimitExpensiveModel5h" xml:space="preserve">
+        <value>Limite de pedidos ao modelo de alto consumo atingido na janela de 5 horas. Por favor, tente novamente mais tarde ou mude de modelo.</value>
+    </data>
+    <data name="KernelMixinFactory_OfficialError_RateLimitExpensiveModel7d" xml:space="preserve">
+        <value>Limite de pedidos ao modelo de alto consumo atingido na janela de 7 dias. Por favor, tente novamente mais tarde ou mude de modelo.</value>
     </data>
     <data name="ChatWindowViewModel_QuickActions_Solve" xml:space="preserve">
         <value>Resolver</value>
@@ -2887,5 +2923,122 @@ Data de lançamento: {2}</value>
     </data>
     <data name="Assistant_TopK_Description" xml:space="preserve">
         <value>Para cada token subsequente, a amostragem é feita apenas entre as opções classificadas entre os K melhores.</value>
+    </data>
+    <data name="SkillPage_Title" xml:space="preserve">
+        <value>Habilidades</value>
+    </data>
+    <data name="SkillPage_Description" xml:space="preserve">
+        <value>Gerencie e configure as Habilidades que o Everywhere pode usar.</value>
+    </data>
+    <data name="SkillPage_RescanButton_ToolTip" xml:space="preserve">
+        <value>Reescanear Habilidades</value>
+    </data>
+    <data name="SkillPage_SourceFilter_All" xml:space="preserve">
+        <value>Todas as Fontes</value>
+    </data>
+    <data name="SkillPage_SearchBox_Watermark" xml:space="preserve">
+        <value>Buscar Habilidades...</value>
+    </data>
+    <data name="SkillPage_ClearSearchButton_ToolTip" xml:space="preserve">
+        <value>Limpar Busca</value>
+    </data>
+    <data name="SkillPage_CountText" xml:space="preserve">
+        <value>Total de {0} Habilidades</value>
+    </data>
+    <data name="SkillPage_EnableSwitch_ToolTip" xml:space="preserve">
+        <value>Ativar ou desativar esta Habilidade. Isso afetará apenas o comportamento do Everywhere.</value>
+    </data>
+    <data name="SkillPage_NoMatchingSkills" xml:space="preserve">
+        <value>Nenhuma Habilidade correspondente</value>
+    </data>
+    <data name="SkillPage_NoSkillsFound" xml:space="preserve">
+        <value>Nenhuma Habilidade encontrada</value>
+    </data>
+    <data name="SkillPage_OpenButton_Content" xml:space="preserve">
+        <value>Abrir</value>
+    </data>
+    <data name="SkillPage_OpenFileLocationButton_ToolTip" xml:space="preserve">
+        <value>Abrir Localização do Arquivo</value>
+    </data>
+    <data name="SkillPage_OpenSourceFolderButton_ToolTip" xml:space="preserve">
+        <value>Abrir Pasta de Origem</value>
+    </data>
+    <data name="SkillPage_SourceGroupNoSkills" xml:space="preserve">
+        <value>Não há Habilidades nesta fonte. Abra a pasta para adicionar.</value>
+    </data>
+    <data name="SkillPage_Status_Enabled" xml:space="preserve">
+        <value>Ativado</value>
+    </data>
+    <data name="SkillPage_Status_Disabled" xml:space="preserve">
+        <value>Desativado</value>
+    </data>
+    <data name="SkillPage_Status_Error" xml:space="preserve">
+        <value>Falha ao Carregar</value>
+    </data>
+    <data name="SkillPage_Tab_Overview" xml:space="preserve">
+        <value>Visão Geral</value>
+    </data>
+    <data name="SkillPage_Tab_SkillMarkdownPreview" xml:space="preserve">
+        <value>Pré-visualização de SKILL.md</value>
+    </data>
+    <data name="SkillPage_Tab_Metadata" xml:space="preserve">
+        <value>Metadados</value>
+    </data>
+    <data name="SkillPage_BasicInformationCard_Title" xml:space="preserve">
+        <value>Informações Básicas</value>
+    </data>
+    <data name="SkillPage_DescriptionCard_Title" xml:space="preserve">
+        <value>Descrição da Habilidade</value>
+    </data>
+    <data name="SkillPage_DescriptionEmpty" xml:space="preserve">
+        <value>Esta habilidade não possui descrição.</value>
+    </data>
+    <data name="SkillPage_MarkdownPreviewMode_Preview" xml:space="preserve">
+        <value>Pré-visualização</value>
+    </data>
+    <data name="SkillPage_MarkdownPreviewMode_Raw" xml:space="preserve">
+        <value>Texto Original</value>
+    </data>
+    <data name="SkillPage_MarkdownEmpty" xml:space="preserve">
+        <value>SKILL.md está vazio.</value>
+    </data>
+    <data name="SkillPage_EmptyContent_SelectInstruction" xml:space="preserve">
+        <value>Selecione uma habilidade para ver os detalhes.</value>
+    </data>
+    <data name="SkillPage_Field_Id" xml:space="preserve">
+        <value>ID</value>
+    </data>
+    <data name="SkillPage_Field_Source" xml:space="preserve">
+        <value>Fonte</value>
+    </data>
+    <data name="SkillPage_Field_File" xml:space="preserve">
+        <value>Arquivo</value>
+    </data>
+    <data name="SkillPage_Field_License" xml:space="preserve">
+        <value>Licença</value>
+    </data>
+    <data name="SkillPage_Field_Compatibility" xml:space="preserve">
+        <value>Compatibilidade</value>
+    </data>
+    <data name="SkillPage_Field_Author" xml:space="preserve">
+        <value>Autor</value>
+    </data>
+    <data name="SkillPage_Field_Version" xml:space="preserve">
+        <value>Versão</value>
+    </data>
+    <data name="SkillPage_RescanSuccessToast_Title" xml:space="preserve">
+        <value>Habilidades reescanadas com sucesso.</value>
+    </data>
+    <data name="SkillPage_RescanFailedToast_Title" xml:space="preserve">
+        <value>Não foi possível reescanear as habilidades.</value>
+    </data>
+    <data name="SkillPage_OpenFileLocationFailedToast_Title" xml:space="preserve">
+        <value>Não foi possível abrir a localização do arquivo.</value>
+    </data>
+    <data name="SkillPage_UpdateStatusFailedToast_Title" xml:space="preserve">
+        <value>Não foi possível atualizar o status da habilidade.</value>
+    </data>
+    <data name="OfficialAssistant_IsQuotaLimitFree_ToolTip" xml:space="preserve">
+        <value>Indica se o modelo atual está sujeito a limites de 5 horas e semanais</value>
     </data>
 </root>

@@ -164,7 +164,8 @@ public sealed partial class OfficialModelProvider :
         [property: JsonPropertyName("modalities")] CloudModelModalities Modalities,
         [property: JsonPropertyName("specializations")] IReadOnlyList<string>? Specializations,
         [property: JsonPropertyName("limit")] CloudModelLimitInfo LimitInfo,
-        [property: JsonPropertyName("pricing")] CloudModelPricing Pricing
+        [property: JsonPropertyName("pricing")] CloudModelPricing Pricing,
+        [property: JsonPropertyName("quotaLimited")] bool IsQuotaLimited
     )
     {
         public ModelDefinitionTemplate ToModelDefinitionTemplate() =>
@@ -184,6 +185,7 @@ public sealed partial class OfficialModelProvider :
                 IconUrl = Icon,
                 DescriptionKey = DescriptionKey,
                 Pricing = ConvertPricing(Pricing),
+                IsQuotaLimited = IsQuotaLimited
             };
 
         private static Modalities ConvertModalities(IReadOnlyList<string> modalityStrings) => modalityStrings.AsValueEnumerable().Aggregate(

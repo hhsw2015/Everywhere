@@ -533,8 +533,8 @@
     <data name="CustomAssistant_SupportsReasoning_Description" xml:space="preserve">
         <value>モデルは先に考えてから回答することをサポートします。このオプションを有効にすると、モデルがサポートしていない場合に対話中にエラーが発生する可能性があります。このオプションはEverywhereがモデルの応答を処理する方法にのみ影響し、モデルが実際に思考を有効にするかどうかを制御するものではありません。動的に思考を切り替えられるモデルの場合は、このオプションを有効にした後、下の「思考を有効にする」オプションでさらに調整してください。</value>
     </data>
-    <data name="CustomAssistant_SupportsReasoning_Header" xml:space="preserve">
-        <value>深い思考</value>
+    <data name="OfficialAssistant_IsQuotaLimitFree_Header" xml:space="preserve">
+        <value>配額制限なし</value>
     </data>
     <data name="Assistant_SupportsImage_Header" xml:space="preserve">
         <value>画像入力サポート</value>
@@ -842,6 +842,42 @@
     </data>
     <data name="KernelMixinFactory_UnsupportedModelProviderSchema" xml:space="preserve">
         <value>サポートされていないモデルプロバイダーAPIスキーマです。</value>
+    </data>
+    <data name="KernelMixinFactory_OfficialError_InvalidRequest" xml:space="preserve">
+        <value>公式サービスはこのリクエストを処理できません。リクエスト内容を確認するか、後で再試行してください。</value>
+    </data>
+    <data name="KernelMixinFactory_OfficialError_Authentication" xml:space="preserve">
+        <value>公式サービスのログイン状態が無効または期限切れです。再ログインしてください。</value>
+    </data>
+    <data name="KernelMixinFactory_OfficialError_ModelUnavailable" xml:space="preserve">
+        <value>選択した公式モデルは利用できません。他のモデルに切り替えてください。</value>
+    </data>
+    <data name="KernelMixinFactory_OfficialError_BillingAccountNotFound" xml:space="preserve">
+        <value>あなたの公式サービスアカウント情報が見つかりません。再ログインするか、サポートに連絡してください。</value>
+    </data>
+    <data name="KernelMixinFactory_OfficialError_AccountSuspended" xml:space="preserve">
+        <value>あなたの公式サービスアカウントは一時停止されています。詳細についてはサポートに連絡してください。</value>
+    </data>
+    <data name="KernelMixinFactory_OfficialError_RequestTooLarge" xml:space="preserve">
+        <value>リクエスト内容が公式サービスの制限を超えています。入力内容または添付ファイルを減らして再試行してください。</value>
+    </data>
+    <data name="KernelMixinFactory_OfficialError_RateLimitApi" xml:space="preserve">
+        <value>公式サービスへのリクエストが頻繁すぎます。しばらく待ってから再試行してください。</value>
+    </data>
+    <data name="KernelMixinFactory_OfficialError_RateLimitLlmBurst" xml:space="preserve">
+        <value>短時間にモデルへのリクエストが多すぎます。しばらく待ってから再試行してください。</value>
+    </data>
+    <data name="KernelMixinFactory_OfficialError_RateLimitLlm2h" xml:space="preserve">
+        <value>2時間のウィンドウ内でのモデルリクエスト制限に達しました。後で再試行してください。</value>
+    </data>
+    <data name="KernelMixinFactory_OfficialError_RateLimitLlm24h" xml:space="preserve">
+        <value>毎日のモデルリクエスト制限に達しました。後で再試行してください。</value>
+    </data>
+    <data name="KernelMixinFactory_OfficialError_RateLimitExpensiveModel5h" xml:space="preserve">
+        <value>5時間のウィンドウ内での高消費モデルリクエスト制限に達しました。後で再試行するか、モデルを切り替えてください。</value>
+    </data>
+    <data name="KernelMixinFactory_OfficialError_RateLimitExpensiveModel7d" xml:space="preserve">
+        <value>7日間のウィンドウ内での高消費モデルリクエスト制限に達しました。後で再試行するか、モデルを切り替えてください。</value>
     </data>
     <data name="ChatWindowViewModel_QuickActions_Solve" xml:space="preserve">
         <value>解決</value>
@@ -2886,5 +2922,122 @@
     </data>
     <data name="Assistant_TopK_Description" xml:space="preserve">
         <value>次の各トークンについて、上位 K のオプションからのみサンプリングします。</value>
+    </data>
+    <data name="SkillPage_Title" xml:space="preserve">
+        <value>スキル</value>
+    </data>
+    <data name="SkillPage_Description" xml:space="preserve">
+        <value>Everywhere が使用できるスキルを管理および構成します。</value>
+    </data>
+    <data name="SkillPage_RescanButton_ToolTip" xml:space="preserve">
+        <value>スキルを再スキャン</value>
+    </data>
+    <data name="SkillPage_SourceFilter_All" xml:space="preserve">
+        <value>すべてのソース</value>
+    </data>
+    <data name="SkillPage_SearchBox_Watermark" xml:space="preserve">
+        <value>スキルを検索...</value>
+    </data>
+    <data name="SkillPage_ClearSearchButton_ToolTip" xml:space="preserve">
+        <value>検索をクリア</value>
+    </data>
+    <data name="SkillPage_CountText" xml:space="preserve">
+        <value>合計 {0} 件のスキル</value>
+    </data>
+    <data name="SkillPage_EnableSwitch_ToolTip" xml:space="preserve">
+        <value>このスキルを有効または無効にします。これは Everywhere 自体の動作にのみ影響します。</value>
+    </data>
+    <data name="SkillPage_NoMatchingSkills" xml:space="preserve">
+        <value>一致するスキルはありません</value>
+    </data>
+    <data name="SkillPage_NoSkillsFound" xml:space="preserve">
+        <value>スキルが見つかりません</value>
+    </data>
+    <data name="SkillPage_OpenButton_Content" xml:space="preserve">
+        <value>開く</value>
+    </data>
+    <data name="SkillPage_OpenFileLocationButton_ToolTip" xml:space="preserve">
+        <value>ファイルの場所を開く</value>
+    </data>
+    <data name="SkillPage_OpenSourceFolderButton_ToolTip" xml:space="preserve">
+        <value>ソースフォルダーを開く</value>
+    </data>
+    <data name="SkillPage_SourceGroupNoSkills" xml:space="preserve">
+        <value>このソースにはスキルがありません。フォルダーを開いて追加してください。</value>
+    </data>
+    <data name="SkillPage_Status_Enabled" xml:space="preserve">
+        <value>有効</value>
+    </data>
+    <data name="SkillPage_Status_Disabled" xml:space="preserve">
+        <value>無効</value>
+    </data>
+    <data name="SkillPage_Status_Error" xml:space="preserve">
+        <value>読み込みエラー</value>
+    </data>
+    <data name="SkillPage_Tab_Overview" xml:space="preserve">
+        <value>概要</value>
+    </data>
+    <data name="SkillPage_Tab_SkillMarkdownPreview" xml:space="preserve">
+        <value>SKILL.md プレビュー</value>
+    </data>
+    <data name="SkillPage_Tab_Metadata" xml:space="preserve">
+        <value>メタデータ</value>
+    </data>
+    <data name="SkillPage_BasicInformationCard_Title" xml:space="preserve">
+        <value>基本情報</value>
+    </data>
+    <data name="SkillPage_DescriptionCard_Title" xml:space="preserve">
+        <value>スキルの説明</value>
+    </data>
+    <data name="SkillPage_DescriptionEmpty" xml:space="preserve">
+        <value>このスキルには説明がありません。</value>
+    </data>
+    <data name="SkillPage_MarkdownPreviewMode_Preview" xml:space="preserve">
+        <value>プレビュー</value>
+    </data>
+    <data name="SkillPage_MarkdownPreviewMode_Raw" xml:space="preserve">
+        <value>生の内容</value>
+    </data>
+    <data name="SkillPage_MarkdownEmpty" xml:space="preserve">
+        <value>SKILL.mdには内容がありません。</value>
+    </data>
+    <data name="SkillPage_EmptyContent_SelectInstruction" xml:space="preserve">
+        <value>詳細を表示するにはスキルを選択してください。</value>
+    </data>
+    <data name="SkillPage_Field_Id" xml:space="preserve">
+        <value>ID</value>
+    </data>
+    <data name="SkillPage_Field_Source" xml:space="preserve">
+        <value>ソース</value>
+    </data>
+    <data name="SkillPage_Field_File" xml:space="preserve">
+        <value>ファイル</value>
+    </data>
+    <data name="SkillPage_Field_License" xml:space="preserve">
+        <value>ライセンス</value>
+    </data>
+    <data name="SkillPage_Field_Compatibility" xml:space="preserve">
+        <value>互換性</value>
+    </data>
+    <data name="SkillPage_Field_Author" xml:space="preserve">
+        <value>著者</value>
+    </data>
+    <data name="SkillPage_Field_Version" xml:space="preserve">
+        <value>バージョン</value>
+    </data>
+    <data name="SkillPage_RescanSuccessToast_Title" xml:space="preserve">
+        <value>スキルが再スキャンされました。</value>
+    </data>
+    <data name="SkillPage_RescanFailedToast_Title" xml:space="preserve">
+        <value>スキルの再スキャンに失敗しました。</value>
+    </data>
+    <data name="SkillPage_OpenFileLocationFailedToast_Title" xml:space="preserve">
+        <value>ファイルの場所を開けませんでした。</value>
+    </data>
+    <data name="SkillPage_UpdateStatusFailedToast_Title" xml:space="preserve">
+        <value>スキルの状態を更新できませんでした。</value>
+    </data>
+    <data name="OfficialAssistant_IsQuotaLimitFree_ToolTip" xml:space="preserve">
+        <value>現在のモデルが5時間および週ごとの配額制限を受けているかどうかを示します</value>
     </data>
 </root>
