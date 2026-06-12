@@ -200,7 +200,7 @@ public sealed class EssentialPlugin : BuiltInChatPlugin
     [Description(
         "Use this tool to ask the user a small number of clarifying questions before proceeding. " +
         "Provide the questions array with concise headers and prompts. " +
-        "Use options for fixed choices, set multiSelect when multiple selections are allowed, and set allowFreeformInput to let users supply their own answer.")]
+        "Use options for fixed choices, set multiSelect when multiple selections are allowed.")]
     [DynamicResourceKey(
         LocaleKey.BuiltInChatPlugin_Essential_AskUserQuestion_Header,
         LocaleKey.BuiltInChatPlugin_Essential_AskUserQuestion_Description)]

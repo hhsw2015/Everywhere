@@ -214,10 +214,10 @@ public sealed partial class TextDifference : ObservableObject, IDisposable
     /// <returns></returns>
     public Task<bool> WaitForAcceptanceAsync(CancellationToken cancellationToken = default)
     {
-        _acceptanceTcs ??= new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-        cancellationToken.Register(() => _acceptanceTcs?.TrySetCanceled());
+        var tcs = _acceptanceTcs ??= new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        cancellationToken.Register(() => tcs.TrySetCanceled(cancellationToken));
         TrySetAcceptanceResult(); // Check once in case already decided
-        return _acceptanceTcs.Task;
+        return tcs.Task;
     }
 
     internal void TrySetAcceptanceResult()

@@ -873,11 +873,11 @@
     <data name="KernelMixinFactory_OfficialError_RateLimitLlm24h" xml:space="preserve">
         <value>Достигнут лимит запросов к модели за день. Пожалуйста, попробуйте позже.</value>
     </data>
-    <data name="KernelMixinFactory_OfficialError_RateLimitExpensiveModel5h" xml:space="preserve">
-        <value>Достигнут лимит запросов к ресурсоемкой модели за 5-часовой период. Пожалуйста, попробуйте позже или переключитесь на другую модель.</value>
+    <data name="KernelMixinFactory_OfficialError_5HourQuotaLimitExceeded" xml:space="preserve">
+        <value>Превышен лимит запросов модели на 5 часов, пожалуйста, попробуйте позже или переключитесь на модель без ограничений.</value>
     </data>
-    <data name="KernelMixinFactory_OfficialError_RateLimitExpensiveModel7d" xml:space="preserve">
-        <value>Достигнут лимит запросов к ресурсоемкой модели за 7-дневный период. Пожалуйста, попробуйте позже или переключитесь на другую модель.</value>
+    <data name="KernelMixinFactory_OfficialError_7DayQuotaLimitExceeded" xml:space="preserve">
+        <value>Превышен лимит запросов модели на 7 дней, пожалуйста, попробуйте позже или переключитесь на модель без ограничений.</value>
     </data>
     <data name="ChatWindowViewModel_QuickActions_Solve" xml:space="preserve">
         <value>Решить</value>
@@ -1164,6 +1164,24 @@
     </data>
     <data name="BuiltInChatPlugin_FileSystem_DeleteFiles_DeletionConsent_Header" xml:space="preserve">
         <value>Будет удалено {0} файлов или папок</value>
+    </data>
+    <data name="BuiltInChatPlugin_FileSystem_MoveFile_MoveConsent_Header" xml:space="preserve">
+        <value>Allow file move?</value>
+    </data>
+    <data name="BuiltInChatPlugin_FileSystem_CreateDirectory_CreateConsent_Header" xml:space="preserve">
+        <value>Allow directory creation?</value>
+    </data>
+    <data name="BuiltInChatPlugin_FileSystem_WriteToFile_WriteConsent_Header" xml:space="preserve">
+        <value>Allow file write?</value>
+    </data>
+    <data name="BuiltInChatPlugin_FileSystem_WriteToFile_CreateConsent_Description" xml:space="preserve">
+        <value>Create this file.</value>
+    </data>
+    <data name="BuiltInChatPlugin_FileSystem_WriteToFile_AppendConsent_Description" xml:space="preserve">
+        <value>Append to this file.</value>
+    </data>
+    <data name="BuiltInChatPlugin_FileSystem_WriteToFile_OverwriteConsent_Description" xml:space="preserve">
+        <value>Overwrite this file.</value>
     </data>
     <data name="BuiltInChatPlugin_FileSystem_DeleteFiles_SystemFile_DeletionConsent_Header" xml:space="preserve">
         <value>Системный файл или директория будет удалена</value>
@@ -3038,6 +3056,15 @@
         <value>Не удалось обновить статус навыка.</value>
     </data>
     <data name="OfficialAssistant_IsQuotaLimitFree_ToolTip" xml:space="preserve">
-        <value>Указывает, ограничена ли текущая модель 5 часами и недельной квотой</value>
+        <value>Указывает, ограничена ли текущая модель квотой в 5 часов и 7 дней</value>
+    </data>
+    <data name="UserProfilePresenter_FiveHourWindowTextBlock_Text" xml:space="preserve">
+        <value>5 часов</value>
+    </data>
+    <data name="UserProfilePresenter_SevenDayWindowTextBlock_Text" xml:space="preserve">
+        <value>7 дней</value>
+    </data>
+    <data name="UserProfilePresenter_QuotaLimitResetAtToolTip_Tip" xml:space="preserve">
+        <value>Квота будет сброшена {1} для {0}</value>
     </data>
 </root>

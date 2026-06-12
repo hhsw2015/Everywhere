@@ -1,5 +1,4 @@
 ﻿using System.ClientModel;
-using System.Net;
 using System.Text.Json;
 using Anthropic.Exceptions;
 using Everywhere.AI.Configurator;
@@ -125,12 +124,12 @@ public sealed class KernelMixinFactory(IHttpClientFactory httpClientFactory, ILo
         {
             var payload = exception switch
             {
-                ClientResultException { Status: 502 } clientResultException when clientResultException.GetRawResponse() is { } response =>
-                    response.BufferContent().ToObjectFromJson<ApiPayload>(),
-                Anthropic5xxException { StatusCode: HttpStatusCode.BadGateway, ResponseBody: { } responseBody } =>
-                    JsonSerializer.Deserialize<ApiPayload>(responseBody),
-                HttpOperationException { StatusCode: HttpStatusCode.BadGateway, ResponseContent: { } responseContent } =>
-                    JsonSerializer.Deserialize<ApiPayload>(responseContent),
+                ClientResultException clientResultException when clientResultException.GetRawResponse() is { } response =>
+                    response.BufferContent().ToObjectFromJson<ApiPayload>(ApiPayloadJsonSerializerContext.Default.ApiPayload.Options),
+                Anthropic5xxException { ResponseBody: { } responseBody } =>
+                    JsonSerializer.Deserialize<ApiPayload>(responseBody, ApiPayloadJsonSerializerContext.Default.ApiPayload),
+                HttpOperationException { ResponseContent: { } responseContent } =>
+                    JsonSerializer.Deserialize<ApiPayload>(responseContent, ApiPayloadJsonSerializerContext.Default.ApiPayload),
                 _ => null
             };
 
@@ -154,7 +153,7 @@ public sealed class KernelMixinFactory(IHttpClientFactory httpClientFactory, ILo
                     exception,
                     error.Message.IsNullOrWhiteSpace() ?
                         errorMessageKey :
-                        new AggregateDynamicResourceKey([errorMessageKey, new DirectResourceKey(error.Code)], "\n"),
+                        new AggregateDynamicResourceKey([errorMessageKey, new DirectResourceKey(error.Message)], "\n"),
                     showDetails: false);
             }
 
@@ -204,9 +203,9 @@ public sealed class KernelMixinFactory(IHttpClientFactory httpClientFactory, ILo
         "rate_limit_llm_24h" =>
             new DynamicResourceKey(LocaleKey.KernelMixinFactory_OfficialError_RateLimitLlm24h),
         "rate_limit_expensive_model_5h" =>
-            new DynamicResourceKey(LocaleKey.KernelMixinFactory_OfficialError_RateLimitExpensiveModel5h),
+            new DynamicResourceKey(LocaleKey.KernelMixinFactory_OfficialError_5HourQuotaLimitExceeded),
         "rate_limit_expensive_model_7d" =>
-            new DynamicResourceKey(LocaleKey.KernelMixinFactory_OfficialError_RateLimitExpensiveModel7d),
+            new DynamicResourceKey(LocaleKey.KernelMixinFactory_OfficialError_7DayQuotaLimitExceeded),
 
         _ => null
     };

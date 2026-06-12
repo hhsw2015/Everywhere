@@ -57,10 +57,8 @@ public partial class AskQuestionCard : Card
                 }
             }
 
-            if (question.Options is null || question.AllowFreeformInput)
-            {
-                OptionWrappers.Add(new FreeformOptionWrapper());
-            }
+            // Always allow freeform
+            OptionWrappers.Add(new FreeformOptionWrapper());
         }
     }
 

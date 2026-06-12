@@ -941,6 +941,61 @@ public class PtyExecutionTests
     }
 
     [Test]
+    public async Task RichStrategy_CommandLine_DecodesEscapedSemicolon()
+    {
+        var sb = new StringBuilder();
+        sb.Append("\e]633;A\a");
+        sb.Append("\e]633;B\a");
+        sb.Append("\r\n");
+        sb.Append("\e]633;E;echo \"1\"\\x3becho \"2\"\a");
+        sb.Append("\e]633;C\a");
+        sb.Append("1\r\n");
+        sb.Append("2\r\n");
+        sb.Append("\e]633;D;0\a");
+        sb.Append("\e]633;A\a");
+
+        var (session, _) = CreateMockPty(Encoding.UTF8.GetBytes(sb.ToString()));
+        var strategy = new RichExecuteStrategy(_logger);
+        var result = await ExecuteSingleRunAsync(
+            strategy,
+            session,
+            script: "echo \"1\";echo \"2\"",
+            ShellType.Unknown,
+            timeout: TimeSpan.FromSeconds(10),
+            cancellationToken: CancellationToken.None);
+
+        Assert.That(result.CommandLine, Is.EqualTo("echo \"1\";echo \"2\""));
+        Assert.That(result.OutputText.Replace("\r\n", "\n"), Is.EqualTo("1\n2"));
+    }
+
+    [Test]
+    public async Task RichStrategy_CommandLine_PreservesEmoji()
+    {
+        var sb = new StringBuilder();
+        sb.Append("\e]633;A\a");
+        sb.Append("\e]633;B\a");
+        sb.Append("\r\n");
+        sb.Append("\e]633;E;echo \"🚀\"\a");
+        sb.Append("\e]633;C\a");
+        sb.Append("🚀\r\n");
+        sb.Append("\e]633;D;0\a");
+        sb.Append("\e]633;A\a");
+
+        var (session, _) = CreateMockPty(Encoding.UTF8.GetBytes(sb.ToString()));
+        var strategy = new RichExecuteStrategy(_logger);
+        var result = await ExecuteSingleRunAsync(
+            strategy,
+            session,
+            script: "echo \"🚀\"",
+            ShellType.Unknown,
+            timeout: TimeSpan.FromSeconds(10),
+            cancellationToken: CancellationToken.None);
+
+        Assert.That(result.CommandLine, Is.EqualTo("echo \"🚀\""));
+        Assert.That(result.OutputText.Replace("\r\n", "\n"), Is.EqualTo("🚀"));
+    }
+
+    [Test]
     public async Task RichStrategy_ClearDisplay_ClearsActiveRunOutput()
     {
         var sb = new StringBuilder();
@@ -1026,6 +1081,7 @@ public class PtyExecutionTests
                     "\e]633;D;0\a" +
                     "\e]633;A\a\e]633;B\a")));
         var session = CreateMockPty(readerStream);
+        session.Parser.Feed("\e[?2004h");
 
         var strategy = new RichExecuteStrategy(_logger);
         var result = await ExecuteSingleRunAsync(
@@ -1048,6 +1104,7 @@ public class PtyExecutionTests
     {
         var ptyData = "\r\nWrite-Host 'RESULT'\r\nRESULT\r\nPS C:\\test> "u8.ToArray();
         var (session, _) = CreateMockPty(ptyData);
+        session.Parser.Feed("\e[?2004h");
         session.Parser.Feed("PS C:\\detect> ");
 
         var strategy = new RichExecuteStrategy(_logger);

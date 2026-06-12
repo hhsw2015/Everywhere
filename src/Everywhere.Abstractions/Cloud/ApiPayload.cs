@@ -163,3 +163,6 @@ public class ApiPayload<T> : ApiPayload
         return payload;
     }
 }
+
+[JsonSerializable(typeof(ApiPayload))]
+public sealed partial class ApiPayloadJsonSerializerContext : JsonSerializerContext;

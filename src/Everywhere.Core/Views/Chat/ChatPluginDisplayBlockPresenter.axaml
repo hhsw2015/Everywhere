@@ -71,7 +71,8 @@
           <StackPanel Spacing="4">
             <TextBlock
               Classes="Muted"
-              FontSize="{DynamicResource FontSizeS}">
+              FontSize="{DynamicResource FontSizeS}"
+              IsVisible="{Binding HasMoreReferences}">
               <TextBlock.Text>
                 <I18N Key="{x:Static LocaleKey.ChatPluginDisplayBlockPresenter_FileReferences_TotalCountTextBlock_Text}">
                   <Binding Path="TotalReferenceCount"/>
@@ -93,7 +94,9 @@
                           Size="14"/>
                         <TextBlock
                           FontSize="{DynamicResource FontSizeS}"
-                          Text="{Binding FullPath, Converter={x:Static vc:CommonConverters.FullPathToFileName}}"/>
+                          Text="{Binding FullPath}"
+                          TextTrimming="PathSegmentEllipsis"
+                          ToolTip.Tip="{Binding FullPath}"/>
                       </StackPanel>
                     </HyperlinkButton.Content>
                   </HyperlinkButton>

@@ -14,6 +14,10 @@ if ($ExecutionContext.SessionState.LanguageMode -ne "FullLanguage") {
 	return;
 }
 
+$EverywhereUtf8NoBomEncoding = [System.Text.UTF8Encoding]::new($false)
+[Console]::OutputEncoding = $EverywhereUtf8NoBomEncoding
+$OutputEncoding = $EverywhereUtf8NoBomEncoding
+
 # Disable all history providers to prevent them from interfering with our history tracking
 Get-PSReadlineOption | ForEach-Object {
     if ($_.HistorySaveStyle -ne "SaveNothing") {
@@ -37,6 +41,28 @@ $Global:__EverywhereState = @{
 
 # Clear the nonce from environment
 $env:EVERYWHERE_NONCE = $null
+
+function Global:__EverywhereEscapeValue([string]$Value) {
+	$Builder = [System.Text.StringBuilder]::new()
+	for ($Index = 0; $Index -lt $Value.Length; $Index++) {
+		$Char = $Value[$Index]
+		$Code = [int][char]$Char
+		if ($Code -lt 0x20) {
+			[void]$Builder.Append("\x$($Code.ToString('x2'))")
+		}
+		elseif ($Char -eq "\") {
+			[void]$Builder.Append("\\")
+		}
+		elseif ($Char -eq ";") {
+			[void]$Builder.Append("\x3b")
+		}
+		else {
+			[void]$Builder.Append($Char)
+		}
+	}
+
+	$Builder.ToString()
+}
 
 function Global:Prompt() {
 	$FakeCode = [int]!$global:?
@@ -82,9 +108,10 @@ if (Get-Module -Name PSReadLine) {
 	function Global:PSConsoleHostReadLine {
 		$CommandLine = $Global:__EverywhereState.OriginalPSConsoleHostReadLine.Invoke()
 		$Global:__EverywhereState.IsInExecution = $true
+		$EscapedCommandLine = __EverywhereEscapeValue $CommandLine
 
 		# Command line
-		$Result = "$([char]0x1b)]633;E;$CommandLine`a"
+		$Result = "$([char]0x1b)]633;E;$EscapedCommandLine`a"
 		# Command executed
 		$Result += "$([char]0x1b)]633;C`a"
 

@@ -873,11 +873,11 @@ Mi inteligencia está impulsada por un modelo de lenguaje grande, y necesito que
     <data name="KernelMixinFactory_OfficialError_RateLimitLlm24h" xml:space="preserve">
         <value>Se ha alcanzado el límite diario de solicitudes al modelo. Intenta de nuevo más tarde.</value>
     </data>
-    <data name="KernelMixinFactory_OfficialError_RateLimitExpensiveModel5h" xml:space="preserve">
-        <value>Se ha alcanzado el límite de solicitudes al modelo de alto consumo en una ventana de 5 horas. Intenta de nuevo más tarde o cambia de modelo.</value>
+    <data name="KernelMixinFactory_OfficialError_5HourQuotaLimitExceeded" xml:space="preserve">
+        <value>Se ha superado el límite de cuota de 5 horas para solicitudes de modelo. Inténtalo de nuevo más tarde o cambia a un modelo sin límite de cuota.</value>
     </data>
-    <data name="KernelMixinFactory_OfficialError_RateLimitExpensiveModel7d" xml:space="preserve">
-        <value>Se ha alcanzado el límite de solicitudes al modelo de alto consumo en una ventana de 7 días. Intenta de nuevo más tarde o cambia de modelo.</value>
+    <data name="KernelMixinFactory_OfficialError_7DayQuotaLimitExceeded" xml:space="preserve">
+        <value>Se ha superado el límite de cuota de 7 días para solicitudes de modelo. Inténtalo de nuevo más tarde o cambia a un modelo sin límite de cuota.</value>
     </data>
     <data name="ChatWindowViewModel_QuickActions_Solve" xml:space="preserve">
         <value>Resolver</value>
@@ -1164,6 +1164,24 @@ Se pueden usar marcadores de posición en la palabra clave, que están contenido
     </data>
     <data name="BuiltInChatPlugin_FileSystem_DeleteFiles_DeletionConsent_Header" xml:space="preserve">
         <value>Se eliminarán {0} archivos o carpetas</value>
+    </data>
+    <data name="BuiltInChatPlugin_FileSystem_MoveFile_MoveConsent_Header" xml:space="preserve">
+        <value>Allow file move?</value>
+    </data>
+    <data name="BuiltInChatPlugin_FileSystem_CreateDirectory_CreateConsent_Header" xml:space="preserve">
+        <value>Allow directory creation?</value>
+    </data>
+    <data name="BuiltInChatPlugin_FileSystem_WriteToFile_WriteConsent_Header" xml:space="preserve">
+        <value>Allow file write?</value>
+    </data>
+    <data name="BuiltInChatPlugin_FileSystem_WriteToFile_CreateConsent_Description" xml:space="preserve">
+        <value>Create this file.</value>
+    </data>
+    <data name="BuiltInChatPlugin_FileSystem_WriteToFile_AppendConsent_Description" xml:space="preserve">
+        <value>Append to this file.</value>
+    </data>
+    <data name="BuiltInChatPlugin_FileSystem_WriteToFile_OverwriteConsent_Description" xml:space="preserve">
+        <value>Overwrite this file.</value>
     </data>
     <data name="BuiltInChatPlugin_FileSystem_DeleteFiles_SystemFile_DeletionConsent_Header" xml:space="preserve">
         <value>Se eliminará un archivo o directorio del sistema</value>
@@ -3038,6 +3056,15 @@ Fecha de lanzamiento: {2}</value>
         <value>No se pudo actualizar el estado de la habilidad.</value>
     </data>
     <data name="OfficialAssistant_IsQuotaLimitFree_ToolTip" xml:space="preserve">
-        <value>Indica si el modelo actual está sujeto a un límite de 5 horas y cuotas semanales</value>
+        <value>Indica si el modelo actual está sujeto a límites de cuota de 5 horas y 7 días</value>
+    </data>
+    <data name="UserProfilePresenter_FiveHourWindowTextBlock_Text" xml:space="preserve">
+        <value>5 Horas</value>
+    </data>
+    <data name="UserProfilePresenter_SevenDayWindowTextBlock_Text" xml:space="preserve">
+        <value>7 Días</value>
+    </data>
+    <data name="UserProfilePresenter_QuotaLimitResetAtToolTip_Tip" xml:space="preserve">
+        <value>La cuota de {0} se reiniciará el {1}</value>
     </data>
 </root>

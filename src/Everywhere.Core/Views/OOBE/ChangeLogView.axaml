@@ -21,7 +21,8 @@
     </shadui:NavigationView.PaneHeader>
 
     <shadui:NavigationView.PaneContent>
-      <Grid RowDefinitions="Auto,*,Auto">
+      <Grid
+        Margin="0,0,0,12" RowDefinitions="Auto,*,Auto">
         <Grid.Styles>
           <Style Selector="ProgressBar.Hide">
             <Setter Property="Opacity" Value="0"/>

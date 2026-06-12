@@ -64,15 +64,27 @@
 
                     <ListBox.DataTemplates>
                       <DataTemplate DataType="v:AskQuestionCard+NormalOptionWrapper">
-                        <TextBlock
-                          Text="{Binding Option.Content}"
-                          TextWrapping="Wrap"/>
+                        <DockPanel
+                          HorizontalAlignment="Left" HorizontalSpacing="6">
+                          <LucideIcon
+                            DockPanel.Dock="Right" VerticalAlignment="Center"
+                            IsVisible="{Binding Option.Description, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                            Kind="CircleQuestionMark"
+                            Size="{DynamicResource FontSizeS}"
+                            ToolTip.Placement="Top"
+                            ToolTip.Tip="{Binding Option.Description}"/>
+
+                          <TextBlock
+                            Text="{Binding Option.Content}"
+                            TextWrapping="Wrap"/>
+                        </DockPanel>
                       </DataTemplate>
 
                       <DataTemplate DataType="v:AskQuestionCard+FreeformOptionWrapper">
                         <TextBox
-                          Classes="Compact" HorizontalAlignment="Stretch"
-                          AcceptsReturn="True" MaxLines="5"
+                          Classes="Compact" Margin="-2,0"
+                          HorizontalAlignment="Stretch" AcceptsReturn="True"
+                          MaxLines="5"
                           Text="{Binding FreeformText}"
                           TextWrapping="Wrap"
                           Watermark="{I18N {x:Static LocaleKey.AskQuestionCard_FreeformTextBox_Watermark}}">

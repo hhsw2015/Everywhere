@@ -41,9 +41,6 @@ public sealed class ChatPluginQuestion
     [Description("Allow selecting multiple options when options are provided'")]
     public bool MultiSelect { get; set; }
 
-    [Description("Allow freeform text answers in addition to option selection")]
-    public bool AllowFreeformInput { get; set; }
-
     [Description("Optional list of selectable answers. If omitted, the question is free text")]
     public IReadOnlyList<ChatPluginQuestionOption>? Options { get; set; }
 }
@@ -54,8 +51,11 @@ public sealed class ChatPluginQuestionOption
     [Description("Main content for the option")]
     public required string Content { get; set; }
 
-    [Description("Mark this option as the recommended default")]
-    public bool Recommended { get; set; }
+    [Description("Optional additional description for the option, such as implications of selecting it")]
+    public string? Description { get; set; } = null;
+
+    [Description("Optional flag to indicate the option is recommended.")]
+    public bool Recommended { get; set; } = false;
 }
 
 [Serializable]

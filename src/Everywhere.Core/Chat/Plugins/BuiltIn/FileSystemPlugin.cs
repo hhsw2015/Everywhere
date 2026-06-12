@@ -16,6 +16,12 @@ namespace Everywhere.Chat.Plugins.BuiltIn;
 
 public sealed class FileSystemPlugin : BuiltInChatPlugin
 {
+#if WINDOWS
+    private static StringComparison PathComparer => StringComparison.OrdinalIgnoreCase;
+#else
+    private static StringComparison PathComparer => StringComparison.Ordinal;
+#endif
+
     private static TimeSpan RegexTimeout => TimeSpan.FromSeconds(3);
 
     public override IDynamicResourceKey HeaderKey { get; } = new DynamicResourceKey(LocaleKey.BuiltInChatPlugin_FileSystem_Header);
@@ -48,24 +54,29 @@ public sealed class FileSystemPlugin : BuiltInChatPlugin
                     ChatFunctionPermissions.FileRead));
             list.Add(
                 new BuiltInChatFunction(
-                    MoveFile,
-                    ChatFunctionPermissions.FileAccess));
+                    MoveFileAsync,
+                    ChatFunctionPermissions.FileAccess,
+                    onPermissionConsent: _ => true));
             list.Add(
                 new BuiltInChatFunction(
                     DeleteFilesAsync,
-                    ChatFunctionPermissions.FileAccess));
+                    ChatFunctionPermissions.FileAccess,
+                    onPermissionConsent: _ => true));
             list.Add(
                 new BuiltInChatFunction(
                     CreateDirectory,
-                    ChatFunctionPermissions.FileAccess));
+                    ChatFunctionPermissions.FileAccess,
+                    onPermissionConsent: _ => true));
             list.Add(
                 new BuiltInChatFunction(
                     WriteToFileAsync,
-                    ChatFunctionPermissions.FileAccess));
+                    ChatFunctionPermissions.FileAccess,
+                    onPermissionConsent: _ => true));
             list.Add(
                 new BuiltInChatFunction(
                     ReplaceFileContentAsync,
-                    ChatFunctionPermissions.FileAccess));
+                    ChatFunctionPermissions.FileAccess,
+                    onPermissionConsent: _ => true));
         });
     }
 
@@ -565,11 +576,13 @@ public sealed class FileSystemPlugin : BuiltInChatPlugin
     [Description("Moves or renames a file or directory.")]
     [DynamicResourceKey(LocaleKey.BuiltInChatPlugin_FileSystem_MoveFile_Header, LocaleKey.BuiltInChatPlugin_FileSystem_MoveFile_Description)]
     [FriendlyFunctionCallContentRenderer(typeof(FileRenderer))]
-    private bool MoveFile(
+    private async Task MoveFileAsync(
         [FromKernelServices] IChatPluginDisplaySink displaySink,
+        [FromKernelServices] IChatPluginUserInterface userInterface,
         [FromKernelServices] ChatContext chatContext,
         [Description("Source file or directory path.")] string source,
-        [Description("Destination file or directory path. Type must match the source.")] string destination)
+        [Description("Destination file or directory path. Type must match the source.")] string destination,
+        CancellationToken cancellationToken = default)
     {
         _logger.LogDebug("Moving file from {Source} to {Destination}", source, destination);
 
@@ -595,6 +608,14 @@ public sealed class FileSystemPlugin : BuiltInChatPlugin
                 HandledSystemExceptionType.DirectoryNotFound);
         }
 
+        await RequestFileOperationConsentAsync(
+            userInterface,
+            chatContext,
+            new DynamicResourceKey(LocaleKey.BuiltInChatPlugin_FileSystem_MoveFile_MoveConsent_Header),
+            null,
+            [source, destination],
+            cancellationToken);
+
         try
         {
             Directory.CreateDirectory(destinationDirectory);
@@ -615,8 +636,6 @@ public sealed class FileSystemPlugin : BuiltInChatPlugin
         {
             Directory.Move(source, destination);
         }
-
-        return true;
     }
 
     [KernelFunction("delete_files")]
@@ -682,9 +701,30 @@ public sealed class FileSystemPlugin : BuiltInChatPlugin
             }
         }
 
+        var infosToDeleteList = infosToDelete.ToList();
+        if (infosToDeleteList.Count == 0)
+        {
+            return "No files or directories to delete.";
+        }
+
+        var deleteTargets = infosToDeleteList
+            .AsValueEnumerable()
+            .Select(info => info.FullName)
+            .Order()
+            .ToList();
+        await RequestFileOperationConsentAsync(
+            userInterface,
+            chatContext,
+            new FormattedDynamicResourceKey(
+                LocaleKey.BuiltInChatPlugin_FileSystem_DeleteFiles_DeletionConsent_Header,
+                new DirectResourceKey(infosToDeleteList.Count)),
+            null,
+            deleteTargets,
+            cancellationToken);
+
         var successCount = 0;
         var errorCount = 0;
-        foreach (var info in infosToDelete)
+        foreach (var info in infosToDeleteList)
         {
             if (info.Attributes.HasFlag(FileAttributes.System))
             {
@@ -734,15 +774,25 @@ public sealed class FileSystemPlugin : BuiltInChatPlugin
         LocaleKey.BuiltInChatPlugin_FileSystem_CreateDirectory_Header,
         LocaleKey.BuiltInChatPlugin_FileSystem_CreateDirectory_Description)]
     [FriendlyFunctionCallContentRenderer(typeof(FileRenderer))]
-    private void CreateDirectory(
+    private async Task CreateDirectory(
         [FromKernelServices] IChatPluginDisplaySink displaySink,
+        [FromKernelServices] IChatPluginUserInterface userInterface,
         [FromKernelServices] ChatContext chatContext,
-        string path)
+        string path,
+        CancellationToken cancellationToken = default)
     {
         _logger.LogDebug("Creating directory at {Path}", path);
 
         ExpandFullPath(chatContext, ref path);
         displaySink.AppendFileReferences(new ChatPluginFileReference(path));
+
+        await RequestFileOperationConsentAsync(
+            userInterface,
+            chatContext,
+            new DynamicResourceKey(LocaleKey.BuiltInChatPlugin_FileSystem_CreateDirectory_CreateConsent_Header),
+            null,
+            [path],
+            cancellationToken);
 
         Directory.CreateDirectory(path);
     }
@@ -755,18 +805,29 @@ public sealed class FileSystemPlugin : BuiltInChatPlugin
     [FriendlyFunctionCallContentRenderer(typeof(FileRenderer))]
     private async Task WriteToFileAsync(
         [FromKernelServices] IChatPluginDisplaySink displaySink,
+        [FromKernelServices] IChatPluginUserInterface userInterface,
         [FromKernelServices] ChatContext chatContext,
         string path,
         string? content,
-        bool append = false)
+        bool append = false,
+        CancellationToken cancellationToken = default)
     {
         _logger.LogDebug("Writing text file at {Path}, append: {Append}", path, append);
 
         ExpandFullPath(chatContext, ref path);
         displaySink.AppendFileReferences(new ChatPluginFileReference(path));
 
+        var fileExists = File.Exists(path);
+        await RequestFileOperationConsentAsync(
+            userInterface,
+            chatContext,
+            new DynamicResourceKey(LocaleKey.BuiltInChatPlugin_FileSystem_WriteToFile_WriteConsent_Header),
+            new DynamicResourceKey(GetWriteConsentDescriptionKey(append, fileExists)),
+            [path],
+            cancellationToken);
+
         await using var stream = new FileStream(path, append ? FileMode.Append : FileMode.Create, FileAccess.ReadWrite, FileShare.None);
-        if (await EncodingDetector.DetectEncodingAsync(stream) is not { } encoding)
+        if (await EncodingDetector.DetectEncodingAsync(stream, cancellationToken: cancellationToken) is not { } encoding)
         {
             throw new HandledException(
                 new UnauthorizedAccessException("Cannot write to a binary file."),
@@ -776,7 +837,7 @@ public sealed class FileSystemPlugin : BuiltInChatPlugin
 
         await using var writer = new StreamWriter(stream, encoding);
         await writer.WriteAsync(content);
-        await writer.FlushAsync();
+        await writer.FlushAsync(cancellationToken);
     }
 
     [KernelFunction("replace_file_content")]
@@ -874,6 +935,11 @@ public sealed class FileSystemPlugin : BuiltInChatPlugin
             }
         }
 
+        if (replacedContent == fileContent)
+        {
+            return "No content was replaced.";
+        }
+
         var difference = new TextDifference(path);
         TextDifferenceBuilder.BuildLineDiff(difference, fileContent, replacedContent);
 
@@ -898,6 +964,11 @@ public sealed class FileSystemPlugin : BuiltInChatPlugin
 
     private static void ExpandFullPath(ChatContext chatContext, ref string path)
     {
+        path = ExpandFullPath(chatContext.EnsureWorkingDirectory(), path);
+    }
+
+    internal static string ExpandFullPath(string workingDirectory, string path)
+    {
         if (string.IsNullOrWhiteSpace(path))
         {
             throw new HandledFunctionInvokingException(
@@ -906,16 +977,81 @@ public sealed class FileSystemPlugin : BuiltInChatPlugin
                 new ArgumentException("Path cannot be null or empty.", nameof(path)));
         }
 
-        var originalWorkingDirectory = Environment.CurrentDirectory;
-        Environment.CurrentDirectory = chatContext.EnsureWorkingDirectory();
-        try
+        if (string.IsNullOrWhiteSpace(workingDirectory))
         {
-            path = Environment.ExpandEnvironmentVariables(path);
-            path = Path.GetFullPath(path);
+            throw new ArgumentException("Working directory cannot be null or empty.", nameof(workingDirectory));
         }
-        finally
+
+        path = Environment.ExpandEnvironmentVariables(path);
+        return Path.GetFullPath(path, workingDirectory);
+    }
+
+    internal static bool IsPathInsideDirectory(string path, string directory)
+    {
+        var fullPath = Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
+        var fullDirectory = Path.TrimEndingDirectorySeparator(Path.GetFullPath(directory));
+        if (fullPath.Equals(fullDirectory, PathComparer)) return true;
+
+        var directoryWithSeparator = fullDirectory + Path.DirectorySeparatorChar;
+        return fullPath.StartsWith(directoryWithSeparator, PathComparer);
+    }
+
+    private static string BuildConsentId(IReadOnlyList<string> normalizedPaths)
+    {
+        var builder = new StringBuilder();
+        foreach (var path in normalizedPaths.AsValueEnumerable().Order())
         {
-            Environment.CurrentDirectory = originalWorkingDirectory;
+            builder.Append('|').Append(Path.TrimEndingDirectorySeparator(path));
+        }
+
+        return builder.ToString();
+    }
+
+    internal static string GetWriteConsentDescriptionKey(bool append, bool fileExists) =>
+        fileExists
+            ? append
+                ? LocaleKey.BuiltInChatPlugin_FileSystem_WriteToFile_AppendConsent_Description
+                : LocaleKey.BuiltInChatPlugin_FileSystem_WriteToFile_OverwriteConsent_Description
+            : LocaleKey.BuiltInChatPlugin_FileSystem_WriteToFile_CreateConsent_Description;
+
+    private static async Task RequestFileOperationConsentAsync(
+        IChatPluginUserInterface userInterface,
+        ChatContext chatContext,
+        IDynamicResourceKey headerKey,
+        IDynamicResourceKey? descriptionKey,
+        List<string> paths,
+        CancellationToken cancellationToken)
+    {
+        var workingDirectory = chatContext.EnsureWorkingDirectory();
+        if (paths.Count > 0 && paths.AsValueEnumerable().All(path => IsPathInsideDirectory(path, workingDirectory)))
+        {
+            return;
+        }
+
+        var container = new ChatPluginContainerDisplayBlock();
+        if (descriptionKey is not null)
+        {
+            container.Add(new ChatPluginDynamicResourceKeyDisplayBlock(descriptionKey));
+        }
+
+        container.Add(new ChatPluginFileReferencesDisplayBlock(
+            paths.AsValueEnumerable().Select(path => new ChatPluginFileReference(path)).ToList())
+        {
+            TotalReferenceCount = paths.Count
+        });
+
+        var consent = await userInterface.RequestConsentAsync(
+            BuildConsentId(paths),
+            headerKey,
+            container,
+            RequestConsentRememberMasks.AllowOnce | RequestConsentRememberMasks.AllowSession,
+            cancellationToken: cancellationToken);
+        if (!consent)
+        {
+            throw new HandledException(
+                new UnauthorizedAccessException(consent.FormatReason("User denied consent for this operation.")),
+                new DirectResourceKey("File operation denied"),
+                showDetails: false);
         }
     }
 
@@ -1054,6 +1190,7 @@ public sealed class FileSystemPlugin : BuiltInChatPlugin
                 ShouldRecursePredicate = (ref entry) =>
                 {
                     var name = entry.FileName;
+                    // TODO: follow ignore pattern
                     return !name.Equals("node_modules", StringComparison.OrdinalIgnoreCase) &&
                         !name.Equals("bin", StringComparison.OrdinalIgnoreCase) &&
                         !name.Equals("obj", StringComparison.OrdinalIgnoreCase) &&

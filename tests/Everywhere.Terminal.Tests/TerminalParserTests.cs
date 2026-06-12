@@ -117,6 +117,60 @@ public class TerminalParserTests
     }
 
     [Test]
+    public void Feed_DecodesEscapedSemicolonInShellIntegrationCommandLine()
+    {
+        var commandLines = new List<string?>();
+        var parser = new TerminalParser(
+            shellIntegrationMarkerHandler: (in marker) =>
+            {
+                if (marker.Type == ShellIntegrationMarkerType.CommandLine)
+                {
+                    commandLines.Add(marker.CommandLine);
+                }
+            });
+
+        parser.Feed("\e]633;E;echo \"1\"\\x3becho \"2\"\a");
+
+        Assert.That(commandLines, Is.EqualTo(new[] { "echo \"1\";echo \"2\"" }));
+    }
+
+    [Test]
+    public void Feed_DecodesEmojiInShellIntegrationCommandLine()
+    {
+        var commandLines = new List<string?>();
+        var parser = new TerminalParser(
+            shellIntegrationMarkerHandler: (in marker) =>
+            {
+                if (marker.Type == ShellIntegrationMarkerType.CommandLine)
+                {
+                    commandLines.Add(marker.CommandLine);
+                }
+            });
+
+        parser.Feed("\e]633;E;echo \"🚀\"\a");
+
+        Assert.That(commandLines, Is.EqualTo(new[] { "echo \"🚀\"" }));
+    }
+
+    [Test]
+    public void Feed_DecodesEmojiAndEscapedSemicolonInShellIntegrationCommandLine()
+    {
+        var commandLines = new List<string?>();
+        var parser = new TerminalParser(
+            shellIntegrationMarkerHandler: (in marker) =>
+            {
+                if (marker.Type == ShellIntegrationMarkerType.CommandLine)
+                {
+                    commandLines.Add(marker.CommandLine);
+                }
+            });
+
+        parser.Feed("\e]633;E;echo \"🚀\"\\x3becho \"2\"\a");
+
+        Assert.That(commandLines, Is.EqualTo(new[] { "echo \"🚀\";echo \"2\"" }));
+    }
+
+    [Test]
     public void Feed_EmitsTerminalQueryResponses()
     {
         var responses = new List<string>();

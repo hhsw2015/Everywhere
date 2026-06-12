@@ -61,7 +61,8 @@
                   <Button
                     x:Name="PART_RemoveButton" DockPanel.Dock="Right"
                     Margin="0,0,-2,0" Padding="1"
-                    VerticalAlignment="Center" Background="Transparent"
+                    VerticalAlignment="Center"
+                    Background="{DynamicResource TransparentColor}"
                     BorderThickness="0" Focusable="False"
                     ToolTip.Tip="{I18N {x:Static LocaleKey.ChatAttachment_RemoveButton_ToolTip}}">
                     <LucideIcon

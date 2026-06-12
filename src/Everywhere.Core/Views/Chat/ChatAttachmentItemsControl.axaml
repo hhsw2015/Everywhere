@@ -72,7 +72,8 @@
                   <Button
                     x:Name="PART_RemoveButton" DockPanel.Dock="Right"
                     Margin="0,0,-2,0" Padding="1"
-                    VerticalAlignment="Center" Background="Transparent"
+                    VerticalAlignment="Center"
+                    Background="{DynamicResource TransparentColor}"
                     BorderThickness="0"
                     Command="{Binding $parent[v:ChatAttachmentItemsControl].RemoveCommand}"
                     CommandParameter="{Binding}"
@@ -137,7 +138,8 @@
                   <Button
                     x:Name="PART_RemoveButton" DockPanel.Dock="Right"
                     Margin="0,0,-2,0" Padding="1"
-                    VerticalAlignment="Center" Background="Transparent"
+                    VerticalAlignment="Center"
+                    Background="{DynamicResource TransparentColor}"
                     BorderThickness="0"
                     Command="{Binding $parent[v:ChatAttachmentItemsControl].RemoveCommand}"
                     CommandParameter="{Binding}"

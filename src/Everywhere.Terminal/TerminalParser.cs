@@ -175,6 +175,11 @@ public sealed class TerminalParser(
                     WriteChar(c);
                     CaptureWrite(c);
                 }
+                else if (_state == State.OscString)
+                {
+                    _oscBuffer.Append(_highSurrogate);
+                    _oscBuffer.Append(c);
+                }
                 _highSurrogate = '\0';
             }
 
@@ -189,6 +194,10 @@ public sealed class TerminalParser(
             {
                 WriteChar(_highSurrogate);
                 CaptureWrite(_highSurrogate);
+            }
+            else if (_state == State.OscString)
+            {
+                _oscBuffer.Append(_highSurrogate);
             }
             _highSurrogate = '\0';
         }
