@@ -1,7 +1,6 @@
 ﻿using System.Diagnostics;
 using System.Diagnostics.Metrics;
 using System.Text;
-using Avalonia.Threading;
 using CommunityToolkit.Mvvm.Messaging;
 using DynamicData;
 using Everywhere.AI;
@@ -604,11 +603,15 @@ public sealed partial class ChatService : IChatService
                         }
                     }
 
-                    void HandleTextMessage(string text) => Dispatcher.UIThread.Post(() =>
-                        EnsureSpan<AssistantChatMessageTextSpan>(false).ContentMarkdownBuilder.Append(text));
+                    void HandleTextMessage(string text)
+                    {
+                        EnsureSpan<AssistantChatMessageTextSpan>(false).ContentMarkdownBuilder.Append(text);
+                    }
 
-                    void HandleReasoningMessage(string text) => Dispatcher.UIThread.Post(() =>
-                        EnsureSpan<AssistantChatMessageReasoningSpan>(false).ReasoningMarkdownBuilder.Append(text));
+                    void HandleReasoningMessage(string text)
+                    {
+                        EnsureSpan<AssistantChatMessageReasoningSpan>(false).ReasoningMarkdownBuilder.Append(text);
+                    }
                 }
 
                 authorRole ??= streamingContent.Role;
@@ -630,15 +633,8 @@ public sealed partial class ChatService : IChatService
             activity.SetChatUsageTags(usage);
             RecordChatUsageMetrics(usage, kernelMixin.ModelId);
 
-            // Post to UI thread to ensure all pending text/reasoning Dispatcher.UIThread.Post
-            // callbacks (which create spans and append content) have executed before we
-            // signal completion.  Otherwise we race: the finally runs on the thread pool
-            // while span may still be null because the Post lambdas haven't fired yet.
-            Dispatcher.UIThread.Post(() =>
-            {
-                if (assistantChatMessage.Spans is { Count: > 0 } spans)
-                    spans[^1].FinishedAt ??= generationEndTime;
-            });
+            if (assistantChatMessage.Spans is { Count: > 0 } spans)
+                spans[^1].FinishedAt ??= generationEndTime;
 
             callingToolsBusyMessage?.Dispose();
         }
@@ -1122,13 +1118,15 @@ public sealed partial class ChatService : IChatService
 
         public string RenderStrategyUserPrompt(string strategyBody, string? userInput, PreprocessorResult? preprocessorResult)
         {
-            var renderedStrategy = RenderPrompt(strategyBody, key =>
-            {
-                if (key == "Argument") return userInput ?? string.Empty;
-                if (preprocessorResult?.Variables?.TryGetValue(key, out var val) == true) return val;
-                if (promptVariables.TryGetValue(key, out var getter)) return getter();
-                return null;
-            });
+            var renderedStrategy = RenderPrompt(
+                strategyBody,
+                key =>
+                {
+                    if (key == "Argument") return userInput ?? string.Empty;
+                    if (preprocessorResult?.Variables?.TryGetValue(key, out var val) == true) return val;
+                    if (promptVariables.TryGetValue(key, out var getter)) return getter();
+                    return null;
+                });
 
             if (string.IsNullOrEmpty(userInput))
             {

@@ -1,5 +1,4 @@
 ﻿using Avalonia.Input;
-using CommunityToolkit.Mvvm.ComponentModel;
 using Everywhere.Interop;
 using Lucide.Avalonia;
 
@@ -20,27 +19,21 @@ public sealed partial class ShortcutSettings : SettingsBase, ISettingsCategory
     [SettingsItemIgnore]
     public IDynamicResourceKey? DescriptionKey { get; } = new DynamicResourceKey(LocaleKey.SettingsCategory_Settings_Shortcut_Description);
 
-    [ObservableProperty]
     [DynamicResourceKey(
         LocaleKey.ShortcutSettings_ChatWindow_Header,
         LocaleKey.ShortcutSettings_ChatWindow_Desription)]
-    [SettingsItem(Group = "_")]
     [SettingsTemplatedItem]
-    public partial KeyboardShortcut ChatWindow { get; set; } = new(Key.E, KeyModifiers.Control | KeyModifiers.Shift);
+    public CompositeKeyboardShortcut ChatWindow { get; set; } = new KeyboardShortcut(Key.E, KeyModifiers.Control | KeyModifiers.Shift);
 
-    [ObservableProperty]
     [DynamicResourceKey(
         LocaleKey.ShortcutSettings_PickVisualElement_Header,
         LocaleKey.ShortcutSettings_PickVisualElement_Desription)]
-    [SettingsItem(Group = "_")]
     [SettingsTemplatedItem]
-    public partial KeyboardShortcut PickVisualElement { get; set; }
+    public CompositeKeyboardShortcut PickVisualElement { get; } = new();
 
-    [ObservableProperty]
     [DynamicResourceKey(
         LocaleKey.ShortcutSettings_TakeScreenshot_Header,
         LocaleKey.ShortcutSettings_TakeScreenshot_Desription)]
-    [SettingsItem(Group = "_")]
     [SettingsTemplatedItem]
-    public partial KeyboardShortcut TakeScreenshot { get; set; }
+    public CompositeKeyboardShortcut TakeScreenshot { get; } = new();
 }

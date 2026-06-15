@@ -1,5 +1,6 @@
 ﻿using System.Text.Json.Nodes;
 using Everywhere.AI;
+using Everywhere.Common;
 
 namespace Everywhere.Configuration.Migrations;
 
@@ -19,7 +20,7 @@ namespace Everywhere.Configuration.Migrations;
 /// </summary>
 public class _20260208160256_0_7_0 : SettingsMigration
 {
-    public override Version Version => new(0, 7, 0);
+    public override SemanticVersion Version => new(0, 7, 0);
 
     protected override IEnumerable<Func<JsonObject, bool>> MigrationTasks =>
     [

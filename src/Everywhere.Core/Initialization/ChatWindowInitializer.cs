@@ -4,6 +4,7 @@ using Everywhere.Common;
 using Everywhere.Configuration;
 using Everywhere.Interop;
 using Everywhere.Messages;
+using Everywhere.Utilities;
 using Everywhere.Views;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -29,9 +30,6 @@ public sealed class ChatWindowInitializer(
 
     private readonly Lock _syncLock = new();
 
-    private IDisposable? _chatWindowShortcutSubscription;
-    private IDisposable? _pickElementShortcutSubscription;
-    private IDisposable? _screenshotShortcutSubscription;
     private IDisposable? _textSelectionSubscription;
 
     public Task InitializeAsync()
@@ -43,21 +41,16 @@ public sealed class ChatWindowInitializer(
         // Preload ChatWindow to avoid delay on first open
         chatWindow.Initialize();
 
-        settings.Shortcut.PropertyChanged += (_, args) =>
-        {
-            switch (args.PropertyName)
-            {
-                case nameof(ShortcutSettings.ChatWindow):
-                    HandleChatWindowShortcutChanged(chatWindow, chatWindowHandle, settings.Shortcut.ChatWindow);
-                    break;
-                case nameof(ShortcutSettings.PickVisualElement):
-                    HandlePickElementShortcutChanged(chatWindowViewModel, settings.Shortcut.PickVisualElement);
-                    break;
-                case nameof(ShortcutSettings.TakeScreenshot):
-                    HandleScreenshotShortcutChanged(chatWindowViewModel, settings.Shortcut.TakeScreenshot);
-                    break;
-            }
-        };
+        InitializeShortcut(
+            settings.Shortcut.ChatWindow,
+            (shortcut, ref subscription) => RegisterChatWindowShortcut(chatWindow, chatWindowHandle, shortcut, ref subscription));
+        InitializeShortcut(
+            settings.Shortcut.PickVisualElement,
+            (shortcut, ref subscription) => RegisterPickElementShortcut(chatWindowViewModel, shortcut, ref subscription));
+        InitializeShortcut(
+            settings.Shortcut.TakeScreenshot,
+            (shortcut, ref subscription) => RegisterScreenshotShortcut(chatWindowViewModel, shortcut, ref subscription));
+
         settings.ChatWindow.PropertyChanged += (_, args) =>
         {
             if (args.PropertyName == nameof(ChatWindowSettings.AutomaticallyAddTextSelection))
@@ -65,16 +58,59 @@ public sealed class ChatWindowInitializer(
                 HandleTextSelectionChanged(chatWindowViewModel, settings.ChatWindow.AutomaticallyAddTextSelection);
             }
         };
-
-        HandleChatWindowShortcutChanged(chatWindow, chatWindowHandle, settings.Shortcut.ChatWindow);
-        HandlePickElementShortcutChanged(chatWindowViewModel, settings.Shortcut.PickVisualElement);
-        HandleScreenshotShortcutChanged(chatWindowViewModel, settings.Shortcut.TakeScreenshot);
         HandleTextSelectionChanged(chatWindowViewModel, settings.ChatWindow.AutomaticallyAddTextSelection);
 
         return Task.CompletedTask;
     }
 
-    private void HandleChatWindowShortcutChanged(ChatWindow chatWindow, nint chatWindowHandle, KeyboardShortcut shortcut)
+    private delegate void CompositeKeyboardShortcutRegister(KeyboardShortcut shortcut, ref IDisposable? subscription);
+
+    private void InitializeShortcut(CompositeKeyboardShortcut shortcut, CompositeKeyboardShortcutRegister register)
+    {
+        IDisposable? mainSubscription = null, alternativeSubscription = null;
+
+        shortcut.PropertyChanged += (_, args) =>
+        {
+            switch (args.PropertyName)
+            {
+                case nameof(CompositeKeyboardShortcut.IsEnabled):
+                {
+                    if (shortcut.IsEnabled) RegisterAll();
+                    else
+                    {
+                        using var _0 = _syncLock.EnterScope();
+
+                        DisposeHelper.DisposeToDefault(ref mainSubscription);
+                        DisposeHelper.DisposeToDefault(ref alternativeSubscription);
+                    }
+
+                    break;
+                }
+                case nameof(CompositeKeyboardShortcut.Main) when shortcut.IsEnabled:
+                {
+                    // ReSharper disable once AccessToModifiedClosure
+                    register(shortcut.Main, ref mainSubscription);
+                    break;
+                }
+                case nameof(CompositeKeyboardShortcut.Alternative) when shortcut.IsEnabled:
+                {
+                    // ReSharper disable once AccessToModifiedClosure
+                    register(shortcut.Alternative, ref alternativeSubscription);
+                    break;
+                }
+            }
+        };
+
+        if (shortcut.IsEnabled) RegisterAll();
+
+        void RegisterAll()
+        {
+            if (shortcut.Main.IsValid) register(shortcut.Main, ref mainSubscription);
+            if (shortcut.Alternative.IsValid) register(shortcut.Alternative, ref alternativeSubscription);
+        }
+    }
+
+    private void RegisterChatWindowShortcut(ChatWindow chatWindow, nint chatWindowHandle, KeyboardShortcut shortcut, ref IDisposable? subscription)
     {
         RegisterShortcutListener(
             shortcut,
@@ -109,30 +145,30 @@ public sealed class ChatWindowInitializer(
                     }
                 });
             },
-            ref _chatWindowShortcutSubscription);
+            ref subscription);
     }
 
-    private void HandlePickElementShortcutChanged(ChatWindowViewModel chatWindowViewModel, KeyboardShortcut shortcut)
+    private void RegisterPickElementShortcut(ChatWindowViewModel chatWindowViewModel, KeyboardShortcut shortcut, ref IDisposable? subscription)
     {
         RegisterShortcutListener(
             shortcut,
             () => Dispatcher.UIThread.Post(() => chatWindowViewModel.PickVisualElementCommand.Execute(null)),
-            ref _pickElementShortcutSubscription);
+            ref subscription);
     }
 
-    private void HandleScreenshotShortcutChanged(ChatWindowViewModel chatWindowViewModel, KeyboardShortcut shortcut)
+    private void RegisterScreenshotShortcut(ChatWindowViewModel chatWindowViewModel, KeyboardShortcut shortcut, ref IDisposable? subscription)
     {
         RegisterShortcutListener(
             shortcut,
             () => Dispatcher.UIThread.Post(() => chatWindowViewModel.TakeScreenshotCommand.Execute(null)),
-            ref _screenshotShortcutSubscription);
+            ref subscription);
     }
 
     private void RegisterShortcutListener(KeyboardShortcut shortcut, Action callback, ref IDisposable? subscription)
     {
         using var _ = _syncLock.EnterScope();
 
-        subscription?.Dispose();
+        DisposeHelper.DisposeToDefault(ref subscription);
         if (!shortcut.IsValid) return;
 
         try

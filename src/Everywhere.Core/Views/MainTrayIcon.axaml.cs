@@ -1,33 +1,34 @@
 ﻿using Avalonia.Controls;
+using Avalonia.Data;
 using Avalonia.Markup.Xaml;
+using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
 using Everywhere.Common;
+using Everywhere.Configuration;
 using Everywhere.Messages;
 using Everywhere.Utilities;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Everywhere.Views;
 
-public class MainTrayIcon : TrayIcon
+public sealed partial class MainTrayIcon : TrayIcon
 {
     private readonly App _app;
+    private readonly ShortcutSettings _shortcutSettings;
     private readonly DebounceExecutor<MainTrayIcon, DispatcherTimerImpl> _trayIconClickedDebounce;
     private int _trayIconClickCount;
 
-    public MainTrayIcon(App app)
+    public MainTrayIcon(App app, IServiceProvider serviceProvider)
     {
         _app = app;
+        _shortcutSettings = serviceProvider.GetRequiredService<Settings>().Shortcut;
+
         _trayIconClickedDebounce = new DebounceExecutor<MainTrayIcon, DispatcherTimerImpl>(
             () => this,
             sender =>
             {
-                if (sender._trayIconClickCount >= 2)
-                {
-                    sender.HandleOpenMainWindowMenuItemClicked(sender, EventArgs.Empty);
-                }
-                else
-                {
-                    sender.HandleOpenChatWindowMenuItemClicked(sender, EventArgs.Empty);
-                }
+                if (sender._trayIconClickCount >= 2) sender.ShowMainWindow();
+                else ShowChatWindow();
 
                 sender._trayIconClickCount = 0;
             },
@@ -35,6 +36,54 @@ public class MainTrayIcon : TrayIcon
         );
 
         AvaloniaXamlLoader.Load(this);
+        InitializeMenuItems();
+    }
+
+    private void InitializeMenuItems()
+    {
+        Menu =
+        [
+            new NativeMenuItem
+            {
+                [!NativeMenuItem.HeaderProperty] = new DynamicResourceKey(LocaleKey.MainTrayIcon_Menu_OpenChatWindow).ToBinding(),
+                Command = ShowChatWindowCommand
+            },
+
+            new NativeMenuItem
+            {
+                [!NativeMenuItem.HeaderProperty] = new DynamicResourceKey(LocaleKey.MainTrayIcon_Menu_OpenMainWindow).ToBinding(),
+                Command = ShowMainWindowCommand
+            },
+        ];
+
+#if DEBUG
+        Menu.Items.Add(new NativeMenuItem
+        {
+            [!NativeMenuItem.HeaderProperty] = new DynamicResourceKey(LocaleKey.MainTrayIcon_Menu_OpenDebugWindow).ToBinding(),
+            Command = ShowDebugWindowCommand
+        });
+#endif
+
+        Menu.Items.Add(new NativeMenuItemSeparator());
+        Menu.Items.Add(new NativeMenuItem
+        {
+            [!NativeMenuItem.HeaderProperty] = new DynamicResourceKey(LocaleKey.MainTrayIcon_Menu_EnableChatWindowShortcut).ToBinding(),
+            [!NativeMenuItem.IsCheckedProperty] = new Binding
+            {
+                // TODO: Use CompiledBinding.Create in Avalonia 12
+                Path = nameof(ShortcutSettings.ChatWindow.IsEnabled),
+                Source = _shortcutSettings.ChatWindow,
+                Mode = BindingMode.TwoWay
+            },
+            ToggleType = NativeMenuItemToggleType.CheckBox,
+        });
+
+        Menu.Items.Add(new NativeMenuItemSeparator());
+        Menu.Items.Add(new NativeMenuItem
+        {
+            [!NativeMenuItem.HeaderProperty] = new DynamicResourceKey(LocaleKey.MainTrayIcon_Menu_Exit).ToBinding(),
+            Command = ExitCommand
+        });
     }
 
     private void HandleTrayIconClicked(object? sender, EventArgs e)
@@ -43,7 +92,7 @@ public class MainTrayIcon : TrayIcon
         if (_trayIconClickCount >= 2)
         {
             // Double click detected, open main window immediately.
-            HandleOpenMainWindowMenuItemClicked(this, EventArgs.Empty);
+            ShowMainWindow();
             _trayIconClickCount = 0;
             _trayIconClickedDebounce.Cancel();
         }
@@ -54,12 +103,16 @@ public class MainTrayIcon : TrayIcon
         }
     }
 
-    private void HandleOpenChatWindowMenuItemClicked(object? sender, EventArgs e) =>
+    [RelayCommand]
+    private static void ShowChatWindow() =>
         WeakReferenceMessenger.Default.Send(new ActivateChatSessionMessage());
 
-    private void HandleOpenMainWindowMenuItemClicked(object? sender, EventArgs e) => _app.ShowMainWindow();
+    [RelayCommand]
+    private void ShowMainWindow() => _app.ShowMainWindow();
 
-    private void HandleOpenDebugWindowMenuItemClicked(object? sender, EventArgs e) => _app.ShowDebugWindow();
+    [RelayCommand]
+    private void ShowDebugWindow() => _app.ShowDebugWindow();
 
-    private void HandleExitMenuItemClicked(object? sender, EventArgs e) => Environment.Exit(0);
+    [RelayCommand]
+    private static void Exit() => Environment.Exit(0);
 }

@@ -383,8 +383,10 @@
               <v:ConditionalContentControl.TrueContent>
                 <DataTemplate x:DataType="chat:AssistantChatMessage">
                   <SelectableTextBlock
-                    Classes="Muted"
-                    FontSize="{DynamicResource FontSizeS}">
+                    Classes="Muted" HorizontalAlignment="Left"
+                    FontSize="{DynamicResource FontSizeS}"
+                    TextWrapping="Wrap"
+                    ToolTip.Tip="{I18N {x:Static LocaleKey.ChatMessageControl_ChatStatisticsTextBlock_ToolTip_Tip}}">
                     <Run Text="{I18N {x:Static LocaleKey.ChatMessageControl_ChatStatisticsTextBlock_InputTokenCountRun}}"/>
                     <Run Text="{Binding UsageDetails.InputTokenCount}"/>
                     <Run Text="·"/>

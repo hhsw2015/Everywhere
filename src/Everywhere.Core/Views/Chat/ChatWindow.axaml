@@ -802,9 +802,11 @@
               ItemsSource="{Binding ChatContextManager.Current.TodoItems}">
               <ItemsControl.ItemTemplate>
                 <DataTemplate x:DataType="p:ChatPluginTodoItem">
-                  <DockPanel HorizontalSpacing="4">
+                  <Grid
+                    ColumnDefinitions="Auto,Auto,Auto" ColumnSpacing="4">
                     <v:LazyIndexedContentControl
-                      HorizontalAlignment="Center" VerticalAlignment="Center"
+                      Grid.Column="0" HorizontalAlignment="Center"
+                      VerticalAlignment="Center"
                       ItemIndex="{Binding Status, Converter={x:Static vc:Int32Converters.FromEnum}}">
                       <!--  NotStarted  -->
                       <ControlTemplate>
@@ -832,9 +834,17 @@
                     </v:LazyIndexedContentControl>
 
                     <TextBlock
-                      Classes="Muted Caption" VerticalAlignment="Center"
-                      Text="{Binding Description}"/>
-                  </DockPanel>
+                      Classes="Muted Caption" Grid.Column="1"
+                      VerticalAlignment="Center"
+                      Text="{Binding Title}"/>
+
+                    <LucideIcon
+                      Grid.Column="2" VerticalAlignment="Center"
+                      IsVisible="{Binding Description, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                      Kind="CircleQuestionMark"
+                      Size="{DynamicResource FontSizeS}"
+                      ToolTip.Tip="{Binding Description}"/>
+                  </Grid>
                 </DataTemplate>
               </ItemsControl.ItemTemplate>
             </ItemsControl>

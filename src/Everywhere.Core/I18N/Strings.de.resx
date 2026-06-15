@@ -92,7 +92,7 @@
         <value>Chatfenster</value>
     </data>
     <data name="ShortcutSettings_ChatWindow_Desription" xml:space="preserve">
-        <value>Legen Sie eine Tastenkombination fest, um das Chatfenster jederzeit aufzurufen.</value>
+        <value>Drücken Sie jederzeit, um das Chatfenster aufzurufen.</value>
     </data>
     <data name="Assistant_Temperature_Header" xml:space="preserve">
         <value>temperature</value>
@@ -2197,13 +2197,13 @@ Scrollrad oder Zifferntasten zum Wechseln des Auswahlmodus</value>
         <value>Visuelles Element Wählen</value>
     </data>
     <data name="ShortcutSettings_PickVisualElement_Desription" xml:space="preserve">
-        <value>Lege eine Tastenkombination fest, um jederzeit ein visuelles Element auszuwählen und das Chatfenster zu öffnen.</value>
+        <value>Drücken Sie jederzeit, um ein visuelles Element auszuwählen, danach wird das Chatfenster geöffnet.</value>
     </data>
     <data name="ShortcutSettings_TakeScreenshot_Header" xml:space="preserve">
         <value>Screenshot Erfassen</value>
     </data>
     <data name="ShortcutSettings_TakeScreenshot_Desription" xml:space="preserve">
-        <value>Lege eine Tastenkombination fest, um jederzeit einen Screenshot zu erfassen und das Chatfenster zu öffnen.</value>
+        <value>Drücken Sie jederzeit, um einen Screenshot zu erstellen, danach wird das Chatfenster geöffnet.</value>
     </data>
     <data name="Strategy_BuiltIn_Browser_Name" xml:space="preserve">
         <value>Browser-Assistent</value>
@@ -3065,5 +3065,32 @@ Veröffentlichungsdatum: {2}</value>
     </data>
     <data name="UserProfilePresenter_QuotaLimitResetAtToolTip_Tip" xml:space="preserve">
         <value>Das Kontingent von {0} wird am {1} zurückgesetzt</value>
+    </data>
+    <data name="CompositeKeyboardShortcut_IsEnabled_Description" xml:space="preserve">
+        <value>Legt fest, ob die aktuelle Tastenkombination aktiviert ist.</value>
+    </data>
+    <data name="CompositeKeyboardShortcut_Main_Description" xml:space="preserve">
+        <value>Legt die Haupttastenkombination fest.</value>
+    </data>
+    <data name="CompositeKeyboardShortcut_Main_Header" xml:space="preserve">
+        <value>Haupt</value>
+    </data>
+    <data name="CompositeKeyboardShortcut_Alternative_Header" xml:space="preserve">
+        <value>Alternativ</value>
+    </data>
+    <data name="CompositeKeyboardShortcut_Alternative_Description" xml:space="preserve">
+        <value>Legt eine optionale alternative Taste fest.</value>
+    </data>
+    <data name="MainTrayIcon_Menu_EnableChatWindowShortcut" xml:space="preserve">
+        <value>Chatfenster-Tastenkombination</value>
+    </data>
+    <data name="CompositeKeyboardShortcut_IsEnabled_Header" xml:space="preserve">
+        <value>Aktivieren</value>
+    </data>
+    <data name="CompositeKeyboardShortcutInputBox_SetAlternativeKeyToggleButton_ToolTip_Tip" xml:space="preserve">
+        <value>Alternative Taste festlegen</value>
+    </data>
+    <data name="ChatMessageControl_ChatStatisticsTextBlock_ToolTip_Tip" xml:space="preserve">
+        <value>Eingaben, Ausgaben und Gesamtsummen sind die Summen der aktuellen Runde (einschließlich mehrerer Toolaufrufe) und spiegeln möglicherweise nicht den Kontext wider.</value>
     </data>
 </root>

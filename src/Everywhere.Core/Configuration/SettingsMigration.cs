@@ -1,4 +1,5 @@
 using System.Text.Json.Nodes;
+using Everywhere.Common;
 using Serilog;
 
 namespace Everywhere.Configuration;
@@ -11,7 +12,7 @@ public abstract class SettingsMigration
     /// <summary>
     /// The target version of the migration.
     /// </summary>
-    public abstract Version Version { get; }
+    public abstract SemanticVersion Version { get; }
 
     /// <summary>
     /// The list of migration tasks to be performed.

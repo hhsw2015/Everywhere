@@ -69,7 +69,7 @@ public class SettingsMigrator
         root ??= new JsonObject();
 
         var currentVersionStr = root[nameof(Settings.Version)]?.GetValue<string>();
-        var currentVersion = Version.TryParse(currentVersionStr, out var version) ? version : new Version(0, 0, 0);
+        var currentVersion = SemanticVersion.TryParse(currentVersionStr, out var version) ? version : new SemanticVersion(0);
         var originalVersion = currentVersion;
         var hasChanges = false;
 

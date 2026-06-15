@@ -92,7 +92,7 @@
         <value>聊天窗口</value>
     </data>
     <data name="ShortcutSettings_ChatWindow_Desription" xml:space="preserve">
-        <value>設定快捷鍵以隨時調出聊天視窗。</value>
+        <value>隨時按下以調出聊天窗口。</value>
     </data>
     <data name="Assistant_Temperature_Header" xml:space="preserve">
         <value>temperature</value>
@@ -2198,13 +2198,13 @@
         <value>選擇視覺元素</value>
     </data>
     <data name="ShortcutSettings_PickVisualElement_Desription" xml:space="preserve">
-        <value>設置一個快捷鍵，在任何時候按下即可選擇視覺元素，之後會喚起聊天窗口。</value>
+        <value>隨時按下以選擇視覺元素，然後將調出聊天窗口。</value>
     </data>
     <data name="ShortcutSettings_TakeScreenshot_Header" xml:space="preserve">
         <value>捕獲螢幕截圖</value>
     </data>
     <data name="ShortcutSettings_TakeScreenshot_Desription" xml:space="preserve">
-        <value>設置一個快捷鍵，在任何時候按下即可捕獲螢幕截圖，之後會喚起聊天窗口。</value>
+        <value>隨時按下以捕捉螢幕截圖，然後將調出聊天窗口。</value>
     </data>
     <data name="Strategy_BuiltIn_Browser_Name" xml:space="preserve">
         <value>瀏覽器助手</value>
@@ -3066,5 +3066,32 @@
     </data>
     <data name="UserProfilePresenter_QuotaLimitResetAtToolTip_Tip" xml:space="preserve">
         <value>{0} 使用配額將於 {1} 重置</value>
+    </data>
+    <data name="CompositeKeyboardShortcut_IsEnabled_Description" xml:space="preserve">
+        <value>設置是否啟用當前快捷鍵。</value>
+    </data>
+    <data name="CompositeKeyboardShortcut_Main_Description" xml:space="preserve">
+        <value>設置主要快捷鍵。</value>
+    </data>
+    <data name="CompositeKeyboardShortcut_Main_Header" xml:space="preserve">
+        <value>主要</value>
+    </data>
+    <data name="CompositeKeyboardShortcut_Alternative_Header" xml:space="preserve">
+        <value>替代</value>
+    </data>
+    <data name="CompositeKeyboardShortcut_Alternative_Description" xml:space="preserve">
+        <value>設置可選的替代按鍵。</value>
+    </data>
+    <data name="MainTrayIcon_Menu_EnableChatWindowShortcut" xml:space="preserve">
+        <value>聊天窗口快捷鍵</value>
+    </data>
+    <data name="CompositeKeyboardShortcut_IsEnabled_Header" xml:space="preserve">
+        <value>啟用</value>
+    </data>
+    <data name="CompositeKeyboardShortcutInputBox_SetAlternativeKeyToggleButton_ToolTip_Tip" xml:space="preserve">
+        <value>設置替代按鍵</value>
+    </data>
+    <data name="ChatMessageControl_ChatStatisticsTextBlock_ToolTip_Tip" xml:space="preserve">
+        <value>輸入、輸出和總計均為當前輪次內的總和（包括多輪工具調用等），不一定能反映上下文情況</value>
     </data>
 </root>

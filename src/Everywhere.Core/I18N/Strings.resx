@@ -92,7 +92,7 @@
         <value>Chat Window</value>
     </data>
     <data name="ShortcutSettings_ChatWindow_Desription" xml:space="preserve">
-        <value>Set a shortcut to invoke the chat window at any time.</value>
+        <value>Press at any time to open the chat window.</value>
     </data>
     <data name="Assistant_Temperature_Header" xml:space="preserve">
         <value>temperature</value>
@@ -2198,13 +2198,13 @@ Use scroll wheel or number keys to switch selection mode</value>
         <value>Select Visual Element</value>
     </data>
     <data name="ShortcutSettings_PickVisualElement_Desription" xml:space="preserve">
-        <value>Set a shortcut key to select a visual element at any time, which will then invoke the chat window.</value>
+        <value>Press at any time to select a visual element, which will then open the chat window.</value>
     </data>
     <data name="ShortcutSettings_TakeScreenshot_Header" xml:space="preserve">
         <value>Capture Screenshot</value>
     </data>
     <data name="ShortcutSettings_TakeScreenshot_Desription" xml:space="preserve">
-        <value>Set a shortcut key to capture a screenshot anytime, which will then open the chat window.</value>
+        <value>Press at any time to capture a screenshot, which will then open the chat window.</value>
     </data>
     <data name="Strategy_BuiltIn_Browser_Name" xml:space="preserve">
         <value>Browser Assistant</value>
@@ -3066,5 +3066,32 @@ Release date: {2}</value>
     </data>
     <data name="UserProfilePresenter_QuotaLimitResetAtToolTip_Tip" xml:space="preserve">
         <value>{0} quota limit will be reset at {1}</value>
+    </data>
+    <data name="CompositeKeyboardShortcut_IsEnabled_Description" xml:space="preserve">
+        <value>Set whether to enable the current shortcut.</value>
+    </data>
+    <data name="CompositeKeyboardShortcut_Main_Description" xml:space="preserve">
+        <value>Set the main shortcut.</value>
+    </data>
+    <data name="CompositeKeyboardShortcut_Main_Header" xml:space="preserve">
+        <value>Main</value>
+    </data>
+    <data name="CompositeKeyboardShortcut_Alternative_Header" xml:space="preserve">
+        <value>Alternative</value>
+    </data>
+    <data name="CompositeKeyboardShortcut_Alternative_Description" xml:space="preserve">
+        <value>Set an optional alternative key.</value>
+    </data>
+    <data name="MainTrayIcon_Menu_EnableChatWindowShortcut" xml:space="preserve">
+        <value>Chat Window Shortcut</value>
+    </data>
+    <data name="CompositeKeyboardShortcut_IsEnabled_Header" xml:space="preserve">
+        <value>Enable</value>
+    </data>
+    <data name="CompositeKeyboardShortcutInputBox_SetAlternativeKeyToggleButton_ToolTip_Tip" xml:space="preserve">
+        <value>Set Alternative Key</value>
+    </data>
+    <data name="ChatMessageControl_ChatStatisticsTextBlock_ToolTip_Tip" xml:space="preserve">
+        <value>Input, output, and total are the sums for the current round (including multi-turn tool calls, etc.) and may not reflect the context.</value>
     </data>
 </root>

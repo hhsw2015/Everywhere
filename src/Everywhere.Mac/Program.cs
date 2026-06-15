@@ -5,7 +5,6 @@ using Everywhere.Cloud;
 using Everywhere.Common;
 using Everywhere.Configuration;
 using Everywhere.Extensions;
-using Everywhere.I18N;
 using Everywhere.Initialization;
 using Everywhere.Interop;
 using Everywhere.Mac.Chat.Plugin;
@@ -73,7 +72,8 @@ public static class Program
         NSApplication.CheckForIllegalCrossThreadCalls = false;
         NSApplication.Init();
         NSApplication.SharedApplication.Delegate = new AppDelegate();
-        BuildAvaloniaApp().StartWithClassicDesktopLifetime(args, ShutdownMode.OnExplicitShutdown);
+
+        BuildAvaloniaApp(ServiceLocator.Resolve<IServiceProvider>()).StartWithClassicDesktopLifetime(args, ShutdownMode.OnExplicitShutdown);
     }
 
     private static NativeMessageBoxResult MessageBoxHandler(string title, string message, NativeMessageBoxButtons buttons, NativeMessageBoxIcon icon)
@@ -159,8 +159,8 @@ public static class Program
         };
     }
 
-    private static AppBuilder BuildAvaloniaApp() =>
-        AppBuilder.Configure<App>()
+    private static AppBuilder BuildAvaloniaApp(IServiceProvider serviceProvider) =>
+        AppBuilder.Configure(() => new App(serviceProvider))
             .UsePlatformDetect()
             .With(
                 new AvaloniaNativePlatformOptions

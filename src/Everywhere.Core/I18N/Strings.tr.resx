@@ -92,7 +92,7 @@
         <value>Sohbet Penceresi</value>
     </data>
     <data name="ShortcutSettings_ChatWindow_Desription" xml:space="preserve">
-        <value>Sohbet penceresini istediğiniz zaman çağırmak için bir kısayol ayarlayın.</value>
+        <value>Her zaman basarak sohbet penceresini açabilirsiniz.</value>
     </data>
     <data name="Assistant_Temperature_Header" xml:space="preserve">
         <value>temperature</value>
@@ -2197,13 +2197,13 @@ Seçim modunu değiştirmek için kaydırıcı veya rakam tuşlarını kullanın
         <value>Görsel Elemanı Seç</value>
     </data>
     <data name="ShortcutSettings_PickVisualElement_Desription" xml:space="preserve">
-        <value>Herhangi bir zamanda basarak görsel elemanı seçmek için bir kısayol ayarlayın, ardından sohbet penceresi açılacaktır.</value>
+        <value>Her zaman basarak görsel öğeyi seçin, ardından sohbet penceresi açılacaktır.</value>
     </data>
     <data name="ShortcutSettings_TakeScreenshot_Header" xml:space="preserve">
         <value>Ekran Görüntüsü Al</value>
     </data>
     <data name="ShortcutSettings_TakeScreenshot_Desription" xml:space="preserve">
-        <value>Herhangi bir zamanda basarak ekran görüntüsü almak için bir kısayol ayarlayın, ardından sohbet penceresi açılacaktır.</value>
+        <value>Her zaman basarak ekran görüntüsü alabilirsiniz, ardından sohbet penceresi açılacaktır.</value>
     </data>
     <data name="Strategy_BuiltIn_Browser_Name" xml:space="preserve">
         <value>Tarayıcı Asistanı</value>
@@ -3065,5 +3065,32 @@ Yayın tarihi: {2}</value>
     </data>
     <data name="UserProfilePresenter_QuotaLimitResetAtToolTip_Tip" xml:space="preserve">
         <value>{0} kotaları {1} tarihinde sıfırlanacak</value>
+    </data>
+    <data name="CompositeKeyboardShortcut_IsEnabled_Description" xml:space="preserve">
+        <value>Mevcut kısayolun etkin olup olmadığını ayarlayın.</value>
+    </data>
+    <data name="CompositeKeyboardShortcut_Main_Description" xml:space="preserve">
+        <value>Ana kısayolu ayarlayın.</value>
+    </data>
+    <data name="CompositeKeyboardShortcut_Main_Header" xml:space="preserve">
+        <value>Ana</value>
+    </data>
+    <data name="CompositeKeyboardShortcut_Alternative_Header" xml:space="preserve">
+        <value>Alternatif</value>
+    </data>
+    <data name="CompositeKeyboardShortcut_Alternative_Description" xml:space="preserve">
+        <value>Seçenek olarak alternatif tuşları ayarlayın.</value>
+    </data>
+    <data name="MainTrayIcon_Menu_EnableChatWindowShortcut" xml:space="preserve">
+        <value>Sohbet Penceresi Kısayolu</value>
+    </data>
+    <data name="CompositeKeyboardShortcut_IsEnabled_Header" xml:space="preserve">
+        <value>Etkin</value>
+    </data>
+    <data name="CompositeKeyboardShortcutInputBox_SetAlternativeKeyToggleButton_ToolTip_Tip" xml:space="preserve">
+        <value>Alternatif Tuşu Ayarla</value>
+    </data>
+    <data name="ChatMessageControl_ChatStatisticsTextBlock_ToolTip_Tip" xml:space="preserve">
+        <value>Girdi, çıktı ve toplam, mevcut tur içindeki toplamı (çoklu tur araç çağrıları dahil) yansıtır, bağlamı tam olarak yansıtmayabilir.</value>
     </data>
 </root>

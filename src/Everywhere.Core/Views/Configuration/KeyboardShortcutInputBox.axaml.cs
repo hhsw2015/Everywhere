@@ -7,6 +7,7 @@ using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using CommunityToolkit.Mvvm.Input;
 using Everywhere.Common;
 using Everywhere.Interop;
 using Everywhere.Utilities;
@@ -20,7 +21,7 @@ public record TextShortcutPart(string Text) : IShortcutPart;
 public record IconShortcutPart(Geometry Icon) : IShortcutPart;
 
 [TemplatePart(ClearButtonPartName, typeof(Button), IsRequired = true)]
-public class KeyboardShortcutInputBox : TemplatedControl
+public partial class KeyboardShortcutInputBox : TemplatedControl
 {
     private const string ClearButtonPartName = "PART_ClearButton";
 
@@ -140,9 +141,16 @@ public class KeyboardShortcutInputBox : TemplatedControl
         if (!_isPressed || e.InitialPressMouseButton != MouseButton.Left) return;
 
         _isPressed = false;
-        e.Handled = true;
 
         if (!this.GetVisualsAt(e.GetPosition(this)).Any(c => this == c || this.IsVisualAncestorOf(c))) return;
+
+        EnterRecordingMode();
+        e.Handled = true;
+    }
+
+    [RelayCommand]
+    private void EnterRecordingMode()
+    {
         if (_shortcutScope is not null) return;
 
         _shortcutScope = ServiceLocator.Resolve<IShortcutListener>().StartCaptureKeyboardShortcut();
@@ -153,8 +161,6 @@ public class KeyboardShortcutInputBox : TemplatedControl
         Shortcut = default;
         IsRecording = true;
         Focus();
-
-        e.Handled = true;
     }
 
     protected override void OnLostFocus(RoutedEventArgs e)

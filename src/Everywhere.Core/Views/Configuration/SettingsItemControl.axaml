@@ -341,5 +341,19 @@
         <Setter Property="VerticalSpacing" Value="0"/>
       </Style>
     </Style>
+
+    <Style Selector="^.NoInteractive">
+      <Setter Property="IsExpanded" Value="True"/>
+      <Setter Property="Background" Value="{x:Null}"/>
+
+      <Style Selector="^ ToggleButton#PART_ToggleButton">
+        <Setter Property="shadui:ButtonAssist.CheckedBackground" Value="{x:Null}"/>
+        <Setter Property="IsHitTestVisible" Value="False"/>
+      </Style>
+
+      <Style Selector="^ PathIcon#PART_Icon">
+        <Setter Property="IsVisible" Value="False"/>
+      </Style>
+    </Style>
   </ControlTheme>
 </ResourceDictionary>

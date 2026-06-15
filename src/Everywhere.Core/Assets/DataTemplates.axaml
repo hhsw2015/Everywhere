@@ -52,8 +52,19 @@
     </DataTemplate.DataType>
 
     <v:KeyboardShortcutInputBox
-      MinWidth="320" MinHeight="32"
-      HorizontalAlignment="Left"
+      MinWidth="160" MinHeight="32"
+      HorizontalAlignment="Right"
+      Shortcut="{Binding Value, Mode=TwoWay}"/>
+  </DataTemplate>
+
+  <DataTemplate x:Key="{x:Type c:CompositeKeyboardShortcut}">
+    <DataTemplate.DataType>
+      <x:Type
+        x:TypeArguments="c:CompositeKeyboardShortcut" TypeName="c:SettingsTemplatedItem"/>
+    </DataTemplate.DataType>
+
+    <v:CompositeKeyboardShortcutInputBox
+      MinHeight="32" HorizontalAlignment="Right"
       Shortcut="{Binding Value, Mode=TwoWay}"/>
   </DataTemplate>
 

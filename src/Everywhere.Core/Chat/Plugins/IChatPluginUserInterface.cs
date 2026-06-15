@@ -18,10 +18,12 @@ public sealed class ChatPluginTodoItem
     [Description("1-based unique identifier for the todo item.")]
     public required int Id { get; set; }
 
+    [MaxLength(300)]
     [Description("Concise action-oriented todo label displayed in UI.")]
     public required string Title { get; set; }
 
-    [Description("(Optional) Detailed context, requirements, or implementation notes.")]
+    [MaxLength(300)]
+    [Description("Optional detailed context, requirements, or implementation notes.")]
     public string? Description { get; set; }
 
     public ChatPluginTodoStatus Status { get; set; } = ChatPluginTodoStatus.NotStarted;
@@ -30,12 +32,12 @@ public sealed class ChatPluginTodoItem
 [Serializable]
 public sealed class ChatPluginQuestion
 {
-    [Description("Short identifier for the question. Must be unique so answers can be mapped back to the question")]
     [MaxLength(75)]
+    [Description("Short identifier for the question. Must be unique so answers can be mapped back to the question")]
     public required string Id { get; set; }
 
-    [Description("The question text to display to the user. Keep it concise, ideally one sentence")]
     [MaxLength(300)]
+    [Description("The question text to display to the user. Keep it concise, ideally one sentence")]
     public required string Question { get; set; }
 
     [Description("Allow selecting multiple options when options are provided'")]
@@ -72,7 +74,7 @@ public enum RequestConsentRememberMasks
     AlwaysAllow = 0x4,
     Custom = 0x8,
 
-    All = AllowOnce | AllowSession | AllowSession | AlwaysAllow | Custom
+    All = AllowOnce | AllowSession | AlwaysAllow | Custom
 }
 
 public readonly record struct RequestConsentResult(bool IsAccepted, string? Reason)

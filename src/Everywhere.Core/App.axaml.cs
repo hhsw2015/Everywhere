@@ -16,12 +16,13 @@ using Everywhere.Interop;
 using Everywhere.Messages;
 using Everywhere.Views;
 using LiveMarkdown.Avalonia;
+using Microsoft.Extensions.DependencyInjection;
 using Serilog;
 using ShadUI;
 
 namespace Everywhere;
 
-public class App : Application, IRecipient<ApplicationMessage>
+public class App(IServiceProvider serviceProvider) : Application, IRecipient<ApplicationMessage>
 {
     public static string Version => RuntimeConstants.Version.ToString();
 
@@ -75,7 +76,7 @@ public class App : Application, IRecipient<ApplicationMessage>
         InitializeMarkdown();
         InitializeApp();
 
-        TrayIcon.SetIcons(this, [new MainTrayIcon(this)]);
+        TrayIcon.SetIcons(this, [new MainTrayIcon(this, serviceProvider)]);
 
         RecordAppLaunchMetric();
     }
@@ -125,12 +126,12 @@ public class App : Application, IRecipient<ApplicationMessage>
         MarkdownNode.Register<MermaidBlockNode>();
     }
 
-    private static void InitializeApp()
+    private void InitializeApp()
     {
         try
         {
-            foreach (var group in ServiceLocator
-                         .Resolve<IEnumerable<IAsyncInitializer>>()
+            foreach (var group in serviceProvider
+                         .GetRequiredService<IEnumerable<IAsyncInitializer>>()
                          .GroupBy(i => i.Index)
                          .OrderBy(g => g.Key))
             {
@@ -205,7 +206,7 @@ public class App : Application, IRecipient<ApplicationMessage>
     private void ShowMainWindowOnNeeded()
     {
         var currentVersion = RuntimeConstants.Version;
-        var persistentState = ServiceLocator.Resolve<PersistentState>();
+        var persistentState = serviceProvider.GetRequiredService<PersistentState>();
         if (!SemanticVersion.TryParse(persistentState.PreviousLaunchVersion, out var previousVersion))
         {
             previousVersion = new SemanticVersion(0);
@@ -253,7 +254,7 @@ public class App : Application, IRecipient<ApplicationMessage>
                     window.Close();
                 }
 
-                var content = ServiceLocator.Resolve<TContent>();
+                var content = serviceProvider.GetRequiredService<TContent>();
                 content.To<ISetLogicalParent>().SetParent(null);
                 window = new TransientWindow
                 {

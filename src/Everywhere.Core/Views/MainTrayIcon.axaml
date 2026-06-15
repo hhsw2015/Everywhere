@@ -10,21 +10,4 @@
       x:TypeArguments="WindowIcon" Default="avares://Everywhere.Core/Assets/Everywhere.ico"
       macOS="avares://Everywhere.Core/Assets/Everywhere-macOS.png"/>
   </TrayIcon.Icon>
-  <TrayIcon.Menu>
-    <NativeMenu>
-      <NativeMenuItem
-        Click="HandleOpenChatWindowMenuItemClicked"
-        Header="{I18N {x:Static LocaleKey.MainTrayIcon_Menu_OpenChatWindow}}"/>
-      <NativeMenuItem
-        Click="HandleOpenMainWindowMenuItemClicked"
-        Header="{I18N {x:Static LocaleKey.MainTrayIcon_Menu_OpenMainWindow}}"/>
-      <NativeMenuItem
-        Click="HandleOpenDebugWindowMenuItemClicked"
-        Header="{I18N {x:Static LocaleKey.MainTrayIcon_Menu_OpenDebugWindow}}"/>
-      <NativeMenuItemSeparator/>
-      <NativeMenuItem
-        Click="HandleExitMenuItemClicked"
-        Header="{I18N {x:Static LocaleKey.MainTrayIcon_Menu_Exit}}"/>
-    </NativeMenu>
-  </TrayIcon.Menu>
 </TrayIcon>
