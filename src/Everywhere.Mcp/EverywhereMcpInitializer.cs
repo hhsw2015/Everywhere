@@ -1,10 +1,9 @@
 using Everywhere.Common;
 using Everywhere.Configuration;
-using Everywhere.Mcp;
 using Everywhere.Mcp.Transport;
 using Microsoft.Extensions.Logging;
 
-namespace Everywhere.Initialization;
+namespace Everywhere.Mcp;
 
 /// <summary>
 /// Boots the in-process MCP HTTP listener (loopback only) once the GUI services are up.

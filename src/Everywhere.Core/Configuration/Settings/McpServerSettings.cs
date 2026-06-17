@@ -29,6 +29,6 @@ public sealed partial class McpServerSettings : SettingsBase, ISettingsCategory
         LocaleKey.McpServerSettings_HttpPort_Header,
         LocaleKey.McpServerSettings_HttpPort_Description)]
     [SettingsItem(IsVisibleBindingPath = nameof(HttpEnabled), Group = "_")]
-    [SettingsIntegerItem(Min = 1, Max = 65535, Step = 1)]
+    [SettingsIntegerItem(Min = 1, Max = 65535, IsSliderVisible = false)]
     public partial int HttpPort { get; set; } = 7878;
 }
