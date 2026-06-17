@@ -85,9 +85,11 @@
         </DataTemplate>
       </Setter>
       <Setter Property="Interaction.Behaviors">
-        <BehaviorCollection>
-          <shadui:SwallowBringIntoViewEventBehavior/>
-        </BehaviorCollection>
+        <BehaviorCollectionTemplate>
+          <BehaviorCollection>
+            <shadui:SwallowBringIntoViewEventBehavior/>
+          </BehaviorCollection>
+        </BehaviorCollectionTemplate>
       </Setter>
     </Style>
 
