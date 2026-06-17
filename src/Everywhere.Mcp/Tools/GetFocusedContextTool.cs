@@ -54,7 +54,7 @@ public static class GetFocusedContextTool
             try
             {
                 using var captured = await topLevel.CaptureAsync(cancellationToken);
-                screenshot = ScreenshotEncoder.EncodePngBase64(captured);
+                screenshot = ScreenshotEncoder.EncodeBase64(captured);
             }
             catch
             {

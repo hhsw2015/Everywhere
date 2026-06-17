@@ -41,7 +41,7 @@ public static class GetAppStateTool
             try
             {
                 using var captured = await window.CaptureAsync(cancellationToken);
-                screenshotBase64 = ScreenshotEncoder.EncodePngBase64(captured);
+                screenshotBase64 = ScreenshotEncoder.EncodeBase64(captured);
             }
             catch
             {
