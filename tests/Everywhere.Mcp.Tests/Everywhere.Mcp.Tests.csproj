@@ -19,6 +19,7 @@
     <PackageReference Include="NUnit3TestAdapter" />
     <PackageReference Include="Avalonia" />
     <PackageReference Include="SkiaSharp" />
+    <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
   </ItemGroup>
 
   <ItemGroup>

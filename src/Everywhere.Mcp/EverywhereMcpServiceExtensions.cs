@@ -21,11 +21,13 @@ public static class EverywhereMcpServiceExtensions
         this IServiceCollection services,
         Action<EverywhereMcpHttpOptions>? configure = null)
     {
-        var options = new EverywhereMcpHttpOptions();
-        configure?.Invoke(options);
-
         services.AddEverywhereMcpTools();
-        services.TryAddSingleton(options);
+        services.TryAddSingleton(sp =>
+        {
+            var options = new EverywhereMcpHttpOptions();
+            configure?.Invoke(options);
+            return options;
+        });
         services.AddSingleton<EverywhereMcpHttpHost>();
         // Avalonia GUI hosts don't run a generic-host pipeline, so expose the listener as
         // an explicit Start call instead of an IHostedService. Hosts that *do* run a
@@ -47,6 +49,7 @@ public static class EverywhereMcpServiceExtensions
     internal static IServiceCollection AddEverywhereMcpTools(this IServiceCollection services)
     {
         services.TryAddSingleton<SessionStore>();
+        services.TryAddSingleton<PickStash>();
         services.TryAddSingleton<IVisualElementContext, EmptyVisualElementContext>();
         services.TryAddSingleton<IInputSimulator, NotSupportedInputSimulator>();
         services.TryAddSingleton<IFocusBackend, NotSupportedFocusBackend>();

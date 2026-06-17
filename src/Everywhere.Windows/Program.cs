@@ -14,6 +14,7 @@ using Everywhere.Initialization;
 using Everywhere.Interop;
 using Everywhere.Messages;
 using Everywhere.StrategyEngine;
+using Everywhere.Mcp;
 using Everywhere.Windows.Chat.Plugins;
 using Everywhere.Windows.Common;
 using Everywhere.Windows.Interop;
@@ -39,7 +40,9 @@ public static class Program
     {
         if (args.Contains("--mcp"))
         {
-            await Everywhere.Mcp.Server.EverywhereMcpServer.RunStdioAsync(args);
+            await Everywhere.Mcp.Server.EverywhereMcpServer.RunStdioAsync(
+                args,
+                services => services.AddSingleton<IVisualElementContext, VisualElementContext>());
             return;
         }
 
@@ -71,6 +74,7 @@ public static class Program
                 .AddDatabaseAndStorage()
                 .AddCloudClient()
                 .AddChatEssentials()
+                .AddEverywhereMcp()
 
                 #endregion
 
@@ -90,6 +94,7 @@ public static class Program
 
                 .AddTransient<IAsyncInitializer, ChatWindowInitializer>()
                 .AddTransient<IAsyncInitializer, UpdaterInitializer>()
+                .AddTransient<IAsyncInitializer, EverywhereMcpInitializer>()
 
             #endregion
 

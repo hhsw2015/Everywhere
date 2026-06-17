@@ -12,6 +12,7 @@ using Everywhere.Interop;
 using Everywhere.Linux.Chat.Plugins;
 using Everywhere.Linux.Common;
 using Everywhere.Linux.Interop;
+using Everywhere.Mcp;
 using Everywhere.StrategyEngine;
 using Microsoft.Extensions.DependencyInjection;
 using Serilog;
@@ -48,7 +49,9 @@ public static class Program
     {
         if (args.Contains("--mcp"))
         {
-            await Everywhere.Mcp.Server.EverywhereMcpServer.RunStdioAsync(args);
+            await Everywhere.Mcp.Server.EverywhereMcpServer.RunStdioAsync(
+                args,
+                services => services.AddSingleton<IVisualElementContext, VisualElementContext>());
             return;
         }
 
@@ -72,6 +75,7 @@ public static class Program
                 .AddViewsAndViewModels()
                 .AddDatabaseAndStorage()
                 .AddChatEssentials()
+                .AddEverywhereMcp()
 
                 #endregion
 
@@ -100,6 +104,7 @@ public static class Program
 
                 .AddTransient<IAsyncInitializer, ChatWindowInitializer>()
                 .AddTransient<IAsyncInitializer, UpdaterInitializer>()
+                .AddTransient<IAsyncInitializer, EverywhereMcpInitializer>()
 
             #endregion
 

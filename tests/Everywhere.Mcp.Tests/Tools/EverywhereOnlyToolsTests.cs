@@ -1,4 +1,6 @@
+using Everywhere.Interop;
 using Everywhere.Mcp.Snapshot;
+using Everywhere.Mcp.Tests.Snapshot;
 using Everywhere.Mcp.Tools;
 using ModelContextProtocol.Protocol;
 
@@ -49,6 +51,32 @@ public class EverywhereOnlyToolsTests
             null, new EmptyVisualElementContext(), new SessionStore(), CancellationToken.None);
 
         Assert.That(result.IsError, Is.True);
+    }
+
+    [Test]
+    public void ReadPick_ReturnsPinnedFalse_WhenStashEmpty()
+    {
+        var stash = new PickStash();
+        var sessions = new SessionStore();
+        var result = ReadPickTool.ReadPick(stash, sessions);
+
+        Assert.That(result.IsError, Is.Not.True);
+        Assert.That(ExtractText(result), Does.Contain("\"pinned\":false"));
+    }
+
+    [Test]
+    public void ReadPick_ConsumesStashedElement_OnFirstCall()
+    {
+        var stash = new PickStash();
+        var sessions = new SessionStore();
+        stash.Set(new FakeVisualElement("submit", []));
+
+        var first = ReadPickTool.ReadPick(stash, sessions);
+        var second = ReadPickTool.ReadPick(stash, sessions);
+
+        Assert.That(ExtractText(first), Does.Contain("\"pinned\":true"));
+        Assert.That(ExtractText(first), Does.Contain("submit"));
+        Assert.That(ExtractText(second), Does.Contain("\"pinned\":false"));
     }
 
     private static string ExtractText(CallToolResult result) =>

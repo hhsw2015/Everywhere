@@ -23,6 +23,7 @@ public sealed class ChatWindowInitializer(
     Settings settings,
     IShortcutListener shortcutListener,
     IVisualElementContext visualElementContext,
+    PickStash pickStash,
     ILogger<ChatWindowInitializer> logger
 ) : IAsyncInitializer
 {
@@ -50,6 +51,9 @@ public sealed class ChatWindowInitializer(
         InitializeShortcut(
             settings.Shortcut.TakeScreenshot,
             (shortcut, ref subscription) => RegisterScreenshotShortcut(chatWindowViewModel, shortcut, ref subscription));
+        InitializeShortcut(
+            settings.Shortcut.AgentPickElement,
+            (shortcut, ref subscription) => RegisterAgentPickShortcut(shortcut, ref subscription));
 
         settings.ChatWindow.PropertyChanged += (_, args) =>
         {
@@ -161,6 +165,28 @@ public sealed class ChatWindowInitializer(
         RegisterShortcutListener(
             shortcut,
             () => Dispatcher.UIThread.Post(() => chatWindowViewModel.TakeScreenshotCommand.Execute(null)),
+            ref subscription);
+    }
+
+    private void RegisterAgentPickShortcut(KeyboardShortcut shortcut, ref IDisposable? subscription)
+    {
+        RegisterShortcutListener(
+            shortcut,
+            () => Dispatcher.UIThread.Post(async () =>
+            {
+                try
+                {
+                    var element = await visualElementContext.PickVisualElementAsync(null);
+                    if (element is not null)
+                    {
+                        pickStash.Set(element);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, "Agent pick hotkey failed");
+                }
+            }),
             ref subscription);
     }
 

@@ -33,6 +33,7 @@ public sealed class EverywhereMcpHttpHost : IHostedService, IAsyncDisposable
     // Resolved once at construction so a missing parent registration fails fast — not silently
     // swallowed by the per-port retry loop.
     private readonly SessionStore _sessions;
+    private readonly PickStash _pickStash;
     private readonly IVisualElementContext _visualContext;
     private readonly IInputSimulator _input;
     private readonly FocusBorrow _focusBorrow;
@@ -47,6 +48,7 @@ public sealed class EverywhereMcpHttpHost : IHostedService, IAsyncDisposable
         _logger = logger;
 
         _sessions = parentServices.GetRequiredService<SessionStore>();
+        _pickStash = parentServices.GetRequiredService<PickStash>();
         _visualContext = parentServices.GetRequiredService<IVisualElementContext>();
         _input = parentServices.GetRequiredService<IInputSimulator>();
         _focusBorrow = parentServices.GetRequiredService<FocusBorrow>();
@@ -155,6 +157,7 @@ public sealed class EverywhereMcpHttpHost : IHostedService, IAsyncDisposable
 
         // Share parent singletons; lifecycle stays with the parent provider.
         builder.Services.AddSingleton(_sessions);
+        builder.Services.AddSingleton(_pickStash);
         builder.Services.AddSingleton(_visualContext);
         builder.Services.AddSingleton(_input);
         builder.Services.AddSingleton(_focusBorrow);

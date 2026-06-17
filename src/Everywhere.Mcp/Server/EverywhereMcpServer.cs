@@ -12,7 +12,10 @@ namespace Everywhere.Mcp.Server;
 /// </summary>
 public static class EverywhereMcpServer
 {
-    public static async Task RunStdioAsync(string[] args, CancellationToken cancellationToken = default)
+    public static async Task RunStdioAsync(
+        string[] args,
+        Action<IServiceCollection>? configure = null,
+        CancellationToken cancellationToken = default)
     {
         var builder = Host.CreateApplicationBuilder(args);
 
@@ -21,6 +24,11 @@ public static class EverywhereMcpServer
             // stdout is reserved for the MCP frame channel; logs must go to stderr.
             options.LogToStandardErrorThreshold = LogLevel.Trace;
         });
+
+        // Platform projects can register the real IVisualElementContext / IInputSimulator /
+        // IFocusBackend BEFORE AddEverywhereMcpTools() runs its TryAdd fallbacks, so the
+        // stdio transport gets full a11y access without spinning up Avalonia.
+        configure?.Invoke(builder.Services);
 
         builder.Services
             .AddEverywhereMcpTools()
