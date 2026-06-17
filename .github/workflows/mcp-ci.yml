@@ -53,3 +53,6 @@ jobs:
 
       - name: Test
         run: dotnet test tests/Everywhere.Mcp.Tests/Everywhere.Mcp.Tests.csproj -c Release --no-build --logger "console;verbosity=normal"
+
+      - name: Build (Everywhere.Linux app — integration smoke for Core wiring)
+        run: dotnet build src/Everywhere.Linux/Everywhere.Linux.csproj -c Release
