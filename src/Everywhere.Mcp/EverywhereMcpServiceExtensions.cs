@@ -54,6 +54,7 @@ public static class EverywhereMcpServiceExtensions
         services.TryAddSingleton<IInputSimulator, NotSupportedInputSimulator>();
         services.TryAddSingleton<IFocusBackend, NotSupportedFocusBackend>();
         services.TryAddSingleton<FocusBorrow>();
+        services.TryAddSingleton<SelectionCache>();
         return services;
     }
 }
