@@ -2218,6 +2218,12 @@ Utilisez la molette ou les touches numériques pour changer de mode de sélectio
     <data name="ShortcutSettings_SnapshotContext_Desription" xml:space="preserve">
         <value>Pressez dans n'importe quelle app pour capturer le contexte actuel (titre de fenêtre, URL, sélection, résumé a11y, capture d'écran). La prochaine fois que vous parlez à l'agent IA dans un terminal, le hook Claude Code l'injecte automatiquement. Expiration après 5 minutes.</value>
     </data>
+    <data name="ShortcutSettings_ClearContextStash_Header" xml:space="preserve">
+        <value>Vider le stash de contexte</value>
+    </data>
+    <data name="ShortcutSettings_ClearContextStash_Desription" xml:space="preserve">
+        <value>Efface le stash de contexte sur le disque et tout élément épinglé, pour que le prochain prompt Claude Code ne soit pas décoré. À utiliser quand tu as capturé la mauvaise fenêtre par erreur.</value>
+    </data>
     <data name="SettingsCategory_Settings_McpServer_Header" xml:space="preserve">
         <value>Serveur MCP</value>
     </data>
@@ -2247,6 +2253,12 @@ Utilisez la molette ou les touches numériques pour changer de mode de sélectio
     </data>
     <data name="McpServerSettings_AgentAppId_Description" xml:space="preserve">
         <value>Quand renseigné, Everywhere place cette application au premier plan après une capture de contexte (raccourci SnapshotContext ou épinglage AgentPickElement), pour que tu puisses continuer à taper dans ton agent IA sans changer de fenêtre. Accepte un identifiant de bundle (ex. com.github.cmux), un nom d'exécutable ou un nom d'application localisé. Vide pour désactiver.</value>
+    </data>
+    <data name="McpServerSettings_AgentTriggerKey_Header" xml:space="preserve">
+        <value>Touche déclencheur agent</value>
+    </data>
+    <data name="McpServerSettings_AgentTriggerKey_Description" xml:space="preserve">
+        <value>Après avoir mis l'application agent au premier plan, Everywhere envoie cette combinaison (ex. cmd+shift+space pour réveiller la dictée, cmd+l pour mettre le focus sur le champ de saisie). Style xdotool : cmd / alt / shift / ctrl / super plus une touche. Vide pour désactiver.</value>
     </data>
     <data name="Strategy_BuiltIn_Browser_Name" xml:space="preserve">
         <value>Assistant Navigateur</value>

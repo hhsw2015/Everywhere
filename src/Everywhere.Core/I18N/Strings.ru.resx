@@ -2218,6 +2218,12 @@
     <data name="ShortcutSettings_SnapshotContext_Desription" xml:space="preserve">
         <value>Нажмите в любом приложении, чтобы захватить текущий контекст (заголовок окна, URL, выделение, сводку a11y, скриншот). В следующий раз, когда вы общаетесь с ИИ-агентом в терминале, хук Claude Code автоматически внедрит его. Слот истекает через 5 минут.</value>
     </data>
+    <data name="ShortcutSettings_ClearContextStash_Header" xml:space="preserve">
+        <value>Очистить stash контекста</value>
+    </data>
+    <data name="ShortcutSettings_ClearContextStash_Desription" xml:space="preserve">
+        <value>Удаляет файл stash контекста на диске и любой закреплённый элемент, чтобы следующий запрос Claude Code не был декорирован. Используйте, если случайно захватили не то окно.</value>
+    </data>
     <data name="SettingsCategory_Settings_McpServer_Header" xml:space="preserve">
         <value>MCP-сервер</value>
     </data>
@@ -2247,6 +2253,12 @@
     </data>
     <data name="McpServerSettings_AgentAppId_Description" xml:space="preserve">
         <value>Если задано, Everywhere после захвата контекста (горячая клавиша SnapshotContext или закрепление AgentPickElement) выводит это приложение на передний план, чтобы вы могли продолжать ввод в ИИ-агента без ручного переключения окон. Принимает bundle id (например, com.github.cmux), имя исполняемого файла или локализованное имя приложения. Оставьте пустым, чтобы отключить.</value>
+    </data>
+    <data name="McpServerSettings_AgentTriggerKey_Header" xml:space="preserve">
+        <value>Клавиша вызова агента</value>
+    </data>
+    <data name="McpServerSettings_AgentTriggerKey_Description" xml:space="preserve">
+        <value>После вывода приложения агента на передний план Everywhere отправляет ему это сочетание (например, cmd+shift+space — голосовой ввод, cmd+l — фокус в поле ввода). Стиль xdotool: cmd / alt / shift / ctrl / super плюс обычная клавиша. Пусто — отключено.</value>
     </data>
     <data name="Strategy_BuiltIn_Browser_Name" xml:space="preserve">
         <value>Помощник браузера</value>

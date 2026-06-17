@@ -58,4 +58,15 @@ public sealed partial class ShortcutSettings : SettingsBase, ISettingsCategory
         LocaleKey.ShortcutSettings_SnapshotContext_Desription)]
     [SettingsTemplatedItem]
     public CompositeKeyboardShortcut SnapshotContext { get; } = new();
+
+    /// <summary>
+    /// Manual escape hatch. Wipes the on-disk context stash and any fresh
+    /// pin so the next prompt to a Claude Code hook is NOT decorated. Use
+    /// when you accidentally captured something you don't want injected.
+    /// </summary>
+    [DynamicResourceKey(
+        LocaleKey.ShortcutSettings_ClearContextStash_Header,
+        LocaleKey.ShortcutSettings_ClearContextStash_Desription)]
+    [SettingsTemplatedItem]
+    public CompositeKeyboardShortcut ClearContextStash { get; } = new();
 }

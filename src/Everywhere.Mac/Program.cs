@@ -98,6 +98,7 @@ public static class Program
                 .AddTransient<IAsyncInitializer, UpdaterInitializer>()
                 .AddTransient<IAsyncInitializer, EverywhereMcpInitializer>()
                 .AddTransient<IAsyncInitializer, SnapshotContextHotkeyInitializer>()
+                .AddTransient<IAsyncInitializer, ClearContextStashHotkeyInitializer>()
                 .AddTransient<IAsyncInitializer>(sp => sp.GetRequiredService<Everywhere.Mcp.Snapshot.AutoCaptureService>())
 
             #endregion

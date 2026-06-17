@@ -2217,6 +2217,12 @@ Seçim modunu değiştirmek için kaydırıcı veya rakam tuşlarını kullanın
     <data name="ShortcutSettings_SnapshotContext_Desription" xml:space="preserve">
         <value>Herhangi bir uygulamada basınca mevcut bağlamı (pencere başlığı, URL, seçim, a11y özeti, ekran görüntüsü) yakalar. Bir terminalde yapay zekâ aracısıyla bir sonraki konuşmanızda Claude Code kancası bunu otomatik olarak enjekte eder. 5 dakika sonra dolar.</value>
     </data>
+    <data name="ShortcutSettings_ClearContextStash_Header" xml:space="preserve">
+        <value>Bağlam stash'ını temizle</value>
+    </data>
+    <data name="ShortcutSettings_ClearContextStash_Desription" xml:space="preserve">
+        <value>Diskteki bağlam stash dosyasını ve sabitlenmiş öğeyi siler; sonraki Claude Code istemi süslenmez. Yanlış pencereyi yakaladığında kullan.</value>
+    </data>
     <data name="SettingsCategory_Settings_McpServer_Header" xml:space="preserve">
         <value>MCP Sunucusu</value>
     </data>
@@ -2246,6 +2252,12 @@ Seçim modunu değiştirmek için kaydırıcı veya rakam tuşlarını kullanın
     </data>
     <data name="McpServerSettings_AgentAppId_Description" xml:space="preserve">
         <value>Doldurulduğunda, Everywhere bağlam yakalandıktan sonra (SnapshotContext kısayolu veya AgentPickElement sabitlemesi) bu uygulamayı öne getirir; pencere değiştirmeden AI ajanına yazmaya devam edebilirsin. Bundle id (örn. com.github.cmux), çalıştırılabilir dosya adı veya yerelleştirilmiş uygulama adı kabul eder. Devre dışı bırakmak için boş bırak.</value>
+    </data>
+    <data name="McpServerSettings_AgentTriggerKey_Header" xml:space="preserve">
+        <value>Ajan tetik tuşu</value>
+    </data>
+    <data name="McpServerSettings_AgentTriggerKey_Description" xml:space="preserve">
+        <value>Ajan uygulaması öne getirildikten sonra Everywhere bu kombinasyonu gönderir (ör. cmd+shift+space ile dikte etmeyi açma, cmd+l ile giriş alanına odaklanma). xdotool tarzı: cmd / alt / shift / ctrl / super artı bir tuş. Boş bırak ki devre dışı kalsın.</value>
     </data>
     <data name="Strategy_BuiltIn_Browser_Name" xml:space="preserve">
         <value>Tarayıcı Asistanı</value>

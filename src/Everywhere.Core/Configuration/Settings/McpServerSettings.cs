@@ -44,4 +44,11 @@ public sealed partial class McpServerSettings : SettingsBase, ISettingsCategory
         LocaleKey.McpServerSettings_AgentAppId_Description)]
     [SettingsStringItem(Watermark = "com.github.cmux")]
     public partial string AgentAppId { get; set; } = string.Empty;
+
+    [ObservableProperty]
+    [DynamicResourceKey(
+        LocaleKey.McpServerSettings_AgentTriggerKey_Header,
+        LocaleKey.McpServerSettings_AgentTriggerKey_Description)]
+    [SettingsStringItem(Watermark = "cmd+shift+space")]
+    public partial string AgentTriggerKey { get; set; } = string.Empty;
 }

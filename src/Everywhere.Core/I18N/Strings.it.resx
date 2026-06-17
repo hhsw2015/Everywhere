@@ -2218,6 +2218,12 @@ Rotella o tasti numerici per cambiare modalità di selezione</value>
     <data name="ShortcutSettings_SnapshotContext_Desription" xml:space="preserve">
         <value>Premi in qualsiasi app per catturare il contesto attuale (titolo finestra, URL, selezione, sommario a11y, screenshot). La prossima volta che parli all'agente IA in un terminale, l'hook di Claude Code lo inietta automaticamente. Scade dopo 5 minuti.</value>
     </data>
+    <data name="ShortcutSettings_ClearContextStash_Header" xml:space="preserve">
+        <value>Svuota lo stash di contesto</value>
+    </data>
+    <data name="ShortcutSettings_ClearContextStash_Desription" xml:space="preserve">
+        <value>Cancella lo stash di contesto su disco e qualsiasi elemento fissato, così il prossimo prompt di Claude Code non verrà decorato. Usalo quando hai catturato per errore la finestra sbagliata.</value>
+    </data>
     <data name="SettingsCategory_Settings_McpServer_Header" xml:space="preserve">
         <value>Server MCP</value>
     </data>
@@ -2247,6 +2253,12 @@ Rotella o tasti numerici per cambiare modalità di selezione</value>
     </data>
     <data name="McpServerSettings_AgentAppId_Description" xml:space="preserve">
         <value>Se impostata, Everywhere porta questa app in primo piano dopo una cattura di contesto (tramite la scorciatoia SnapshotContext o il pin di AgentPickElement), così puoi continuare a digitare nel tuo agente IA senza cambiare finestra. Accetta bundle id (es. com.github.cmux), nome dell'eseguibile o nome localizzato dell'app. Lascia vuoto per disabilitare.</value>
+    </data>
+    <data name="McpServerSettings_AgentTriggerKey_Header" xml:space="preserve">
+        <value>Tasto di attivazione dell'agente</value>
+    </data>
+    <data name="McpServerSettings_AgentTriggerKey_Description" xml:space="preserve">
+        <value>Dopo aver portato l'app dell'agente in primo piano, Everywhere le invia questa combinazione (es. cmd+shift+space per attivare la dettatura, cmd+l per mettere a fuoco il campo di input). Stile xdotool: cmd / alt / shift / ctrl / super più un tasto. Vuoto per disabilitare.</value>
     </data>
     <data name="Strategy_BuiltIn_Browser_Name" xml:space="preserve">
         <value>Assistente Browser</value>
