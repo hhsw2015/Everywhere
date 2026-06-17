@@ -173,7 +173,7 @@
       <Link>Contents\Helpers\Everywhere.Watchdog</Link>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
     </None>
-    <None Include="$(ContextHookExecutable)" PublishFolderType="RootDirectory" Condition="Exists('$(ContextHookExecutable)')">
+    <None Include="$(ContextHookExecutable)" PublishFolderType="RootDirectory">
       <Link>Contents\Helpers\everywhere-context-hook</Link>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>

@@ -18,7 +18,14 @@
     <ContextHookExecutable>$(ContextHookTargetDir)/release/$(ContextHookBinName)</ContextHookExecutable>
   </PropertyGroup>
 
-  <Target Name="BuildEverywhereContextHook" BeforeTargets="ResolveAssemblyReferences">
+  <!-- Run BEFORE the SDK resolves None items, so the binary exists when the
+       <None Include="$(ContextHookExecutable)"> in the consuming csproj is
+       evaluated for publish. Mirrors what Build.Watchdog.targets does for
+       the watchdog binary. -->
+  <Target Name="BuildEverywhereContextHook"
+          BeforeTargets="BeforeResolveReferences"
+          Inputs="$(ContextHookSrcDir)/src/main.rs;$(ContextHookSrcDir)/Cargo.toml"
+          Outputs="$(ContextHookExecutable)">
     <Message Text="Building Rust context hook in $(ContextHookSrcDir)..." Importance="high" />
     <!-- Soft-fail when cargo isn't installed: host build proceeds without the
          hook binary; Mac/Win/Linux release CI all have cargo preinstalled. -->
