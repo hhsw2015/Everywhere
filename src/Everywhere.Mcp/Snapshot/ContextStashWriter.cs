@@ -148,6 +148,9 @@ public sealed class ContextStashWriter
         sb.Append("[everywhere-ctx-json] ");
         sb.Append(JsonSerializer.Serialize(p, ContextSnapshotPayload.SerializerOptions));
         sb.Append('\n');
+
+        sb.Append("[everywhere-hint] If the user's question needs more than this pointer, call the relevant Everywhere MCP tool — don't guess.\n");
+
         return sb.ToString();
     }
 
