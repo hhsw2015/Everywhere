@@ -20,8 +20,16 @@
 
   <Target Name="BuildEverywhereContextHook" BeforeTargets="ResolveAssemblyReferences">
     <Message Text="Building Rust context hook in $(ContextHookSrcDir)..." Importance="high" />
+    <!-- Soft-fail when cargo isn't installed: host build proceeds without the
+         hook binary; Mac/Win/Linux release CI all have cargo preinstalled. -->
     <Exec
       Command="cargo build --release --manifest-path &quot;$(ContextHookSrcDir)/Cargo.toml&quot;"
-      ContinueOnError="false" />
+      ContinueOnError="true">
+      <Output TaskParameter="ExitCode" PropertyName="ContextHookExitCode" />
+    </Exec>
+    <Message
+      Condition="'$(ContextHookExitCode)' != '0'"
+      Text="Rust context hook build skipped (cargo not available or build failed). The Snapshot Context hotkey works without it; only Claude Code prompt-injection misses out."
+      Importance="high" />
   </Target>
 </Project>

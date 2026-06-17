@@ -1,11 +1,10 @@
 // Tiny binary invoked by Claude Code's UserPromptSubmit hook.
-// Stats ~/Library/Application Support/Everywhere/context-stash.json — if it
-// exists and is fresh (<5 min), prints its contents to stdout and deletes it.
-// Otherwise exits 0 silently.
+// Stats the platform-specific Everywhere context-stash file — if it exists
+// and is fresh (<5 min), prints its contents to stdout and deletes it.
+// Otherwise exits 0 silently so a routine Enter key has zero overhead.
 //
-// Built for ~3 ms cold start so adding it to every Enter key doesn't slow
-// terminal interaction at all. No deps, no allocations beyond what stdlib
-// inevitably does.
+// Built for ~3 ms cold start. Path resolution mirrors
+// `Everywhere.Mcp.Snapshot.StashPaths` on the C# side; both must agree.
 
 use std::env;
 use std::fs;
@@ -24,7 +23,17 @@ fn main() -> ExitCode {
 
     let meta = match fs::metadata(&path) {
         Ok(m) => m,
-        Err(_) => return ExitCode::SUCCESS, // 99% case — file absent, instant exit
+        Err(e) if e.kind() == io::ErrorKind::NotFound => {
+            // 99% case — file absent, instant exit
+            return ExitCode::SUCCESS;
+        }
+        Err(e) => {
+            // Unexpected I/O error: stat permissioned-out, FS unmounted, etc.
+            // Surface to stderr (Claude Code captures it for hook diagnostics)
+            // but still succeed so the user's prompt isn't blocked.
+            let _ = writeln!(io::stderr(), "everywhere-context-hook: stat failed: {e}");
+            return ExitCode::SUCCESS;
+        }
     };
 
     if let Ok(modified) = meta.modified() {
@@ -33,7 +42,6 @@ fn main() -> ExitCode {
             .map(|d| d.as_secs() > TTL_SECS)
             .unwrap_or(false)
         {
-            // Stale — delete and exit silently.
             let _ = fs::remove_file(&path);
             return ExitCode::SUCCESS;
         }
@@ -41,11 +49,16 @@ fn main() -> ExitCode {
 
     let body = match fs::read(&path) {
         Ok(b) => b,
-        Err(_) => return ExitCode::SUCCESS,
+        Err(e) => {
+            let _ = writeln!(io::stderr(), "everywhere-context-hook: read failed: {e}");
+            return ExitCode::SUCCESS;
+        }
     };
 
     // Take semantics: consume on read.
-    let _ = fs::remove_file(&path);
+    if let Err(e) = fs::remove_file(&path) {
+        let _ = writeln!(io::stderr(), "everywhere-context-hook: remove failed: {e}");
+    }
 
     let stdout = io::stdout();
     let _ = stdout.lock().write_all(&body);
@@ -53,11 +66,40 @@ fn main() -> ExitCode {
 }
 
 fn stash_path() -> Option<PathBuf> {
-    let home = env::var_os("HOME")?;
-    let mut p = PathBuf::from(home);
-    p.push("Library");
-    p.push("Application Support");
-    p.push("Everywhere");
-    p.push("context-stash.json");
-    Some(p)
+    #[cfg(target_os = "macos")]
+    {
+        let home = env::var_os("HOME")?;
+        let mut p = PathBuf::from(home);
+        p.push("Library");
+        p.push("Application Support");
+        p.push("Everywhere");
+        p.push("context-stash.json");
+        Some(p)
+    }
+    #[cfg(target_os = "windows")]
+    {
+        // %APPDATA% mirrors C# SpecialFolder.ApplicationData on Windows.
+        let appdata = env::var_os("APPDATA")?;
+        let mut p = PathBuf::from(appdata);
+        p.push("Everywhere");
+        p.push("context-stash.json");
+        Some(p)
+    }
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        // Linux / freedesktop XDG: prefer $XDG_DATA_HOME, fall back to ~/.local/share.
+        if let Some(xdg) = env::var_os("XDG_DATA_HOME") {
+            let mut p = PathBuf::from(xdg);
+            p.push("Everywhere");
+            p.push("context-stash.json");
+            return Some(p);
+        }
+        let home = env::var_os("HOME")?;
+        let mut p = PathBuf::from(home);
+        p.push(".local");
+        p.push("share");
+        p.push("Everywhere");
+        p.push("context-stash.json");
+        Some(p)
+    }
 }
