@@ -2236,6 +2236,12 @@
     <data name="McpServerSettings_HttpPort_Description" xml:space="preserve">
         <value>기본값 7878. 포트가 사용 중이면 Everywhere가 최대 10개의 대체 포트를 순차로 시도합니다.</value>
     </data>
+    <data name="McpServerSettings_AutoCaptureContext_Header" xml:space="preserve">
+        <value>AI 훅을 위해 컨텍스트 자동 캡처</value>
+    </data>
+    <data name="McpServerSettings_AutoCaptureContext_Description" xml:space="preserve">
+        <value>활성화하면 텍스트 선택, 복사, 요소 핀 고정 시 Everywhere 가 컨텍스트 stash 파일을 자동으로 새로 고칩니다 — 터미널에서 AI 프롬프트에 Enter 를 누르기 전에 Snapshot Context 를 누르지 않아도 최신 포인터가 전달됩니다. stash 는 여전히 5 분 후 만료됩니다.</value>
+    </data>
     <data name="Strategy_BuiltIn_Browser_Name" xml:space="preserve">
         <value>브라우저 도우미</value>
     </data>

@@ -2236,6 +2236,12 @@ Use scroll wheel or number keys to switch selection mode</value>
     <data name="McpServerSettings_HttpPort_Description" xml:space="preserve">
         <value>Default 7878. If the port is in use, Everywhere walks up to ten fallback ports.</value>
     </data>
+    <data name="McpServerSettings_AutoCaptureContext_Header" xml:space="preserve">
+        <value>Auto-capture context for AI hook</value>
+    </data>
+    <data name="McpServerSettings_AutoCaptureContext_Description" xml:space="preserve">
+        <value>Continuously refresh the context stash whenever you select text, copy something, or pin an element — so a terminal AI prompt picks up the freshest pointer without you having to press Snapshot Context first. Stash still expires after 5 minutes.</value>
+    </data>
     <data name="Strategy_BuiltIn_Browser_Name" xml:space="preserve">
         <value>Browser Assistant</value>
     </data>

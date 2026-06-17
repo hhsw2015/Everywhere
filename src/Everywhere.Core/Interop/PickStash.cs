@@ -24,6 +24,13 @@ public sealed class PickStash
         _clock = clock;
     }
 
+    /// <summary>
+    /// Raised after a successful <see cref="Set"/>. Lets background services
+    /// (e.g. context stash auto-capture) react to a fresh pin without polling.
+    /// Handlers run synchronously on the caller thread; keep them lightweight.
+    /// </summary>
+    public event Action<IVisualElement>? Pinned;
+
     public void Set(IVisualElement element, TimeSpan? ttl = null)
     {
         ArgumentNullException.ThrowIfNull(element);
@@ -32,6 +39,7 @@ public sealed class PickStash
         {
             _current = new Entry(element, expiry);
         }
+        Pinned?.Invoke(element);
     }
 
     /// <summary>

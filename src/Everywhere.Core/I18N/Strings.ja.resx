@@ -2236,6 +2236,12 @@
     <data name="McpServerSettings_HttpPort_Description" xml:space="preserve">
         <value>既定 7878。ポートが使用中の場合、Everywhere は最大 10 個の代替ポートを順次試行します。</value>
     </data>
+    <data name="McpServerSettings_AutoCaptureContext_Header" xml:space="preserve">
+        <value>AI フック向けに自動でコンテキストを取得</value>
+    </data>
+    <data name="McpServerSettings_AutoCaptureContext_Description" xml:space="preserve">
+        <value>オンにするとテキストの選択、コピー、要素のピン留めのたびに Everywhere が自動でコンテキスト stash を更新します — ターミナルで AI に Enter を押す前に Snapshot Context を押さなくても最新のポインタが渡ります。stash は引き続き 5 分で失効します。</value>
+    </data>
     <data name="Strategy_BuiltIn_Browser_Name" xml:space="preserve">
         <value>ブラウザアシスタント</value>
     </data>
