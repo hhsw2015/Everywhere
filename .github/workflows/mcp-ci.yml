@@ -16,7 +16,9 @@ on:
   pull_request:
     paths:
       - 'src/Everywhere.Mcp/**'
+      - 'src/Everywhere.Core/**'
       - 'tests/Everywhere.Mcp.Tests/**'
+      - 'Directory.Packages.props'
       - '.github/workflows/mcp-ci.yml'
   workflow_dispatch:
 
