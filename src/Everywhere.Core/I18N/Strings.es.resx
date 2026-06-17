@@ -2218,6 +2218,12 @@ Rueda o teclas numéricas para cambiar el modo de selección</value>
     <data name="ShortcutSettings_SnapshotContext_Desription" xml:space="preserve">
         <value>Pulsa en cualquier app para capturar el contexto actual (título de ventana, URL, selección, resumen de a11y, captura de pantalla). La próxima vez que hables con el agente de IA en un terminal, el hook de Claude Code lo inyectará automáticamente. Caduca tras 5 minutos.</value>
     </data>
+    <data name="ShortcutSettings_ClearContextStash_Header" xml:space="preserve">
+        <value>Vaciar stash de contexto</value>
+    </data>
+    <data name="ShortcutSettings_ClearContextStash_Desription" xml:space="preserve">
+        <value>Borra el stash de contexto en disco y cualquier elemento fijado, para que el siguiente prompt de Claude Code no se decore. Úsalo cuando hayas capturado la ventana equivocada.</value>
+    </data>
     <data name="SettingsCategory_Settings_McpServer_Header" xml:space="preserve">
         <value>Servidor MCP</value>
     </data>
@@ -2247,6 +2253,12 @@ Rueda o teclas numéricas para cambiar el modo de selección</value>
     </data>
     <data name="McpServerSettings_AgentAppId_Description" xml:space="preserve">
         <value>Si está definido, Everywhere trae esta app al frente tras capturar el contexto (con el atajo SnapshotContext o al fijar con AgentPickElement) para que sigas escribiendo en tu agente de IA sin cambiar de ventana manualmente. Acepta bundle id (p. ej. com.github.cmux), nombre del ejecutable o nombre localizado. Déjalo vacío para desactivarlo.</value>
+    </data>
+    <data name="McpServerSettings_AgentTriggerKey_Header" xml:space="preserve">
+        <value>Tecla de activación del agente</value>
+    </data>
+    <data name="McpServerSettings_AgentTriggerKey_Description" xml:space="preserve">
+        <value>Después de traer la app del agente al frente, Everywhere envía esta combinación (p. ej. cmd+shift+space para activar el dictado, cmd+l para enfocar el campo de entrada). Estilo xdotool: cmd / alt / shift / ctrl / super más una tecla. Vacío para desactivar.</value>
     </data>
     <data name="Strategy_BuiltIn_Browser_Name" xml:space="preserve">
         <value>Asistente de Navegador</value>

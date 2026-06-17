@@ -2218,6 +2218,12 @@
     <data name="ShortcutSettings_SnapshotContext_Desription" xml:space="preserve">
         <value>任意のアプリで押すと、現在のコンテキスト（ウィンドウタイトル、URL、選択、a11y サマリー、スクリーンショット）をキャプチャします。次にターミナルで AI エージェントと話すとき、Claude Code フックが自動的に挿入します。スロットは 5 分後に期限切れになります。</value>
     </data>
+    <data name="ShortcutSettings_ClearContextStash_Header" xml:space="preserve">
+        <value>コンテキスト stash をクリア</value>
+    </data>
+    <data name="ShortcutSettings_ClearContextStash_Desription" xml:space="preserve">
+        <value>ディスク上のコンテキスト stash と現在のピン留めを消去し、次の Claude Code プロンプトに注入されないようにします。誤って違うウィンドウを取得したときに使ってください。</value>
+    </data>
     <data name="SettingsCategory_Settings_McpServer_Header" xml:space="preserve">
         <value>MCP サーバー</value>
     </data>
@@ -2247,6 +2253,12 @@
     </data>
     <data name="McpServerSettings_AgentAppId_Description" xml:space="preserve">
         <value>設定すると Everywhere はコンテキスト取得（SnapshotContext ホットキーや AgentPickElement ピン留め）後にこのアプリを前面に切り替えます。手動でウィンドウを切り替えずに AI エージェントへ入力を続けられます。bundle id（例: com.github.cmux）、実行ファイル名、ローカライズされたアプリ名のいずれでも可。空にすると無効。</value>
+    </data>
+    <data name="McpServerSettings_AgentTriggerKey_Header" xml:space="preserve">
+        <value>エージェント起動キー</value>
+    </data>
+    <data name="McpServerSettings_AgentTriggerKey_Description" xml:space="preserve">
+        <value>エージェントアプリを前面に切り替えた後、このキー組み合わせを送信します（例: cmd+shift+space で音声入力を起動、cmd+l で入力欄にフォーカス）。xdotool スタイル: cmd / alt / shift / ctrl / super に通常キーを追加。空欄で無効。</value>
     </data>
     <data name="Strategy_BuiltIn_Browser_Name" xml:space="preserve">
         <value>ブラウザアシスタント</value>

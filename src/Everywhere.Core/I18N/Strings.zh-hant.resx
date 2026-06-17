@@ -2218,6 +2218,12 @@
     <data name="ShortcutSettings_SnapshotContext_Desription" xml:space="preserve">
         <value>在任何應用中按下，擷取當前脈絡（視窗標題、URL、選取、輔助功能摘要、截圖）。下次你在終端機跟 AI 代理對話時，Claude Code 掛鉤會自動注入。槽位 5 分鐘後過期。</value>
     </data>
+    <data name="ShortcutSettings_ClearContextStash_Header" xml:space="preserve">
+        <value>清空上下文 stash</value>
+    </data>
+    <data name="ShortcutSettings_ClearContextStash_Desription" xml:space="preserve">
+        <value>把磁碟上的上下文 stash 檔與目前的 pin 都清除，這樣下次 Claude Code 提問就不會被注入。誤擷取到不想要的視窗時按這個鍵。</value>
+    </data>
     <data name="SettingsCategory_Settings_McpServer_Header" xml:space="preserve">
         <value>MCP 伺服器</value>
     </data>
@@ -2247,6 +2253,12 @@
     </data>
     <data name="McpServerSettings_AgentAppId_Description" xml:space="preserve">
         <value>設定後，Everywhere 會在擷取上下文（透過 SnapshotContext 熱鍵或 AgentPickElement 釘選）之後自動把該應用程式帶到最上層，省去手動切換視窗。可填 bundle id（如 com.github.cmux）、執行檔名稱或本地化應用程式名。留空停用。</value>
+    </data>
+    <data name="McpServerSettings_AgentTriggerKey_Header" xml:space="preserve">
+        <value>Agent 觸發快捷鍵</value>
+    </data>
+    <data name="McpServerSettings_AgentTriggerKey_Description" xml:space="preserve">
+        <value>把 Agent 應用程式帶到前景後，自動向它送這組按鍵（如 cmd+shift+space 喚醒語音輸入法，cmd+l 聚焦輸入框）。語法為 xdotool 風格：cmd / alt / shift / ctrl / super 加一個普通鍵。留空則不送。</value>
     </data>
     <data name="Strategy_BuiltIn_Browser_Name" xml:space="preserve">
         <value>瀏覽器助手</value>

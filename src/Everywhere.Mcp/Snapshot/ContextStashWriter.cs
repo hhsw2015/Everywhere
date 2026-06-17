@@ -32,6 +32,7 @@ public sealed class ContextStashWriter
     private readonly SelectionCache _selectionCache;
     private readonly PickStash _pickStash;
     private readonly IAppActivator _appActivator;
+    private readonly IInputSimulator _input;
     private readonly Settings _settings;
     private readonly ILogger<ContextStashWriter> _logger;
     private readonly SemaphoreSlim _writeLock = new(1, 1);
@@ -42,6 +43,7 @@ public sealed class ContextStashWriter
         SelectionCache selectionCache,
         PickStash pickStash,
         IAppActivator appActivator,
+        IInputSimulator input,
         Settings settings,
         ILogger<ContextStashWriter> logger)
     {
@@ -50,8 +52,26 @@ public sealed class ContextStashWriter
         _selectionCache = selectionCache;
         _pickStash = pickStash;
         _appActivator = appActivator;
+        _input = input;
         _settings = settings;
         _logger = logger;
+    }
+
+    /// <summary>
+    /// Manual escape hatch bound to the ClearContextStash hotkey. Wipes the
+    /// on-disk stash, any orphaned <c>.tmp</c>, AND any fresh pin so the
+    /// next prompt to a Claude Code hook is NOT decorated. Idempotent — safe
+    /// to call when nothing is staged.
+    /// </summary>
+    public void ClearStash()
+    {
+        try { _pickStash.Clear(); } catch { }
+        foreach (var path in new[] { StashPath, StashPath + ".tmp" })
+        {
+            try { if (File.Exists(path)) File.Delete(path); }
+            catch (Exception ex) { _logger.LogDebug(ex, "Clear stash: failed to delete {Path}", path); }
+        }
+        _logger.LogInformation("Context stash cleared by user.");
     }
 
     public Task CaptureAsync(CancellationToken cancellationToken = default) => CaptureCoreAsync(seed: null, cancellationToken);
@@ -176,15 +196,41 @@ public sealed class ContextStashWriter
     {
         var id = _settings.McpServer.AgentAppId;
         if (string.IsNullOrWhiteSpace(id)) return;
+        bool raised;
         try
         {
-            var raised = _appActivator.Activate(id);
+            raised = _appActivator.Activate(id);
             if (raised) _logger.LogDebug("Activated agent app {Id} after context capture.", id);
         }
         catch (Exception ex)
         {
             _logger.LogDebug(ex, "Failed to activate agent app {Id}", id);
+            return;
         }
+        if (!raised) return;
+
+        // Optional post-activation keystroke (e.g. cmd+shift+space to wake a
+        // dictation IME, cmd+l to focus the omnibar). macOS activation is
+        // async — the focus change is dispatched on the AppKit run loop and
+        // arrives a frame or two later, so we wait briefly before sending so
+        // the keystroke lands in the agent app, not the previously-focused
+        // window.
+        var trigger = _settings.McpServer.AgentTriggerKey;
+        if (string.IsNullOrWhiteSpace(trigger)) return;
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await Task.Delay(120);
+                _input.PressKey(trigger);
+                _logger.LogDebug("Sent agent trigger key {Key} after activation.", trigger);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Failed to send agent trigger key {Key}", trigger);
+            }
+        });
     }
 
     /// <summary>

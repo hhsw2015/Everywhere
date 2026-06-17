@@ -2217,6 +2217,12 @@ Scrollrad oder Zifferntasten zum Wechseln des Auswahlmodus</value>
     <data name="ShortcutSettings_SnapshotContext_Desription" xml:space="preserve">
         <value>Beliebige App: Drücken erfasst den aktuellen Kontext (Fenstertitel, URL, Auswahl, A11y-Zusammenfassung, Screenshot). Beim nächsten Gespräch mit dem KI-Agenten im Terminal injiziert der Claude-Code-Hook ihn automatisch. Slot läuft nach 5 Minuten ab.</value>
     </data>
+    <data name="ShortcutSettings_ClearContextStash_Header" xml:space="preserve">
+        <value>Kontext-Stash leeren</value>
+    </data>
+    <data name="ShortcutSettings_ClearContextStash_Desription" xml:space="preserve">
+        <value>Löscht den Kontext-Stash auf der Festplatte und alle angehefteten Elemente, sodass der nächste Claude-Code-Prompt nicht mehr dekoriert wird. Nutze das, wenn du versehentlich das falsche Fenster erfasst hast.</value>
+    </data>
     <data name="SettingsCategory_Settings_McpServer_Header" xml:space="preserve">
         <value>MCP-Server</value>
     </data>
@@ -2246,6 +2252,12 @@ Scrollrad oder Zifferntasten zum Wechseln des Auswahlmodus</value>
     </data>
     <data name="McpServerSettings_AgentAppId_Description" xml:space="preserve">
         <value>Wenn gesetzt, holt Everywhere diese App nach einer Kontext-Erfassung (per SnapshotContext-Hotkey oder AgentPickElement-Pin) in den Vordergrund, sodass du ohne manuellen Fensterwechsel weiter im KI-Agenten tippen kannst. Akzeptiert Bundle-ID (z. B. com.github.cmux), Programmnamen oder den lokalisierten App-Namen. Leer lassen zum Deaktivieren.</value>
+    </data>
+    <data name="McpServerSettings_AgentTriggerKey_Header" xml:space="preserve">
+        <value>Agent-Trigger-Taste</value>
+    </data>
+    <data name="McpServerSettings_AgentTriggerKey_Description" xml:space="preserve">
+        <value>Nachdem die Agent-App in den Vordergrund gebracht wurde, sendet Everywhere diese Tastenkombination an sie (z. B. cmd+shift+space zum Auslösen einer Diktier-IME, cmd+l zum Fokussieren des Eingabefelds). xdotool-Stil: cmd / alt / shift / ctrl / super plus eine Taste. Leer lassen zum Deaktivieren.</value>
     </data>
     <data name="Strategy_BuiltIn_Browser_Name" xml:space="preserve">
         <value>Browser-Assistent</value>
