@@ -28,6 +28,7 @@ public sealed class ContextStashWriter
     private readonly IVisualElementContext _context;
     private readonly IBrowserUrlReader _browserUrl;
     private readonly SelectionCache _selectionCache;
+    private readonly PickStash _pickStash;
     private readonly ILogger<ContextStashWriter> _logger;
     private readonly SemaphoreSlim _writeLock = new(1, 1);
 
@@ -35,11 +36,13 @@ public sealed class ContextStashWriter
         IVisualElementContext context,
         IBrowserUrlReader browserUrl,
         SelectionCache selectionCache,
+        PickStash pickStash,
         ILogger<ContextStashWriter> logger)
     {
         _context = context;
         _browserUrl = browserUrl;
         _selectionCache = selectionCache;
+        _pickStash = pickStash;
         _logger = logger;
     }
 
@@ -103,14 +106,17 @@ public sealed class ContextStashWriter
                 selectionApp = appKey;
             }
 
+            var pinPending = _pickStash.HasFreshPin;
+
             // If we ended up with nothing useful — no app, no title, no url, no
-            // selection — refuse to write. An empty stash makes the hook
-            // inject a bare "[everywhere-ctx]" envelope, which is worse than
-            // not injecting at all because the user can't tell why it fired.
+            // selection, AND no fresh pin waiting — refuse to write. An empty
+            // stash makes the hook inject a bare "[everywhere-ctx]" envelope,
+            // which is worse than not injecting at all.
             if (string.IsNullOrEmpty(appKey)
                 && string.IsNullOrEmpty(topLevel?.Name)
                 && string.IsNullOrEmpty(url)
-                && string.IsNullOrEmpty(selectionText))
+                && string.IsNullOrEmpty(selectionText)
+                && !pinPending)
             {
                 _logger.LogDebug("Context stash capture produced no usable data; skipping write.");
                 return;
@@ -124,7 +130,8 @@ public sealed class ContextStashWriter
                 WindowTitle: topLevel?.Name,
                 Url: url,
                 SelectedText: selectionText,
-                SelectedApp: selectionApp);
+                SelectedApp: selectionApp,
+                PinPending: pinPending ? true : null);
 
             await WriteAtomicAsync(FormatForHook(payload), cancellationToken);
             _logger.LogInformation("Context stash captured for {App} ({Title}).", appKey, topLevel?.Name);
@@ -165,15 +172,23 @@ public sealed class ContextStashWriter
         }
         if (p.SelectedText is { Length: > 0 })
         {
-            sb.Append("selection=\"").Append(SanitiseUserText(p.SelectedText, 200)).Append('"');
+            sb.Append("selection=\"").Append(SanitiseUserText(p.SelectedText, 200)).Append('"').Append(' ');
         }
+        if (p.PinPending == true) sb.Append("pin_pending=true");
         sb.Append('\n');
 
         sb.Append("[everywhere-ctx-json] ");
         sb.Append(JsonSerializer.Serialize(p, ContextSnapshotPayload.SerializerOptions));
         sb.Append('\n');
 
-        sb.Append("[everywhere-hint] If the user's question needs more than this pointer, call the relevant Everywhere MCP tool — don't guess.\n");
+        if (p.PinPending == true)
+        {
+            sb.Append("[everywhere-hint] The user pinned a UI element for this question. Call the Everywhere MCP `read_pick` tool now to consume it before answering — its bounds/tree/text are NOT in this envelope.\n");
+        }
+        else
+        {
+            sb.Append("[everywhere-hint] If the user's question needs more than this pointer, call the relevant Everywhere MCP tool — don't guess.\n");
+        }
 
         return sb.ToString();
     }
@@ -309,7 +324,8 @@ internal sealed record ContextSnapshotPayload(
     [property: JsonPropertyName("window_title")] string? WindowTitle,
     [property: JsonPropertyName("url")] string? Url,
     [property: JsonPropertyName("selected_text")] string? SelectedText,
-    [property: JsonPropertyName("selected_app")] string? SelectedApp)
+    [property: JsonPropertyName("selected_app")] string? SelectedApp,
+    [property: JsonPropertyName("pin_pending")] bool? PinPending)
 {
     public static readonly JsonSerializerOptions SerializerOptions = new()
     {
