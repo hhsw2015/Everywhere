@@ -8,7 +8,9 @@ namespace Everywhere.Mac.Mcp;
 /// </summary>
 public sealed class MacFinderReader(IAppleScriptRunner runner) : IFinderReader
 {
-    private const string Source =
+    private const string Marker = "<<<FINDER_END>>>";
+
+    private static readonly string Source =
         @"tell application ""Finder""
             set sel to selection
             set out to """"
@@ -20,7 +22,7 @@ public sealed class MacFinderReader(IAppleScriptRunner runner) : IFinderReader
             on error
                 set fp to """"
             end try
-            return out & ""---"" & linefeed & fp
+            return out & """ + Marker + @""" & linefeed & fp
         end tell";
 
     public FinderSelection? GetSelection()
@@ -28,17 +30,27 @@ public sealed class MacFinderReader(IAppleScriptRunner runner) : IFinderReader
         var raw = runner.Run(Source);
         if (string.IsNullOrEmpty(raw)) return null;
 
-        var separator = "\n---\n";
-        var idx = raw.IndexOf(separator, StringComparison.Ordinal);
-        var selBlock = idx >= 0 ? raw[..idx] : raw;
-        var folder = idx >= 0 ? raw[(idx + separator.Length)..].Trim() : null;
-        if (string.IsNullOrEmpty(folder)) folder = null;
+        var idx = raw.IndexOf(Marker, StringComparison.Ordinal);
+        string selBlock;
+        string? folder = null;
+        if (idx >= 0)
+        {
+            selBlock = raw[..idx];
+            var folderBlock = raw[(idx + Marker.Length)..].Trim();
+            if (!string.IsNullOrEmpty(folderBlock)) folder = folderBlock;
+        }
+        else
+        {
+            selBlock = raw;
+        }
 
         var files = new List<FinderItem>();
         foreach (var line in selBlock.Split('\n'))
         {
             var path = line.Trim();
             if (string.IsNullOrEmpty(path)) continue;
+            // Treat anything that doesn't start with "/" as garbage (markers, errors, prompts).
+            if (!path.StartsWith('/')) continue;
             var trimmed = path.TrimEnd('/');
             var name = Path.GetFileName(trimmed);
             if (string.IsNullOrEmpty(name)) name = path;

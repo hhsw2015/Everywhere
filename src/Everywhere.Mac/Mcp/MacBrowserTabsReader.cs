@@ -4,20 +4,31 @@ namespace Everywhere.Mac.Mcp;
 
 /// <summary>
 /// macOS browser-tabs reader. Per-app AppleScript: Safari / Chrome (and Chromium
-/// derivatives like Arc/Brave/Edge with the same dictionary). Format per line:
-/// <c>active|title|url</c> — caller parses.
+/// derivatives like Arc/Brave/Edge with the same dictionary).
 /// </summary>
 public sealed class MacBrowserTabsReader(IAppleScriptRunner runner) : IBrowserTabsReader
 {
-    public IReadOnlyList<BrowserTab>? GetTabs(string appKey)
+    public BrowserTabsResult GetTabs(string appKey)
     {
-        if (string.IsNullOrWhiteSpace(appKey)) return null;
+        if (string.IsNullOrWhiteSpace(appKey))
+            return new BrowserTabsResult(BrowserTabsStatus.NotSupported, []);
+
         var lower = appKey.ToLowerInvariant();
         var script = ScriptFor(lower);
-        if (script is null) return null;
+        if (script is null)
+            return new BrowserTabsResult(BrowserTabsStatus.NotSupported, []);
 
         var raw = runner.Run(script);
-        if (string.IsNullOrEmpty(raw)) return null;
+        if (string.IsNullOrEmpty(raw))
+        {
+            // Distinguish "permission denied / scripting failed" from "no tabs".
+            var err = (runner as MacAppleScriptRunner)?.LastError;
+            if (!string.IsNullOrEmpty(err))
+            {
+                return new BrowserTabsResult(BrowserTabsStatus.PermissionDenied, [], err);
+            }
+            return new BrowserTabsResult(BrowserTabsStatus.Ok, []);
+        }
 
         var tabs = new List<BrowserTab>();
         foreach (var line in raw.Split('\n'))
@@ -31,19 +42,17 @@ public sealed class MacBrowserTabsReader(IAppleScriptRunner runner) : IBrowserTa
                 Url: parts[2],
                 IsActive: parts[0] == "1"));
         }
-        return tabs;
+        return new BrowserTabsResult(BrowserTabsStatus.Ok, tabs);
     }
 
     private static string? ScriptFor(string lowerAppKey)
     {
-        // Chromium-based browsers share the same scripting dictionary.
         if (lowerAppKey is "google chrome" or "chrome" or "arc" or "brave browser" or "brave" or "microsoft edge" or "edge"
             or "chromium" or "vivaldi" or "opera")
         {
             var name = AppleScriptAppName(lowerAppKey);
             return $@"tell application ""{name}""
                 set out to """"
-                set i to 0
                 repeat with w in windows
                     set ai to active tab index of w
                     set i to 0
