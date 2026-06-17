@@ -55,6 +55,9 @@ public static class EverywhereMcpServiceExtensions
         services.TryAddSingleton<IFocusBackend, NotSupportedFocusBackend>();
         services.TryAddSingleton<FocusBorrow>();
         services.TryAddSingleton<SelectionCache>();
+        services.TryAddSingleton<IClipboardReader, NullClipboardReader>();
+        services.TryAddSingleton<IIdleTimeReader, NullIdleTimeReader>();
+        services.TryAddSingleton<IBrowserUrlReader, NullBrowserUrlReader>();
         return services;
     }
 }
