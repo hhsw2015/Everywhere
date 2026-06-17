@@ -35,7 +35,8 @@ public sealed class MacAppActivator : IAppActivator
 
         // If the target app is already frontmost, do nothing — switching to it
         // would cause a noisy focus blink and (worse) cancel the chat window
-        // selection the user just made.
+        // selection the user just made. Returns true (successful no-op) so
+        // callers don't log this as "activation failed".
         var frontmostSel = sel_registerName("frontmostApplication");
         var frontmost = objc_msgSend_get(workspace, frontmostSel);
         if (frontmost != 0
@@ -43,7 +44,7 @@ public sealed class MacAppActivator : IAppActivator
                 || Matches(frontmost, nameSel, utf8Sel, appIdentifier)
                 || MatchesExecutable(frontmost, execSel, lastPathSel, pathSel, utf8Sel, appIdentifier)))
         {
-            return false;
+            return true;
         }
 
         var runningSel = sel_registerName("runningApplications");
@@ -81,8 +82,10 @@ public sealed class MacAppActivator : IAppActivator
         if (ptr == 0) return false;
         var actual = Marshal.PtrToStringUTF8(ptr);
         if (string.IsNullOrEmpty(actual)) return false;
-        return string.Equals(actual, needle, StringComparison.OrdinalIgnoreCase)
-            || actual.Contains(needle, StringComparison.OrdinalIgnoreCase);
+        // Exact match only. A substring fallback is dangerous: AgentAppId="chat"
+        // would match "WeChat", "Whatsapp" (executable name), etc. Bundle ids
+        // (com.foo.bar) and executable basenames already round-trip cleanly.
+        return string.Equals(actual, needle, StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool MatchesExecutable(nint app, nint execSel, nint lastPathSel, nint pathSel, nint utf8Sel, string needle)
@@ -105,5 +108,11 @@ public sealed class MacAppActivator : IAppActivator
 
     [DllImport(Objc, EntryPoint = "objc_msgSend")] private static extern nint objc_msgSend_get(nint receiver, nint selector);
     [DllImport(Objc, EntryPoint = "objc_msgSend")] private static extern nint objc_msgSend_idx(nint receiver, nint selector, nuint index);
-    [DllImport(Objc, EntryPoint = "objc_msgSend")] private static extern bool objc_msgSend_activate(nint receiver, nint selector, ulong options);
+    // -[NSRunningApplication activateWithOptions:] returns Objective-C BOOL
+    // (signed char, 1 byte). .NET's default `bool` marshalling treats the
+    // return as a 4-byte Win32 BOOL, leaving the upper bytes undefined on
+    // arm64 and producing non-deterministic values. We don't need the
+    // return value (success is observed via the next focus event), so
+    // declare void to mirror MacFocusBackend.ActivateProcess.
+    [DllImport(Objc, EntryPoint = "objc_msgSend")] private static extern void objc_msgSend_activate(nint receiver, nint selector, ulong options);
 }
