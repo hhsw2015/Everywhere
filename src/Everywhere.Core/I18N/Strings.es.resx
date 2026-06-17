@@ -2237,10 +2237,10 @@ Rueda o teclas numéricas para cambiar el modo de selección</value>
         <value>Predeterminado 7878. Si el puerto está en uso, Everywhere intenta hasta diez puertos alternativos.</value>
     </data>
     <data name="McpServerSettings_AutoCaptureContext_Header" xml:space="preserve">
-        <value>Capturar contexto automáticamente para el hook de IA</value>
+        <value>Capturar el contexto al fijar un elemento</value>
     </data>
     <data name="McpServerSettings_AutoCaptureContext_Description" xml:space="preserve">
-        <value>Actualiza el stash de contexto cada vez que seleccionas texto, copias algo o fijas un elemento — así un prompt de IA en la terminal recoge el puntero más reciente sin pulsar antes Snapshot Context. El stash sigue caducando a los 5 minutos.</value>
+        <value>Si está activado, fijar un elemento de UI con el atajo AgentPickElement también actualiza el stash de contexto, para que el siguiente prompt de Claude Code lo recoja. Desactivado por defecto. Para una captura manual puntual, usa el atajo SnapshotContext.</value>
     </data>
     <data name="Strategy_BuiltIn_Browser_Name" xml:space="preserve">
         <value>Asistente de Navegador</value>

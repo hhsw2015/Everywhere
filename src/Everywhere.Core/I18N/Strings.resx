@@ -2237,10 +2237,10 @@ Use scroll wheel or number keys to switch selection mode</value>
         <value>Default 7878. If the port is in use, Everywhere walks up to ten fallback ports.</value>
     </data>
     <data name="McpServerSettings_AutoCaptureContext_Header" xml:space="preserve">
-        <value>Auto-capture context for AI hook</value>
+        <value>Auto-capture context on Pin Element</value>
     </data>
     <data name="McpServerSettings_AutoCaptureContext_Description" xml:space="preserve">
-        <value>Continuously refresh the context stash whenever you select text, copy something, or pin an element — so a terminal AI prompt picks up the freshest pointer without you having to press Snapshot Context first. Stash still expires after 5 minutes.</value>
+        <value>When enabled, pinning a UI element with the AgentPickElement hotkey also refreshes the context stash so the next Claude Code prompt picks it up. Off by default. Use the SnapshotContext hotkey for an explicit one-shot capture.</value>
     </data>
     <data name="Strategy_BuiltIn_Browser_Name" xml:space="preserve">
         <value>Browser Assistant</value>

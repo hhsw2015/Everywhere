@@ -36,5 +36,5 @@ public sealed partial class McpServerSettings : SettingsBase, ISettingsCategory
     [DynamicResourceKey(
         LocaleKey.McpServerSettings_AutoCaptureContext_Header,
         LocaleKey.McpServerSettings_AutoCaptureContext_Description)]
-    public partial bool AutoCaptureContext { get; set; } = true;
+    public partial bool AutoCaptureContext { get; set; } = false;
 }

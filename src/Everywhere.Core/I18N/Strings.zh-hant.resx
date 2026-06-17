@@ -2237,10 +2237,10 @@
         <value>預設 7878。若連接埠被占用，Everywhere 會向後嘗試最多十個備用連接埠。</value>
     </data>
     <data name="McpServerSettings_AutoCaptureContext_Header" xml:space="preserve">
-        <value>為 AI Hook 自動擷取上下文</value>
+        <value>Pin Element 時自動擷取上下文</value>
     </data>
     <data name="McpServerSettings_AutoCaptureContext_Description" xml:space="preserve">
-        <value>勾選後，每次選取文字、複製或使用 Pin Element 釘選元素時，Everywhere 都會自動更新上下文 stash 檔案 —— 在終端機輸入 AI 提示按下 Enter 前就無須再按 Snapshot Context。stash 仍會在 5 分鐘後過期。</value>
+        <value>勾選後，按 AgentPickElement 熱鍵釘選 UI 元素時會順帶更新上下文 stash，下一次 Claude Code 提問即可帶上。預設關閉。若只想手動一次性擷取，請按 SnapshotContext 熱鍵。</value>
     </data>
     <data name="Strategy_BuiltIn_Browser_Name" xml:space="preserve">
         <value>瀏覽器助手</value>

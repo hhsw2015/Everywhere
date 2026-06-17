@@ -2237,10 +2237,10 @@ Utilisez la molette ou les touches numériques pour changer de mode de sélectio
         <value>Par défaut 7878. Si le port est occupé, Everywhere essaie jusqu'à dix ports de secours.</value>
     </data>
     <data name="McpServerSettings_AutoCaptureContext_Header" xml:space="preserve">
-        <value>Capture automatique du contexte pour le hook IA</value>
+        <value>Capturer le contexte lors de l'épinglage d'un élément</value>
     </data>
     <data name="McpServerSettings_AutoCaptureContext_Description" xml:space="preserve">
-        <value>Rafraîchit en continu le stash de contexte à chaque sélection de texte, copie ou épinglage d'élément — un prompt IA dans le terminal récupère le pointeur le plus récent sans avoir à appuyer sur Snapshot Context au préalable. Le stash expire toujours après 5 minutes.</value>
+        <value>Quand cette option est active, épingler un élément UI avec le raccourci AgentPickElement actualise aussi le stash de contexte pour le prochain prompt Claude Code. Désactivé par défaut. Pour une capture manuelle ponctuelle, utilise le raccourci SnapshotContext.</value>
     </data>
     <data name="Strategy_BuiltIn_Browser_Name" xml:space="preserve">
         <value>Assistant Navigateur</value>

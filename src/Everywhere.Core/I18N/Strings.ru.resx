@@ -2237,10 +2237,10 @@
         <value>По умолчанию 7878. Если порт занят, Everywhere пробует до десяти запасных портов.</value>
     </data>
     <data name="McpServerSettings_AutoCaptureContext_Header" xml:space="preserve">
-        <value>Автозахват контекста для ИИ-хука</value>
+        <value>Автозахват контекста при закреплении элемента</value>
     </data>
     <data name="McpServerSettings_AutoCaptureContext_Description" xml:space="preserve">
-        <value>Обновляет stash контекста при каждом выделении текста, копировании или закреплении элемента — терминальный промпт ИИ получает свежий указатель без предварительного нажатия Snapshot Context. stash всё так же истекает через 5 минут.</value>
+        <value>Когда включено, закрепление UI-элемента горячей клавишей AgentPickElement также обновляет stash контекста для следующего запроса Claude Code. По умолчанию выключено. Для однократной ручной фиксации используйте горячую клавишу SnapshotContext.</value>
     </data>
     <data name="Strategy_BuiltIn_Browser_Name" xml:space="preserve">
         <value>Помощник браузера</value>

@@ -2236,10 +2236,10 @@ Scrollrad oder Zifferntasten zum Wechseln des Auswahlmodus</value>
         <value>Standardmäßig 7878. Falls der Port belegt ist, versucht Everywhere bis zu zehn Ausweichports.</value>
     </data>
     <data name="McpServerSettings_AutoCaptureContext_Header" xml:space="preserve">
-        <value>Kontext für KI-Hook automatisch erfassen</value>
+        <value>Kontext beim Anheften eines Elements automatisch erfassen</value>
     </data>
     <data name="McpServerSettings_AutoCaptureContext_Description" xml:space="preserve">
-        <value>Aktualisiert den Kontext-Stash automatisch bei jeder Textauswahl, Kopie oder Element-Anheftung — eine Terminal-Aufforderung an die KI greift sofort auf den frischesten Zeiger zu, ohne dass du zuerst Snapshot Context drücken musst. Der Stash läuft weiterhin nach 5 Minuten ab.</value>
+        <value>Aktualisiert den Kontext-Stash beim Anheften eines UI-Elements per AgentPickElement-Hotkey, sodass der nächste Claude-Code-Prompt ihn aufnimmt. Standardmäßig aus. Für eine manuelle einmalige Erfassung den SnapshotContext-Hotkey verwenden.</value>
     </data>
     <data name="Strategy_BuiltIn_Browser_Name" xml:space="preserve">
         <value>Browser-Assistent</value>

@@ -2,57 +2,41 @@ using Avalonia.Threading;
 using Everywhere.Common;
 using Everywhere.Configuration;
 using Everywhere.Interop;
-using Everywhere.Mcp.Input;
 using Microsoft.Extensions.Logging;
 
 namespace Everywhere.Mcp.Snapshot;
 
 /// <summary>
-/// Auto-refresh the context stash whenever the user signals interest in
-/// something — text selection, clipboard copy, or pinned element. Replaces
-/// the "press SnapshotContext first" friction so a terminal AI prompt picks
-/// up the freshest pointer for free.
+/// Auto-refresh the context stash when the user actively pins a UI element via
+/// AgentPickElement. Selection / clipboard auto-capture were intentionally
+/// removed — they fired on terminal cursor moves and any-app Cmd-C, leaking
+/// noise into every Claude Code prompt. Only deliberate pin actions trigger
+/// here. Manual SnapshotContext hotkey still works as an explicit override.
 ///
 /// Gated on <see cref="McpServerSettings.AutoCaptureContext"/>: when the
-/// toggle flips, we (de)register the underlying observers/timer. Stash file
-/// lifetime + Take semantics are unchanged — this service only speeds up
-/// the *write* side; the hook still consumes once and the file expires
-/// after 5 minutes.
+/// toggle flips, we (de)register the pin handler. Stash file lifetime + Take
+/// semantics are unchanged.
 /// </summary>
 public sealed class AutoCaptureService : IAsyncInitializer, IDisposable
 {
-    private static readonly TimeSpan SelectionDebounce = TimeSpan.FromMilliseconds(250);
-    private static readonly TimeSpan ClipboardPoll = TimeSpan.FromMilliseconds(500);
-
     private readonly Settings _settings;
     private readonly ContextStashWriter _writer;
-    private readonly IVisualElementContext _context;
     private readonly PickStash _pickStash;
-    private readonly IClipboardReader _clipboard;
     private readonly ILogger<AutoCaptureService> _logger;
     private readonly Lock _gate = new();
 
-    private SelectionObserver? _selectionObserver;
-    private IDisposable? _selectionSubscription;
     private Action<IVisualElement>? _pickHandler;
-    private Timer? _clipboardTimer;
-    private string? _lastClipboard;
-    private DateTimeOffset _lastSelectionTrigger;
     private int _running;
 
     public AutoCaptureService(
         Settings settings,
         ContextStashWriter writer,
-        IVisualElementContext context,
         PickStash pickStash,
-        IClipboardReader clipboard,
         ILogger<AutoCaptureService> logger)
     {
         _settings = settings;
         _writer = writer;
-        _context = context;
         _pickStash = pickStash;
-        _clipboard = clipboard;
         _logger = logger;
     }
 
@@ -80,95 +64,33 @@ public sealed class AutoCaptureService : IAsyncInitializer, IDisposable
 
     private void Start()
     {
-        if (_selectionObserver is null)
-        {
-            _selectionObserver = new SelectionObserver(this);
-            try { _selectionSubscription = _context.Subscribe(_selectionObserver); }
-            catch (Exception ex) { _logger.LogWarning(ex, "AutoCapture: selection subscribe failed"); }
-        }
-
-        if (_pickHandler is null)
-        {
-            _pickHandler = _ => TryCapture("pick");
-            _pickStash.Pinned += _pickHandler;
-        }
-
-        if (_clipboardTimer is null)
-        {
-            _lastClipboard = SafeReadClipboard();
-            _clipboardTimer = new Timer(OnClipboardTick, null, ClipboardPoll, ClipboardPoll);
-        }
+        if (_pickHandler is not null) return;
+        _pickHandler = _ => TryCapture();
+        _pickStash.Pinned += _pickHandler;
     }
 
     private void Stop()
     {
-        if (_selectionSubscription is { } sub)
-        {
-            try { sub.Dispose(); } catch { }
-            _selectionSubscription = null;
-        }
-        _selectionObserver = null;
-
         if (_pickHandler is { } h)
         {
             _pickStash.Pinned -= h;
             _pickHandler = null;
         }
-
-        if (_clipboardTimer is { } t)
-        {
-            try { t.Dispose(); } catch { }
-            _clipboardTimer = null;
-            _lastClipboard = null;
-        }
     }
 
-    private void OnClipboardTick(object? state)
+    private void TryCapture()
     {
-        try
-        {
-            var current = _clipboard.GetText();
-            if (current is null || current.Length == 0) return;
-            if (string.Equals(current, _lastClipboard, StringComparison.Ordinal)) return;
-            _lastClipboard = current;
-            TryCapture("clipboard");
-        }
-        catch (Exception ex)
-        {
-            _logger.LogDebug(ex, "AutoCapture clipboard tick failed");
-        }
-    }
-
-    private string? SafeReadClipboard()
-    {
-        try { return _clipboard.GetText(); }
-        catch { return null; }
-    }
-
-    private void OnSelection(TextSelectionData data)
-    {
-        if (string.IsNullOrEmpty(data.Text)) return;
-        var now = DateTimeOffset.UtcNow;
-        if (now - _lastSelectionTrigger < SelectionDebounce) return;
-        _lastSelectionTrigger = now;
-        TryCapture("selection");
-    }
-
-    private void TryCapture(string reason)
-    {
-        // Single-flight at this layer too: rapid-fire selection bursts must not
-        // pile up dispatcher posts that all serialise on the writer's lock.
         if (Interlocked.Exchange(ref _running, 1) == 1) return;
         Dispatcher.UIThread.Post(async () =>
         {
             try
             {
                 await _writer.CaptureAsync();
-                _logger.LogDebug("Auto-captured context ({Reason})", reason);
+                _logger.LogDebug("Auto-captured context (pin)");
             }
             catch (Exception ex)
             {
-                _logger.LogDebug(ex, "Auto-capture failed ({Reason})", reason);
+                _logger.LogDebug(ex, "Auto-capture (pin) failed");
             }
             finally
             {
@@ -181,12 +103,5 @@ public sealed class AutoCaptureService : IAsyncInitializer, IDisposable
     {
         using var _ = _gate.EnterScope();
         Stop();
-    }
-
-    private sealed class SelectionObserver(AutoCaptureService owner) : IObserver<TextSelectionData>
-    {
-        public void OnNext(TextSelectionData value) => owner.OnSelection(value);
-        public void OnError(Exception error) { }
-        public void OnCompleted() { }
     }
 }
