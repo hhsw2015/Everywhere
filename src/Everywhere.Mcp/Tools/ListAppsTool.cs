@@ -11,7 +11,13 @@ namespace Everywhere.Mcp.Tools;
 public static class ListAppsTool
 {
     [McpServerTool(Name = "list_apps", ReadOnly = true)]
-    [Description("List all currently running, user-visible applications. Returns the values you can pass as the 'app' argument to other Computer Use tools.")]
+    [Description(
+        "List all running apps that have a visible window the user could be looking at. " +
+        "Each entry has \"app\" (process key for the 'app' parameter of other tools), " +
+        "\"title\" (window title), and \"process_id\". Menubar widgets and headless agents " +
+        "are filtered out. " +
+        "PREFER get_app_context(app_hint) when the user names an app — it does list+match+snapshot " +
+        "in one call.")]
     public static CallToolResult ListApps(IVisualElementContext context)
     {
         var apps = AppResolver.ListApps(context)

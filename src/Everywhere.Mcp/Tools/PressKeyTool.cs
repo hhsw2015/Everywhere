@@ -25,13 +25,16 @@ public static class PressKeyTool
 
         try
         {
-            using var _ = focusBorrow.Acquire(resolved.Value.Window.NativeWindowHandle, requireFocus: true);
+            using var _ = focusBorrow.Acquire(
+                resolved.Value.Window.NativeWindowHandle,
+                requireFocus: true,
+                processId: resolved.Value.ProcessId);
             input.PressKey(key);
             return new CallToolResult { Content = [new TextContentBlock { Text = "ok" }] };
         }
         catch (Exception ex)
         {
-            return ToolErrors.Error(ex.Message);
+            return ToolErrors.FromException(ex, "press_key");
         }
     }
 }

@@ -2206,6 +2206,30 @@
     <data name="ShortcutSettings_TakeScreenshot_Desription" xml:space="preserve">
         <value>언제든지 눌러 스크린샷을 캡처한 후 채팅 창을 호출하세요.</value>
     </data>
+    <data name="ShortcutSettings_AgentPickElement_Header" xml:space="preserve">
+        <value>AI 에이전트용 요소 고정</value>
+    </data>
+    <data name="ShortcutSettings_AgentPickElement_Desription" xml:space="preserve">
+        <value>누르면 UI 요소를 선택하고 AI 에이전트에 고정합니다(MCP를 통해 읽기). 일반 선택 단축키와 달리 채팅 창을 열지 않습니다.</value>
+    </data>
+    <data name="SettingsCategory_Settings_McpServer_Header" xml:space="preserve">
+        <value>MCP 서버</value>
+    </data>
+    <data name="SettingsCategory_Settings_McpServer_Description" xml:space="preserve">
+        <value>Everywhere를 Model Context Protocol 서버로 공개하여 AI 에이전트가 선택 영역/포커스/터미널 출력을 읽고 UI를 대신 조작할 수 있게 합니다.</value>
+    </data>
+    <data name="McpServerSettings_HttpEnabled_Header" xml:space="preserve">
+        <value>HTTP 전송 활성화</value>
+    </data>
+    <data name="McpServerSettings_HttpEnabled_Description" xml:space="preserve">
+        <value>활성화하면 Everywhere가 http://localhost:&lt;포트&gt;/mcp에서 MCP 연결을 수신합니다(루프백 전용). 비활성화하면 'everywhere --mcp'의 stdio 전송만 사용할 수 있습니다.</value>
+    </data>
+    <data name="McpServerSettings_HttpPort_Header" xml:space="preserve">
+        <value>HTTP 포트</value>
+    </data>
+    <data name="McpServerSettings_HttpPort_Description" xml:space="preserve">
+        <value>기본값 7878. 포트가 사용 중이면 Everywhere가 최대 10개의 대체 포트를 순차로 시도합니다.</value>
+    </data>
     <data name="Strategy_BuiltIn_Browser_Name" xml:space="preserve">
         <value>브라우저 도우미</value>
     </data>

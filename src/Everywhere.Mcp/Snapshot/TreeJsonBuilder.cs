@@ -1,23 +1,21 @@
-using Everywhere.Interop;
 using Everywhere.Mcp.Tools.Schemas;
+using Everywhere.Interop;
 
 namespace Everywhere.Mcp.Snapshot;
 
 /// <summary>
-/// Builds a structured JSON tree from a list of <see cref="ElementIndexer.IndexedNode"/>.
-/// Returns the same indices used by <see cref="SnapshotRenderer"/>, so agents can switch
-/// between the indented text form and the JSON form without re-snapshotting.
+/// Builds a structured JSON tree from BFS-walked nodes. Parent linkage comes from
+/// <see cref="ElementIndexer.IndexedNode.ParentIndex"/> recorded during the walk, which
+/// is robust against platform wrappers that produce a NEW <see cref="IVisualElement"/>
+/// instance every time you ask for a child or a parent.
 /// </summary>
 public static class TreeJsonBuilder
 {
     public static TreeNode? Build(IReadOnlyList<ElementIndexer.IndexedNode> nodes)
     {
-        if (nodes.Count == 0)
-        {
-            return null;
-        }
+        if (nodes.Count == 0) return null;
 
-        var elementToNode = new Dictionary<IVisualElement, TreeNode>(ReferenceEqualityComparer.Instance);
+        var byIndex = new Dictionary<int, TreeNode>(nodes.Count);
         TreeNode? rootNode = null;
 
         foreach (var indexed in nodes)
@@ -32,19 +30,18 @@ public static class TreeJsonBuilder
                 Bounds = new WindowBounds(bounds.X, bounds.Y, bounds.Width, bounds.Height),
                 States = indexed.Element.States == VisualElementStates.None ? null : indexed.Element.States.ToString(),
             };
-            elementToNode[indexed.Element] = node;
+            byIndex[indexed.Index] = node;
 
-            if (rootNode is null)
+            if (indexed.ParentIndex < 0)
             {
                 rootNode = node;
                 continue;
             }
 
-            if (indexed.Element.Parent is { } parent
-                && elementToNode.TryGetValue(parent, out var parentNode))
+            if (byIndex.TryGetValue(indexed.ParentIndex, out var parent))
             {
-                parentNode.Children ??= [];
-                parentNode.Children.Add(node);
+                parent.Children ??= [];
+                parent.Children.Add(node);
             }
         }
 

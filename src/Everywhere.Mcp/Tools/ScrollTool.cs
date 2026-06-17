@@ -40,7 +40,7 @@ public static class ScrollTool
                 : ToolErrors.Error($"Invalid direction '{direction}'. Expected up|down.");
         }
 
-        var (error, element) = ElementResolver.Resolve(sessions, element_index);
+        var (error, element) = ElementResolver.Resolve(sessions, element_index, appHint: app);
         if (error is not null) return error;
 
         var amount = pages ?? 1.0;
@@ -61,7 +61,7 @@ public static class ScrollTool
         }
         catch (Exception ex)
         {
-            return ToolErrors.Error($"Failed to scroll: {ex.Message}");
+            return ToolErrors.FromException(ex, "scroll");
         }
     }
 }

@@ -2206,6 +2206,30 @@ Rueda o teclas numéricas para cambiar el modo de selección</value>
     <data name="ShortcutSettings_TakeScreenshot_Desription" xml:space="preserve">
         <value>Presiona en cualquier momento para capturar una captura de pantalla, luego se abrirá la ventana de chat.</value>
     </data>
+    <data name="ShortcutSettings_AgentPickElement_Header" xml:space="preserve">
+        <value>Anclar elemento para el agente de IA</value>
+    </data>
+    <data name="ShortcutSettings_AgentPickElement_Desription" xml:space="preserve">
+        <value>Pulsa para seleccionar un elemento de la interfaz y anclarlo para los agentes de IA (lectura mediante MCP). A diferencia del atajo de selección habitual, esto no abre la ventana de chat.</value>
+    </data>
+    <data name="SettingsCategory_Settings_McpServer_Header" xml:space="preserve">
+        <value>Servidor MCP</value>
+    </data>
+    <data name="SettingsCategory_Settings_McpServer_Description" xml:space="preserve">
+        <value>Expone Everywhere como servidor de Model Context Protocol para que los agentes de IA puedan leer la selección/enfoque/salida de terminal y operar la interfaz en tu nombre.</value>
+    </data>
+    <data name="McpServerSettings_HttpEnabled_Header" xml:space="preserve">
+        <value>Activar transporte HTTP</value>
+    </data>
+    <data name="McpServerSettings_HttpEnabled_Description" xml:space="preserve">
+        <value>Cuando está activado, Everywhere acepta conexiones MCP en http://localhost:&lt;puerto&gt;/mcp (solo bucle local). Desactívalo para usar únicamente el transporte stdio mediante 'everywhere --mcp'.</value>
+    </data>
+    <data name="McpServerSettings_HttpPort_Header" xml:space="preserve">
+        <value>Puerto HTTP</value>
+    </data>
+    <data name="McpServerSettings_HttpPort_Description" xml:space="preserve">
+        <value>Predeterminado 7878. Si el puerto está en uso, Everywhere intenta hasta diez puertos alternativos.</value>
+    </data>
     <data name="Strategy_BuiltIn_Browser_Name" xml:space="preserve">
         <value>Asistente de Navegador</value>
     </data>

@@ -19,10 +19,13 @@ public sealed class EverywhereMcpInitializer(
 {
     public AsyncInitializerIndex Index => AsyncInitializerIndex.Startup;
 
+    private readonly SemaphoreSlim _restartLock = new(1, 1);
+    private CancellationTokenSource? _pendingDebounce;
+
     public async Task InitializeAsync()
     {
         ApplySettingsToOptions();
-        settings.McpServer.PropertyChanged += async (_, _) => await RestartIfNeededAsync();
+        settings.McpServer.PropertyChanged += (_, _) => ScheduleRestart();
 
         if (!settings.McpServer.HttpEnabled)
         {
@@ -54,21 +57,62 @@ public sealed class EverywhereMcpInitializer(
         options.Enabled = settings.McpServer.HttpEnabled;
     }
 
-    private async Task RestartIfNeededAsync()
+    /// <summary>
+    /// Coalesce a burst of property-change notifications (the user typing into the port
+    /// box, toggling enabled, etc.) into a single restart. Without this, two property
+    /// changes in quick succession both call StopAsync→StartAsync; the second StartAsync
+    /// can race past the first's StopAsync, leaving a Kestrel listener bound that nobody
+    /// holds a reference to (port leak + zombie listener).
+    /// </summary>
+    private void ScheduleRestart()
     {
+        var oldCts = Interlocked.Exchange(ref _pendingDebounce, new CancellationTokenSource());
+        oldCts?.Cancel();
+        oldCts?.Dispose();
+
+        var token = _pendingDebounce!.Token;
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await Task.Delay(TimeSpan.FromMilliseconds(300), token);
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
+
+            try
+            {
+                await RestartAsync(token);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "MCP HTTP restart failed.");
+            }
+        });
+    }
+
+    private async Task RestartAsync(CancellationToken token)
+    {
+        await _restartLock.WaitAsync(token);
         try
         {
             await host.StopAsync(CancellationToken.None);
             ApplySettingsToOptions();
-            if (settings.McpServer.HttpEnabled)
+
+            if (!settings.McpServer.HttpEnabled)
             {
-                await host.StartAsync(CancellationToken.None);
-                logger.LogInformation("MCP HTTP transport restarted on port {Port}.", host.BoundPort);
+                logger.LogInformation("MCP HTTP transport disabled by user.");
+                return;
             }
+
+            await host.StartAsync(CancellationToken.None);
+            logger.LogInformation("MCP HTTP transport restarted on port {Port}.", host.BoundPort);
         }
-        catch (Exception ex)
+        finally
         {
-            logger.LogError(ex, "Failed to restart MCP HTTP transport.");
+            _restartLock.Release();
         }
     }
 }

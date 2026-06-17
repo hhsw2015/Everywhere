@@ -63,7 +63,9 @@ so existing test corpora and prompt templates apply unchanged.
 
 | Tool | Use when |
 |------|----------|
-| `get_focused_context` | One-shot snapshot of whatever the user is looking at. PREFER on deictic references (*"this"*, *"that"*, *"the error"*, *"这个"*). |
+| `read_pick`           | The user pre-pinned an element via the Pin-Element hotkey. ALWAYS try this first on deictic refs. Reading consumes the pin. |
+| `get_app_context`     | The user named an app (*"the browser"*, *"slack"*, *"vscode"*). One-shot fuzzy resolve + snapshot. |
+| `get_focused_context` | The user references their current view (*"this"*, *"that"*, *"here"*, *"这个"*) and there's no fresh pin. |
 | `get_selected_text`   | OS-wide selection. Returns `""` if nothing is selected. |
 | `read_pick`           | Reads the element the user pre-pinned via the Agent Pick hotkey (Settings → Shortcut → "Pin Element for AI Agent"). PREFER this BEFORE `get_focused_context` on deictic references. Reading consumes the pin. |
 | `pick_element`        | Triggers Everywhere's visual picker — user clicks an element/window/screen. |

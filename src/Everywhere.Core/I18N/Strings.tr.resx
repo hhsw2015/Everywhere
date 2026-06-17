@@ -2205,6 +2205,30 @@ Seçim modunu değiştirmek için kaydırıcı veya rakam tuşlarını kullanın
     <data name="ShortcutSettings_TakeScreenshot_Desription" xml:space="preserve">
         <value>Her zaman basarak ekran görüntüsü alabilirsiniz, ardından sohbet penceresi açılacaktır.</value>
     </data>
+    <data name="ShortcutSettings_AgentPickElement_Header" xml:space="preserve">
+        <value>Yapay zekâ aracısı için öğe sabitle</value>
+    </data>
+    <data name="ShortcutSettings_AgentPickElement_Desription" xml:space="preserve">
+        <value>Bir UI öğesini seçip yapay zekâ aracılarına sabitlemek için bu kısayola basın (MCP ile okunur). Normal seçim kısayolundan farklı olarak sohbet penceresini açmaz.</value>
+    </data>
+    <data name="SettingsCategory_Settings_McpServer_Header" xml:space="preserve">
+        <value>MCP Sunucusu</value>
+    </data>
+    <data name="SettingsCategory_Settings_McpServer_Description" xml:space="preserve">
+        <value>Everywhere'i Model Context Protocol sunucusu olarak açar; böylece yapay zekâ aracıları seçimi/odakı/terminal çıktısını okuyabilir ve arayüzü sizin yerinize çalıştırabilir.</value>
+    </data>
+    <data name="McpServerSettings_HttpEnabled_Header" xml:space="preserve">
+        <value>HTTP taşımasını etkinleştir</value>
+    </data>
+    <data name="McpServerSettings_HttpEnabled_Description" xml:space="preserve">
+        <value>Etkinleştirildiğinde Everywhere, http://localhost:&lt;port&gt;/mcp adresinde MCP bağlantılarını kabul eder (yalnızca loopback). Devre dışı bırakırsanız yalnızca 'everywhere --mcp' üzerinden stdio taşıması kullanılır.</value>
+    </data>
+    <data name="McpServerSettings_HttpPort_Header" xml:space="preserve">
+        <value>HTTP bağlantı noktası</value>
+    </data>
+    <data name="McpServerSettings_HttpPort_Description" xml:space="preserve">
+        <value>Varsayılan 7878. Bağlantı noktası kullanımdaysa Everywhere en fazla on yedek bağlantı noktasını sırayla dener.</value>
+    </data>
     <data name="Strategy_BuiltIn_Browser_Name" xml:space="preserve">
         <value>Tarayıcı Asistanı</value>
     </data>

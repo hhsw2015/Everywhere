@@ -8,6 +8,9 @@ namespace Everywhere.Mcp.Tools.Schemas;
 /// </summary>
 public sealed class AppStateResult
 {
+    [JsonPropertyName("app")]
+    public string? App { get; set; }
+
     [JsonPropertyName("window_title")]
     public string? WindowTitle { get; set; }
 

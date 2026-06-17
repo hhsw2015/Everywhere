@@ -2206,6 +2206,30 @@
     <data name="ShortcutSettings_TakeScreenshot_Desription" xml:space="preserve">
         <value>Нажмите в любое время, чтобы сделать снимок экрана, после чего откроется окно чата.</value>
     </data>
+    <data name="ShortcutSettings_AgentPickElement_Header" xml:space="preserve">
+        <value>Закрепить элемент для ИИ-агента</value>
+    </data>
+    <data name="ShortcutSettings_AgentPickElement_Desription" xml:space="preserve">
+        <value>Нажмите, чтобы выбрать элемент интерфейса и закрепить его для ИИ-агентов (читается через MCP). В отличие от обычного сочетания выбора, окно чата не открывается.</value>
+    </data>
+    <data name="SettingsCategory_Settings_McpServer_Header" xml:space="preserve">
+        <value>MCP-сервер</value>
+    </data>
+    <data name="SettingsCategory_Settings_McpServer_Description" xml:space="preserve">
+        <value>Открывает Everywhere как сервер Model Context Protocol, чтобы ИИ-агенты могли читать выделение/фокус/вывод терминала и управлять интерфейсом от вашего имени.</value>
+    </data>
+    <data name="McpServerSettings_HttpEnabled_Header" xml:space="preserve">
+        <value>Включить HTTP-транспорт</value>
+    </data>
+    <data name="McpServerSettings_HttpEnabled_Description" xml:space="preserve">
+        <value>Когда включено, Everywhere принимает MCP-подключения на http://localhost:&lt;порт&gt;/mcp (только локальный интерфейс). Отключите, чтобы использовать только stdio-транспорт через 'everywhere --mcp'.</value>
+    </data>
+    <data name="McpServerSettings_HttpPort_Header" xml:space="preserve">
+        <value>HTTP-порт</value>
+    </data>
+    <data name="McpServerSettings_HttpPort_Description" xml:space="preserve">
+        <value>По умолчанию 7878. Если порт занят, Everywhere пробует до десяти запасных портов.</value>
+    </data>
     <data name="Strategy_BuiltIn_Browser_Name" xml:space="preserve">
         <value>Помощник браузера</value>
     </data>

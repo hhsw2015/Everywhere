@@ -36,12 +36,12 @@ public static class ScreenshotTool
         {
             using var captured = await target!.CaptureAsync(cancellationToken);
             var base64 = ScreenshotEncoder.EncodePngBase64(captured);
-            var payload = JsonSerializer.Serialize(new { png_b64 = base64 });
+            var payload = JsonSerializer.Serialize(new { screenshot_png_b64 = base64 });
             return new CallToolResult { Content = [new TextContentBlock { Text = payload }] };
         }
         catch (Exception ex)
         {
-            return ToolErrors.Error($"screenshot failed: {ex.Message}");
+            return ToolErrors.FromException(ex, "screenshot");
         }
     }
 

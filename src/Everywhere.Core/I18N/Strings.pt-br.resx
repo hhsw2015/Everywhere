@@ -2207,6 +2207,30 @@ Use a roda do mouse ou teclas numéricas para alternar o modo de seleção</valu
     <data name="ShortcutSettings_TakeScreenshot_Desription" xml:space="preserve">
         <value>Press at any time to capture a screenshot, which will then open the chat window.</value>
     </data>
+    <data name="ShortcutSettings_AgentPickElement_Header" xml:space="preserve">
+        <value>Fixar elemento para agente de IA</value>
+    </data>
+    <data name="ShortcutSettings_AgentPickElement_Desription" xml:space="preserve">
+        <value>Pressione para selecionar um elemento da interface e fixá-lo para agentes de IA (lido via MCP). Diferente do atalho de seleção comum, este não abre a janela de chat.</value>
+    </data>
+    <data name="SettingsCategory_Settings_McpServer_Header" xml:space="preserve">
+        <value>Servidor MCP</value>
+    </data>
+    <data name="SettingsCategory_Settings_McpServer_Description" xml:space="preserve">
+        <value>Expõe o Everywhere como um servidor Model Context Protocol para que agentes de IA possam ler a seleção/o foco/a saída do terminal e operar a interface em seu nome.</value>
+    </data>
+    <data name="McpServerSettings_HttpEnabled_Header" xml:space="preserve">
+        <value>Ativar transporte HTTP</value>
+    </data>
+    <data name="McpServerSettings_HttpEnabled_Description" xml:space="preserve">
+        <value>Quando ativado, o Everywhere aceita conexões MCP em http://localhost:&lt;porta&gt;/mcp (apenas loopback). Desative para usar apenas o transporte stdio via 'everywhere --mcp'.</value>
+    </data>
+    <data name="McpServerSettings_HttpPort_Header" xml:space="preserve">
+        <value>Porta HTTP</value>
+    </data>
+    <data name="McpServerSettings_HttpPort_Description" xml:space="preserve">
+        <value>Padrão 7878. Se a porta estiver em uso, o Everywhere tenta até dez portas alternativas.</value>
+    </data>
     <data name="Strategy_BuiltIn_Browser_Name" xml:space="preserve">
         <value>Assistente do Navegador</value>
     </data>

@@ -2205,6 +2205,30 @@ Scrollrad oder Zifferntasten zum Wechseln des Auswahlmodus</value>
     <data name="ShortcutSettings_TakeScreenshot_Desription" xml:space="preserve">
         <value>Drücken Sie jederzeit, um einen Screenshot zu erstellen, danach wird das Chatfenster geöffnet.</value>
     </data>
+    <data name="ShortcutSettings_AgentPickElement_Header" xml:space="preserve">
+        <value>Element für KI-Agent anheften</value>
+    </data>
+    <data name="ShortcutSettings_AgentPickElement_Desription" xml:space="preserve">
+        <value>Drücken Sie die Taste, um ein UI-Element auszuwählen und für KI-Agenten anzuheften (Zugriff über MCP). Im Gegensatz zum regulären Pick-Shortcut wird das Chat-Fenster nicht geöffnet.</value>
+    </data>
+    <data name="SettingsCategory_Settings_McpServer_Header" xml:space="preserve">
+        <value>MCP-Server</value>
+    </data>
+    <data name="SettingsCategory_Settings_McpServer_Description" xml:space="preserve">
+        <value>Stellt Everywhere als Model Context Protocol-Server bereit, sodass KI-Agenten Auswahl/Fokus/Terminal-Ausgabe lesen und die Benutzeroberfläche stellvertretend bedienen können.</value>
+    </data>
+    <data name="McpServerSettings_HttpEnabled_Header" xml:space="preserve">
+        <value>HTTP-Transport aktivieren</value>
+    </data>
+    <data name="McpServerSettings_HttpEnabled_Description" xml:space="preserve">
+        <value>Wenn aktiviert, akzeptiert Everywhere MCP-Verbindungen unter http://localhost:&lt;Port&gt;/mcp (nur Loopback). Bei Deaktivierung wird ausschließlich der stdio-Transport über 'everywhere --mcp' verwendet.</value>
+    </data>
+    <data name="McpServerSettings_HttpPort_Header" xml:space="preserve">
+        <value>HTTP-Port</value>
+    </data>
+    <data name="McpServerSettings_HttpPort_Description" xml:space="preserve">
+        <value>Standardmäßig 7878. Falls der Port belegt ist, versucht Everywhere bis zu zehn Ausweichports.</value>
+    </data>
     <data name="Strategy_BuiltIn_Browser_Name" xml:space="preserve">
         <value>Browser-Assistent</value>
     </data>

@@ -26,18 +26,10 @@ public static class ClickTool
     {
         if (!string.IsNullOrEmpty(element_index))
         {
-            var (error, element) = ElementResolver.Resolve(sessions, element_index);
+            var (error, element) = ElementResolver.Resolve(sessions, element_index, appHint: app);
             if (error is not null) return error;
 
-            try
-            {
-                element!.Invoke();
-                return new CallToolResult { Content = [new TextContentBlock { Text = "ok" }] };
-            }
-            catch (Exception ex)
-            {
-                return ToolErrors.Error($"Failed to invoke element: {ex.Message}");
-            }
+            return ElementClickDispatcher.Click(element!);
         }
 
         if (x.HasValue && y.HasValue)
@@ -50,13 +42,16 @@ public static class ClickTool
 
             try
             {
-                using var _ = focusBorrow.Acquire(resolved.Value.Window.NativeWindowHandle, requireFocus: true);
+                using var _ = focusBorrow.Acquire(
+                    resolved.Value.Window.NativeWindowHandle,
+                    requireFocus: true,
+                    processId: resolved.Value.ProcessId);
                 input.Click(x.Value, y.Value, clickCount, button);
                 return new CallToolResult { Content = [new TextContentBlock { Text = "ok" }] };
             }
             catch (Exception ex)
             {
-                return ToolErrors.Error(ex.Message);
+                return ToolErrors.FromException(ex, "click(x,y)");
             }
         }
 

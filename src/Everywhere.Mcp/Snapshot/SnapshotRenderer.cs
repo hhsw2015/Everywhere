@@ -55,5 +55,10 @@ public static class SnapshotRenderer
         return sb.ToString();
     }
 
-    private static string EscapeQuotes(string s) => s.Replace("\"", "\\\"");
+    private static string EscapeQuotes(string s) =>
+        s.Replace("\\", "\\\\")
+         .Replace("\"", "\\\"")
+         .Replace("\r", "\\r")
+         .Replace("\n", "\\n")
+         .Replace("\t", "\\t");
 }

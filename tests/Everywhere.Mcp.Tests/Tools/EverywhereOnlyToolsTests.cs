@@ -74,9 +74,33 @@ public class EverywhereOnlyToolsTests
         var first = ReadPickTool.ReadPick(stash, sessions);
         var second = ReadPickTool.ReadPick(stash, sessions);
 
-        Assert.That(ExtractText(first), Does.Contain("\"pinned\":true"));
-        Assert.That(ExtractText(first), Does.Contain("submit"));
-        Assert.That(ExtractText(second), Does.Contain("\"pinned\":false"));
+        var firstJson = System.Text.Json.JsonDocument.Parse(ExtractText(first)).RootElement;
+        Assert.Multiple(() =>
+        {
+            Assert.That(firstJson.GetProperty("pinned").GetBoolean(), Is.True);
+            Assert.That(firstJson.GetProperty("picked_index").GetInt32(), Is.EqualTo(0));
+            Assert.That(firstJson.TryGetProperty("element", out _), Is.True);
+        });
+
+        var secondJson = System.Text.Json.JsonDocument.Parse(ExtractText(second)).RootElement;
+        Assert.That(secondJson.GetProperty("pinned").GetBoolean(), Is.False);
+    }
+
+    [Test]
+    public void ReadPick_RegistersIndexInSessionStoreForFollowUp()
+    {
+        var stash = new PickStash();
+        var sessions = new SessionStore();
+        var pick = new FakeVisualElement("submit", []);
+        stash.Set(pick);
+
+        ReadPickTool.ReadPick(stash, sessions);
+
+        // ResolveAcrossSessions(0) should now find the pinned element so a subsequent
+        // click(element_index="0") works on the pinned element.
+        var hit = sessions.ResolveAcrossSessions(0);
+        Assert.That(hit, Is.Not.Null);
+        Assert.That(hit!.Value.Element, Is.SameAs(pick));
     }
 
     private static string ExtractText(CallToolResult result) =>

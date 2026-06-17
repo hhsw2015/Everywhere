@@ -27,4 +27,28 @@ internal static class ToolErrors
 
     public static CallToolResult ParameterRequired(string name) =>
         Error($"Required parameter '{name}' missing.");
+
+    /// <summary>
+    /// Wraps an unexpected exception into a clean tool error, hiding internal types and
+    /// stack-shaped strings while preserving enough signal for the agent to route.
+    /// </summary>
+    public static CallToolResult FromException(Exception ex, string contextLabel)
+    {
+        if (ex is OperationCanceledException)
+        {
+            return Error($"{contextLabel}: cancelled.");
+        }
+
+        if (ex is NotSupportedException)
+        {
+            return Error($"{contextLabel}: not supported on this platform yet.");
+        }
+
+        if (ex is ArgumentException || ex is InvalidOperationException || ex is TimeoutException)
+        {
+            return Error($"{contextLabel}: {ex.Message}");
+        }
+
+        return Error($"{contextLabel}: internal error.");
+    }
 }

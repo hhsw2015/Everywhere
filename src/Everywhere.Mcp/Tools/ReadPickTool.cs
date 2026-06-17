@@ -13,12 +13,14 @@ public static class ReadPickTool
 {
     [McpServerTool(Name = "read_pick", ReadOnly = true)]
     [Description(
-        "Read the UI element the user explicitly pinned for this agent via the Agent Pick hotkey " +
-        "(see Settings → Shortcut → 'Pin Element for AI Agent'). Returns {\"pinned\": false} if " +
-        "the user hasn't pinned anything; the agent should then fall back to get_focused_context " +
-        "or list_apps. Reading consumes the pin — the next call returns {\"pinned\": false}. " +
-        "PREFER calling this BEFORE get_focused_context/list_apps when the user uses deictic " +
-        "references like \"this\", \"that\", \"the button I just selected\", \"刚才那个\".")]
+        "Read the UI element the user explicitly pinned for this agent via Everywhere's " +
+        "configurable Pin-Element hotkey. Returns {\"pinned\": true, \"picked_index\": int, " +
+        "\"app\": str, \"element\": {...}} — the picked element is at picked_index inside the " +
+        "indexed tree, addressable by click/set_value/scroll. Returns {\"pinned\": false} when " +
+        "no pin is fresh (the pin is one-shot: reading consumes it; pins expire after 5 min). " +
+        "ALWAYS call this FIRST when the user uses deictic references (\"this\", \"that\", " +
+        "\"the button I just selected\", \"刚才那个\") — fall back to get_app_context or " +
+        "get_focused_context when pinned is false.")]
     public static CallToolResult ReadPick(PickStash stash, SessionStore sessions)
     {
         var picked = stash.Take();
@@ -46,7 +48,13 @@ public static class ReadPickTool
             TreeJson = TreeJsonBuilder.Build(nodes),
         };
 
-        var json = JsonSerializer.Serialize(new { pinned = true, element = payload });
+        var json = JsonSerializer.Serialize(new
+        {
+            pinned = true,
+            picked_index = nodes.Count > 0 ? nodes[0].Index : 0,
+            app = appKey,
+            element = payload,
+        });
         return new CallToolResult
         {
             Content = [new TextContentBlock { Text = json }],
