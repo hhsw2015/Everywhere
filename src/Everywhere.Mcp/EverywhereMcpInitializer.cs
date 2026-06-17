@@ -11,7 +11,6 @@ namespace Everywhere.Mcp;
 /// at runtime by stop/start cycling the listener.
 /// </summary>
 public sealed class EverywhereMcpInitializer(
-    IServiceProvider serviceProvider,
     Settings settings,
     EverywhereMcpHttpOptions options,
     EverywhereMcpHttpHost host,
