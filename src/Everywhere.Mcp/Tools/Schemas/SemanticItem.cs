@@ -22,4 +22,12 @@ public sealed class SemanticItem
     [JsonPropertyName("states")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? States { get; set; }
+
+    /// <summary>
+    /// Suggested MCP tools the agent can use on this element, derived from element type.
+    /// E.g. ["click","perform_secondary_action"] for Button; ["set_value"] for TextEdit.
+    /// </summary>
+    [JsonPropertyName("available_actions")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<string>? AvailableActions { get; set; }
 }

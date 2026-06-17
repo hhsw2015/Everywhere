@@ -34,7 +34,10 @@ public static class Program
                     .AddSingleton<IFocusBackend, MacFocusBackend>()
                     .AddSingleton<IClipboardReader, MacClipboardReader>()
                     .AddSingleton<IIdleTimeReader, MacIdleTimeReader>()
-                    .AddSingleton<IBrowserUrlReader, MacBrowserUrlReader>());
+                    .AddSingleton<IBrowserUrlReader, MacBrowserUrlReader>()
+                    .AddSingleton<IAppleScriptRunner, MacAppleScriptRunner>()
+                    .AddSingleton<IFinderReader, MacFinderReader>()
+                    .AddSingleton<IBrowserTabsReader, MacBrowserTabsReader>());
             return;
         }
 
@@ -68,6 +71,9 @@ public static class Program
                 .AddSingleton<IClipboardReader, MacClipboardReader>()
                 .AddSingleton<IIdleTimeReader, MacIdleTimeReader>()
                 .AddSingleton<IBrowserUrlReader, MacBrowserUrlReader>()
+                .AddSingleton<IAppleScriptRunner, MacAppleScriptRunner>()
+                .AddSingleton<IFinderReader, MacFinderReader>()
+                .AddSingleton<IBrowserTabsReader, MacBrowserTabsReader>()
                 .AddEverywhereMcp()
 
                 #endregion

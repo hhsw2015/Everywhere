@@ -84,8 +84,38 @@ public static class SemanticExtractor
             Type = node.Element.Type.ToString(),
             Text = string.IsNullOrEmpty(ownText) ? null : ownText,
             States = node.Element.States == VisualElementStates.None ? null : node.Element.States.ToString(),
+            AvailableActions = SuggestActions(node.Element.Type),
         };
     }
+
+    private static List<string>? SuggestActions(VisualElementType type) => type switch
+    {
+        VisualElementType.Button or VisualElementType.Hyperlink or VisualElementType.MenuItem
+            or VisualElementType.HeaderItem or VisualElementType.TabItem
+            or VisualElementType.RadioButton or VisualElementType.CheckBox
+            => ["click", "perform_secondary_action"],
+
+        VisualElementType.ListViewItem or VisualElementType.TreeViewItem or VisualElementType.DataGridItem
+            => ["click", "perform_secondary_action"],
+
+        VisualElementType.TextEdit
+            => ["set_value", "click"],
+
+        VisualElementType.Slider or VisualElementType.Spinner
+            => ["set_value"],
+
+        VisualElementType.ComboBox
+            => ["click", "set_value"],
+
+        VisualElementType.ListView or VisualElementType.TreeView or VisualElementType.DataGrid
+            or VisualElementType.Document
+            => ["scroll", "expand_element"],
+
+        VisualElementType.Image
+            => ["click"],
+
+        _ => null,
+    };
 
     private static string? FindLabelTextInChildren(IVisualElement element, int maxDepth)
     {
