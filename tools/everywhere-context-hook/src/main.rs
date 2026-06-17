@@ -90,16 +90,50 @@ fn main() -> ExitCode {
         return ExitCode::SUCCESS;
     }
 
-    let stdout = io::stdout();
-    let _ = stdout.lock().write_all(&body);
-
-    // Surface a short, user-visible confirmation on stderr — Claude Code shows
-    // hook stderr inline above the user's prompt so the user knows context was
-    // injected without seeing the raw [everywhere-ctx] line in their UI.
+    // Claude Code's UserPromptSubmit hook protocol:
+    //   stdout JSON with hookSpecificOutput.additionalContext → injected to Claude
+    //   systemMessage → user-visible "warning" line above the prompt
+    // Both at once means the user sees a confirmation AND the agent gets the
+    // raw bytes to work from.
+    let body_str = std::str::from_utf8(&body).unwrap_or("");
     let summary = summarise_first_ctx_line(&body);
-    let _ = writeln!(io::stderr(), "✓ everywhere context injected: {summary}");
+    let payload = build_hook_response(body_str, &summary);
 
+    let stdout = io::stdout();
+    let _ = stdout.lock().write_all(payload.as_bytes());
     ExitCode::SUCCESS
+}
+
+fn build_hook_response(additional_context: &str, summary: &str) -> String {
+    // Hand-rolled JSON to avoid pulling serde_json — keeps the binary tiny.
+    // Both fields contain user-controlled bytes (selection / window title) which
+    // ContextStashWriter has already scrubbed of control chars and brackets, so
+    // we only have to escape JSON metacharacters here.
+    format!(
+        "{{\"hookSpecificOutput\":{{\"hookEventName\":\"UserPromptSubmit\",\"additionalContext\":{ctx}}},\"systemMessage\":{msg}}}\n",
+        ctx = json_escape(additional_context),
+        msg = json_escape(&format!("✓ Everywhere context injected: {summary}")),
+    )
+}
+
+fn json_escape(s: &str) -> String {
+    let mut out = String::with_capacity(s.len() + 2);
+    out.push('"');
+    for c in s.chars() {
+        match c {
+            '"'  => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            '\u{08}' => out.push_str("\\b"),
+            '\u{0c}' => out.push_str("\\f"),
+            c if (c as u32) < 0x20 => out.push_str(&format!("\\u{:04x}", c as u32)),
+            c => out.push(c),
+        }
+    }
+    out.push('"');
+    out
 }
 
 /// Reject obviously-broken stash files so they don't leak garbage into the
