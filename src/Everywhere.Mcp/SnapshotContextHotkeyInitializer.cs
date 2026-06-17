@@ -88,7 +88,14 @@ public sealed class SnapshotContextHotkeyInitializer : IAsyncInitializer
         using var _0 = _syncLock.EnterScope();
         DisposeHelper.DisposeToDefault(ref slot);
         if (!shortcut.IsValid) return;
-        slot = _shortcutListener.Register(shortcut, OnSnapshotPressed);
+        try
+        {
+            slot = _shortcutListener.Register(shortcut, OnSnapshotPressed);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to register SnapshotContext shortcut {Shortcut}", shortcut);
+        }
     }
 
     private void OnSnapshotPressed()

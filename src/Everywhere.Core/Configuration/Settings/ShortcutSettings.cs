@@ -47,9 +47,11 @@ public sealed partial class ShortcutSettings : SettingsBase, ISettingsCategory
     public CompositeKeyboardShortcut AgentPickElement { get; } = new();
 
     /// <summary>
-    /// Captures a full context snapshot (focused app + window title + URL + selection +
-    /// screenshot) and writes it to ~/Library/Application Support/Everywhere/context-stash.json
-    /// so a subsequent terminal prompt can pick it up via the Claude Code hook.
+    /// Captures a context pointer (focused app + window title + URL + selection)
+    /// to a per-OS stash file so a subsequent Claude Code UserPromptSubmit hook
+    /// can inject it into the next agent prompt. Tree text and screenshots are
+    /// intentionally NOT captured — the agent calls the corresponding MCP tools
+    /// (get_focused_context / screenshot) on demand.
     /// </summary>
     [DynamicResourceKey(
         LocaleKey.ShortcutSettings_SnapshotContext_Header,
