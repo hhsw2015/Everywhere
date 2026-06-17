@@ -87,8 +87,9 @@ public static class ScreenshotEncoder
             return data.ToArray();
         }
 
-        using var paint = new SKPaint { IsAntialias = true, FilterQuality = SKFilterQuality.High };
-        surface.Canvas.DrawImage(source, new SKRect(0, 0, width, height), paint);
+        using var paint = new SKPaint { IsAntialias = true };
+        var sampling = new SKSamplingOptions(SKCubicResampler.Mitchell);
+        surface.Canvas.DrawImage(source, new SKRect(0, 0, width, height), sampling, paint);
         using var snapshot = surface.Snapshot();
         using var encoded = snapshot.Encode(SKEncodedImageFormat.Png, 100);
         return encoded.ToArray();
