@@ -39,8 +39,9 @@ public static class PerformSecondaryActionTool
                     return ElementClickDispatcher.Click(element!);
 
                 case "focus":
-                    element!.SendShortcut(new KeyboardShortcut(Key.None, KeyModifiers.None));
-                    return new CallToolResult { Content = [new TextContentBlock { Text = "ok" }] };
+                    return ToolErrors.Error(
+                        "Direct focus action is not supported via a11y. Use click(element_index) " +
+                        "on the target — most controls take focus when clicked.");
 
                 case "context_menu":
                 case "right_click":

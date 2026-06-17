@@ -22,58 +22,62 @@ public static class GetFocusedContextTool
         "DO NOT use when the user has pre-pinned an element via the Pin Element hotkey — " +
         "call read_pick instead.")]
     public static async Task<CallToolResult> GetFocusedContext(
-        int? budget,
         IVisualElementContext context,
         SessionStore sessions,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        int? budget = null)
     {
-        var focused = context.FocusedElement;
-        if (focused is null)
-        {
-            return ToolErrors.NoFocusedApp();
-        }
-
-        var topLevel = WalkToTopLevel(focused) ?? focused;
-        var nodeBudget = Math.Clamp(budget ?? 4000, 1, UpstreamConstants.AccessibilityTreeMaxNodeCount * 4);
-
-        var nodes = ElementIndexer.Walk(topLevel, maxNodeCount: Math.Min(nodeBudget, UpstreamConstants.AccessibilityTreeMaxNodeCount));
-        var elementMap = ElementIndexer.ToIndexMap(nodes);
-        var appKey = AppKey.FromProcessId(topLevel.ProcessId);
-        sessions.Issue(appKey, elementMap, topLevel.NativeWindowHandle);
-
-        var totalDescendants = topLevel.GetDescendants(includeSelf: true).Count();
-        var omitted = totalDescendants > nodes.Count;
-
-        string? screenshot = null;
         try
         {
-            using var captured = await topLevel.CaptureAsync(cancellationToken);
-            screenshot = ScreenshotEncoder.EncodePngBase64(captured);
-        }
-        catch
-        {
-            // ponytail: tree text is the load-bearing field; screenshot best-effort.
-        }
+            var focused = context.FocusedElement;
+            if (focused is null) return ToolErrors.NoFocusedApp();
 
-        var bounds = topLevel.BoundingRectangle;
-        var result = new FocusedContextResult
-        {
-            App = appKey,
-            WindowTitle = topLevel.Name,
-            WindowBounds = new WindowBounds(bounds.X, bounds.Y, bounds.Width, bounds.Height),
-            ScreenshotPngBase64 = screenshot,
-            TreeText = SnapshotRenderer.Render(nodes, showFullText: false),
-            FocusedSummary = focused.Name,
-            SelectedText = focused.GetSelectionText(),
-            OmittedChildren = omitted,
-            OmittedNodeCount = Math.Max(0, totalDescendants - nodes.Count),
-            TreeJson = TreeJsonBuilder.Build(nodes),
-        };
+            var topLevel = WalkToTopLevel(focused) ?? focused;
+            var nodeBudget = Math.Clamp(budget ?? 4000, 1, UpstreamConstants.AccessibilityTreeMaxNodeCount * 4);
 
-        return new CallToolResult
+            var nodes = ElementIndexer.Walk(topLevel, maxNodeCount: Math.Min(nodeBudget, UpstreamConstants.AccessibilityTreeMaxNodeCount));
+            var elementMap = ElementIndexer.ToIndexMap(nodes);
+            var appKey = AppKey.FromProcessId(topLevel.ProcessId);
+            sessions.Issue(appKey, elementMap, topLevel.NativeWindowHandle);
+
+            var totalDescendants = topLevel.GetDescendants(includeSelf: true).Count();
+            var omitted = totalDescendants > nodes.Count;
+
+            string? screenshot = null;
+            try
+            {
+                using var captured = await topLevel.CaptureAsync(cancellationToken);
+                screenshot = ScreenshotEncoder.EncodePngBase64(captured);
+            }
+            catch
+            {
+                // best-effort screenshot.
+            }
+
+            var bounds = topLevel.BoundingRectangle;
+            var result = new FocusedContextResult
+            {
+                App = appKey,
+                WindowTitle = topLevel.Name,
+                WindowBounds = new WindowBounds(bounds.X, bounds.Y, bounds.Width, bounds.Height),
+                ScreenshotPngBase64 = screenshot,
+                TreeText = SnapshotRenderer.Render(nodes, showFullText: false),
+                FocusedSummary = focused.Name,
+                SelectedText = focused.GetSelectionText(),
+                OmittedChildren = omitted,
+                OmittedNodeCount = Math.Max(0, totalDescendants - nodes.Count),
+                TreeJson = TreeJsonBuilder.Build(nodes),
+            };
+
+            return new CallToolResult
+            {
+                Content = [new TextContentBlock { Text = JsonSerializer.Serialize(result) }],
+            };
+        }
+        catch (Exception ex)
         {
-            Content = [new TextContentBlock { Text = JsonSerializer.Serialize(result) }],
-        };
+            return ToolErrors.FromException(ex, "get_focused_context");
+        }
     }
 
     private static IVisualElement? WalkToTopLevel(IVisualElement element)

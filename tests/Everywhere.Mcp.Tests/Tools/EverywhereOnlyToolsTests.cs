@@ -22,7 +22,7 @@ public class EverywhereOnlyToolsTests
     [Test]
     public void GetTerminalOutput_ReturnsIsTerminalFalse_WhenNoFocus()
     {
-        var result = GetTerminalOutputTool.GetTerminalOutput(50, new EmptyVisualElementContext());
+        var result = GetTerminalOutputTool.GetTerminalOutput(new EmptyVisualElementContext(), 50);
         Assert.That(result.IsError, Is.Not.True);
         var json = System.Text.Json.JsonDocument.Parse(ExtractText(result)).RootElement;
         Assert.That(json.GetProperty("is_terminal").GetBoolean(), Is.False);
@@ -33,7 +33,7 @@ public class EverywhereOnlyToolsTests
     {
         var sessions = new SessionStore();
         var result = await GetFocusedContextTool.GetFocusedContext(
-            2000, new EmptyVisualElementContext(), sessions, CancellationToken.None);
+            new EmptyVisualElementContext(), sessions, CancellationToken.None, 2000);
 
         Assert.That(result.IsError, Is.True);
         Assert.That(ExtractText(result), Does.Contain("foreground"));
@@ -42,7 +42,7 @@ public class EverywhereOnlyToolsTests
     [Test]
     public void ExpandElement_ReturnsExpired_WhenIndexUnknown()
     {
-        var result = ExpandElementTool.ExpandElement("999", null, new SessionStore());
+        var result = ExpandElementTool.ExpandElement("999", new SessionStore());
         Assert.That(result.IsError, Is.True);
         Assert.That(ExtractText(result), Does.Contain("999").And.Contain("not found"));
     }
@@ -51,7 +51,7 @@ public class EverywhereOnlyToolsTests
     public async Task Screenshot_ReturnsError_WhenNoFocus()
     {
         var result = await ScreenshotTool.Screenshot(
-            null, new EmptyVisualElementContext(), new SessionStore(), CancellationToken.None);
+            new EmptyVisualElementContext(), new SessionStore(), CancellationToken.None);
 
         Assert.That(result.IsError, Is.True);
     }

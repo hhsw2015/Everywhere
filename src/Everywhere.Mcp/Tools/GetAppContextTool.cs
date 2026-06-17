@@ -24,49 +24,56 @@ public static class GetAppContextTool
         SessionStore sessions,
         CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(app_hint)) return ToolErrors.ParameterRequired("app_hint");
-
-        var resolved = AppResolver.Resolve(context, app_hint);
-        if (resolved is null) return ToolErrors.AppNotRunning(app_hint);
-
-        var window = resolved.Value.Window;
-        var nodes = ElementIndexer.Walk(window);
-        var elementMap = ElementIndexer.ToIndexMap(nodes);
-        sessions.Issue(resolved.Value.AppKey, elementMap, window.NativeWindowHandle);
-
-        var treeText = SnapshotRenderer.Render(nodes, show_full_text);
-
-        string? screenshotBase64 = null;
         try
         {
-            using var captured = await window.CaptureAsync(cancellationToken);
-            screenshotBase64 = ScreenshotEncoder.EncodePngBase64(captured);
-        }
-        catch
-        {
-            // ponytail: best-effort screenshot; tree text is the load-bearing signal.
-        }
+            if (string.IsNullOrWhiteSpace(app_hint)) return ToolErrors.ParameterRequired("app_hint");
 
-        var bounds = window.BoundingRectangle;
-        var payload = new
-        {
-            matched = new
+            var resolved = AppResolver.Resolve(context, app_hint);
+            if (resolved is null) return ToolErrors.AppNotRunning(app_hint);
+
+            var window = resolved.Value.Window;
+            var nodes = ElementIndexer.Walk(window);
+            var elementMap = ElementIndexer.ToIndexMap(nodes);
+            sessions.Issue(resolved.Value.AppKey, elementMap, window.NativeWindowHandle);
+
+            var treeText = SnapshotRenderer.Render(nodes, show_full_text);
+
+            string? screenshotBase64 = null;
+            try
             {
+                using var captured = await window.CaptureAsync(cancellationToken);
+                screenshotBase64 = ScreenshotEncoder.EncodePngBase64(captured);
+            }
+            catch
+            {
+                // best-effort screenshot.
+            }
+
+            var bounds = window.BoundingRectangle;
+            var payload = new
+            {
+                matched = new
+                {
+                    app = resolved.Value.AppKey,
+                    window_title = window.Name,
+                    hint = app_hint,
+                },
                 app = resolved.Value.AppKey,
                 window_title = window.Name,
-                hint = app_hint,
-            },
-            app = resolved.Value.AppKey,
-            window_title = window.Name,
-            window_bounds = new WindowBounds(bounds.X, bounds.Y, bounds.Width, bounds.Height),
-            screenshot_png_b64 = screenshotBase64,
-            tree_text = treeText,
-            tree_json = TreeJsonBuilder.Build(nodes),
-        };
+                window_bounds = new WindowBounds(bounds.X, bounds.Y, bounds.Width, bounds.Height),
+                screenshot_png_b64 = screenshotBase64,
+                tree_text = treeText,
+                tree_json = TreeJsonBuilder.Build(nodes),
+            };
 
-        return new CallToolResult
+            return new CallToolResult
+            {
+                Content = [new TextContentBlock { Text = JsonSerializer.Serialize(payload) }],
+            };
+        }
+        catch (Exception ex)
         {
-            Content = [new TextContentBlock { Text = JsonSerializer.Serialize(payload) }],
-        };
+            return ToolErrors.FromException(ex, "get_app_context");
+        }
     }
 }
