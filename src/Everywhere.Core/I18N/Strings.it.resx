@@ -2258,7 +2258,7 @@ Rotella o tasti numerici per cambiare modalità di selezione</value>
         <value>Tasto di attivazione dell'agente</value>
     </data>
     <data name="McpServerSettings_AgentTriggerKey_Description" xml:space="preserve">
-        <value>Dopo aver portato l'app dell'agente in primo piano, Everywhere le invia questa combinazione (es. cmd+shift+space per attivare la dettatura, cmd+l per mettere a fuoco il campo di input). Stile xdotool: cmd / alt / shift / ctrl / super più un tasto. Vuoto per disabilitare.</value>
+        <value>Dopo aver portato l'app dell'agente in primo piano, Everywhere le invia la scorciatoia registrata (es. cmd+shift+space per la dettatura, cmd+l per il campo di input). Clicca i tasti per registrare; disattiva per non inviare.</value>
     </data>
     <data name="Strategy_BuiltIn_Browser_Name" xml:space="preserve">
         <value>Assistente Browser</value>

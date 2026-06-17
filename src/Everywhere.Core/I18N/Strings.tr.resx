@@ -2257,7 +2257,7 @@ Seçim modunu değiştirmek için kaydırıcı veya rakam tuşlarını kullanın
         <value>Ajan tetik tuşu</value>
     </data>
     <data name="McpServerSettings_AgentTriggerKey_Description" xml:space="preserve">
-        <value>Ajan uygulaması öne getirildikten sonra Everywhere bu kombinasyonu gönderir (ör. cmd+shift+space ile dikte etmeyi açma, cmd+l ile giriş alanına odaklanma). xdotool tarzı: cmd / alt / shift / ctrl / super artı bir tuş. Boş bırak ki devre dışı kalsın.</value>
+        <value>Ajan uygulaması öne getirildikten sonra Everywhere kaydettiğin kısayolu ona gönderir (ör. cmd+shift+space ile dikte, cmd+l ile giriş alanı). Tuşlara tıklayarak kaydet; devre dışı bırakırsan gönderilmez.</value>
     </data>
     <data name="Strategy_BuiltIn_Browser_Name" xml:space="preserve">
         <value>Tarayıcı Asistanı</value>

@@ -2257,7 +2257,7 @@ Scrollrad oder Zifferntasten zum Wechseln des Auswahlmodus</value>
         <value>Agent-Trigger-Taste</value>
     </data>
     <data name="McpServerSettings_AgentTriggerKey_Description" xml:space="preserve">
-        <value>Nachdem die Agent-App in den Vordergrund gebracht wurde, sendet Everywhere diese Tastenkombination an sie (z. B. cmd+shift+space zum Auslösen einer Diktier-IME, cmd+l zum Fokussieren des Eingabefelds). xdotool-Stil: cmd / alt / shift / ctrl / super plus eine Taste. Leer lassen zum Deaktivieren.</value>
+        <value>Nachdem die Agent-App in den Vordergrund gebracht wurde, sendet Everywhere diese aufgenommene Tastenkombination an sie (z. B. cmd+shift+space für Diktier-IME, cmd+l für das Eingabefeld). Tasten anklicken zum Aufnehmen; deaktivieren überspringt das Senden.</value>
     </data>
     <data name="Strategy_BuiltIn_Browser_Name" xml:space="preserve">
         <value>Browser-Assistent</value>

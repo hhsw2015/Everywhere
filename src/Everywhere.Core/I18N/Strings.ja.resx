@@ -2258,7 +2258,7 @@
         <value>エージェント起動キー</value>
     </data>
     <data name="McpServerSettings_AgentTriggerKey_Description" xml:space="preserve">
-        <value>エージェントアプリを前面に切り替えた後、このキー組み合わせを送信します（例: cmd+shift+space で音声入力を起動、cmd+l で入力欄にフォーカス）。xdotool スタイル: cmd / alt / shift / ctrl / super に通常キーを追加。空欄で無効。</value>
+        <value>エージェントアプリを前面に切り替えた後、録音したこのショートカットをアプリに送信します（例: cmd+shift+space で音声入力起動、cmd+l で入力欄にフォーカス）。キーを押して録音、無効化で送信スキップ。</value>
     </data>
     <data name="Strategy_BuiltIn_Browser_Name" xml:space="preserve">
         <value>ブラウザアシスタント</value>

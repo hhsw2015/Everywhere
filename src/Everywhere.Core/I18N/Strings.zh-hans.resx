@@ -2259,7 +2259,7 @@
         <value>Agent 触发快捷键</value>
     </data>
     <data name="McpServerSettings_AgentTriggerKey_Description" xml:space="preserve">
-        <value>把 Agent 应用切到前台之后，自动向它发这组键（例如 cmd+shift+space 唤醒语音输入法，cmd+l 聚焦输入框）。语法用 xdotool 风格：cmd / alt / shift / ctrl / super 加一个普通键。留空则不发送。</value>
+        <value>把 Agent 应用切到前台之后，自动按下你录下的这组快捷键（例如 cmd+shift+space 唤醒语音输入法，cmd+l 聚焦输入框）。点击下方按键进行录制，关闭则不发送。</value>
     </data>
     <data name="Strategy_BuiltIn_Browser_Name" xml:space="preserve">
         <value>浏览器助手</value>
