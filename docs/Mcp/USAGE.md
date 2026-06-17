@@ -65,6 +65,7 @@ so existing test corpora and prompt templates apply unchanged.
 |------|----------|
 | `get_focused_context` | One-shot snapshot of whatever the user is looking at. PREFER on deictic references (*"this"*, *"that"*, *"the error"*, *"这个"*). |
 | `get_selected_text`   | OS-wide selection. Returns `""` if nothing is selected. |
+| `read_pick`           | Reads the element the user pre-pinned via the Agent Pick hotkey (Settings → Shortcut → "Pin Element for AI Agent"). PREFER this BEFORE `get_focused_context` on deictic references. Reading consumes the pin. |
 | `pick_element`        | Triggers Everywhere's visual picker — user clicks an element/window/screen. |
 | `expand_element`      | Re-walk a previously indexed subtree with a fresh budget when `omitted_children=true`. |
 | `get_terminal_output` | Visible PTY of the focused terminal app. Empty string if not on a terminal. |

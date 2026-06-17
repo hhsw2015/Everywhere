@@ -36,4 +36,13 @@ public sealed partial class ShortcutSettings : SettingsBase, ISettingsCategory
         LocaleKey.ShortcutSettings_TakeScreenshot_Desription)]
     [SettingsTemplatedItem]
     public CompositeKeyboardShortcut TakeScreenshot { get; } = new();
+
+    /// <summary>
+    /// Lets the user "pin" a UI element for AI agents (MCP read_pick) without opening the chat window.
+    /// </summary>
+    [DynamicResourceKey(
+        LocaleKey.ShortcutSettings_AgentPickElement_Header,
+        LocaleKey.ShortcutSettings_AgentPickElement_Desription)]
+    [SettingsTemplatedItem]
+    public CompositeKeyboardShortcut AgentPickElement { get; } = new();
 }

@@ -2206,6 +2206,30 @@ Use scroll wheel or number keys to switch selection mode</value>
     <data name="ShortcutSettings_TakeScreenshot_Desription" xml:space="preserve">
         <value>Press at any time to capture a screenshot, which will then open the chat window.</value>
     </data>
+    <data name="ShortcutSettings_AgentPickElement_Header" xml:space="preserve">
+        <value>Pin Element for AI Agent</value>
+    </data>
+    <data name="ShortcutSettings_AgentPickElement_Desription" xml:space="preserve">
+        <value>Press to pick a UI element and pin it for AI agents (read via MCP). Unlike the regular pick shortcut, this does not open the chat window.</value>
+    </data>
+    <data name="SettingsCategory_Settings_McpServer_Header" xml:space="preserve">
+        <value>MCP Server</value>
+    </data>
+    <data name="SettingsCategory_Settings_McpServer_Description" xml:space="preserve">
+        <value>Expose Everywhere as a Model Context Protocol server so AI agents can read selection / focus / terminal output and drive the UI on your behalf.</value>
+    </data>
+    <data name="McpServerSettings_HttpEnabled_Header" xml:space="preserve">
+        <value>Enable HTTP transport</value>
+    </data>
+    <data name="McpServerSettings_HttpEnabled_Description" xml:space="preserve">
+        <value>When enabled, Everywhere accepts MCP connections on http://localhost:&lt;port&gt;/mcp (loopback only). Disable to use the stdio transport via 'everywhere --mcp' only.</value>
+    </data>
+    <data name="McpServerSettings_HttpPort_Header" xml:space="preserve">
+        <value>HTTP port</value>
+    </data>
+    <data name="McpServerSettings_HttpPort_Description" xml:space="preserve">
+        <value>Default 7878. If the port is in use, Everywhere walks up to ten fallback ports.</value>
+    </data>
     <data name="Strategy_BuiltIn_Browser_Name" xml:space="preserve">
         <value>Browser Assistant</value>
     </data>

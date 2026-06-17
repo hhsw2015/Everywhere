@@ -40,4 +40,6 @@ public sealed partial class Settings : SettingsBase
     public ChatWindowSettings ChatWindow { get; set; } = new();
 
     public PluginSettings Plugin { get; set; } = new();
+
+    public McpServerSettings McpServer { get; set; } = new();
 }
