@@ -1,4 +1,7 @@
+using Everywhere.Interop;
+using Everywhere.Mcp.Snapshot;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using ModelContextProtocol.Server;
 
 namespace Everywhere.Mcp;
@@ -33,8 +36,10 @@ public static class EverywhereMcpServiceExtensions
 
     internal static IServiceCollection AddEverywhereMcpTools(this IServiceCollection services)
     {
-        // Tools/* will register their per-tool dependencies here as they come online
-        // (SessionStore, ElementIndexer, IInputSimulator, FocusBorrow, etc.).
+        services.TryAddSingleton<SessionStore>();
+        // Stdio fallback: GUI host pre-registers a real IVisualElementContext, so
+        // TryAdd never overrides it.
+        services.TryAddSingleton<IVisualElementContext, EmptyVisualElementContext>();
         return services;
     }
 }
