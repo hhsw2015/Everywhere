@@ -83,10 +83,14 @@ public sealed class MacBrowserTabsReader(IAppleScriptRunner runner) : IBrowserTa
         return null;
     }
 
-    // Arc shares the Chromium dictionary in NAME but lacks `active tab index` AND
-    // `active tab`/`current tab` (Arc manages active tab internally; scripting can
-    // only enumerate). We list every tab without an active flag — the agent can
-    // still cross-reference get_browser_url() to know which tab is in front.
+    // Arc's `tabs of window` collection is the ENTIRE sidebar — pinned shortcuts,
+    // favourites, and every tab across every space. Heavy users routinely see
+    // 200+. Arc exposes no AppleScript way to distinguish "actually open" from
+    // pinned/folded, so we stream them all (per-tab cross-process RPC dominates
+    // wall time — ~15-20 ms per tab — so 266 tabs ≈ 4.5 s).
+    // Arc also lacks `active tab` / `current tab` / `active tab index`, so every
+    // entry is reported with active=false; pair with get_browser_url() when the
+    // agent needs to know which tab is actually displayed.
     private static string BuildArcScript() =>
         @"tell application ""Arc""
             set out to """"
@@ -94,17 +98,7 @@ public sealed class MacBrowserTabsReader(IAppleScriptRunner runner) : IBrowserTa
             set RS to (ASCII character 30)
             repeat with w in windows
                 repeat with t in tabs of w
-                    try
-                        set ti to title of t
-                    on error
-                        set ti to """"
-                    end try
-                    try
-                        set u to URL of t
-                    on error
-                        set u to """"
-                    end try
-                    set out to out & ""0"" & US & ti & US & u & RS
+                    set out to out & ""0"" & US & (title of t) & US & (URL of t) & RS
                 end repeat
             end repeat
             return out
