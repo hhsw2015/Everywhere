@@ -52,6 +52,7 @@ public static class ReadPickTool
             TreeText = SnapshotRenderer.Render(nodes, showFullText: false),
             TreeJson = TreeJsonBuilder.Build(nodes),
         };
+        SemanticEnricher.Apply(payload, nodes);
 
         var json = JsonSerializer.Serialize(new
         {

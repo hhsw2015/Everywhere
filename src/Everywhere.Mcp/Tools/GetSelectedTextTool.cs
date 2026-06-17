@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Text.Json;
 using Everywhere.Interop;
+using Everywhere.Mcp.Snapshot;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 
@@ -10,26 +11,48 @@ namespace Everywhere.Mcp.Tools;
 public static class GetSelectedTextTool
 {
     [McpServerTool(Name = "get_selected_text", ReadOnly = true)]
-    [Description("Return the text the user has currently selected in any application, OS-wide, as JSON {\"selected\": bool, \"text\": string}. \"selected\" is false when nothing is highlighted; \"text\" is the empty string in that case. PREFER this over scraping a tree when the user says \"this text\", \"the highlighted code\", \"my selection\", \"选中的\".")]
-    public static CallToolResult GetSelectedText(IVisualElementContext context)
+    [Description(
+        "Return the text the user has highlighted, OS-wide, as JSON " +
+        "{\"selected\": bool, \"text\": string, \"app\": string|null, \"source\": \"cache\"|\"focused\"|null}. " +
+        "Pulls from a 2-minute selection cache fed by the platform's text-selection observer, so it " +
+        "works even when focus has since moved to a different app (e.g. you select in the browser, " +
+        "switch back to chat, ask the agent). Falls back to the currently focused element's selection " +
+        "if no cached selection is fresh. selected=false / text=\"\" when nothing is highlighted anywhere.")]
+    public static CallToolResult GetSelectedText(IVisualElementContext context, SelectionCache cache)
     {
         try
         {
+            // Cache wins — survives focus changes back to the chat window.
+            if (cache.GetFresh() is { } cached)
+            {
+                return Json(new
+                {
+                    selected = true,
+                    text = cached.Text,
+                    app = cached.AppKey,
+                    source = "cache",
+                });
+            }
+
             var focused = context.FocusedElement;
             var text = focused?.GetSelectionText() ?? string.Empty;
-            var payload = JsonSerializer.Serialize(new
+            return Json(new
             {
                 selected = !string.IsNullOrEmpty(text),
                 text,
+                app = focused != null ? AppKey.FromProcessId(focused.ProcessId) : null,
+                source = string.IsNullOrEmpty(text) ? null : "focused",
             });
-            return new CallToolResult
-            {
-                Content = [new TextContentBlock { Text = payload }],
-            };
         }
         catch (Exception ex)
         {
             return ToolErrors.FromException(ex, "get_selected_text");
         }
     }
+
+    private static CallToolResult Json(object payload) =>
+        new()
+        {
+            Content = [new TextContentBlock { Text = JsonSerializer.Serialize(payload) }],
+        };
 }

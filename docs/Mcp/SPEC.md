@@ -2,7 +2,37 @@
 
 Status: Draft v1
 Audience: implementing agent (`/goal`-style)
-Goal: ship one MCP server inside Everywhere that is a strict superset of `iFurySt/open-codex-computer-use`, plus Everywhere-specific context tools. No runtime dependency on `open-computer-use`. Maximum-fidelity port of its tested logic.
+
+## Mission
+
+Combine **Everywhere's general-purpose UI awareness** (a11y trees, selection
+state, focus state, text selection, terminal output, picker hotkey, selection
+cache, …) with **Computer Use's input-injection** (CGEvent / SendInput /
+XTest) into ONE unified MCP interface.
+
+- Every signal Everywhere can perceive about the user's current activity is
+  surfaced as a first-class field in tool payloads — not buried in tree_text —
+  so agents can act on user intent with one tool call.
+- Every action a user can take with mouse + keyboard is drivable via the same
+  MCP.
+- Strict superset of `iFurySt/open-codex-computer-use`: tool names + JSON
+  schemas byte-compatible. No runtime dependency on open-computer-use.
+
+The result: an agent on the other end of MCP gets the same situational
+awareness as a human looking over the user's shoulder, plus the ability to
+operate the machine on their behalf.
+
+### Awareness surface
+list_apps / get_app_state / get_app_context / get_focused_context /
+get_selected_text (OS-wide, cached) / get_terminal_output / screenshot /
+pick_element + read_pick. Every snapshot payload exposes
+**selected_items**, **focused_items**, **focused_path** as first-class
+semantic fields derived from Everywhere's a11y abstraction so the agent never
+has to grep tree_text for `[Selected]`.
+
+### Action surface
+click (element_index OR x/y) / drag / type_text / press_key / scroll /
+set_value / perform_secondary_action.
 
 ---
 

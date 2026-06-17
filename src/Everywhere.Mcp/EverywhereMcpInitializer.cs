@@ -1,5 +1,6 @@
 using Everywhere.Common;
 using Everywhere.Configuration;
+using Everywhere.Mcp.Snapshot;
 using Everywhere.Mcp.Transport;
 using Microsoft.Extensions.Logging;
 
@@ -14,9 +15,14 @@ public sealed class EverywhereMcpInitializer(
     Settings settings,
     EverywhereMcpHttpOptions options,
     EverywhereMcpHttpHost host,
+    SelectionCache selectionCache,
     ILogger<EverywhereMcpInitializer> logger
 ) : IAsyncInitializer
 {
+    // Touch the cache so DI resolves it now → its ctor subscribes to the selection
+    // stream from process start, not lazily on first get_selected_text call.
+    private readonly SelectionCache _selectionCache = selectionCache;
+
     public AsyncInitializerIndex Index => AsyncInitializerIndex.Startup;
 
     private readonly SemaphoreSlim _restartLock = new(1, 1);

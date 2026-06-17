@@ -37,6 +37,7 @@ public sealed class EverywhereMcpHttpHost : IHostedService, IAsyncDisposable
     private readonly IVisualElementContext _visualContext;
     private readonly IInputSimulator _input;
     private readonly FocusBorrow _focusBorrow;
+    private readonly SelectionCache _selectionCache;
 
     public EverywhereMcpHttpHost(
         EverywhereMcpHttpOptions options,
@@ -52,6 +53,7 @@ public sealed class EverywhereMcpHttpHost : IHostedService, IAsyncDisposable
         _visualContext = parentServices.GetRequiredService<IVisualElementContext>();
         _input = parentServices.GetRequiredService<IInputSimulator>();
         _focusBorrow = parentServices.GetRequiredService<FocusBorrow>();
+        _selectionCache = parentServices.GetRequiredService<SelectionCache>();
     }
 
     public int BoundPort => Volatile.Read(ref _boundPort);
@@ -173,6 +175,7 @@ public sealed class EverywhereMcpHttpHost : IHostedService, IAsyncDisposable
         builder.Services.AddSingleton(_visualContext);
         builder.Services.AddSingleton(_input);
         builder.Services.AddSingleton(_focusBorrow);
+        builder.Services.AddSingleton(_selectionCache);
 
         builder.Services
             .AddMcpServer(opts =>

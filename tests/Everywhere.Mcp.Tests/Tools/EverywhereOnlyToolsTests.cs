@@ -12,7 +12,7 @@ public class EverywhereOnlyToolsTests
     [Test]
     public void GetSelectedText_ReturnsSelectedFalseEnvelope_WhenNoFocus()
     {
-        var result = GetSelectedTextTool.GetSelectedText(new EmptyVisualElementContext());
+        var result = GetSelectedTextTool.GetSelectedText(new EmptyVisualElementContext(), new SelectionCache(new EmptyVisualElementContext()));
         Assert.That(result.IsError, Is.Not.True);
         var json = System.Text.Json.JsonDocument.Parse(ExtractText(result)).RootElement;
         Assert.That(json.GetProperty("selected").GetBoolean(), Is.False);

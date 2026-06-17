@@ -68,6 +68,7 @@ public static class GetFocusedContextTool
                 OmittedNodeCount = Math.Max(0, totalDescendants - nodes.Count),
                 TreeJson = TreeJsonBuilder.Build(nodes),
             };
+            SemanticEnricher.Apply(result, nodes);
 
             return new CallToolResult
             {

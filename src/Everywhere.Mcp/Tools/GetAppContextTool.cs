@@ -50,6 +50,17 @@ public static class GetAppContextTool
             }
 
             var bounds = window.BoundingRectangle;
+            var inner = new AppStateResult
+            {
+                App = resolved.Value.AppKey,
+                WindowTitle = window.Name,
+                WindowBounds = new WindowBounds(bounds.X, bounds.Y, bounds.Width, bounds.Height),
+                ScreenshotPngBase64 = screenshotBase64,
+                TreeText = treeText,
+                TreeJson = TreeJsonBuilder.Build(nodes),
+            };
+            SemanticEnricher.Apply(inner, nodes);
+
             var payload = new
             {
                 matched = new
@@ -58,12 +69,15 @@ public static class GetAppContextTool
                     window_title = window.Name,
                     hint = app_hint,
                 },
-                app = resolved.Value.AppKey,
-                window_title = window.Name,
-                window_bounds = new WindowBounds(bounds.X, bounds.Y, bounds.Width, bounds.Height),
-                screenshot_png_b64 = screenshotBase64,
-                tree_text = treeText,
-                tree_json = TreeJsonBuilder.Build(nodes),
+                app = inner.App,
+                window_title = inner.WindowTitle,
+                window_bounds = inner.WindowBounds,
+                screenshot_png_b64 = inner.ScreenshotPngBase64,
+                tree_text = inner.TreeText,
+                tree_json = inner.TreeJson,
+                selected_items = inner.SelectedItems,
+                focused_items = inner.FocusedItems,
+                focused_path = inner.FocusedPath,
             };
 
             return new CallToolResult

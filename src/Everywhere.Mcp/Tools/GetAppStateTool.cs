@@ -60,6 +60,7 @@ public static class GetAppStateTool
                 FocusedSummary = context.FocusedElement?.Name,
                 SelectedText = context.FocusedElement?.GetSelectionText(),
             };
+            SemanticEnricher.Apply(result, nodes);
 
             return new CallToolResult
             {
