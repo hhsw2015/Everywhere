@@ -13,10 +13,12 @@ public static class GetBrowserTabsTool
     [McpServerTool(Name = "get_browser_tabs", ReadOnly = true)]
     [Description(
         "Return all tabs of a browser app (Safari / Chrome / Arc / Brave / Edge / " +
-        "Chromium / Vivaldi / Opera) as JSON {\"app\": str, \"tabs\": [{\"title\":str, " +
-        "\"url\":str, \"active\":bool}]}. Pass app_hint to target a specific browser; " +
-        "omit to use the foreground app. On macOS this requires the user to grant " +
-        "Apple Events to that browser once.")]
+        "Chromium / Vivaldi / Opera) as JSON. Pass app_hint to target a specific browser; " +
+        "omit to use the foreground app. " +
+        "Status field: \"ok\" / \"not_supported\" (app isn't a browser) / " +
+        "\"permission_denied\" (Apple Events not granted yet — first call typically triggers " +
+        "the macOS permission prompt; if user dismissed it once, re-grant via " +
+        "System Settings → Privacy & Security → Automation).")]
     public static CallToolResult GetBrowserTabs(
         IVisualElementContext context,
         IBrowserTabsReader reader,
@@ -34,20 +36,24 @@ public static class GetBrowserTabsTool
             else
             {
                 var focused = context.FocusedElement;
-                if (focused is null) return Json(new { app = (string?)null, tabs = Array.Empty<object>() });
+                if (focused is null)
+                    return Json(new { app = (string?)null, status = "not_supported", tabs = Array.Empty<object>() });
                 appKey = AppKey.FromProcessId(focused.ProcessId);
             }
 
-            var tabs = reader.GetTabs(appKey);
-            if (tabs is null)
+            var result = reader.GetTabs(appKey);
+            var statusStr = result.Status switch
             {
-                return Json(new { app = appKey, tabs = Array.Empty<object>(), supported = false });
-            }
+                BrowserTabsStatus.Ok => "ok",
+                BrowserTabsStatus.PermissionDenied => "permission_denied",
+                _ => "not_supported",
+            };
             return Json(new
             {
                 app = appKey,
-                supported = true,
-                tabs = tabs.Select(t => new { title = t.Title, url = t.Url, active = t.IsActive }).ToArray(),
+                status = statusStr,
+                error = result.ErrorMessage,
+                tabs = result.Tabs.Select(t => new { title = t.Title, url = t.Url, active = t.IsActive }).ToArray(),
             });
         }
         catch (Exception ex)

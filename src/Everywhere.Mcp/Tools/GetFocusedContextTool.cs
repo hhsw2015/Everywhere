@@ -33,7 +33,13 @@ public static class GetFocusedContextTool
             if (focused is null) return ToolErrors.NoFocusedApp();
 
             var topLevel = WalkToTopLevel(focused) ?? focused;
-            var nodeBudget = Math.Clamp(budget ?? 4000, 1, UpstreamConstants.AccessibilityTreeMaxNodeCount * 4);
+            // Default budget 4000; for app shells whose top-level is a Document (browsers,
+            // PDF readers) bump to the cap so the agent doesn't see "omitted_node_count: 714"
+            // on the very first call.
+            var defaultBudget = focused.Type == VisualElementType.Document
+                ? UpstreamConstants.AccessibilityTreeMaxNodeCount
+                : 4000;
+            var nodeBudget = Math.Clamp(budget ?? defaultBudget, 1, UpstreamConstants.AccessibilityTreeMaxNodeCount * 4);
 
             var nodes = ElementIndexer.Walk(topLevel, maxNodeCount: Math.Min(nodeBudget, UpstreamConstants.AccessibilityTreeMaxNodeCount));
             var elementMap = ElementIndexer.ToIndexMap(nodes);
