@@ -10,19 +10,22 @@ namespace Everywhere.Mcp.Tests.Tools;
 public class EverywhereOnlyToolsTests
 {
     [Test]
-    public void GetSelectedText_ReturnsEmpty_WhenNoFocus()
+    public void GetSelectedText_ReturnsSelectedFalseEnvelope_WhenNoFocus()
     {
         var result = GetSelectedTextTool.GetSelectedText(new EmptyVisualElementContext());
         Assert.That(result.IsError, Is.Not.True);
-        Assert.That(ExtractText(result), Is.Empty);
+        var json = System.Text.Json.JsonDocument.Parse(ExtractText(result)).RootElement;
+        Assert.That(json.GetProperty("selected").GetBoolean(), Is.False);
+        Assert.That(json.GetProperty("text").GetString(), Is.Empty);
     }
 
     [Test]
-    public void GetTerminalOutput_ReturnsEmpty_WhenNoFocus()
+    public void GetTerminalOutput_ReturnsIsTerminalFalse_WhenNoFocus()
     {
         var result = GetTerminalOutputTool.GetTerminalOutput(50, new EmptyVisualElementContext());
         Assert.That(result.IsError, Is.Not.True);
-        Assert.That(ExtractText(result), Is.Empty);
+        var json = System.Text.Json.JsonDocument.Parse(ExtractText(result)).RootElement;
+        Assert.That(json.GetProperty("is_terminal").GetBoolean(), Is.False);
     }
 
     [Test]
