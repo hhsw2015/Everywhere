@@ -1,4 +1,5 @@
 using Everywhere.Interop;
+using Everywhere.Mcp.Input;
 using Everywhere.Mcp.Snapshot;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -37,9 +38,10 @@ public static class EverywhereMcpServiceExtensions
     internal static IServiceCollection AddEverywhereMcpTools(this IServiceCollection services)
     {
         services.TryAddSingleton<SessionStore>();
-        // Stdio fallback: GUI host pre-registers a real IVisualElementContext, so
-        // TryAdd never overrides it.
         services.TryAddSingleton<IVisualElementContext, EmptyVisualElementContext>();
+        services.TryAddSingleton<IInputSimulator, NotSupportedInputSimulator>();
+        services.TryAddSingleton<IFocusBackend, NotSupportedFocusBackend>();
+        services.TryAddSingleton<FocusBorrow>();
         return services;
     }
 }

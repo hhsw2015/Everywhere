@@ -1,5 +1,6 @@
 using Everywhere.Interop;
 using Everywhere.Mcp;
+using Everywhere.Mcp.Input;
 using Everywhere.Mcp.Snapshot;
 using Everywhere.Mcp.Tools;
 using Microsoft.Extensions.DependencyInjection;
@@ -43,8 +44,26 @@ public class SmokeTests
     public void ClickTool_ReturnsExpired_WhenIndexUnknown()
     {
         var sessions = new SessionStore();
-        var result = ClickTool.Click("any", "999", null, null, null, null, sessions);
+        var input = new TestInputSimulator();
+        var focus = new FocusBorrow(new TestFocusBackend());
+        var result = ClickTool.Click("any", "999", null, null, null, null, sessions, input, focus, new EmptyVisualElementContext());
         Assert.That(result.IsError, Is.True);
+    }
+
+    private sealed class TestInputSimulator : IInputSimulator
+    {
+        public void MoveTo(double x, double y) { }
+        public void Click(double x, double y, int clickCount = 1, MouseButton button = MouseButton.Left) { }
+        public void DragTo(double fromX, double fromY, double toX, double toY) { }
+        public void TypeText(string text) { }
+        public void PressKey(string xdotoolKeyName) { }
+    }
+
+    private sealed class TestFocusBackend : IFocusBackend
+    {
+        public nint GetForegroundWindow() => 0;
+        public bool TryAxRaise(nint window) => true;
+        public void Activate(nint window) { }
     }
 
     [Test]

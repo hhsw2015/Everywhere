@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using Everywhere.Interop;
+using Everywhere.Mcp.Input;
 using Everywhere.Mcp.Snapshot;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
@@ -18,23 +19,20 @@ public static class ClickTool
         double? y,
         int? click_count,
         string? mouse_button,
-        SessionStore sessions)
+        SessionStore sessions,
+        IInputSimulator input,
+        FocusBorrow focusBorrow,
+        IVisualElementContext context)
     {
         if (!string.IsNullOrEmpty(element_index))
         {
             var (error, element) = ElementResolver.Resolve(sessions, element_index);
-            if (error is not null)
-            {
-                return error;
-            }
+            if (error is not null) return error;
 
             try
             {
                 element!.Invoke();
-                return new CallToolResult
-                {
-                    Content = [new TextContentBlock { Text = "ok" }],
-                };
+                return new CallToolResult { Content = [new TextContentBlock { Text = "ok" }] };
             }
             catch (Exception ex)
             {
@@ -44,10 +42,32 @@ public static class ClickTool
 
         if (x.HasValue && y.HasValue)
         {
-            // Phase 4 will wire IInputSimulator + FocusBorrow.
-            return ToolErrors.Error("Coordinate-based click is not yet supported in this build (Phase 4).");
+            var resolved = AppResolver.Resolve(context, app);
+            if (resolved is null) return ToolErrors.AppNotRunning(app);
+
+            var button = ParseButton(mouse_button);
+            var clickCount = click_count is { } c && c > 0 ? c : 1;
+
+            try
+            {
+                using var _ = focusBorrow.Acquire(resolved.Value.Window.NativeWindowHandle, requireFocus: true);
+                input.Click(x.Value, y.Value, clickCount, button);
+                return new CallToolResult { Content = [new TextContentBlock { Text = "ok" }] };
+            }
+            catch (Exception ex)
+            {
+                return ToolErrors.Error(ex.Message);
+            }
         }
 
         return ToolErrors.Error("click requires either element_index or both x and y.");
     }
+
+    private static MouseButton ParseButton(string? raw) =>
+        raw?.ToLowerInvariant() switch
+        {
+            "right" => MouseButton.Right,
+            "middle" => MouseButton.Middle,
+            _ => MouseButton.Left,
+        };
 }

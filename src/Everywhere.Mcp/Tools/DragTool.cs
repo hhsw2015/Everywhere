@@ -1,4 +1,6 @@
 using System.ComponentModel;
+using Everywhere.Interop;
+using Everywhere.Mcp.Input;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 
@@ -14,6 +16,23 @@ public static class DragTool
         double from_x,
         double from_y,
         double to_x,
-        double to_y) =>
-        ToolErrors.Error("drag is not yet supported in this build (Phase 4).");
+        double to_y,
+        IInputSimulator input,
+        FocusBorrow focusBorrow,
+        IVisualElementContext context)
+    {
+        var resolved = AppResolver.Resolve(context, app);
+        if (resolved is null) return ToolErrors.AppNotRunning(app);
+
+        try
+        {
+            using var _ = focusBorrow.Acquire(resolved.Value.Window.NativeWindowHandle, requireFocus: true);
+            input.DragTo(from_x, from_y, to_x, to_y);
+            return new CallToolResult { Content = [new TextContentBlock { Text = "ok" }] };
+        }
+        catch (Exception ex)
+        {
+            return ToolErrors.Error(ex.Message);
+        }
+    }
 }
