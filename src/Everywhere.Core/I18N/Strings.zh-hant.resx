@@ -2258,7 +2258,7 @@
         <value>Agent 觸發快捷鍵</value>
     </data>
     <data name="McpServerSettings_AgentTriggerKey_Description" xml:space="preserve">
-        <value>把 Agent 應用程式帶到前景後，自動向它送這組按鍵（如 cmd+shift+space 喚醒語音輸入法，cmd+l 聚焦輸入框）。語法為 xdotool 風格：cmd / alt / shift / ctrl / super 加一個普通鍵。留空則不送。</value>
+        <value>把 Agent 應用切到前景後，自動按下你錄下的這組快捷鍵（例如 cmd+shift+space 喚醒語音輸入法，cmd+l 聚焦輸入框）。點擊按鍵進行錄製，停用則不送出。</value>
     </data>
     <data name="Strategy_BuiltIn_Browser_Name" xml:space="preserve">
         <value>瀏覽器助手</value>

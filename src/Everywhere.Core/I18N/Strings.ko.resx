@@ -2258,7 +2258,7 @@
         <value>에이전트 트리거 키</value>
     </data>
     <data name="McpServerSettings_AgentTriggerKey_Description" xml:space="preserve">
-        <value>에이전트 앱을 전면으로 가져온 뒤 이 조합을 자동으로 전송합니다(예: cmd+shift+space 로 음성 입력 호출, cmd+l 로 입력창 포커스). xdotool 형식: cmd / alt / shift / ctrl / super 에 일반 키를 더합니다. 비워 두면 비활성.</value>
+        <value>에이전트 앱을 전면으로 가져온 뒤 녹음한 이 단축키를 앱에 전송합니다(예: cmd+shift+space 음성 입력 호출, cmd+l 입력창 포커스). 키를 눌러 녹음, 비활성화하면 전송하지 않습니다.</value>
     </data>
     <data name="Strategy_BuiltIn_Browser_Name" xml:space="preserve">
         <value>브라우저 도우미</value>

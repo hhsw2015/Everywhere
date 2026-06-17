@@ -2258,7 +2258,7 @@ Rueda o teclas numéricas para cambiar el modo de selección</value>
         <value>Tecla de activación del agente</value>
     </data>
     <data name="McpServerSettings_AgentTriggerKey_Description" xml:space="preserve">
-        <value>Después de traer la app del agente al frente, Everywhere envía esta combinación (p. ej. cmd+shift+space para activar el dictado, cmd+l para enfocar el campo de entrada). Estilo xdotool: cmd / alt / shift / ctrl / super más una tecla. Vacío para desactivar.</value>
+        <value>Después de traer la app del agente al frente, Everywhere reenvía el atajo grabado (p. ej. cmd+shift+space para activar el dictado, cmd+l para enfocar el input). Pulsa las teclas para grabar; desactívalo para no enviar nada.</value>
     </data>
     <data name="Strategy_BuiltIn_Browser_Name" xml:space="preserve">
         <value>Asistente de Navegador</value>

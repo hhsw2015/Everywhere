@@ -2258,7 +2258,7 @@
         <value>Клавиша вызова агента</value>
     </data>
     <data name="McpServerSettings_AgentTriggerKey_Description" xml:space="preserve">
-        <value>После вывода приложения агента на передний план Everywhere отправляет ему это сочетание (например, cmd+shift+space — голосовой ввод, cmd+l — фокус в поле ввода). Стиль xdotool: cmd / alt / shift / ctrl / super плюс обычная клавиша. Пусто — отключено.</value>
+        <value>После вывода приложения агента на передний план Everywhere отправляет ему записанное вами сочетание (например, cmd+shift+space — голосовой ввод, cmd+l — поле ввода). Нажмите клавиши для записи; отключите, чтобы ничего не отправлять.</value>
     </data>
     <data name="Strategy_BuiltIn_Browser_Name" xml:space="preserve">
         <value>Помощник браузера</value>

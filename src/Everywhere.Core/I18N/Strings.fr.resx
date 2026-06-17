@@ -2258,7 +2258,7 @@ Utilisez la molette ou les touches numériques pour changer de mode de sélectio
         <value>Touche déclencheur agent</value>
     </data>
     <data name="McpServerSettings_AgentTriggerKey_Description" xml:space="preserve">
-        <value>Après avoir mis l'application agent au premier plan, Everywhere envoie cette combinaison (ex. cmd+shift+space pour réveiller la dictée, cmd+l pour mettre le focus sur le champ de saisie). Style xdotool : cmd / alt / shift / ctrl / super plus une touche. Vide pour désactiver.</value>
+        <value>Après avoir mis l'application agent au premier plan, Everywhere y envoie le raccourci enregistré (ex. cmd+shift+space pour la dictée, cmd+l pour le champ de saisie). Clique sur les touches pour enregistrer ; désactive pour ne rien envoyer.</value>
     </data>
     <data name="Strategy_BuiltIn_Browser_Name" xml:space="preserve">
         <value>Assistant Navigateur</value>

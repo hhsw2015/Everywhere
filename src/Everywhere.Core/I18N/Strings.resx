@@ -2258,7 +2258,7 @@ Use scroll wheel or number keys to switch selection mode</value>
         <value>Agent trigger key</value>
     </data>
     <data name="McpServerSettings_AgentTriggerKey_Description" xml:space="preserve">
-        <value>After Everywhere brings the agent app to the foreground, send this key combo to it (e.g. cmd+shift+space to wake a dictation IME, cmd+l to focus the input field). Use xdotool-style names: cmd, alt, shift, ctrl, super, plus a key. Leave empty to disable.</value>
+        <value>After Everywhere brings the agent app to the foreground, replay this recorded shortcut into it (e.g. cmd+shift+space to wake a dictation IME, cmd+l to focus the input field). Click the keys to record. Disable to skip.</value>
     </data>
     <data name="Strategy_BuiltIn_Browser_Name" xml:space="preserve">
         <value>Browser Assistant</value>

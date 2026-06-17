@@ -214,21 +214,25 @@ public sealed class ContextStashWriter
         // async — the focus change is dispatched on the AppKit run loop and
         // arrives a frame or two later, so we wait briefly before sending so
         // the keystroke lands in the agent app, not the previously-focused
-        // window.
-        var trigger = _settings.McpServer.AgentTriggerKey;
-        if (string.IsNullOrWhiteSpace(trigger)) return;
+        // window. Prefer Main; fall back to Alternative if Main is empty.
+        var triggerCombo = _settings.McpServer.AgentTriggerKey;
+        if (!triggerCombo.IsEnabled) return;
+        var keySpec = triggerCombo.Main.IsValid ? triggerCombo.Main.ToXdotool()
+                    : triggerCombo.Alternative.IsValid ? triggerCombo.Alternative.ToXdotool()
+                    : string.Empty;
+        if (string.IsNullOrEmpty(keySpec)) return;
 
         _ = Task.Run(async () =>
         {
             try
             {
                 await Task.Delay(120);
-                _input.PressKey(trigger);
-                _logger.LogDebug("Sent agent trigger key {Key} after activation.", trigger);
+                _input.PressKey(keySpec);
+                _logger.LogDebug("Sent agent trigger key {Key} after activation.", keySpec);
             }
             catch (Exception ex)
             {
-                _logger.LogDebug(ex, "Failed to send agent trigger key {Key}", trigger);
+                _logger.LogDebug(ex, "Failed to send agent trigger key {Key}", keySpec);
             }
         });
     }
