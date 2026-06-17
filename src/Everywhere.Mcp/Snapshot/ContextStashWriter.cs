@@ -216,6 +216,12 @@ public sealed class ContextStashWriter
     {
         var dir = Path.GetDirectoryName(StashPath);
         if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+
+        // Sweep stale claim leftovers from prior aborted hook reads — keeps the
+        // stash directory free of files that might confuse a future hook or a
+        // user scanning the folder for "what's in there".
+        SweepStaleClaimFiles(dir);
+
         var tmp = StashPath + ".tmp";
         await File.WriteAllTextAsync(tmp, content, cancellationToken);
 
@@ -232,6 +238,28 @@ public sealed class ContextStashWriter
         }
 
         File.Move(tmp, StashPath, overwrite: true);
+    }
+
+    private static void SweepStaleClaimFiles(string? dir)
+    {
+        if (string.IsNullOrEmpty(dir) || !Directory.Exists(dir)) return;
+        try
+        {
+            var cutoff = DateTimeOffset.UtcNow.AddMinutes(-10);
+            foreach (var leftover in Directory.EnumerateFiles(dir, "context-stash.consumed-*.json"))
+            {
+                try
+                {
+                    var info = new FileInfo(leftover);
+                    if (info.LastWriteTimeUtc < cutoff)
+                    {
+                        info.Delete();
+                    }
+                }
+                catch { /* best-effort */ }
+            }
+        }
+        catch { /* best-effort */ }
     }
 
     private static IVisualElement? WalkToTopLevel(IVisualElement? element)
