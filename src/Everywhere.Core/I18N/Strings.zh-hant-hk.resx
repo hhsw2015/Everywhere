@@ -2236,6 +2236,12 @@
     <data name="McpServerSettings_HttpPort_Description" xml:space="preserve">
         <value>預設 7878。若連接埠被佔用，Everywhere 會向後嘗試最多十個備用連接埠。</value>
     </data>
+    <data name="McpServerSettings_AutoCaptureContext_Header" xml:space="preserve">
+        <value>為 AI Hook 自動擷取上下文</value>
+    </data>
+    <data name="McpServerSettings_AutoCaptureContext_Description" xml:space="preserve">
+        <value>勾選後，每次揀選文字、複製或者用 Pin Element 釘住元素時，Everywhere 就會自動更新上下文 stash 檔案 —— 喺終端機按 Enter 之前就唔使再撳 Snapshot Context。stash 仍會喺 5 分鐘後過期。</value>
+    </data>
     <data name="Strategy_BuiltIn_Browser_Name" xml:space="preserve">
         <value>瀏覽器助手</value>
     </data>

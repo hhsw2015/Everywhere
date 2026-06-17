@@ -2235,6 +2235,12 @@ Scrollrad oder Zifferntasten zum Wechseln des Auswahlmodus</value>
     <data name="McpServerSettings_HttpPort_Description" xml:space="preserve">
         <value>Standardmäßig 7878. Falls der Port belegt ist, versucht Everywhere bis zu zehn Ausweichports.</value>
     </data>
+    <data name="McpServerSettings_AutoCaptureContext_Header" xml:space="preserve">
+        <value>Kontext für KI-Hook automatisch erfassen</value>
+    </data>
+    <data name="McpServerSettings_AutoCaptureContext_Description" xml:space="preserve">
+        <value>Aktualisiert den Kontext-Stash automatisch bei jeder Textauswahl, Kopie oder Element-Anheftung — eine Terminal-Aufforderung an die KI greift sofort auf den frischesten Zeiger zu, ohne dass du zuerst Snapshot Context drücken musst. Der Stash läuft weiterhin nach 5 Minuten ab.</value>
+    </data>
     <data name="Strategy_BuiltIn_Browser_Name" xml:space="preserve">
         <value>Browser-Assistent</value>
     </data>

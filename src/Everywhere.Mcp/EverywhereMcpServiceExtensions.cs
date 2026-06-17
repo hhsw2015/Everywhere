@@ -62,6 +62,7 @@ public static class EverywhereMcpServiceExtensions
         services.TryAddSingleton<IFinderReader, NullFinderReader>();
         services.TryAddSingleton<IBrowserTabsReader, NullBrowserTabsReader>();
         services.TryAddSingleton<ContextStashWriter>();
+        services.TryAddSingleton<AutoCaptureService>();
         return services;
     }
 }

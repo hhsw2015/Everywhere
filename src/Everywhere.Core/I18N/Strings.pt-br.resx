@@ -2237,6 +2237,12 @@ Use a roda do mouse ou teclas numéricas para alternar o modo de seleção</valu
     <data name="McpServerSettings_HttpPort_Description" xml:space="preserve">
         <value>Padrão 7878. Se a porta estiver em uso, o Everywhere tenta até dez portas alternativas.</value>
     </data>
+    <data name="McpServerSettings_AutoCaptureContext_Header" xml:space="preserve">
+        <value>Capturar contexto automaticamente para o hook de IA</value>
+    </data>
+    <data name="McpServerSettings_AutoCaptureContext_Description" xml:space="preserve">
+        <value>Atualiza o stash de contexto sempre que você seleciona texto, copia algo ou fixa um elemento — um prompt de IA no terminal pega o ponteiro mais recente sem precisar pressionar Snapshot Context antes. O stash continua expirando depois de 5 minutos.</value>
+    </data>
     <data name="Strategy_BuiltIn_Browser_Name" xml:space="preserve">
         <value>Assistente do Navegador</value>
     </data>
