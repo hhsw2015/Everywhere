@@ -23,8 +23,8 @@ public static class GetTerminalOutputTool
         "the agent should then fall back to get_focused_context. " +
         "Use this when the user references \"this output\", \"this error\", \"the last command\", \"刚才那条\".")]
     public static CallToolResult GetTerminalOutput(
-        [Description("Max number of trailing lines to return. Defaults to 200, clamped to [1, 10000].")] int? lines_back,
-        IVisualElementContext context)
+        IVisualElementContext context,
+        [Description("Max number of trailing lines to return. Defaults to 200, clamped to [1, 10000].")] int? lines_back = null)
     {
         var maxLines = Math.Clamp(lines_back ?? DefaultLinesBack, 1, MaxLinesBack);
 

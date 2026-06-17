@@ -23,12 +23,17 @@ public static class ReadPickTool
         "get_focused_context when pinned is false.")]
     public static CallToolResult ReadPick(PickStash stash, SessionStore sessions)
     {
+        try
+        {
         var picked = stash.Take();
         if (picked is null)
         {
             return new CallToolResult
             {
-                Content = [new TextContentBlock { Text = "{\"pinned\":false}" }],
+                Content = [new TextContentBlock
+                {
+                    Text = "{\"pinned\":false,\"picked_index\":null,\"app\":null,\"element\":null}",
+                }],
             };
         }
 
@@ -59,5 +64,10 @@ public static class ReadPickTool
         {
             Content = [new TextContentBlock { Text = json }],
         };
+        }
+        catch (Exception ex)
+        {
+            return ToolErrors.FromException(ex, "read_pick");
+        }
     }
 }

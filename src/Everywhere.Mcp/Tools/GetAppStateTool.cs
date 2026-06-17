@@ -25,45 +25,50 @@ public static class GetAppStateTool
         SessionStore sessions,
         CancellationToken cancellationToken)
     {
-        var resolved = AppResolver.Resolve(context, app);
-        if (resolved is null)
-        {
-            return ToolErrors.AppNotRunning(app);
-        }
-
-        var window = resolved.Value.Window;
-        var nodes = ElementIndexer.Walk(window);
-        var elementMap = ElementIndexer.ToIndexMap(nodes);
-        sessions.Issue(resolved.Value.AppKey, elementMap, window.NativeWindowHandle);
-
-        var treeText = SnapshotRenderer.Render(nodes, show_full_text);
-
-        string? screenshotBase64 = null;
         try
         {
-            using var captured = await window.CaptureAsync(cancellationToken);
-            screenshotBase64 = ScreenshotEncoder.EncodePngBase64(captured);
-        }
-        catch
-        {
-            // ponytail: best-effort screenshot; tree text is the load-bearing signal.
-        }
+            var resolved = AppResolver.Resolve(context, app);
+            if (resolved is null) return ToolErrors.AppNotRunning(app);
 
-        var bounds = window.BoundingRectangle;
-        var result = new AppStateResult
-        {
-            App = resolved.Value.AppKey,
-            WindowTitle = window.Name,
-            WindowBounds = new WindowBounds(bounds.X, bounds.Y, bounds.Width, bounds.Height),
-            ScreenshotPngBase64 = screenshotBase64,
-            TreeText = treeText,
-            FocusedSummary = context.FocusedElement?.Name,
-            SelectedText = context.FocusedElement?.GetSelectionText(),
-        };
+            var window = resolved.Value.Window;
+            var nodes = ElementIndexer.Walk(window);
+            var elementMap = ElementIndexer.ToIndexMap(nodes);
+            sessions.Issue(resolved.Value.AppKey, elementMap, window.NativeWindowHandle);
 
-        return new CallToolResult
+            var treeText = SnapshotRenderer.Render(nodes, show_full_text);
+
+            string? screenshotBase64 = null;
+            try
+            {
+                using var captured = await window.CaptureAsync(cancellationToken);
+                screenshotBase64 = ScreenshotEncoder.EncodePngBase64(captured);
+            }
+            catch
+            {
+                // best-effort screenshot; tree text is the load-bearing signal.
+            }
+
+            var bounds = window.BoundingRectangle;
+            var result = new AppStateResult
+            {
+                App = resolved.Value.AppKey,
+                WindowTitle = window.Name,
+                WindowBounds = new WindowBounds(bounds.X, bounds.Y, bounds.Width, bounds.Height),
+                ScreenshotPngBase64 = screenshotBase64,
+                TreeText = treeText,
+                TreeJson = TreeJsonBuilder.Build(nodes),
+                FocusedSummary = context.FocusedElement?.Name,
+                SelectedText = context.FocusedElement?.GetSelectionText(),
+            };
+
+            return new CallToolResult
+            {
+                Content = [new TextContentBlock { Text = JsonSerializer.Serialize(result) }],
+            };
+        }
+        catch (Exception ex)
         {
-            Content = [new TextContentBlock { Text = JsonSerializer.Serialize(result) }],
-        };
+            return ToolErrors.FromException(ex, "get_app_state");
+        }
     }
 }

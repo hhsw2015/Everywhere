@@ -48,7 +48,7 @@ public class SmokeTests
         var sessions = new SessionStore();
         var input = new TestInputSimulator();
         var focus = new FocusBorrow(new TestFocusBackend());
-        var result = ClickTool.Click("any", "999", null, null, null, null, sessions, input, focus, new EmptyVisualElementContext());
+        var result = ClickTool.Click("any", sessions, input, focus, new EmptyVisualElementContext(), element_index: "999");
         Assert.That(result.IsError, Is.True);
         Assert.That(ExtractText(result), Does.Contain("999").And.Contain("not found"));
     }

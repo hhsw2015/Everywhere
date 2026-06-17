@@ -13,10 +13,10 @@ public static class ScreenshotTool
     [McpServerTool(Name = "screenshot", ReadOnly = true)]
     [Description("Capture a PNG screenshot. With element_index, captures only that element's bounding box; without it, captures the focused window. Compression and size envelope match get_app_state. Returns {\"png_b64\": \"...\"}.")]
     public static async Task<CallToolResult> Screenshot(
-        string? element_index,
         IVisualElementContext context,
         SessionStore sessions,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string? element_index = null)
     {
         IVisualElement? target;
         if (!string.IsNullOrEmpty(element_index))

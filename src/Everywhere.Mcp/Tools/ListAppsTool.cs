@@ -12,26 +12,32 @@ public static class ListAppsTool
 {
     [McpServerTool(Name = "list_apps", ReadOnly = true)]
     [Description(
-        "List all running apps that have a visible window the user could be looking at. " +
-        "Each entry has \"app\" (process key for the 'app' parameter of other tools), " +
-        "\"title\" (window title), and \"process_id\". Menubar widgets and headless agents " +
-        "are filtered out. " +
+        "List every running app with at least one top-level window — including menubar-only " +
+        "apps like Bartender/Typeless. Each entry has \"app\" (process key for the 'app' " +
+        "parameter of other tools), \"title\" (the largest window's title), and \"process_id\". " +
         "PREFER get_app_context(app_hint) when the user names an app — it does list+match+snapshot " +
         "in one call.")]
     public static CallToolResult ListApps(IVisualElementContext context)
     {
-        var apps = AppResolver.ListApps(context)
-            .Select(a => new AppListItem
-            {
-                App = a.AppKey,
-                Title = a.Window.Name,
-                ProcessId = a.ProcessId,
-            })
-            .ToArray();
-
-        return new CallToolResult
+        try
         {
-            Content = [new TextContentBlock { Text = JsonSerializer.Serialize(apps) }],
-        };
+            var apps = AppResolver.ListApps(context)
+                .Select(a => new AppListItem
+                {
+                    App = a.AppKey,
+                    Title = a.Window.Name,
+                    ProcessId = a.ProcessId,
+                })
+                .ToArray();
+
+            return new CallToolResult
+            {
+                Content = [new TextContentBlock { Text = JsonSerializer.Serialize(apps) }],
+            };
+        }
+        catch (Exception ex)
+        {
+            return ToolErrors.FromException(ex, "list_apps");
+        }
     }
 }

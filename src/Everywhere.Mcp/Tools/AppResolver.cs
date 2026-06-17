@@ -20,12 +20,18 @@ internal static class AppResolver
             return null;
         }
 
+        // Build a list of candidate query strings: original hint plus any category aliases
+        // ("browser" → arc/safari/chrome/...) so a generic noun resolves to whichever
+        // concrete app the user has open.
+        var queries = new List<string> { app };
+        queries.AddRange(AppAliases.Expand(app));
+
         var candidates = new List<(IVisualElement Window, string AppKey, int ProcessId, long Area)>();
         foreach (var screen in context.Screens)
         {
             foreach (var topLevel in screen.Children)
             {
-                if (!Matches(topLevel, app))
+                if (!queries.Any(q => Matches(topLevel, q)))
                 {
                     continue;
                 }
@@ -59,9 +65,10 @@ internal static class AppResolver
 
     public static IReadOnlyList<ResolvedApp> ListApps(IVisualElementContext context)
     {
-        // Per process, keep only the largest visible top-level window. Drops menubar agents
-        // (bartender 6, memory meter 3, betterdisplay) whose only window is a thin
-        // menubar overlay, but keeps a real app whose primary window happens to be small.
+        // Per process, keep the LARGEST visible top-level window so the title we report is
+        // the one a user would actually associate with that app (avoids reporting a menubar
+        // overlay's title when the app also has a real main window). Do NOT drop menubar-only
+        // apps — they are real installed programs the agent may need to drive.
         var byProcess = new Dictionary<int, (IVisualElement Window, long Area)>();
         foreach (var screen in context.Screens)
         {
@@ -78,15 +85,9 @@ internal static class AppResolver
             }
         }
 
-        const long MinUsefulArea = 200L * 200L;
         var result = new List<ResolvedApp>();
-        foreach (var (pid, (window, area)) in byProcess)
+        foreach (var (pid, (window, _)) in byProcess)
         {
-            if (area < MinUsefulArea)
-            {
-                // Almost certainly a menubar widget / status item with no real GUI; skip.
-                continue;
-            }
             var key = AppKey.FromProcessId(pid);
             result.Add(new ResolvedApp(window, key, pid));
         }

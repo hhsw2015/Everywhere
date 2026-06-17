@@ -18,8 +18,8 @@ public static class ScrollTool
         string app,
         string element_index,
         string direction,
-        double? pages,
-        SessionStore sessions)
+        SessionStore sessions,
+        double? pages = null)
     {
         if (string.IsNullOrEmpty(element_index)) return ToolErrors.ParameterRequired("element_index");
         if (string.IsNullOrEmpty(direction)) return ToolErrors.ParameterRequired("direction");
