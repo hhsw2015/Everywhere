@@ -1,4 +1,5 @@
 using Everywhere.Interop;
+using Everywhere.Mcp.Input;
 using Everywhere.Mcp.Snapshot;
 using Everywhere.Mcp.Tests.Snapshot;
 using Everywhere.Mcp.Tools;
@@ -51,7 +52,9 @@ public class EverywhereOnlyToolsTests
     public async Task Screenshot_ReturnsError_WhenNoFocus()
     {
         var result = await ScreenshotTool.Screenshot(
-            new EmptyVisualElementContext(), new SessionStore(), CancellationToken.None);
+            new EmptyVisualElementContext(), new SessionStore(),
+            new FocusBorrow(new TestFocusBackend()),
+            CancellationToken.None);
 
         Assert.That(result.IsError, Is.True);
     }
@@ -108,4 +111,11 @@ public class EverywhereOnlyToolsTests
 
     private static string ExtractText(CallToolResult result) =>
         result.Content[0] is TextContentBlock block ? block.Text : string.Empty;
+
+    private sealed class TestFocusBackend : IFocusBackend
+    {
+        public nint GetForegroundWindow() => 0;
+        public bool TryAxRaise(nint window) => true;
+        public void Activate(nint window) { }
+    }
 }

@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Text.Json;
 using Everywhere.Interop;
+using Everywhere.Mcp.Input;
 using Everywhere.Mcp.Snapshot;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
@@ -12,37 +13,62 @@ public static class ScreenshotTool
 {
     [McpServerTool(Name = "screenshot", ReadOnly = true)]
     [Description(
-        "Capture a base64-encoded screenshot. With element_index, captures only that element's " +
-        "bounding box; without it, captures the focused window. " +
+        "Capture a base64-encoded screenshot. Targets in priority order: element_index → app_hint " +
+        "→ focused window. " +
         "Defaults: format=jpeg, quality=80, max_height=1080 — yields ~150-300 KB " +
         "(~50-75 K agent tokens) vs. legacy PNG ~1 MB (~330 K tokens). " +
         "Pass format=\"png\" + quality=100 + max_height=0 when you need bit-perfect output (OCR / diff). " +
-        "Returns {\"screenshot_png_b64\":\"...\",\"format\":\"jpeg|png\",\"width\":N,\"height\":N}. " +
+        "raise_if_needed: When true, briefly raise the target to the foreground before capture and " +
+        "restore the previous foreground. Use only when the target may be obscured / off-screen / not " +
+        "actively rendered (background tabs in some apps, occluded windows). " +
+        "Returns {\"screenshot_png_b64\":\"...\",\"format\":\"jpeg|png\"}. " +
         "Field name kept as `screenshot_png_b64` for client back-compat — actual format is in `format`.")]
     public static async Task<CallToolResult> Screenshot(
         IVisualElementContext context,
         SessionStore sessions,
+        FocusBorrow focusBorrow,
         CancellationToken cancellationToken,
         string? element_index = null,
+        string? app_hint = null,
         string? format = null,
         int? quality = null,
-        int? max_height = null)
+        int? max_height = null,
+        bool raise_if_needed = false)
     {
         try
         {
             IVisualElement? target;
+            int processId = 0;
+            nint windowHandle = 0;
+
             if (!string.IsNullOrEmpty(element_index))
             {
                 var (error, element) = ElementResolver.Resolve(sessions, element_index);
                 if (error is not null) return error;
                 target = element;
+                processId = element!.ProcessId;
+                windowHandle = element.NativeWindowHandle;
+            }
+            else if (!string.IsNullOrWhiteSpace(app_hint))
+            {
+                var resolved = AppResolver.Resolve(context, app_hint);
+                if (resolved is null) return ToolErrors.AppNotRunning(app_hint);
+                target = resolved.Value.Window;
+                processId = resolved.Value.ProcessId;
+                windowHandle = resolved.Value.Window.NativeWindowHandle;
             }
             else
             {
                 var focused = context.FocusedElement;
                 if (focused is null) return ToolErrors.NoFocusedApp();
                 target = WalkToTopLevel(focused) ?? focused;
+                processId = target.ProcessId;
+                windowHandle = target.NativeWindowHandle;
             }
+
+            using var borrow = raise_if_needed
+                ? focusBorrow.Acquire(windowHandle, requireFocus: true, processId: processId)
+                : null;
 
             var opts = new ScreenshotEncodeOptions(
                 Format: ParseFormat(format),

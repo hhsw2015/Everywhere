@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Text.Json;
 using Everywhere.Interop;
+using Everywhere.Mcp.Input;
 using Everywhere.Mcp.Snapshot;
 using Everywhere.Mcp.Tools.Schemas;
 using ModelContextProtocol.Protocol;
@@ -17,18 +18,28 @@ public static class GetAppStateTool
         "Each tree row is prefixed [<element_index>]; pass that index to click/scroll/set_value/" +
         "perform_secondary_action. Issues a fresh index map; previously vended indices for this " +
         "app become invalid. " +
-        "PREFER get_app_context(app_hint) when the app match is fuzzy — it does the matching for you.")]
+        "PREFER get_app_context(app_hint) when the app match is fuzzy — it does the matching for you. " +
+        "raise_if_needed: When true, briefly raise the target app to the foreground before reading, " +
+        "then restore the previous foreground. Use only when a prior background read returned an empty " +
+        "tree, the user explicitly asked to switch to and check, or you need a screenshot of an app " +
+        "currently behind another window.")]
     public static async Task<CallToolResult> GetAppState(
         string app,
         bool show_full_text,
         IVisualElementContext context,
         SessionStore sessions,
-        CancellationToken cancellationToken)
+        FocusBorrow focusBorrow,
+        CancellationToken cancellationToken,
+        bool raise_if_needed = false)
     {
         try
         {
             var resolved = AppResolver.Resolve(context, app);
             if (resolved is null) return ToolErrors.AppNotRunning(app);
+
+            using var borrow = raise_if_needed
+                ? focusBorrow.Acquire(resolved.Value.Window.NativeWindowHandle, requireFocus: true, processId: resolved.Value.ProcessId)
+                : null;
 
             var window = resolved.Value.Window;
             var nodes = ElementIndexer.Walk(window);

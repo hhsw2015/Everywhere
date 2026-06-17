@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Text.Json;
 using Everywhere.Interop;
+using Everywhere.Mcp.Input;
 using Everywhere.Mcp.Snapshot;
 using Everywhere.Mcp.Tools.Schemas;
 using ModelContextProtocol.Protocol;
@@ -16,13 +17,21 @@ public static class GetAppContextTool
         "Resolve a fuzzy app name (\"the browser\", \"slack\", \"vscode\", \"arc\") to its current " +
         "window state in ONE call. Internally: list_apps → fuzzy match → snapshot largest visible " +
         "window. PREFER this over calling list_apps + get_app_state separately. Returns the same " +
-        "shape as get_app_state plus a 'matched' field describing which app and how confident.")]
+        "shape as get_app_state plus a 'matched' field describing which app and how confident. " +
+        "raise_if_needed: When true, briefly raise the target app to the foreground before reading, " +
+        "then restore the previous foreground. Pass true ONLY when (a) a prior read returned an empty " +
+        "or incomplete tree (Electron / Wayland apps lazy-load a11y in foreground only), (b) the user " +
+        "explicitly asked to switch to and check the app, or (c) you also need a screenshot of an app " +
+        "currently behind another window. DO NOT pass true for routine reads — most apps expose full " +
+        "a11y in background and raising disrupts the user.")]
     public static async Task<CallToolResult> GetAppContext(
         [Description("Fuzzy app name. Matched against process name AND window title (case-insensitive substring).")] string app_hint,
         bool show_full_text,
         IVisualElementContext context,
         SessionStore sessions,
-        CancellationToken cancellationToken)
+        FocusBorrow focusBorrow,
+        CancellationToken cancellationToken,
+        bool raise_if_needed = false)
     {
         try
         {
@@ -30,6 +39,10 @@ public static class GetAppContextTool
 
             var resolved = AppResolver.Resolve(context, app_hint);
             if (resolved is null) return ToolErrors.AppNotRunning(app_hint);
+
+            using var borrow = raise_if_needed
+                ? focusBorrow.Acquire(resolved.Value.Window.NativeWindowHandle, requireFocus: true, processId: resolved.Value.ProcessId)
+                : null;
 
             var window = resolved.Value.Window;
             var nodes = ElementIndexer.Walk(window);
@@ -68,6 +81,7 @@ public static class GetAppContextTool
                     app = resolved.Value.AppKey,
                     window_title = window.Name,
                     hint = app_hint,
+                    raised = raise_if_needed,
                 },
                 app = inner.App,
                 window_title = inner.WindowTitle,
