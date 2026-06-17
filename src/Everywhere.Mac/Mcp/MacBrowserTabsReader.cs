@@ -76,39 +76,56 @@ public sealed class MacBrowserTabsReader(IAppleScriptRunner runner) : IBrowserTa
     private static string? ScriptFor(string appKey)
     {
         var lower = appKey.ToLowerInvariant();
-        if (lower == "safari")
-        {
-            return BuildSafariScript();
-        }
+        if (lower == "safari") return BuildSafariScript();
+        if (lower == "arc") return BuildArcScript();
         if (ChromiumApps.TryGetValue(lower, out var canonicalName))
-        {
             return BuildChromiumScript(canonicalName);
-        }
         return null;
     }
 
+    // Arc shares the Chromium dictionary in NAME but lacks `active tab index` AND
+    // `active tab`/`current tab` (Arc manages active tab internally; scripting can
+    // only enumerate). We list every tab without an active flag — the agent can
+    // still cross-reference get_browser_url() to know which tab is in front.
+    private static string BuildArcScript() =>
+        @"tell application ""Arc""
+            set out to """"
+            set US to (ASCII character 31)
+            set RS to (ASCII character 30)
+            repeat with w in windows
+                repeat with t in tabs of w
+                    try
+                        set ti to title of t
+                    on error
+                        set ti to """"
+                    end try
+                    try
+                        set u to URL of t
+                    on error
+                        set u to """"
+                    end try
+                    set out to out & ""0"" & US & ti & US & u & RS
+                end repeat
+            end repeat
+            return out
+        end tell";
+
     // \x1F = ASCII Unit Separator, \x1E = ASCII Record Separator.
     // Splits inside titles are vanishingly rare for these control bytes vs. \t / \n.
-    // Chromium browsers (Chrome / Brave / Edge / Vivaldi / Opera / Chromium) expose
-    // `active tab index of window`. Arc uses the same dictionary BUT lacks that
-    // property — so we identify the active tab by reference equality with
-    // `active tab of w` instead, which every Chromium-derived browser supports.
+    // Chromium-derived browsers (Chrome / Brave / Edge / Vivaldi / Opera / Chromium)
+    // expose `active tab index of window`. Arc uses a stripped-down Chromium dict
+    // and is handled separately (BuildArcScript).
     private static string BuildChromiumScript(string canonicalAppName) =>
         $@"tell application ""{canonicalAppName}""
             set out to """"
             set US to (ASCII character 31)
             set RS to (ASCII character 30)
             repeat with w in windows
-                try
-                    set at to active tab of w
-                on error
-                    set at to missing value
-                end try
+                set ai to active tab index of w
+                set i to 0
                 repeat with t in tabs of w
-                    set isActive to false
-                    try
-                        if at is not missing value and (t is at) then set isActive to true
-                    end try
+                    set i to i + 1
+                    set isActive to (i is equal to ai)
                     set flag to ""0""
                     if isActive then set flag to ""1""
                     set out to out & flag & US & (title of t) & US & (URL of t) & RS
