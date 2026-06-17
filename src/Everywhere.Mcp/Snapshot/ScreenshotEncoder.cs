@@ -1,4 +1,5 @@
 using Avalonia.Media.Imaging;
+using Everywhere.Interop;
 using SkiaSharp;
 
 namespace Everywhere.Mcp.Snapshot;
