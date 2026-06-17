@@ -20,6 +20,12 @@ public static class Program
     [STAThread]
     public static async Task Main(string[] args)
     {
+        if (args.Contains("--mcp"))
+        {
+            await Everywhere.Mcp.Server.EverywhereMcpServer.RunStdioAsync(args);
+            return;
+        }
+
 #if IsMacOS
         NativeMessageBox.MacOSMessageBoxHandler = MessageBoxHandler;
 #endif

@@ -37,6 +37,12 @@ public static class Program
     /// <param name="args"></param>
     private static async Task MainAsync(string[] args)
     {
+        if (args.Contains("--mcp"))
+        {
+            await Everywhere.Mcp.Server.EverywhereMcpServer.RunStdioAsync(args);
+            return;
+        }
+
         if (args.Contains("--load-user-profile"))
         {
             LoadUserProfile();
