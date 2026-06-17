@@ -20,51 +20,62 @@ public class ToolCatalogParityTests
     ];
 
     [Test]
-    public void EveryUpstreamToolName_HasMcpServerToolMethodInAssembly()
+    public void DeclaredTools_MatchExpectedCatalog_AndAreUnique()
     {
         var declared = DiscoverDeclaredToolNames();
+        var expected = UpstreamNames.Concat(EverywhereOnlyNames).ToArray();
+
         Assert.Multiple(() =>
         {
-            foreach (var name in UpstreamNames)
-            {
-                Assert.That(declared, Contains.Item(name), $"Missing upstream tool: {name}");
-            }
+            Assert.That(declared, Is.Unique, "Tool names must be globally unique across [McpServerToolType] classes.");
+            Assert.That(declared, Is.EquivalentTo(expected),
+                "Tool catalog drifted: every upstream + Everywhere-only tool must be declared, and no extras.");
         });
     }
 
     [Test]
-    public void EveryEverywhereOnlyTool_IsRegistered()
+    public void EveryToolMethod_DeclaresAnExplicitName()
     {
-        var declared = DiscoverDeclaredToolNames();
-        Assert.Multiple(() =>
-        {
-            foreach (var name in EverywhereOnlyNames)
-            {
-                Assert.That(declared, Contains.Item(name), $"Missing Everywhere-only tool: {name}");
-            }
-        });
+        var assembly = typeof(EverywhereMcpServiceExtensions).Assembly;
+        var missing = LoadableTypes(assembly)
+            .Where(t => t.GetCustomAttribute<McpServerToolTypeAttribute>() is not null)
+            .SelectMany(t => t.GetMethods(BindingFlags.Public | BindingFlags.Static | BindingFlags.Instance))
+            .Where(m => m.GetCustomAttribute<McpServerToolAttribute>() is { } a && string.IsNullOrEmpty(a.Name))
+            .Select(m => $"{m.DeclaringType?.Name}.{m.Name}")
+            .ToArray();
+
+        Assert.That(missing, Is.Empty, "Every [McpServerTool] must declare an explicit Name = \"…\".");
     }
 
     private static IReadOnlyList<string> DiscoverDeclaredToolNames()
     {
         var assembly = typeof(EverywhereMcpServiceExtensions).Assembly;
         var names = new List<string>();
-        foreach (var type in assembly.GetTypes())
+        foreach (var type in LoadableTypes(assembly))
         {
-            if (type.GetCustomAttribute<McpServerToolTypeAttribute>() is null)
-            {
-                continue;
-            }
+            if (type.GetCustomAttribute<McpServerToolTypeAttribute>() is null) continue;
 
             foreach (var method in type.GetMethods(BindingFlags.Public | BindingFlags.Static | BindingFlags.Instance))
             {
                 var attr = method.GetCustomAttribute<McpServerToolAttribute>();
-                if (attr is null) continue;
-
-                var name = attr.Name ?? method.Name;
-                names.Add(name);
+                if (attr?.Name is { Length: > 0 } name)
+                {
+                    names.Add(name);
+                }
             }
         }
         return names;
+    }
+
+    private static IEnumerable<Type> LoadableTypes(Assembly assembly)
+    {
+        try
+        {
+            return assembly.GetTypes();
+        }
+        catch (ReflectionTypeLoadException ex)
+        {
+            return ex.Types.Where(t => t is not null)!;
+        }
     }
 }

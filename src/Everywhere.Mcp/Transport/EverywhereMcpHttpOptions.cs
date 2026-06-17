@@ -7,13 +7,40 @@ namespace Everywhere.Mcp.Transport;
 /// </summary>
 public sealed class EverywhereMcpHttpOptions
 {
-    public int Port { get; set; } = ResolveDefaultPort();
-    public int MaxPortFallbacks { get; set; } = 10;
+    private int _port = ResolveDefaultPort();
+    private int _maxPortFallbacks = 10;
+
+    public int Port
+    {
+        get => _port;
+        set
+        {
+            if (value <= 0 || value > 65_535)
+            {
+                throw new ArgumentOutOfRangeException(nameof(value), value, "Port must be in (0, 65535].");
+            }
+            _port = value;
+        }
+    }
+
+    public int MaxPortFallbacks
+    {
+        get => _maxPortFallbacks;
+        set
+        {
+            if (value < 0 || value > 100)
+            {
+                throw new ArgumentOutOfRangeException(nameof(value), value, "MaxPortFallbacks must be in [0, 100].");
+            }
+            _maxPortFallbacks = value;
+        }
+    }
+
     public bool Enabled { get; set; } = true;
 
     private static int ResolveDefaultPort()
     {
         var fromEnv = Environment.GetEnvironmentVariable("EVERYWHERE_MCP_PORT");
-        return int.TryParse(fromEnv, out var p) && p > 0 && p < 65536 ? p : 7878;
+        return int.TryParse(fromEnv, out var p) && p > 0 && p < 65_536 ? p : 7878;
     }
 }

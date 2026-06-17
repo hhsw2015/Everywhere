@@ -38,7 +38,12 @@ public class ElementIndexerTests
     {
         var root = BuildTree(depth: 8, childrenPerNode: 1);
         var nodes = ElementIndexer.Walk(root, maxDepth: 3);
-        Assert.That(nodes.All(n => n.Depth <= 3), Is.True);
+        Assert.Multiple(() =>
+        {
+            Assert.That(nodes.All(n => n.Depth <= 3), Is.True);
+            Assert.That(nodes.Any(n => n.Depth == 3), Is.True, "maxDepth boundary should be inclusive");
+            Assert.That(nodes, Has.Count.EqualTo(4));
+        });
     }
 
     [Test]
@@ -49,7 +54,7 @@ public class ElementIndexerTests
         var text = SnapshotRenderer.Render(nodes, showFullText: false);
 
         Assert.That(text, Does.Contain("[0] "));
-        Assert.That(text, Does.Contain("[1] "));
+        Assert.That(text, Does.Contain("  [1] "), "child rows should be indented two spaces per depth level");
     }
 
     private static IVisualElement BuildTree(int depth, int childrenPerNode, string namePrefix = "n")

@@ -8,33 +8,36 @@ namespace Everywhere.Mcp.Tools;
 [McpServerToolType]
 public static class GetTerminalOutputTool
 {
+    private const int MaxLinesBack = 10_000;
+    private const int DefaultLinesBack = 200;
+
     [McpServerTool(Name = "get_terminal_output", ReadOnly = true)]
     [Description("Return the visible/rendered text of the currently focused terminal window (Terminal, iTerm2, Windows Terminal, gnome-terminal, etc). Returns the empty string if the focused app is not a terminal. Use this when the user references \"this output\", \"this error\", \"the last command\", \"刚才那条\".")]
     public static CallToolResult GetTerminalOutput(
-        int? lines_back,
+        [Description("Max number of trailing lines to return. Defaults to 200, clamped to [1, 10000].")] int? lines_back,
         IVisualElementContext context)
     {
+        var maxLines = Math.Clamp(lines_back ?? DefaultLinesBack, 1, MaxLinesBack);
+
         var focused = context.FocusedElement;
         if (focused is null)
         {
             return new CallToolResult { Content = [new TextContentBlock { Text = string.Empty }] };
         }
 
-        // ponytail: read whatever the a11y layer surfaces from the focused terminal pane;
-        // the GUI host's IVisualElementContext already returns the terminal's TextEdit element
-        // when the user is in a terminal app. PTY-level capture lands in §13 (v2 follow-up).
-        var maxLines = lines_back ?? 200;
-        var text = focused.GetText(maxLength: -1) ?? string.Empty;
-
-        if (maxLines > 0)
+        try
         {
+            var text = focused.GetText(maxLength: -1) ?? string.Empty;
             var lines = text.Split('\n');
             if (lines.Length > maxLines)
             {
                 text = string.Join('\n', lines[^maxLines..]);
             }
+            return new CallToolResult { Content = [new TextContentBlock { Text = text }] };
         }
-
-        return new CallToolResult { Content = [new TextContentBlock { Text = text }] };
+        catch (Exception ex)
+        {
+            return ToolErrors.Error($"get_terminal_output failed: {ex.Message}");
+        }
     }
 }

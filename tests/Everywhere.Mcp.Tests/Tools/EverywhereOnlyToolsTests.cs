@@ -1,5 +1,6 @@
 using Everywhere.Mcp.Snapshot;
 using Everywhere.Mcp.Tools;
+using ModelContextProtocol.Protocol;
 
 namespace Everywhere.Mcp.Tests.Tools;
 
@@ -11,6 +12,7 @@ public class EverywhereOnlyToolsTests
     {
         var result = GetSelectedTextTool.GetSelectedText(new EmptyVisualElementContext());
         Assert.That(result.IsError, Is.Not.True);
+        Assert.That(ExtractText(result), Is.Empty);
     }
 
     [Test]
@@ -18,17 +20,18 @@ public class EverywhereOnlyToolsTests
     {
         var result = GetTerminalOutputTool.GetTerminalOutput(50, new EmptyVisualElementContext());
         Assert.That(result.IsError, Is.Not.True);
+        Assert.That(ExtractText(result), Is.Empty);
     }
 
     [Test]
-    public void GetFocusedContext_ReturnsError_WhenNoFocus()
+    public async Task GetFocusedContext_ReturnsError_WhenNoFocus()
     {
         var sessions = new SessionStore();
-        var result = GetFocusedContextTool
-            .GetFocusedContext(2000, new EmptyVisualElementContext(), sessions, CancellationToken.None)
-            .GetAwaiter().GetResult();
+        var result = await GetFocusedContextTool.GetFocusedContext(
+            2000, new EmptyVisualElementContext(), sessions, CancellationToken.None);
 
         Assert.That(result.IsError, Is.True);
+        Assert.That(ExtractText(result), Does.Contain("foreground"));
     }
 
     [Test]
@@ -36,15 +39,18 @@ public class EverywhereOnlyToolsTests
     {
         var result = ExpandElementTool.ExpandElement("999", null, new SessionStore());
         Assert.That(result.IsError, Is.True);
+        Assert.That(ExtractText(result), Does.Contain("999").And.Contain("not found"));
     }
 
     [Test]
-    public void Screenshot_ReturnsError_WhenNoFocus()
+    public async Task Screenshot_ReturnsError_WhenNoFocus()
     {
-        var result = ScreenshotTool
-            .Screenshot(null, new EmptyVisualElementContext(), new SessionStore(), CancellationToken.None)
-            .GetAwaiter().GetResult();
+        var result = await ScreenshotTool.Screenshot(
+            null, new EmptyVisualElementContext(), new SessionStore(), CancellationToken.None);
 
         Assert.That(result.IsError, Is.True);
     }
+
+    private static string ExtractText(CallToolResult result) =>
+        result.Content[0] is TextContentBlock block ? block.Text : string.Empty;
 }

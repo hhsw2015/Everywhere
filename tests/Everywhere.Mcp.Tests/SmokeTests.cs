@@ -30,14 +30,16 @@ public class SmokeTests
     }
 
     [Test]
-    public void GetAppStateTool_ReturnsAppNotRunning_WhenAppIsUnknown()
+    public async Task GetAppStateTool_ReturnsAppNotRunning_WhenAppIsUnknown()
     {
         var sessions = new SessionStore();
-        var result = GetAppStateTool
-            .GetAppState("doesnotexist", false, new EmptyVisualElementContext(), sessions, CancellationToken.None)
-            .GetAwaiter().GetResult();
+        var result = await GetAppStateTool.GetAppState(
+            "doesnotexist", false, new EmptyVisualElementContext(), sessions, CancellationToken.None);
 
         Assert.That(result.IsError, Is.True);
+        var text = ExtractText(result);
+        Assert.That(text, Does.Contain("doesnotexist"));
+        Assert.That(text, Does.Contain("not running"));
     }
 
     [Test]
@@ -48,7 +50,11 @@ public class SmokeTests
         var focus = new FocusBorrow(new TestFocusBackend());
         var result = ClickTool.Click("any", "999", null, null, null, null, sessions, input, focus, new EmptyVisualElementContext());
         Assert.That(result.IsError, Is.True);
+        Assert.That(ExtractText(result), Does.Contain("999").And.Contain("not found"));
     }
+
+    private static string ExtractText(ModelContextProtocol.Protocol.CallToolResult result) =>
+        result.Content[0] is ModelContextProtocol.Protocol.TextContentBlock block ? block.Text : string.Empty;
 
     private sealed class TestInputSimulator : IInputSimulator
     {
