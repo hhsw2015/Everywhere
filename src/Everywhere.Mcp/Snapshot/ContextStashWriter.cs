@@ -103,6 +103,19 @@ public sealed class ContextStashWriter
                 selectionApp = appKey;
             }
 
+            // If we ended up with nothing useful — no app, no title, no url, no
+            // selection — refuse to write. An empty stash makes the hook
+            // inject a bare "[everywhere-ctx]" envelope, which is worse than
+            // not injecting at all because the user can't tell why it fired.
+            if (string.IsNullOrEmpty(appKey)
+                && string.IsNullOrEmpty(topLevel?.Name)
+                && string.IsNullOrEmpty(url)
+                && string.IsNullOrEmpty(selectionText))
+            {
+                _logger.LogDebug("Context stash capture produced no usable data; skipping write.");
+                return;
+            }
+
             var payload = new ContextSnapshotPayload(
                 SchemaVersion: CurrentSchemaVersion,
                 CapturedAtUtc: DateTimeOffset.UtcNow,
