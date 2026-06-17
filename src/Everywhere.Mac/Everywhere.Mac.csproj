@@ -160,6 +160,7 @@
   </ItemGroup>
 
   <Import Project="..\Build.Watchdog.targets"/>
+  <Import Project="..\Build.ContextHook.targets"/>
 
   <ItemGroup>
     <None Include="..\..\img\Everywhere.ico">
@@ -171,6 +172,11 @@
     <None Include="$(WatchdogExecutable)" PublishFolderType="RootDirectory">
       <Link>Contents\Helpers\Everywhere.Watchdog</Link>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </None>
+    <None Include="$(ContextHookExecutable)" PublishFolderType="RootDirectory" Condition="Exists('$(ContextHookExecutable)')">
+      <Link>Contents\Helpers\everywhere-context-hook</Link>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>
 

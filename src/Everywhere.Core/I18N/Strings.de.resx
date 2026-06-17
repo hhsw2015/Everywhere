@@ -2211,6 +2211,12 @@ Scrollrad oder Zifferntasten zum Wechseln des Auswahlmodus</value>
     <data name="ShortcutSettings_AgentPickElement_Desription" xml:space="preserve">
         <value>Drücken Sie die Taste, um ein UI-Element auszuwählen und für KI-Agenten anzuheften (Zugriff über MCP). Im Gegensatz zum regulären Pick-Shortcut wird das Chat-Fenster nicht geöffnet.</value>
     </data>
+    <data name="ShortcutSettings_SnapshotContext_Header" xml:space="preserve">
+        <value>Kontext für KI-Agent erfassen</value>
+    </data>
+    <data name="ShortcutSettings_SnapshotContext_Desription" xml:space="preserve">
+        <value>Beliebige App: Drücken erfasst den aktuellen Kontext (Fenstertitel, URL, Auswahl, A11y-Zusammenfassung, Screenshot). Beim nächsten Gespräch mit dem KI-Agenten im Terminal injiziert der Claude-Code-Hook ihn automatisch. Slot läuft nach 5 Minuten ab.</value>
+    </data>
     <data name="SettingsCategory_Settings_McpServer_Header" xml:space="preserve">
         <value>MCP-Server</value>
     </data>

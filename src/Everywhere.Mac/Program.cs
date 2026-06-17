@@ -95,6 +95,7 @@ public static class Program
                 .AddTransient<IAsyncInitializer, ChatWindowInitializer>()
                 .AddTransient<IAsyncInitializer, UpdaterInitializer>()
                 .AddTransient<IAsyncInitializer, EverywhereMcpInitializer>()
+                .AddTransient<IAsyncInitializer, SnapshotContextHotkeyInitializer>()
 
             #endregion
 

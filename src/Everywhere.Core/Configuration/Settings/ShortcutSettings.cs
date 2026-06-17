@@ -45,4 +45,15 @@ public sealed partial class ShortcutSettings : SettingsBase, ISettingsCategory
         LocaleKey.ShortcutSettings_AgentPickElement_Desription)]
     [SettingsTemplatedItem]
     public CompositeKeyboardShortcut AgentPickElement { get; } = new();
+
+    /// <summary>
+    /// Captures a full context snapshot (focused app + window title + URL + selection +
+    /// screenshot) and writes it to ~/Library/Application Support/Everywhere/context-stash.json
+    /// so a subsequent terminal prompt can pick it up via the Claude Code hook.
+    /// </summary>
+    [DynamicResourceKey(
+        LocaleKey.ShortcutSettings_SnapshotContext_Header,
+        LocaleKey.ShortcutSettings_SnapshotContext_Desription)]
+    [SettingsTemplatedItem]
+    public CompositeKeyboardShortcut SnapshotContext { get; } = new();
 }

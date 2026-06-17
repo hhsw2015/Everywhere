@@ -2213,6 +2213,12 @@
     <data name="ShortcutSettings_AgentPickElement_Desription" xml:space="preserve">
         <value>按下后选取一个 UI 元素并固定给 AI 智能体（通过 MCP 读取）。与常规拾取快捷键不同，此操作不会打开聊天窗口。</value>
     </data>
+    <data name="ShortcutSettings_SnapshotContext_Header" xml:space="preserve">
+        <value>为 AI 智能体捕获上下文</value>
+    </data>
+    <data name="ShortcutSettings_SnapshotContext_Desription" xml:space="preserve">
+        <value>在任何应用中按下，捕获当前上下文（窗口标题、URL、选区、辅助功能摘要、截图）。下次你在终端跟 AI 智能体对话时，Claude Code 钩子会自动注入。槽位 5 分钟后过期。</value>
+    </data>
     <data name="SettingsCategory_Settings_McpServer_Header" xml:space="preserve">
         <value>MCP 服务器</value>
     </data>

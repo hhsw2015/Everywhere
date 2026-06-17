@@ -2212,6 +2212,12 @@
     <data name="ShortcutSettings_AgentPickElement_Desription" xml:space="preserve">
         <value>누르면 UI 요소를 선택하고 AI 에이전트에 고정합니다(MCP를 통해 읽기). 일반 선택 단축키와 달리 채팅 창을 열지 않습니다.</value>
     </data>
+    <data name="ShortcutSettings_SnapshotContext_Header" xml:space="preserve">
+        <value>AI 에이전트용 컨텍스트 캡처</value>
+    </data>
+    <data name="ShortcutSettings_SnapshotContext_Desription" xml:space="preserve">
+        <value>어떤 앱에서든 누르면 현재 컨텍스트(창 제목, URL, 선택, a11y 요약, 스크린샷)를 캡처합니다. 다음에 터미널에서 AI 에이전트와 대화할 때 Claude Code 훅이 자동으로 삽입합니다. 슬롯은 5분 후에 만료됩니다.</value>
+    </data>
     <data name="SettingsCategory_Settings_McpServer_Header" xml:space="preserve">
         <value>MCP 서버</value>
     </data>

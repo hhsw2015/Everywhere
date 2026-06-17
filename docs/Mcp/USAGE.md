@@ -134,6 +134,45 @@ falls back to a `NotSupportedInputSimulator` that returns a clear error
 explaining how to wire the platform implementation. Element-index paths
 continue to work because they never call into the simulator.
 
+## Snapshot Context hotkey + Claude Code hook
+
+For zero-friction "I was just looking at X, now I'm in the terminal asking about
+it" flow, install the UserPromptSubmit hook:
+
+1. Bind a hotkey in **Settings → Shortcut → Snapshot Context for AI Agent**
+2. Add the hook to `~/.claude/settings.json`:
+
+```jsonc
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "command": "/Applications/Everywhere.app/Contents/Helpers/everywhere-context-hook"
+      }
+    ]
+  }
+}
+```
+
+How it works:
+
+- You press the hotkey while looking at any app → Everywhere captures
+  `app + window_title + url + selection` into
+  `~/Library/Application Support/Everywhere/context-stash.json`
+  (atomic write, expires after 5 minutes).
+- You switch to your terminal and ask the agent something.
+- On Enter, Claude Code runs the hook (~3 ms binary, no network).
+- If the file exists & is fresh, the hook prints its contents to stdout — Claude
+  Code prepends those bytes to your prompt as
+  `[everywhere-ctx] app=… title=… url=… selection=…` plus a structured
+  `[everywhere-ctx-json] {…}` line.
+- The hook deletes the file on read (Take semantics; no stale context).
+- File absent / stale → hook exits silently, prompt unchanged.
+
+The `[everywhere-ctx]` line is a pointer, not a deep snapshot — the agent calls
+`get_focused_context` / `get_app_context` / `screenshot` only when it actually
+needs to drill in.
+
 ## Limitations (v1)
 
 - HTTP transport has no auth — local-loopback only by middleware policy.

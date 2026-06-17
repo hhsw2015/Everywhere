@@ -2212,6 +2212,12 @@ Utilisez la molette ou les touches numériques pour changer de mode de sélectio
     <data name="ShortcutSettings_AgentPickElement_Desription" xml:space="preserve">
         <value>Appuyez pour sélectionner un élément d'interface et l'épingler pour les agents IA (lu via MCP). Contrairement au raccourci de sélection standard, cela n'ouvre pas la fenêtre de chat.</value>
     </data>
+    <data name="ShortcutSettings_SnapshotContext_Header" xml:space="preserve">
+        <value>Capturer le contexte pour l'agent IA</value>
+    </data>
+    <data name="ShortcutSettings_SnapshotContext_Desription" xml:space="preserve">
+        <value>Pressez dans n'importe quelle app pour capturer le contexte actuel (titre de fenêtre, URL, sélection, résumé a11y, capture d'écran). La prochaine fois que vous parlez à l'agent IA dans un terminal, le hook Claude Code l'injecte automatiquement. Expiration après 5 minutes.</value>
+    </data>
     <data name="SettingsCategory_Settings_McpServer_Header" xml:space="preserve">
         <value>Serveur MCP</value>
     </data>

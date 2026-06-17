@@ -2212,6 +2212,12 @@ Use scroll wheel or number keys to switch selection mode</value>
     <data name="ShortcutSettings_AgentPickElement_Desription" xml:space="preserve">
         <value>Press to pick a UI element and pin it for AI agents (read via MCP). Unlike the regular pick shortcut, this does not open the chat window.</value>
     </data>
+    <data name="ShortcutSettings_SnapshotContext_Header" xml:space="preserve">
+        <value>Snapshot Context for AI Agent</value>
+    </data>
+    <data name="ShortcutSettings_SnapshotContext_Desription" xml:space="preserve">
+        <value>Press while looking at any app to capture its current context (window title, URL, selection, accessibility summary, screenshot). The next time you talk to your AI agent in a terminal, the Claude Code hook injects this context automatically. Stash auto-expires after 5 minutes.</value>
+    </data>
     <data name="SettingsCategory_Settings_McpServer_Header" xml:space="preserve">
         <value>MCP Server</value>
     </data>
