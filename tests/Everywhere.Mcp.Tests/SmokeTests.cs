@@ -34,7 +34,8 @@ public class SmokeTests
     {
         var sessions = new SessionStore();
         var result = await GetAppStateTool.GetAppState(
-            "doesnotexist", false, new EmptyVisualElementContext(), sessions, CancellationToken.None);
+            "doesnotexist", false, new EmptyVisualElementContext(), sessions,
+            new FocusBorrow(new TestFocusBackend()), CancellationToken.None);
 
         Assert.That(result.IsError, Is.True);
         var text = ExtractText(result);
