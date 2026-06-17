@@ -41,6 +41,8 @@ public sealed class EverywhereMcpHttpHost : IHostedService, IAsyncDisposable
     private readonly IClipboardReader _clipboard;
     private readonly IIdleTimeReader _idle;
     private readonly IBrowserUrlReader _browserUrl;
+    private readonly IFinderReader _finder;
+    private readonly IBrowserTabsReader _browserTabs;
 
     public EverywhereMcpHttpHost(
         EverywhereMcpHttpOptions options,
@@ -60,6 +62,8 @@ public sealed class EverywhereMcpHttpHost : IHostedService, IAsyncDisposable
         _clipboard = parentServices.GetRequiredService<IClipboardReader>();
         _idle = parentServices.GetRequiredService<IIdleTimeReader>();
         _browserUrl = parentServices.GetRequiredService<IBrowserUrlReader>();
+        _finder = parentServices.GetRequiredService<IFinderReader>();
+        _browserTabs = parentServices.GetRequiredService<IBrowserTabsReader>();
     }
 
     public int BoundPort => Volatile.Read(ref _boundPort);
@@ -185,6 +189,8 @@ public sealed class EverywhereMcpHttpHost : IHostedService, IAsyncDisposable
         builder.Services.AddSingleton(_clipboard);
         builder.Services.AddSingleton(_idle);
         builder.Services.AddSingleton(_browserUrl);
+        builder.Services.AddSingleton(_finder);
+        builder.Services.AddSingleton(_browserTabs);
 
         builder.Services
             .AddMcpServer(opts =>

@@ -69,6 +69,8 @@ so existing test corpora and prompt templates apply unchanged.
 | `get_clipboard`       | The user references *"剪贴板"* / *"the thing I just copied"*. |
 | `get_idle_time`       | Decide whether the user is at the keyboard before grabbing focus. |
 | `get_browser_url`     | The user asks "what page am I on" / "current URL". |
+| `get_finder_selection` | The user references files they have selected in Finder (full POSIX paths + names + is_dir). |
+| `get_browser_tabs`    | The user asks about all open browser tabs (Safari/Chrome/Arc/Brave/Edge). |
 | `get_selected_text`   | OS-wide selection. Returns `""` if nothing is selected. |
 | `read_pick`           | Reads the element the user pre-pinned via the Agent Pick hotkey (Settings → Shortcut → "Pin Element for AI Agent"). PREFER this BEFORE `get_focused_context` on deictic references. Reading consumes the pin. |
 | `pick_element`        | Triggers Everywhere's visual picker — user clicks an element/window/screen. |
