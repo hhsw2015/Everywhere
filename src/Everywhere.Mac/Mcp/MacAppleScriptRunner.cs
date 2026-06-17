@@ -11,7 +11,9 @@ namespace Everywhere.Mac.Mcp;
 /// </summary>
 public sealed class MacAppleScriptRunner : IAppleScriptRunner
 {
-    private const int TimeoutMs = 5000;
+    // 15 s — accommodates browsers with hundreds of open tabs (Arc users routinely
+    // hit 200+; the per-tab AppleScript dispatch is ~15 ms/tab on a warm machine).
+    private const int TimeoutMs = 15000;
 
     public AppleScriptResult Run(string source)
     {
