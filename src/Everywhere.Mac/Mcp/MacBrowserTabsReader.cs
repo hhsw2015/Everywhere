@@ -89,17 +89,26 @@ public sealed class MacBrowserTabsReader(IAppleScriptRunner runner) : IBrowserTa
 
     // \x1F = ASCII Unit Separator, \x1E = ASCII Record Separator.
     // Splits inside titles are vanishingly rare for these control bytes vs. \t / \n.
+    // Chromium browsers (Chrome / Brave / Edge / Vivaldi / Opera / Chromium) expose
+    // `active tab index of window`. Arc uses the same dictionary BUT lacks that
+    // property — so we identify the active tab by reference equality with
+    // `active tab of w` instead, which every Chromium-derived browser supports.
     private static string BuildChromiumScript(string canonicalAppName) =>
         $@"tell application ""{canonicalAppName}""
             set out to """"
             set US to (ASCII character 31)
             set RS to (ASCII character 30)
             repeat with w in windows
-                set ai to active tab index of w
-                set i to 0
+                try
+                    set at to active tab of w
+                on error
+                    set at to missing value
+                end try
                 repeat with t in tabs of w
-                    set i to i + 1
-                    set isActive to (i is equal to ai)
+                    set isActive to false
+                    try
+                        if at is not missing value and (t is at) then set isActive to true
+                    end try
                     set flag to ""0""
                     if isActive then set flag to ""1""
                     set out to out & flag & US & (title of t) & US & (URL of t) & RS
