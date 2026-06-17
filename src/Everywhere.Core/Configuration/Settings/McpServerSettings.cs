@@ -37,4 +37,11 @@ public sealed partial class McpServerSettings : SettingsBase, ISettingsCategory
         LocaleKey.McpServerSettings_AutoCaptureContext_Header,
         LocaleKey.McpServerSettings_AutoCaptureContext_Description)]
     public partial bool AutoCaptureContext { get; set; } = false;
+
+    [ObservableProperty]
+    [DynamicResourceKey(
+        LocaleKey.McpServerSettings_AgentAppId_Header,
+        LocaleKey.McpServerSettings_AgentAppId_Description)]
+    [SettingsStringItem(Watermark = "com.github.cmux")]
+    public partial string AgentAppId { get; set; } = string.Empty;
 }

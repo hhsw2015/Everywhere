@@ -2241,6 +2241,12 @@ Scrollrad oder Zifferntasten zum Wechseln des Auswahlmodus</value>
     <data name="McpServerSettings_AutoCaptureContext_Description" xml:space="preserve">
         <value>Aktualisiert den Kontext-Stash beim Anheften eines UI-Elements per AgentPickElement-Hotkey, sodass der nächste Claude-Code-Prompt ihn aufnimmt. Standardmäßig aus. Für eine manuelle einmalige Erfassung den SnapshotContext-Hotkey verwenden.</value>
     </data>
+    <data name="McpServerSettings_AgentAppId_Header" xml:space="preserve">
+        <value>Agent-App</value>
+    </data>
+    <data name="McpServerSettings_AgentAppId_Description" xml:space="preserve">
+        <value>Wenn gesetzt, holt Everywhere diese App nach einer Kontext-Erfassung (per SnapshotContext-Hotkey oder AgentPickElement-Pin) in den Vordergrund, sodass du ohne manuellen Fensterwechsel weiter im KI-Agenten tippen kannst. Akzeptiert Bundle-ID (z. B. com.github.cmux), Programmnamen oder den lokalisierten App-Namen. Leer lassen zum Deaktivieren.</value>
+    </data>
     <data name="Strategy_BuiltIn_Browser_Name" xml:space="preserve">
         <value>Browser-Assistent</value>
     </data>

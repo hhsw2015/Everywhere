@@ -61,6 +61,7 @@ public static class EverywhereMcpServiceExtensions
         services.TryAddSingleton<IAppleScriptRunner, NullAppleScriptRunner>();
         services.TryAddSingleton<IFinderReader, NullFinderReader>();
         services.TryAddSingleton<IBrowserTabsReader, NullBrowserTabsReader>();
+        services.TryAddSingleton<IAppActivator, NullAppActivator>();
         services.TryAddSingleton<ContextStashWriter>();
         services.TryAddSingleton<AutoCaptureService>();
         return services;

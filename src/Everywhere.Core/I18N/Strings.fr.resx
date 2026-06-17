@@ -2242,6 +2242,12 @@ Utilisez la molette ou les touches numériques pour changer de mode de sélectio
     <data name="McpServerSettings_AutoCaptureContext_Description" xml:space="preserve">
         <value>Quand cette option est active, épingler un élément UI avec le raccourci AgentPickElement actualise aussi le stash de contexte pour le prochain prompt Claude Code. Désactivé par défaut. Pour une capture manuelle ponctuelle, utilise le raccourci SnapshotContext.</value>
     </data>
+    <data name="McpServerSettings_AgentAppId_Header" xml:space="preserve">
+        <value>Application de l'agent</value>
+    </data>
+    <data name="McpServerSettings_AgentAppId_Description" xml:space="preserve">
+        <value>Quand renseigné, Everywhere place cette application au premier plan après une capture de contexte (raccourci SnapshotContext ou épinglage AgentPickElement), pour que tu puisses continuer à taper dans ton agent IA sans changer de fenêtre. Accepte un identifiant de bundle (ex. com.github.cmux), un nom d'exécutable ou un nom d'application localisé. Vide pour désactiver.</value>
+    </data>
     <data name="Strategy_BuiltIn_Browser_Name" xml:space="preserve">
         <value>Assistant Navigateur</value>
     </data>
