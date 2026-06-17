@@ -11,17 +11,28 @@ namespace Everywhere.Mcp;
 /// Reads its port + enabled flag from <see cref="McpServerSettings"/> and reacts to changes
 /// at runtime by stop/start cycling the listener.
 /// </summary>
-public sealed class EverywhereMcpInitializer(
-    Settings settings,
-    EverywhereMcpHttpOptions options,
-    EverywhereMcpHttpHost host,
-    SelectionCache selectionCache,
-    ILogger<EverywhereMcpInitializer> logger
-) : IAsyncInitializer
+public sealed class EverywhereMcpInitializer : IAsyncInitializer
 {
-    // Touch the cache so DI resolves it now → its ctor subscribes to the selection
-    // stream from process start, not lazily on first get_selected_text call.
-    private readonly SelectionCache _selectionCache = selectionCache;
+    private readonly Settings _settings;
+    private readonly EverywhereMcpHttpOptions _options;
+    private readonly EverywhereMcpHttpHost _host;
+    private readonly ILogger<EverywhereMcpInitializer> _logger;
+
+    public EverywhereMcpInitializer(
+        Settings settings,
+        EverywhereMcpHttpOptions options,
+        EverywhereMcpHttpHost host,
+        SelectionCache selectionCache,
+        ILogger<EverywhereMcpInitializer> logger)
+    {
+        _settings = settings;
+        _options = options;
+        _host = host;
+        _logger = logger;
+        // Resolving SelectionCache via DI here is the side-effect we want — its ctor
+        // subscribes to the platform's text-selection stream from process start.
+        _ = selectionCache;
+    }
 
     public AsyncInitializerIndex Index => AsyncInitializerIndex.Startup;
 
@@ -31,22 +42,22 @@ public sealed class EverywhereMcpInitializer(
     public async Task InitializeAsync()
     {
         ApplySettingsToOptions();
-        settings.McpServer.PropertyChanged += (_, _) => ScheduleRestart();
+        _settings.McpServer.PropertyChanged += (_, _) => ScheduleRestart();
 
-        if (!settings.McpServer.HttpEnabled)
+        if (!_settings.McpServer.HttpEnabled)
         {
-            logger.LogInformation("MCP HTTP transport disabled by user; stdio-only mode.");
+            _logger.LogInformation("MCP HTTP transport disabled by user; stdio-only mode.");
             return;
         }
 
         try
         {
-            await host.StartAsync(CancellationToken.None);
-            logger.LogInformation("MCP HTTP transport listening on port {Port}.", host.BoundPort);
+            await _host.StartAsync(CancellationToken.None);
+            _logger.LogInformation("MCP HTTP transport listening on port {Port}.", _host.BoundPort);
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Failed to start MCP HTTP transport.");
+            _logger.LogError(ex, "Failed to start MCP HTTP transport.");
         }
     }
 
@@ -54,13 +65,13 @@ public sealed class EverywhereMcpInitializer(
     {
         try
         {
-            options.Port = settings.McpServer.HttpPort;
+            _options.Port = _settings.McpServer.HttpPort;
         }
         catch (ArgumentOutOfRangeException ex)
         {
-            logger.LogWarning(ex, "Invalid MCP port {Port}; falling back to default.", settings.McpServer.HttpPort);
+            _logger.LogWarning(ex, "Invalid MCP port {Port}; falling back to default.", _settings.McpServer.HttpPort);
         }
-        options.Enabled = settings.McpServer.HttpEnabled;
+        _options.Enabled = _settings.McpServer.HttpEnabled;
     }
 
     /// <summary>
@@ -94,7 +105,7 @@ public sealed class EverywhereMcpInitializer(
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, "MCP HTTP restart failed.");
+                _logger.LogError(ex, "MCP HTTP restart failed.");
             }
         });
     }
@@ -104,17 +115,17 @@ public sealed class EverywhereMcpInitializer(
         await _restartLock.WaitAsync(token);
         try
         {
-            await host.StopAsync(CancellationToken.None);
+            await _host.StopAsync(CancellationToken.None);
             ApplySettingsToOptions();
 
-            if (!settings.McpServer.HttpEnabled)
+            if (!_settings.McpServer.HttpEnabled)
             {
-                logger.LogInformation("MCP HTTP transport disabled by user.");
+                _logger.LogInformation("MCP HTTP transport disabled by user.");
                 return;
             }
 
-            await host.StartAsync(CancellationToken.None);
-            logger.LogInformation("MCP HTTP transport restarted on port {Port}.", host.BoundPort);
+            await _host.StartAsync(CancellationToken.None);
+            _logger.LogInformation("MCP HTTP transport restarted on port {Port}.", _host.BoundPort);
         }
         finally
         {

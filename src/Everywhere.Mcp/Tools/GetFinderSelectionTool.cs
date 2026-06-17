@@ -11,29 +11,39 @@ public static class GetFinderSelectionTool
 {
     [McpServerTool(Name = "get_finder_selection", ReadOnly = true)]
     [Description(
-        "Return the user's current Finder selection with absolute POSIX paths as JSON " +
-        "{\"selected\": bool, \"count\": int, \"current_folder\": string|null, " +
-        "\"files\": [{\"path\": str, \"name\": str, \"is_dir\": bool}, ...]}. " +
-        "Use when the user references files/folders they have selected in Finder. " +
-        "On macOS this requires the user to grant Apple Events to Finder once.")]
+        "Return the user's current Finder selection with absolute POSIX paths as JSON. " +
+        "Status field: \"ok\" (data returned, possibly empty) / \"not_supported\" / " +
+        "\"permission_denied\" (user must grant Apple Events to Finder once via " +
+        "System Settings → Privacy & Security → Automation).")]
     public static CallToolResult GetFinderSelection(IFinderReader reader)
     {
         try
         {
-            var sel = reader.GetSelection();
-            if (sel is null || sel.Files.Count == 0)
+            var r = reader.GetSelection();
+            var statusStr = r.Status switch
+            {
+                FinderStatus.Ok => "ok",
+                FinderStatus.PermissionDenied => "permission_denied",
+                _ => "not_supported",
+            };
+
+            if (r.Status != FinderStatus.Ok || r.Selection is null)
             {
                 return Json(new
                 {
+                    status = statusStr,
+                    error = r.ErrorMessage,
                     selected = false,
                     count = 0,
-                    current_folder = sel?.CurrentFolder,
                     files = Array.Empty<object>(),
                 });
             }
+
+            var sel = r.Selection;
             return Json(new
             {
-                selected = true,
+                status = statusStr,
+                selected = sel.Files.Count > 0,
                 count = sel.Files.Count,
                 current_folder = sel.CurrentFolder,
                 files = sel.Files.Select(f => new
@@ -53,6 +63,12 @@ public static class GetFinderSelectionTool
     private static CallToolResult Json(object payload) =>
         new()
         {
-            Content = [new TextContentBlock { Text = JsonSerializer.Serialize(payload) }],
+            Content = [new TextContentBlock
+            {
+                Text = JsonSerializer.Serialize(payload, new JsonSerializerOptions
+                {
+                    DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
+                }),
+            }],
         };
 }

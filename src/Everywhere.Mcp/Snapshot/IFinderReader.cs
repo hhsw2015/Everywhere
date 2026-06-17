@@ -6,6 +6,15 @@ public sealed record FinderSelection(
 
 public sealed record FinderItem(string Path, string Name, bool IsDirectory);
 
+public enum FinderStatus
+{
+    Ok,
+    PermissionDenied,
+    NotSupported,
+}
+
+public sealed record FinderResult(FinderStatus Status, FinderSelection? Selection, string? ErrorMessage = null);
+
 /// <summary>
 /// Returns the user's current Finder selection with absolute POSIX paths and the
 /// containing folder. Distinct from generic <c>selected_items</c> which only knows
@@ -13,10 +22,10 @@ public sealed record FinderItem(string Path, string Name, bool IsDirectory);
 /// </summary>
 public interface IFinderReader
 {
-    FinderSelection? GetSelection();
+    FinderResult GetSelection();
 }
 
 internal sealed class NullFinderReader : IFinderReader
 {
-    public FinderSelection? GetSelection() => null;
+    public FinderResult GetSelection() => new(FinderStatus.NotSupported, null);
 }

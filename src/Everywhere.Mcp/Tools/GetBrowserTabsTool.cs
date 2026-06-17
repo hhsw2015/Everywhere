@@ -37,7 +37,7 @@ public static class GetBrowserTabsTool
             {
                 var focused = context.FocusedElement;
                 if (focused is null)
-                    return Json(new { app = (string?)null, status = "not_supported", tabs = Array.Empty<object>() });
+                    return Json(new { app = (string?)null, status = "no_focus", tabs = Array.Empty<object>() });
                 appKey = AppKey.FromProcessId(focused.ProcessId);
             }
 
@@ -48,6 +48,7 @@ public static class GetBrowserTabsTool
                 BrowserTabsStatus.PermissionDenied => "permission_denied",
                 _ => "not_supported",
             };
+
             return Json(new
             {
                 app = appKey,
@@ -65,6 +66,12 @@ public static class GetBrowserTabsTool
     private static CallToolResult Json(object payload) =>
         new()
         {
-            Content = [new TextContentBlock { Text = JsonSerializer.Serialize(payload) }],
+            Content = [new TextContentBlock
+            {
+                Text = JsonSerializer.Serialize(payload, new JsonSerializerOptions
+                {
+                    DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
+                }),
+            }],
         };
 }

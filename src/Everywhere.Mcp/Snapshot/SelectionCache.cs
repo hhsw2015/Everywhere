@@ -41,16 +41,25 @@ public sealed class SelectionCache : IObserver<TextSelectionData>, IDisposable
     void IObserver<TextSelectionData>.OnNext(TextSelectionData value)
     {
         if (string.IsNullOrEmpty(value.Text)) return;
+        // Resolve appKey OUTSIDE the lock — Process.GetProcessById on Windows is a
+        // syscall and we don't want it serialised against GetFresh callers.
+        var appKey = value.Element is { } el ? AppKey.FromProcessId(el.ProcessId) : null;
+        var now = _clock.GetUtcNow();
         lock (_gate)
         {
             _text = value.Text;
-            _appKey = value.Element is { } el ? AppKey.FromProcessId(el.ProcessId) : null;
-            _capturedAtUtc = _clock.GetUtcNow();
+            _appKey = appKey;
+            _capturedAtUtc = now;
         }
     }
 
     void IObserver<TextSelectionData>.OnError(Exception error) { }
     void IObserver<TextSelectionData>.OnCompleted() { }
 
-    public void Dispose() => _subscription.Dispose();
+    private int _disposed;
+    public void Dispose()
+    {
+        if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
+        try { _subscription.Dispose(); } catch { }
+    }
 }

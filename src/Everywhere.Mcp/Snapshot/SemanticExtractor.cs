@@ -23,17 +23,22 @@ public static class SemanticExtractor
         return result;
     }
 
+    /// <summary>
+    /// Returns ONLY the deepest Focused node (or empty). On macOS / Windows a11y the
+    /// Focused flag propagates up the ancestor chain (window → pane → list → row →
+    /// cell), so returning every flagged node would dump the whole chain — confusing
+    /// for the agent. focused_path already covers the chain in order; here we surface
+    /// the actual leaf-level focus.
+    /// </summary>
     public static List<SemanticItem> ExtractFocused(IReadOnlyList<ElementIndexer.IndexedNode> nodes)
     {
-        var result = new List<SemanticItem>();
+        ElementIndexer.IndexedNode? deepest = null;
         foreach (var n in nodes)
         {
-            if ((n.Element.States & VisualElementStates.Focused) != 0)
-            {
-                result.Add(BuildItem(n));
-            }
+            if ((n.Element.States & VisualElementStates.Focused) == 0) continue;
+            if (deepest is null || n.Depth > deepest.Value.Depth) deepest = n;
         }
-        return result;
+        return deepest is null ? [] : [BuildItem(deepest.Value)];
     }
 
     /// <summary>
@@ -83,9 +88,24 @@ public static class SemanticExtractor
             ElementIndex = node.Index,
             Type = node.Element.Type.ToString(),
             Text = string.IsNullOrEmpty(ownText) ? null : ownText,
-            States = node.Element.States == VisualElementStates.None ? null : node.Element.States.ToString(),
+            States = StatesToList(node.Element.States),
             AvailableActions = SuggestActions(node.Element.Type),
         };
+    }
+
+    private static List<string>? StatesToList(VisualElementStates states)
+    {
+        if (states == VisualElementStates.None) return null;
+        var list = new List<string>();
+        foreach (VisualElementStates flag in Enum.GetValues<VisualElementStates>())
+        {
+            if (flag == VisualElementStates.None) continue;
+            if ((states & flag) == flag)
+            {
+                list.Add(flag.ToString());
+            }
+        }
+        return list.Count == 0 ? null : list;
     }
 
     private static List<string>? SuggestActions(VisualElementType type) => type switch

@@ -33,10 +33,11 @@ public static class GetFocusedContextTool
             if (focused is null) return ToolErrors.NoFocusedApp();
 
             var topLevel = WalkToTopLevel(focused) ?? focused;
-            // Default budget 4000; for app shells whose top-level is a Document (browsers,
-            // PDF readers) bump to the cap so the agent doesn't see "omitted_node_count: 714"
-            // on the very first call.
-            var defaultBudget = focused.Type == VisualElementType.Document
+            // Default budget 4000; bump to the cap when the focused element OR any of its
+            // ancestors is a Document — covers browsers / PDF readers / Notion-style canvases
+            // where the focused leaf is usually a TextEdit/Hyperlink inside a Document.
+            var hasDocumentAncestor = HasDocumentInChain(focused);
+            var defaultBudget = hasDocumentAncestor
                 ? UpstreamConstants.AccessibilityTreeMaxNodeCount
                 : 4000;
             var nodeBudget = Math.Clamp(budget ?? defaultBudget, 1, UpstreamConstants.AccessibilityTreeMaxNodeCount * 4);
@@ -95,5 +96,16 @@ public static class GetFocusedContextTool
             current = current.Parent;
         }
         return current;
+    }
+
+    private static bool HasDocumentInChain(IVisualElement element)
+    {
+        var cur = element;
+        for (var i = 0; cur != null && i < 32; i++)
+        {
+            if (cur.Type == VisualElementType.Document) return true;
+            cur = cur.Parent;
+        }
+        return false;
     }
 }

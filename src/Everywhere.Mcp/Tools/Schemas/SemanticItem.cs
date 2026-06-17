@@ -21,7 +21,7 @@ public sealed class SemanticItem
 
     [JsonPropertyName("states")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public string? States { get; set; }
+    public List<string>? States { get; set; }
 
     /// <summary>
     /// Suggested MCP tools the agent can use on this element, derived from element type.
