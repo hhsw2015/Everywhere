@@ -75,7 +75,7 @@ public class SmokeTests
     [Test]
     public void ScrollTool_ReturnsValidationError_OnBadDirection()
     {
-        var result = ScrollTool.Scroll("any", "0", "diagonal", null, new SessionStore());
+        var result = ScrollTool.Scroll("any", "0", "diagonal", new SessionStore());
         Assert.That(result.IsError, Is.True);
     }
 }
