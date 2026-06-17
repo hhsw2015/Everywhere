@@ -47,6 +47,7 @@ public static class PickElementTool
                 TreeText = SnapshotRenderer.Render(nodes, showFullText: false),
                 TreeJson = TreeJsonBuilder.Build(nodes),
             };
+            SemanticEnricher.Apply(payload, nodes);
 
             var json = JsonSerializer.Serialize(new
             {

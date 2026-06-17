@@ -45,6 +45,18 @@ public sealed class FocusedContextResult
     [JsonPropertyName("tree_json")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public TreeNode? TreeJson { get; set; }
+
+    [JsonPropertyName("selected_items")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<SemanticItem>? SelectedItems { get; set; }
+
+    [JsonPropertyName("focused_items")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<SemanticItem>? FocusedItems { get; set; }
+
+    [JsonPropertyName("focused_path")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<SemanticItem>? FocusedPath { get; set; }
 }
 
 public sealed class TreeNode

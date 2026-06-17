@@ -40,6 +40,7 @@ public static class ExpandElementTool
                 TreeText = SnapshotRenderer.Render(nodes, showFullText: false),
                 TreeJson = TreeJsonBuilder.Build(nodes),
             };
+            SemanticEnricher.Apply(payload, nodes);
 
             return new CallToolResult
             {

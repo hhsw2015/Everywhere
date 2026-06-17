@@ -39,6 +39,18 @@ public sealed class AppStateResult
     [JsonPropertyName("selected_text")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? SelectedText { get; set; }
+
+    [JsonPropertyName("selected_items")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<SemanticItem>? SelectedItems { get; set; }
+
+    [JsonPropertyName("focused_items")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<SemanticItem>? FocusedItems { get; set; }
+
+    [JsonPropertyName("focused_path")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<SemanticItem>? FocusedPath { get; set; }
 }
 
 public readonly record struct WindowBounds(
