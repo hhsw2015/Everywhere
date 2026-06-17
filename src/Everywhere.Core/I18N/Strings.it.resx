@@ -2242,6 +2242,12 @@ Rotella o tasti numerici per cambiare modalità di selezione</value>
     <data name="McpServerSettings_AutoCaptureContext_Description" xml:space="preserve">
         <value>Se attivo, fissare un elemento UI con la scorciatoia AgentPickElement aggiorna anche lo stash di contesto per il prossimo prompt di Claude Code. Disattivato di default. Per una cattura manuale singola usa la scorciatoia SnapshotContext.</value>
     </data>
+    <data name="McpServerSettings_AgentAppId_Header" xml:space="preserve">
+        <value>App dell'agente</value>
+    </data>
+    <data name="McpServerSettings_AgentAppId_Description" xml:space="preserve">
+        <value>Se impostata, Everywhere porta questa app in primo piano dopo una cattura di contesto (tramite la scorciatoia SnapshotContext o il pin di AgentPickElement), così puoi continuare a digitare nel tuo agente IA senza cambiare finestra. Accetta bundle id (es. com.github.cmux), nome dell'eseguibile o nome localizzato dell'app. Lascia vuoto per disabilitare.</value>
+    </data>
     <data name="Strategy_BuiltIn_Browser_Name" xml:space="preserve">
         <value>Assistente Browser</value>
     </data>

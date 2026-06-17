@@ -2242,6 +2242,12 @@
     <data name="McpServerSettings_AutoCaptureContext_Description" xml:space="preserve">
         <value>勾選後，按 AgentPickElement 熱鍵釘選 UI 元素時會順帶更新上下文 stash，下一次 Claude Code 提問即可帶上。預設關閉。若只想手動一次性擷取，請按 SnapshotContext 熱鍵。</value>
     </data>
+    <data name="McpServerSettings_AgentAppId_Header" xml:space="preserve">
+        <value>Agent 應用程式</value>
+    </data>
+    <data name="McpServerSettings_AgentAppId_Description" xml:space="preserve">
+        <value>設定後，Everywhere 會在擷取上下文（透過 SnapshotContext 熱鍵或 AgentPickElement 釘選）之後自動把該應用程式帶到最上層，省去手動切換視窗。可填 bundle id（如 com.github.cmux）、執行檔名稱或本地化應用程式名。留空停用。</value>
+    </data>
     <data name="Strategy_BuiltIn_Browser_Name" xml:space="preserve">
         <value>瀏覽器助手</value>
     </data>

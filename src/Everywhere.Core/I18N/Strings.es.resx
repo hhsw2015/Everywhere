@@ -2242,6 +2242,12 @@ Rueda o teclas numéricas para cambiar el modo de selección</value>
     <data name="McpServerSettings_AutoCaptureContext_Description" xml:space="preserve">
         <value>Si está activado, fijar un elemento de UI con el atajo AgentPickElement también actualiza el stash de contexto, para que el siguiente prompt de Claude Code lo recoja. Desactivado por defecto. Para una captura manual puntual, usa el atajo SnapshotContext.</value>
     </data>
+    <data name="McpServerSettings_AgentAppId_Header" xml:space="preserve">
+        <value>App del agente</value>
+    </data>
+    <data name="McpServerSettings_AgentAppId_Description" xml:space="preserve">
+        <value>Si está definido, Everywhere trae esta app al frente tras capturar el contexto (con el atajo SnapshotContext o al fijar con AgentPickElement) para que sigas escribiendo en tu agente de IA sin cambiar de ventana manualmente. Acepta bundle id (p. ej. com.github.cmux), nombre del ejecutable o nombre localizado. Déjalo vacío para desactivarlo.</value>
+    </data>
     <data name="Strategy_BuiltIn_Browser_Name" xml:space="preserve">
         <value>Asistente de Navegador</value>
     </data>

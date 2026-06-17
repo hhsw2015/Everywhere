@@ -2242,6 +2242,12 @@
     <data name="McpServerSettings_AutoCaptureContext_Description" xml:space="preserve">
         <value>オンにすると AgentPickElement ホットキーで UI 要素をピン留めしたときに併せてコンテキスト stash を更新します。次の Claude Code のプロンプトに自動で渡ります。既定はオフ。手動で一度だけ取りたいときは SnapshotContext ホットキーを使ってください。</value>
     </data>
+    <data name="McpServerSettings_AgentAppId_Header" xml:space="preserve">
+        <value>エージェントアプリ</value>
+    </data>
+    <data name="McpServerSettings_AgentAppId_Description" xml:space="preserve">
+        <value>設定すると Everywhere はコンテキスト取得（SnapshotContext ホットキーや AgentPickElement ピン留め）後にこのアプリを前面に切り替えます。手動でウィンドウを切り替えずに AI エージェントへ入力を続けられます。bundle id（例: com.github.cmux）、実行ファイル名、ローカライズされたアプリ名のいずれでも可。空にすると無効。</value>
+    </data>
     <data name="Strategy_BuiltIn_Browser_Name" xml:space="preserve">
         <value>ブラウザアシスタント</value>
     </data>

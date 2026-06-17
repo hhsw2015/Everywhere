@@ -37,7 +37,8 @@ public static class Program
                     .AddSingleton<IBrowserUrlReader, MacBrowserUrlReader>()
                     .AddSingleton<IAppleScriptRunner, MacAppleScriptRunner>()
                     .AddSingleton<IFinderReader, MacFinderReader>()
-                    .AddSingleton<IBrowserTabsReader, MacBrowserTabsReader>());
+                    .AddSingleton<IBrowserTabsReader, MacBrowserTabsReader>()
+                    .AddSingleton<IAppActivator, MacAppActivator>());
             return;
         }
 
@@ -74,6 +75,7 @@ public static class Program
                 .AddSingleton<IAppleScriptRunner, MacAppleScriptRunner>()
                 .AddSingleton<IFinderReader, MacFinderReader>()
                 .AddSingleton<IBrowserTabsReader, MacBrowserTabsReader>()
+                .AddSingleton<IAppActivator, MacAppActivator>()
                 .AddEverywhereMcp()
 
                 #endregion

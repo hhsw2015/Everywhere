@@ -2,7 +2,9 @@ using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Everywhere.Configuration;
 using Everywhere.Interop;
+using Everywhere.Mcp.Input;
 using Microsoft.Extensions.Logging;
 
 namespace Everywhere.Mcp.Snapshot;
@@ -29,6 +31,8 @@ public sealed class ContextStashWriter
     private readonly IBrowserUrlReader _browserUrl;
     private readonly SelectionCache _selectionCache;
     private readonly PickStash _pickStash;
+    private readonly IAppActivator _appActivator;
+    private readonly Settings _settings;
     private readonly ILogger<ContextStashWriter> _logger;
     private readonly SemaphoreSlim _writeLock = new(1, 1);
 
@@ -37,12 +41,16 @@ public sealed class ContextStashWriter
         IBrowserUrlReader browserUrl,
         SelectionCache selectionCache,
         PickStash pickStash,
+        IAppActivator appActivator,
+        Settings settings,
         ILogger<ContextStashWriter> logger)
     {
         _context = context;
         _browserUrl = browserUrl;
         _selectionCache = selectionCache;
         _pickStash = pickStash;
+        _appActivator = appActivator;
+        _settings = settings;
         _logger = logger;
     }
 
@@ -135,6 +143,8 @@ public sealed class ContextStashWriter
 
             await WriteAtomicAsync(FormatForHook(payload), cancellationToken);
             _logger.LogInformation("Context stash captured for {App} ({Title}).", appKey, topLevel?.Name);
+
+            ActivateAgentApp();
         }
         catch (OperationCanceledException)
         {
@@ -147,6 +157,28 @@ public sealed class ContextStashWriter
         finally
         {
             _writeLock.Release();
+        }
+    }
+
+    /// <summary>
+    /// If the user wired an agent app id (Settings → MCP Server → Agent app),
+    /// raise that app to the foreground after a successful capture so they
+    /// can keep typing without an explicit window switch. Skipped when the
+    /// id is empty or when the target is already frontmost — the activator
+    /// handles the same-app short-circuit.
+    /// </summary>
+    private void ActivateAgentApp()
+    {
+        var id = _settings.McpServer.AgentAppId;
+        if (string.IsNullOrWhiteSpace(id)) return;
+        try
+        {
+            var raised = _appActivator.Activate(id);
+            if (raised) _logger.LogDebug("Activated agent app {Id} after context capture.", id);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Failed to activate agent app {Id}", id);
         }
     }
 
