@@ -2238,10 +2238,10 @@
         <value>默认 7878。如果端口被占用，Everywhere 会向后尝试最多十个备用端口。</value>
     </data>
     <data name="McpServerSettings_AutoCaptureContext_Header" xml:space="preserve">
-        <value>为 AI Hook 自动捕获上下文</value>
+        <value>Pin Element 时自动捕获上下文</value>
     </data>
     <data name="McpServerSettings_AutoCaptureContext_Description" xml:space="preserve">
-        <value>勾选后，每次选中文字、复制、或者用 Pin Element 锁定元素时，Everywhere 都会自动刷新上下文 stash 文件 —— 这样在终端打 AI 提示词回车前就不必再去按 Snapshot Context。stash 仍会在 5 分钟后过期。</value>
+        <value>勾选后，按 AgentPickElement 热键固定 UI 元素时会顺带刷新上下文 stash，下一次 Claude Code 提问就能拿到。默认关闭。如果只想手动一次性捕获，按 SnapshotContext 热键。</value>
     </data>
     <data name="Strategy_BuiltIn_Browser_Name" xml:space="preserve">
         <value>浏览器助手</value>
