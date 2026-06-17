@@ -1,103 +1,127 @@
+using System.Text;
 using Everywhere.Mcp.Snapshot;
 
 namespace Everywhere.Mac.Mcp;
 
 /// <summary>
-/// macOS browser-tabs reader. Per-app AppleScript: Safari / Chrome (and Chromium
-/// derivatives like Arc/Brave/Edge with the same dictionary).
+/// macOS browser-tabs reader. Per-app AppleScript: Safari + Chromium derivatives
+/// (Chrome/Arc/Brave/Edge/Chromium/Vivaldi/Opera) — they all share the same
+/// scripting dictionary so one template suffices.
 /// </summary>
 public sealed class MacBrowserTabsReader(IAppleScriptRunner runner) : IBrowserTabsReader
 {
+    // Closed allow-list: every entry is a known-safe AppleScript application name.
+    // No fallthrough to caller-supplied strings, so the AppleScript template is
+    // never interpolated with attacker-controlled data.
+    private static readonly Dictionary<string, string> ChromiumApps = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["chrome"] = "Google Chrome",
+        ["google chrome"] = "Google Chrome",
+        ["arc"] = "Arc",
+        ["brave"] = "Brave Browser",
+        ["brave browser"] = "Brave Browser",
+        ["edge"] = "Microsoft Edge",
+        ["microsoft edge"] = "Microsoft Edge",
+        ["chromium"] = "Chromium",
+        ["vivaldi"] = "Vivaldi",
+        ["opera"] = "Opera",
+    };
+
     public BrowserTabsResult GetTabs(string appKey)
     {
         if (string.IsNullOrWhiteSpace(appKey))
             return new BrowserTabsResult(BrowserTabsStatus.NotSupported, []);
 
-        var lower = appKey.ToLowerInvariant();
-        var script = ScriptFor(lower);
+        var script = ScriptFor(appKey);
         if (script is null)
             return new BrowserTabsResult(BrowserTabsStatus.NotSupported, []);
 
-        var raw = runner.Run(script);
-        if (string.IsNullOrEmpty(raw))
+        var result = runner.Run(script);
+        switch (result.Status)
         {
-            // Distinguish "permission denied / scripting failed" from "no tabs".
-            var err = (runner as MacAppleScriptRunner)?.LastError;
-            if (!string.IsNullOrEmpty(err))
-            {
-                return new BrowserTabsResult(BrowserTabsStatus.PermissionDenied, [], err);
-            }
-            return new BrowserTabsResult(BrowserTabsStatus.Ok, []);
+            case AppleScriptStatus.PermissionDenied:
+                return new BrowserTabsResult(BrowserTabsStatus.PermissionDenied, [], result.ErrorMessage);
+            case AppleScriptStatus.NotSupported:
+                return new BrowserTabsResult(BrowserTabsStatus.NotSupported, [], result.ErrorMessage);
+            case AppleScriptStatus.Failed:
+                return new BrowserTabsResult(BrowserTabsStatus.PermissionDenied, [], result.ErrorMessage);
         }
 
+        var tabs = ParseTabs(result.Output);
+        return new BrowserTabsResult(BrowserTabsStatus.Ok, tabs);
+    }
+
+    private static List<BrowserTab> ParseTabs(string? raw)
+    {
         var tabs = new List<BrowserTab>();
-        foreach (var line in raw.Split('\n'))
+        if (string.IsNullOrEmpty(raw)) return tabs;
+
+        // Each line: `flag\x1Ftitle\x1Furl` — using ASCII Unit Separator avoids
+        // the chance that a page title containing a tab character mis-aligns columns.
+        // (Title still cannot contain \x1F or a record-separating \x1E.)
+        foreach (var line in raw.Split('\x1E'))
         {
-            var trimmed = line.Trim();
+            var trimmed = line.Trim('\r', '\n', ' ');
             if (string.IsNullOrEmpty(trimmed)) continue;
-            var parts = trimmed.Split('\t', 3);
+            var parts = trimmed.Split('\x1F', 3);
             if (parts.Length < 3) continue;
             tabs.Add(new BrowserTab(
                 Title: parts[1],
                 Url: parts[2],
                 IsActive: parts[0] == "1"));
         }
-        return new BrowserTabsResult(BrowserTabsStatus.Ok, tabs);
+        return tabs;
     }
 
-    private static string? ScriptFor(string lowerAppKey)
+    private static string? ScriptFor(string appKey)
     {
-        if (lowerAppKey is "google chrome" or "chrome" or "arc" or "brave browser" or "brave" or "microsoft edge" or "edge"
-            or "chromium" or "vivaldi" or "opera")
+        var lower = appKey.ToLowerInvariant();
+        if (lower == "safari")
         {
-            var name = AppleScriptAppName(lowerAppKey);
-            return $@"tell application ""{name}""
-                set out to """"
-                repeat with w in windows
-                    set ai to active tab index of w
-                    set i to 0
-                    repeat with t in tabs of w
-                        set i to i + 1
-                        set isActive to (i is equal to ai)
-                        set flag to ""0""
-                        if isActive then set flag to ""1""
-                        set out to out & flag & tab & (title of t) & tab & (URL of t) & linefeed
-                    end repeat
-                end repeat
-                return out
-            end tell";
+            return BuildSafariScript();
         }
-        if (lowerAppKey == "safari")
+        if (ChromiumApps.TryGetValue(lower, out var canonicalName))
         {
-            return @"tell application ""Safari""
-                set out to """"
-                repeat with w in windows
-                    set ct to current tab of w
-                    repeat with t in tabs of w
-                        set isActive to (t is ct)
-                        set flag to ""0""
-                        if isActive then set flag to ""1""
-                        set out to out & flag & tab & (name of t) & tab & (URL of t) & linefeed
-                    end repeat
-                end repeat
-                return out
-            end tell";
+            return BuildChromiumScript(canonicalName);
         }
         return null;
     }
 
-    private static string AppleScriptAppName(string key) => key switch
-    {
-        "chrome" => "Google Chrome",
-        "google chrome" => "Google Chrome",
-        "arc" => "Arc",
-        "brave" => "Brave Browser",
-        "brave browser" => "Brave Browser",
-        "edge" => "Microsoft Edge",
-        "microsoft edge" => "Microsoft Edge",
-        "chromium" => "Chromium",
-        "vivaldi" => "Vivaldi",
-        "opera" => "Opera",
-        _ => key,
-    };
+    // \x1F = ASCII Unit Separator, \x1E = ASCII Record Separator.
+    // Splits inside titles are vanishingly rare for these control bytes vs. \t / \n.
+    private static string BuildChromiumScript(string canonicalAppName) =>
+        $@"tell application ""{canonicalAppName}""
+            set out to """"
+            set US to (ASCII character 31)
+            set RS to (ASCII character 30)
+            repeat with w in windows
+                set ai to active tab index of w
+                set i to 0
+                repeat with t in tabs of w
+                    set i to i + 1
+                    set isActive to (i is equal to ai)
+                    set flag to ""0""
+                    if isActive then set flag to ""1""
+                    set out to out & flag & US & (title of t) & US & (URL of t) & RS
+                end repeat
+            end repeat
+            return out
+        end tell";
+
+    private static string BuildSafariScript() =>
+        @"tell application ""Safari""
+            set out to """"
+            set US to (ASCII character 31)
+            set RS to (ASCII character 30)
+            repeat with w in windows
+                set ct to current tab of w
+                repeat with t in tabs of w
+                    set isActive to (t is ct)
+                    set flag to ""0""
+                    if isActive then set flag to ""1""
+                    set out to out & flag & US & (name of t) & US & (URL of t) & RS
+                end repeat
+            end repeat
+            return out
+        end tell";
 }

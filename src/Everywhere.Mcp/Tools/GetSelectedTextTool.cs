@@ -36,12 +36,13 @@ public static class GetSelectedTextTool
 
             var focused = context.FocusedElement;
             var text = focused?.GetSelectionText() ?? string.Empty;
+            var hasSelection = !string.IsNullOrEmpty(text);
             return Json(new
             {
-                selected = !string.IsNullOrEmpty(text),
+                selected = hasSelection,
                 text,
-                app = focused != null ? AppKey.FromProcessId(focused.ProcessId) : null,
-                source = string.IsNullOrEmpty(text) ? null : "focused",
+                app = hasSelection && focused != null ? AppKey.FromProcessId(focused.ProcessId) : null,
+                source = hasSelection ? "focused" : (string?)null,
             });
         }
         catch (Exception ex)

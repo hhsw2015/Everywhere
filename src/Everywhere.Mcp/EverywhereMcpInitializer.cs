@@ -15,13 +15,14 @@ public sealed class EverywhereMcpInitializer(
     Settings settings,
     EverywhereMcpHttpOptions options,
     EverywhereMcpHttpHost host,
+    // ReSharper disable once UnusedParameter.Local — DI resolves the cache as soon
+    // as this initializer is constructed; its ctor subscribes to the selection
+    // stream so events from process start are captured. We only need the resolution
+    // side-effect, no field needed.
     SelectionCache selectionCache,
     ILogger<EverywhereMcpInitializer> logger
 ) : IAsyncInitializer
 {
-    // Touch the cache so DI resolves it now → its ctor subscribes to the selection
-    // stream from process start, not lazily on first get_selected_text call.
-    private readonly SelectionCache _selectionCache = selectionCache;
 
     public AsyncInitializerIndex Index => AsyncInitializerIndex.Startup;
 

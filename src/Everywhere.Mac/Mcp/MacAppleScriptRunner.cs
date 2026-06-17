@@ -4,19 +4,20 @@ using Everywhere.Mcp.Snapshot;
 namespace Everywhere.Mac.Mcp;
 
 /// <summary>
-/// macOS AppleScript runner via <c>/usr/bin/osascript -e &lt;source&gt;</c>. Cheap and
-/// avoids NSAppleScript / Carbon AESendMessage ceremony. 5-second timeout per call.
-/// On any failure (timeout, non-zero exit, missing Apple Events permission) the
-/// stderr is captured and forwarded to <see cref="LastError"/> so callers can
-/// distinguish "no data" from "permission not granted".
+/// macOS AppleScript runner via <c>/usr/bin/osascript -e &lt;source&gt;</c>. Reads
+/// stdout/stderr asynchronously to avoid OS pipe-buffer deadlock when the script
+/// emits more than ~64 KB. Distinguishes Apple Events permission denial (TCC -1743)
+/// from generic failures.
 /// </summary>
 public sealed class MacAppleScriptRunner : IAppleScriptRunner
 {
-    public string? LastError { get; private set; }
+    private const int TimeoutMs = 5000;
 
-    public string? Run(string source)
+    public AppleScriptResult Run(string source)
     {
-        if (string.IsNullOrWhiteSpace(source)) return null;
+        if (string.IsNullOrWhiteSpace(source))
+            return new AppleScriptResult(AppleScriptStatus.Failed, null, "empty script");
+
         try
         {
             using var p = new Process
@@ -32,30 +33,38 @@ public sealed class MacAppleScriptRunner : IAppleScriptRunner
                 },
             };
             if (!p.Start())
-            {
-                LastError = "failed to spawn osascript";
-                return null;
-            }
-            if (!p.WaitForExit(5000))
+                return new AppleScriptResult(AppleScriptStatus.Failed, null, "failed to spawn osascript");
+
+            // Drain pipes concurrently to defeat the 64KB buffer-deadlock case.
+            var stdoutTask = p.StandardOutput.ReadToEndAsync();
+            var stderrTask = p.StandardError.ReadToEndAsync();
+
+            if (!p.WaitForExit(TimeoutMs))
             {
                 try { p.Kill(true); } catch { }
-                LastError = "osascript timed out (5s)";
-                return null;
+                try { p.WaitForExit(1000); } catch { }
+                return new AppleScriptResult(AppleScriptStatus.Failed, null, $"osascript timed out ({TimeoutMs}ms)");
             }
-            var stderr = p.StandardError.ReadToEnd().Trim();
+
+            var stdout = stdoutTask.GetAwaiter().GetResult();
+            var stderr = stderrTask.GetAwaiter().GetResult().Trim();
+
             if (p.ExitCode != 0)
             {
-                LastError = string.IsNullOrEmpty(stderr) ? $"exit {p.ExitCode}" : stderr;
-                return null;
+                // -1743: Apple Events permission denial. Other negatives = scripting errors.
+                var isPermission =
+                    stderr.Contains("-1743", StringComparison.Ordinal) ||
+                    stderr.Contains("not allowed assistive access", StringComparison.OrdinalIgnoreCase) ||
+                    stderr.Contains("not authorized to send Apple events", StringComparison.OrdinalIgnoreCase);
+                var status = isPermission ? AppleScriptStatus.PermissionDenied : AppleScriptStatus.Failed;
+                return new AppleScriptResult(status, null, string.IsNullOrEmpty(stderr) ? $"exit {p.ExitCode}" : stderr);
             }
-            LastError = null;
-            var output = p.StandardOutput.ReadToEnd().TrimEnd('\n');
-            return output.Length == 0 ? null : output;
+
+            return new AppleScriptResult(AppleScriptStatus.Ok, stdout.TrimEnd('\n'), null);
         }
         catch (Exception ex)
         {
-            LastError = ex.Message;
-            return null;
+            return new AppleScriptResult(AppleScriptStatus.Failed, null, ex.Message);
         }
     }
 }
