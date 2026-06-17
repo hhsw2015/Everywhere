@@ -43,7 +43,18 @@ public sealed class ContextStashWriter
         _logger = logger;
     }
 
-    public async Task CaptureAsync(CancellationToken cancellationToken = default)
+    public Task CaptureAsync(CancellationToken cancellationToken = default) => CaptureCoreAsync(seed: null, cancellationToken);
+
+    /// <summary>
+    /// Capture context anchored to a specific element instead of whatever
+    /// happens to be focused right now. Used by pin-driven auto-capture: by
+    /// the time the Pinned event fires, focus has already returned to the
+    /// chat window, so reading FocusedElement would yield the chat window
+    /// (or nothing).
+    /// </summary>
+    public Task CaptureAsync(IVisualElement seed, CancellationToken cancellationToken = default) => CaptureCoreAsync(seed, cancellationToken);
+
+    private async Task CaptureCoreAsync(IVisualElement? seed, CancellationToken cancellationToken)
     {
         // Single-flight: rapid hotkey double-presses must serialise on the file
         // write, otherwise both invocations race on the same .tmp path.
@@ -55,7 +66,7 @@ public sealed class ContextStashWriter
 
         try
         {
-            var focused = _context.FocusedElement;
+            var focused = seed ?? _context.FocusedElement;
             var topLevel = WalkToTopLevel(focused);
             if (topLevel is null)
             {

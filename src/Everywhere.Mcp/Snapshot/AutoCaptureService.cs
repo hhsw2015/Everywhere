@@ -65,7 +65,7 @@ public sealed class AutoCaptureService : IAsyncInitializer, IDisposable
     private void Start()
     {
         if (_pickHandler is not null) return;
-        _pickHandler = _ => TryCapture();
+        _pickHandler = TryCapture;
         _pickStash.Pinned += _pickHandler;
     }
 
@@ -78,14 +78,14 @@ public sealed class AutoCaptureService : IAsyncInitializer, IDisposable
         }
     }
 
-    private void TryCapture()
+    private void TryCapture(IVisualElement element)
     {
         if (Interlocked.Exchange(ref _running, 1) == 1) return;
         Dispatcher.UIThread.Post(async () =>
         {
             try
             {
-                await _writer.CaptureAsync();
+                await _writer.CaptureAsync(element);
                 _logger.LogDebug("Auto-captured context (pin)");
             }
             catch (Exception ex)
