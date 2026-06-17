@@ -114,7 +114,12 @@ public sealed class ContextStashWriter
                 selectionApp = appKey;
             }
 
-            var pinPending = _pickStash.HasFreshPin;
+            // Only label pin_pending when this capture was actually triggered
+            // by a pin (seed != null). The stale-pin slot from a prior
+            // AgentPickElement can still be HasFreshPin=true for up to 5 min,
+            // but the user's current SnapshotContext press is unrelated to it
+            // — claiming pin_pending would point the LLM at the wrong element.
+            var pinPending = seed is not null && _pickStash.HasFreshPin;
 
             // If we ended up with nothing useful — no app, no title, no url, no
             // selection, AND no fresh pin waiting — refuse to write. An empty
