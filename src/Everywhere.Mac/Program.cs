@@ -13,6 +13,7 @@ using Everywhere.Mac.Interop;
 using Everywhere.Mac.Mcp;
 using Everywhere.Mcp;
 using Everywhere.Mcp.Input;
+using Everywhere.Mcp.Snapshot;
 using Everywhere.StrategyEngine;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -30,7 +31,10 @@ public static class Program
                 services => services
                     .AddSingleton<IVisualElementContext, VisualElementContext>()
                     .AddSingleton<IInputSimulator, MacInputSimulator>()
-                    .AddSingleton<IFocusBackend, MacFocusBackend>());
+                    .AddSingleton<IFocusBackend, MacFocusBackend>()
+                    .AddSingleton<IClipboardReader, MacClipboardReader>()
+                    .AddSingleton<IIdleTimeReader, MacIdleTimeReader>()
+                    .AddSingleton<IBrowserUrlReader, MacBrowserUrlReader>());
             return;
         }
 
@@ -61,6 +65,9 @@ public static class Program
                 .AddChatEssentials()
                 .AddSingleton<IInputSimulator, MacInputSimulator>()
                 .AddSingleton<IFocusBackend, MacFocusBackend>()
+                .AddSingleton<IClipboardReader, MacClipboardReader>()
+                .AddSingleton<IIdleTimeReader, MacIdleTimeReader>()
+                .AddSingleton<IBrowserUrlReader, MacBrowserUrlReader>()
                 .AddEverywhereMcp()
 
                 #endregion

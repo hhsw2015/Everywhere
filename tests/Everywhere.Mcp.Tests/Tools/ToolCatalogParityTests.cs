@@ -18,6 +18,7 @@ public class ToolCatalogParityTests
         "get_focused_context", "get_selected_text", "pick_element",
         "expand_element", "get_terminal_output", "screenshot", "read_pick",
         "get_app_context",
+        "get_clipboard", "get_idle_time", "get_browser_url",
     ];
 
     [Test]

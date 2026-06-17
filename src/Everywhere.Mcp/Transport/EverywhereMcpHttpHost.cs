@@ -38,6 +38,9 @@ public sealed class EverywhereMcpHttpHost : IHostedService, IAsyncDisposable
     private readonly IInputSimulator _input;
     private readonly FocusBorrow _focusBorrow;
     private readonly SelectionCache _selectionCache;
+    private readonly IClipboardReader _clipboard;
+    private readonly IIdleTimeReader _idle;
+    private readonly IBrowserUrlReader _browserUrl;
 
     public EverywhereMcpHttpHost(
         EverywhereMcpHttpOptions options,
@@ -54,6 +57,9 @@ public sealed class EverywhereMcpHttpHost : IHostedService, IAsyncDisposable
         _input = parentServices.GetRequiredService<IInputSimulator>();
         _focusBorrow = parentServices.GetRequiredService<FocusBorrow>();
         _selectionCache = parentServices.GetRequiredService<SelectionCache>();
+        _clipboard = parentServices.GetRequiredService<IClipboardReader>();
+        _idle = parentServices.GetRequiredService<IIdleTimeReader>();
+        _browserUrl = parentServices.GetRequiredService<IBrowserUrlReader>();
     }
 
     public int BoundPort => Volatile.Read(ref _boundPort);
@@ -176,6 +182,9 @@ public sealed class EverywhereMcpHttpHost : IHostedService, IAsyncDisposable
         builder.Services.AddSingleton(_input);
         builder.Services.AddSingleton(_focusBorrow);
         builder.Services.AddSingleton(_selectionCache);
+        builder.Services.AddSingleton(_clipboard);
+        builder.Services.AddSingleton(_idle);
+        builder.Services.AddSingleton(_browserUrl);
 
         builder.Services
             .AddMcpServer(opts =>
