@@ -1,10 +1,11 @@
 using System.Reactive.Disposables;
+using System.Reactive.Disposables.Fluent;
 using System.Security;
 using System.Text;
 using System.Text.RegularExpressions;
 using Avalonia.Controls.Notifications;
-using Avalonia.Threading;
 using DynamicData;
+using DynamicData.Binding;
 using Everywhere.Collections;
 using Everywhere.Common;
 using Everywhere.Configuration;
@@ -24,6 +25,7 @@ public sealed partial class SkillManager : ISkillManager, ISkillPromptProvider, 
     private readonly ILogger<SkillManager> _logger;
     private readonly SourceList<SkillSourceGroup> _sourceGroupsSource = new();
     private readonly CompositeDisposable _disposables = new(1);
+    private readonly CompositeDisposable _skillDescriptorSubscriptions = new();
     private readonly Lock _refreshLock = new();
     private Dictionary<string, SkillDescriptor> _skillsById = new(StringComparer.OrdinalIgnoreCase);
 
@@ -61,27 +63,18 @@ public sealed partial class SkillManager : ISkillManager, ISkillPromptProvider, 
             cancellationToken);
     }
 
-    public void SetSkillEnabled(SkillDescriptor skill, bool isEnabled)
-    {
-        skill.IsEnabled = isEnabled;
-
-        var overrides = GetSkillEnabledOverrides();
-        var isDefaultEnabled = SkillSource.IsDefaultEnabled(skill.SourceRoot);
-        if (isEnabled == isDefaultEnabled) overrides.Remove(skill.Id);
-        else overrides[skill.Id] = isEnabled;
-
-        _persistentState.SkillEnabledOverrides = ToOrderedStateDictionary(overrides);
-    }
+    public SkillResolutionResult ResolveSkillReference(string reference) =>
+        SkillReferenceResolver.Resolve(reference, _skillsById.Values);
 
     public string GetPrompt()
     {
         var enabledSkills =
             _skillsById.Values
-            .AsValueEnumerable()
-            .Where(skill => skill is { IsEnabled: true, IsValid: true })
-            .OrderBy(skill => skill.SourceRoot)
-            .ThenBy(skill => skill.Id, StringComparer.OrdinalIgnoreCase)
-            .ToList();
+                .AsValueEnumerable()
+                .Where(skill => skill is { IsEnabled: true, IsValid: true })
+                .OrderBy(skill => skill.SourceRoot)
+                .ThenBy(skill => skill.Id, StringComparer.OrdinalIgnoreCase)
+                .ToList();
         if (enabledSkills.Count == 0) return string.Empty;
 
         var builder = new StringBuilder();
@@ -89,7 +82,8 @@ public sealed partial class SkillManager : ISkillManager, ISkillPromptProvider, 
         builder.AppendLine("<skills>");
         builder.AppendLine("Here is a list of skills that contain domain specific knowledge on a variety of topics.");
         builder.AppendLine("Each skill comes with a description of the topic and a file path that contains the detailed instructions.");
-        builder.AppendLine("When a user asks you to perform a task that falls within the domain of a skill, use the 'read_file' tool to acquire the full instructions from the file URI.");
+        builder.AppendLine(
+            "When a user asks you to perform a task that falls within the domain of a skill, use the 'read_file' tool to acquire the full instructions from the file URI.");
         foreach (var skill in enabledSkills)
         {
             builder.AppendLine("<skill>");
@@ -107,6 +101,7 @@ public sealed partial class SkillManager : ISkillManager, ISkillPromptProvider, 
     {
         lock (_refreshLock)
         {
+            _skillDescriptorSubscriptions.Clear();
             var overrides = GetSkillEnabledOverrides();
             var groups = DiscoverSkillGroups(overrides);
             var skills = groups.SelectMany(group => group.Skills).ToList();
@@ -123,7 +118,7 @@ public sealed partial class SkillManager : ISkillManager, ISkillPromptProvider, 
             }
 
             _skillsById = skills.ToDictionary(skill => skill.Id, StringComparer.OrdinalIgnoreCase);
-            Dispatcher.UIThread.PostOnDemand(() => _sourceGroupsSource.Reset(groups));
+            _sourceGroupsSource.Reset(groups);
         }
     }
 
@@ -190,7 +185,7 @@ public sealed partial class SkillManager : ISkillManager, ISkillPromptProvider, 
         var description = parseResult?.FrontmatterDescription ?? parseResult?.FirstParagraph;
         var directoryName = parseResult?.DirectoryName ?? folderName;
 
-        return new SkillDescriptor
+        var skillDescriptor = new SkillDescriptor
         {
             Id = id,
             Name = displayName,
@@ -205,9 +200,18 @@ public sealed partial class SkillManager : ISkillManager, ISkillPromptProvider, 
             SourceDirectoryPath = root.DirectoryPath,
             IsValid = isValid,
             IsEnabled = isValid && isEnabled,
-            Diagnostics = diagnostics,
-            IsEnabledChangedHandler = SetSkillEnabled,
+            Diagnostics = diagnostics
         };
+        skillDescriptor.WhenPropertyChanged(x => x.IsEnabled, false).Subscribe(x =>
+        {
+            var skill = x.Sender;
+            var overrides = GetSkillEnabledOverrides();
+            if (x.Value == SkillSource.IsDefaultEnabled(skill.SourceRoot)) overrides.Remove(skill.Id);
+            else overrides[skill.Id] = x.Value;
+            _persistentState.SkillEnabledOverrides = ToOrderedStateDictionary(overrides);
+        }).DisposeWith(_skillDescriptorSubscriptions);
+
+        return skillDescriptor;
     }
 
     private static IEnumerable<string> EnumerateSkillFiles(string root, DateTimeOffset deadline)
@@ -262,9 +266,9 @@ public sealed partial class SkillManager : ISkillManager, ISkillPromptProvider, 
     }
 
     private static Dictionary<string, bool>? ToOrderedStateDictionary(Dictionary<string, bool> overrides) =>
-        overrides.Count == 0
-            ? null
-            : overrides
+        overrides.Count == 0 ?
+            null :
+            overrides
                 .OrderBy(kvp => kvp.Key, StringComparer.OrdinalIgnoreCase)
                 .ToDictionary(kvp => kvp.Key, kvp => kvp.Value, StringComparer.OrdinalIgnoreCase);
 
@@ -284,6 +288,7 @@ public sealed partial class SkillManager : ISkillManager, ISkillPromptProvider, 
         _skillSource.Changed -= HandleSkillSourceChanged;
         _sourceGroupsSource.Dispose();
         _disposables.Dispose();
+        _skillDescriptorSubscriptions.Dispose();
     }
 
     private void HandleSkillSourceChanged(object? sender, SkillSourceChangedEventArgs args)

@@ -84,6 +84,11 @@
           </Grid>
         </DataTemplate>
       </Setter>
+      <Setter Property="Interaction.Behaviors">
+        <BehaviorCollection>
+          <shadui:SwallowBringIntoViewEventBehavior/>
+        </BehaviorCollection>
+      </Setter>
     </Style>
 
     <Style Selector="ItemsControl.ChatFunctionPermissions">

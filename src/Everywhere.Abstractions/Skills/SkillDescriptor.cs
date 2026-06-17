@@ -45,10 +45,6 @@ public sealed partial class SkillDescriptor : ObservableObject
     [ObservableProperty]
     public partial bool IsEnabled { get; set; }
 
-    internal Action<SkillDescriptor, bool>? IsEnabledChangedHandler { get; init; }
-
-    partial void OnIsEnabledChanged(bool value) => IsEnabledChangedHandler?.Invoke(this, value);
-
     private string? GetMetadataValue(string key) =>
         Metadata.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value)
             ? value

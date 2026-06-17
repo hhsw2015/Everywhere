@@ -1,6 +1,4 @@
-﻿using System.ComponentModel;
-
-namespace Everywhere.Extensions;
+﻿namespace Everywhere.Extensions;
 
 public static class FluentExtensions
 {
@@ -9,13 +7,4 @@ public static class FluentExtensions
         action(t);
         return t;
     }
-
-    public static T RegisterPropertyChangedHandler<T>(this T source, TypedPropertyChangedEventHandler<T> handler)
-        where T : INotifyPropertyChanged
-    {
-        source.PropertyChanged += (sender, e) => handler(sender.NotNull<T>(), e);
-        return source;
-    }
-
-    public delegate void TypedPropertyChangedEventHandler<in T>(T sender, PropertyChangedEventArgs e);
 }
