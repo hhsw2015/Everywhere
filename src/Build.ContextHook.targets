@@ -1,0 +1,27 @@
+<Project>
+  <!--
+    Builds the small Rust binary `tools/everywhere-context-hook` that the Claude Code
+    UserPromptSubmit hook calls to read + delete the context-stash JSON. Output lands
+    inside the macOS app bundle at Contents/Helpers/everywhere-context-hook.
+
+    Cargo's release-mode binary is ~280 KB and starts in ~3 ms — it's invoked on
+    every Enter key, so size and cold-start time both matter.
+  -->
+
+  <PropertyGroup>
+    <ContextHookSrcDir>$(MSBuildThisFileDirectory)..\tools\everywhere-context-hook</ContextHookSrcDir>
+    <ContextHookBinName Condition="'$(IsWindows)' == 'true'">everywhere-context-hook.exe</ContextHookBinName>
+    <ContextHookBinName Condition="'$(IsWindows)' != 'true'">everywhere-context-hook</ContextHookBinName>
+    <!-- Cargo target dir defaults to <crate>/target; some setups override via env. -->
+    <ContextHookTargetDir Condition="'$(CARGO_TARGET_DIR)' != ''">$(CARGO_TARGET_DIR)</ContextHookTargetDir>
+    <ContextHookTargetDir Condition="'$(ContextHookTargetDir)' == ''">$(ContextHookSrcDir)\target</ContextHookTargetDir>
+    <ContextHookExecutable>$(ContextHookTargetDir)\release\$(ContextHookBinName)</ContextHookExecutable>
+  </PropertyGroup>
+
+  <Target Name="BuildEverywhereContextHook" BeforeTargets="ResolveAssemblyReferences">
+    <Message Text="Building Rust context hook in $(ContextHookSrcDir)..." Importance="high" />
+    <Exec
+      Command="cargo build --release --manifest-path &quot;$(ContextHookSrcDir)\Cargo.toml&quot;"
+      ContinueOnError="false" />
+  </Target>
+</Project>

@@ -2212,6 +2212,12 @@
     <data name="ShortcutSettings_AgentPickElement_Desription" xml:space="preserve">
         <value>押すと UI 要素を選択して AI エージェントに固定します（MCP 経由で読み取り）。通常のピック ショートカットと異なり、チャット ウィンドウは開きません。</value>
     </data>
+    <data name="ShortcutSettings_SnapshotContext_Header" xml:space="preserve">
+        <value>AI エージェント用のコンテキストをキャプチャ</value>
+    </data>
+    <data name="ShortcutSettings_SnapshotContext_Desription" xml:space="preserve">
+        <value>任意のアプリで押すと、現在のコンテキスト（ウィンドウタイトル、URL、選択、a11y サマリー、スクリーンショット）をキャプチャします。次にターミナルで AI エージェントと話すとき、Claude Code フックが自動的に挿入します。スロットは 5 分後に期限切れになります。</value>
+    </data>
     <data name="SettingsCategory_Settings_McpServer_Header" xml:space="preserve">
         <value>MCP サーバー</value>
     </data>

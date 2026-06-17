@@ -2211,6 +2211,12 @@ Seçim modunu değiştirmek için kaydırıcı veya rakam tuşlarını kullanın
     <data name="ShortcutSettings_AgentPickElement_Desription" xml:space="preserve">
         <value>Bir UI öğesini seçip yapay zekâ aracılarına sabitlemek için bu kısayola basın (MCP ile okunur). Normal seçim kısayolundan farklı olarak sohbet penceresini açmaz.</value>
     </data>
+    <data name="ShortcutSettings_SnapshotContext_Header" xml:space="preserve">
+        <value>Yapay zekâ aracısı için bağlamı yakala</value>
+    </data>
+    <data name="ShortcutSettings_SnapshotContext_Desription" xml:space="preserve">
+        <value>Herhangi bir uygulamada basınca mevcut bağlamı (pencere başlığı, URL, seçim, a11y özeti, ekran görüntüsü) yakalar. Bir terminalde yapay zekâ aracısıyla bir sonraki konuşmanızda Claude Code kancası bunu otomatik olarak enjekte eder. 5 dakika sonra dolar.</value>
+    </data>
     <data name="SettingsCategory_Settings_McpServer_Header" xml:space="preserve">
         <value>MCP Sunucusu</value>
     </data>

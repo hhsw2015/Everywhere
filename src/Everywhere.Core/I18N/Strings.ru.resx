@@ -2212,6 +2212,12 @@
     <data name="ShortcutSettings_AgentPickElement_Desription" xml:space="preserve">
         <value>Нажмите, чтобы выбрать элемент интерфейса и закрепить его для ИИ-агентов (читается через MCP). В отличие от обычного сочетания выбора, окно чата не открывается.</value>
     </data>
+    <data name="ShortcutSettings_SnapshotContext_Header" xml:space="preserve">
+        <value>Захватить контекст для ИИ-агента</value>
+    </data>
+    <data name="ShortcutSettings_SnapshotContext_Desription" xml:space="preserve">
+        <value>Нажмите в любом приложении, чтобы захватить текущий контекст (заголовок окна, URL, выделение, сводку a11y, скриншот). В следующий раз, когда вы общаетесь с ИИ-агентом в терминале, хук Claude Code автоматически внедрит его. Слот истекает через 5 минут.</value>
+    </data>
     <data name="SettingsCategory_Settings_McpServer_Header" xml:space="preserve">
         <value>MCP-сервер</value>
     </data>

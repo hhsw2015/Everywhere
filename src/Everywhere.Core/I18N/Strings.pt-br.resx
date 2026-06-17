@@ -2213,6 +2213,12 @@ Use a roda do mouse ou teclas numéricas para alternar o modo de seleção</valu
     <data name="ShortcutSettings_AgentPickElement_Desription" xml:space="preserve">
         <value>Pressione para selecionar um elemento da interface e fixá-lo para agentes de IA (lido via MCP). Diferente do atalho de seleção comum, este não abre a janela de chat.</value>
     </data>
+    <data name="ShortcutSettings_SnapshotContext_Header" xml:space="preserve">
+        <value>Capturar contexto para o agente de IA</value>
+    </data>
+    <data name="ShortcutSettings_SnapshotContext_Desription" xml:space="preserve">
+        <value>Pressione em qualquer app para capturar o contexto atual (título da janela, URL, seleção, resumo de a11y, captura de tela). Da próxima vez que você falar com o agente de IA em um terminal, o hook do Claude Code o injetará automaticamente. Expira após 5 minutos.</value>
+    </data>
     <data name="SettingsCategory_Settings_McpServer_Header" xml:space="preserve">
         <value>Servidor MCP</value>
     </data>

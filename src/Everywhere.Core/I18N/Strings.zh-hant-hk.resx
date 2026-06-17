@@ -2212,6 +2212,12 @@
     <data name="ShortcutSettings_AgentPickElement_Desription" xml:space="preserve">
         <value>按下後選取一個 UI 元素並釘選給 AI 代理（透過 MCP 讀取）。與常規拾取快捷鍵不同，此操作不會打開聊天視窗。</value>
     </data>
+    <data name="ShortcutSettings_SnapshotContext_Header" xml:space="preserve">
+        <value>為 AI 代理擷取脈絡</value>
+    </data>
+    <data name="ShortcutSettings_SnapshotContext_Desription" xml:space="preserve">
+        <value>在任何應用中按下，擷取當前脈絡（視窗標題、URL、選取、輔助功能摘要、截圖）。下次你在終端機跟 AI 代理對話時，Claude Code 掛鉤會自動注入。槽位 5 分鐘後過期。</value>
+    </data>
     <data name="SettingsCategory_Settings_McpServer_Header" xml:space="preserve">
         <value>MCP 伺服器</value>
     </data>
