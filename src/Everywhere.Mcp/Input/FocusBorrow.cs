@@ -21,7 +21,7 @@ public sealed class FocusBorrow
         _backend = backend;
     }
 
-    public IDisposable Acquire(nint targetWindow, bool requireFocus = true)
+    public IDisposable Acquire(nint targetWindow, bool requireFocus = true, int processId = 0)
     {
         if (!requireFocus)
         {
@@ -42,7 +42,14 @@ public sealed class FocusBorrow
             }
             if (_backend.GetForegroundWindow() != targetWindow)
             {
-                _backend.Activate(targetWindow);
+                if (processId > 0)
+                {
+                    _backend.ActivateProcess(processId);
+                }
+                else
+                {
+                    _backend.Activate(targetWindow);
+                }
                 Thread.Sleep(UpstreamConstants.FocusActivateDelay);
             }
         }
@@ -92,4 +99,12 @@ public interface IFocusBackend
     nint GetForegroundWindow();
     bool TryAxRaise(nint window);
     void Activate(nint window);
+
+    /// <summary>
+    /// Optional fast-path: when the caller knows the target process id, the backend can
+    /// raise the app via OS-specific APIs (NSRunningApplication.activate on macOS,
+    /// SetForegroundWindow + AttachThreadInput on Windows). Default falls through to the
+    /// handle-based path for backends that haven't implemented this yet.
+    /// </summary>
+    void ActivateProcess(int processId) { }
 }

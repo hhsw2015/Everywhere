@@ -38,6 +38,8 @@ public sealed class SessionStore
     public AppSession? GetCurrent(string appKey) =>
         _sessions.TryGetValue(appKey, out var s) ? s : null;
 
+    public IEnumerable<string> GetKeys() => _sessions.Keys;
+
     /// <summary>
     /// Resolves an element index against <i>any</i> active session — useful when a tool
     /// receives an <c>element_index</c> without knowing its source app. Returns null if

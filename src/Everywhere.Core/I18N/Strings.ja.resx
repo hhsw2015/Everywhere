@@ -2206,6 +2206,30 @@
     <data name="ShortcutSettings_TakeScreenshot_Desription" xml:space="preserve">
         <value>いつでも押してスクリーンショットをキャプチャし、その後チャットウィンドウが表示されます。</value>
     </data>
+    <data name="ShortcutSettings_AgentPickElement_Header" xml:space="preserve">
+        <value>AI エージェント用に要素を固定</value>
+    </data>
+    <data name="ShortcutSettings_AgentPickElement_Desription" xml:space="preserve">
+        <value>押すと UI 要素を選択して AI エージェントに固定します（MCP 経由で読み取り）。通常のピック ショートカットと異なり、チャット ウィンドウは開きません。</value>
+    </data>
+    <data name="SettingsCategory_Settings_McpServer_Header" xml:space="preserve">
+        <value>MCP サーバー</value>
+    </data>
+    <data name="SettingsCategory_Settings_McpServer_Description" xml:space="preserve">
+        <value>Everywhere を Model Context Protocol サーバーとして公開し、AI エージェントが選択範囲/フォーカス/ターミナル出力を読み取り、UI を代理操作できるようにします。</value>
+    </data>
+    <data name="McpServerSettings_HttpEnabled_Header" xml:space="preserve">
+        <value>HTTP トランスポートを有効化</value>
+    </data>
+    <data name="McpServerSettings_HttpEnabled_Description" xml:space="preserve">
+        <value>有効にすると、Everywhere は http://localhost:&lt;ポート&gt;/mcp で MCP 接続を受け付けます（ループバックのみ）。無効化すると 'everywhere --mcp' の stdio トランスポートのみが利用可能です。</value>
+    </data>
+    <data name="McpServerSettings_HttpPort_Header" xml:space="preserve">
+        <value>HTTP ポート</value>
+    </data>
+    <data name="McpServerSettings_HttpPort_Description" xml:space="preserve">
+        <value>既定 7878。ポートが使用中の場合、Everywhere は最大 10 個の代替ポートを順次試行します。</value>
+    </data>
     <data name="Strategy_BuiltIn_Browser_Name" xml:space="preserve">
         <value>ブラウザアシスタント</value>
     </data>

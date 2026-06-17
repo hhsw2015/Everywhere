@@ -20,7 +20,7 @@ public static class SetValueTool
         if (string.IsNullOrEmpty(element_index)) return ToolErrors.ParameterRequired("element_index");
         if (value is null) return ToolErrors.ParameterRequired("value");
 
-        var (error, element) = ElementResolver.Resolve(sessions, element_index);
+        var (error, element) = ElementResolver.Resolve(sessions, element_index, appHint: app);
         if (error is not null) return error;
 
         try
@@ -30,7 +30,7 @@ public static class SetValueTool
         }
         catch (Exception ex)
         {
-            return ToolErrors.Error($"Failed to set value: {ex.Message}");
+            return ToolErrors.FromException(ex, "set_value");
         }
     }
 }

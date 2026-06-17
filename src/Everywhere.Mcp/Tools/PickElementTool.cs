@@ -53,9 +53,16 @@ public static class PickElementTool
             TreeJson = TreeJsonBuilder.Build(nodes),
         };
 
+        var json = JsonSerializer.Serialize(new
+        {
+            cancelled = false,
+            picked_index = nodes.Count > 0 ? nodes[0].Index : 0,
+            app = appKey,
+            element = payload,
+        });
         return new CallToolResult
         {
-            Content = [new TextContentBlock { Text = JsonSerializer.Serialize(payload) }],
+            Content = [new TextContentBlock { Text = json }],
         };
     }
 

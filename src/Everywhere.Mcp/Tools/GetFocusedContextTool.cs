@@ -12,7 +12,15 @@ namespace Everywhere.Mcp.Tools;
 public static class GetFocusedContextTool
 {
     [McpServerTool(Name = "get_focused_context", ReadOnly = true)]
-    [Description("Get a single rich snapshot of whatever the user is currently looking at: focused window, selected text, accessibility tree with budget-bounded pruning, and screenshot. PREFER THIS over list_apps + get_app_state when the user uses deictic references (\"this\", \"that\", \"the error\", \"this code\", \"这个\"). Cheaper and faster than the two-step flow.")]
+    [Description(
+        "Snapshot of the user's CURRENT foreground app — focused window + selected text + " +
+        "indexed accessibility tree + screenshot. Use ONLY when the user references their " +
+        "current view with deictic words: \"this\", \"that\", \"here\", \"the error\", " +
+        "\"this code\", \"这个\". " +
+        "DO NOT use when the user names a specific app (\"the browser\", \"Chrome\", \"VSCode\", " +
+        "\"Slack\") — call get_app_context instead. " +
+        "DO NOT use when the user has pre-pinned an element via the Pin Element hotkey — " +
+        "call read_pick instead.")]
     public static async Task<CallToolResult> GetFocusedContext(
         int? budget,
         IVisualElementContext context,

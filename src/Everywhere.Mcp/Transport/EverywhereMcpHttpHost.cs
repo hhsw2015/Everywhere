@@ -64,52 +64,64 @@ public sealed class EverywhereMcpHttpHost : IHostedService, IAsyncDisposable
             return;
         }
 
-        Exception? lastError = null;
-        for (var port = _options.Port; port <= _options.Port + _options.MaxPortFallbacks; port++)
+        // The whole port-walk loop holds _lifecycleLock so that a concurrent StopAsync
+        // either runs entirely before us (and then we start cleanly) or entirely after
+        // us (and tears down whatever we just bound). Without the lock, an interleaved
+        // StopAsync between two retry iterations leaves a started Kestrel without an owner.
+        Monitor.Enter(_lifecycleLock);
+        try
         {
-            cancellationToken.ThrowIfCancellationRequested();
+            if (_disposed) return;
 
-            WebApplication? candidate = null;
-            try
+            Exception? lastError = null;
+            for (var port = _options.Port; port <= _options.Port + _options.MaxPortFallbacks; port++)
             {
-                candidate = BuildApp(port);
-                await candidate.StartAsync(cancellationToken);
-                lock (_lifecycleLock)
+                cancellationToken.ThrowIfCancellationRequested();
+                if (_disposed) return;
+
+                WebApplication? candidate = null;
+                try
                 {
+                    candidate = BuildApp(port);
+                    await candidate.StartAsync(cancellationToken);
                     _app = candidate;
                     Volatile.Write(ref _boundPort, port);
+                    _logger.LogInformation(
+                        "Everywhere MCP HTTP transport bound to http://localhost:{Port}/mcp", port);
+                    return;
                 }
-                _logger.LogInformation(
-                    "Everywhere MCP HTTP transport bound to http://localhost:{Port}/mcp", port);
-                return;
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    if (candidate is not null) await candidate.DisposeAsync();
+                    throw;
+                }
+                catch (IOException ex) when (IsAddressInUse(ex))
+                {
+                    lastError = ex;
+                    if (candidate is not null) await candidate.DisposeAsync();
+                    _logger.LogWarning("Port {Port} is in use, trying next.", port);
+                }
+                catch (SocketException ex) when (IsAddressInUse(ex))
+                {
+                    lastError = ex;
+                    if (candidate is not null) await candidate.DisposeAsync();
+                    _logger.LogWarning("Port {Port} is in use, trying next.", port);
+                }
+                catch
+                {
+                    if (candidate is not null) await candidate.DisposeAsync();
+                    throw;
+                }
             }
-            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-            {
-                if (candidate is not null) await candidate.DisposeAsync();
-                throw;
-            }
-            catch (IOException ex) when (IsAddressInUse(ex))
-            {
-                lastError = ex;
-                if (candidate is not null) await candidate.DisposeAsync();
-                _logger.LogWarning("Port {Port} is in use, trying next.", port);
-            }
-            catch (SocketException ex) when (IsAddressInUse(ex))
-            {
-                lastError = ex;
-                if (candidate is not null) await candidate.DisposeAsync();
-                _logger.LogWarning("Port {Port} is in use, trying next.", port);
-            }
-            catch
-            {
-                if (candidate is not null) await candidate.DisposeAsync();
-                throw;
-            }
-        }
 
-        throw new InvalidOperationException(
-            $"Could not bind Everywhere MCP HTTP transport to ports {_options.Port}..{_options.Port + _options.MaxPortFallbacks}.",
-            lastError);
+            throw new InvalidOperationException(
+                $"Could not bind Everywhere MCP HTTP transport to ports {_options.Port}..{_options.Port + _options.MaxPortFallbacks}.",
+                lastError);
+        }
+        finally
+        {
+            Monitor.Exit(_lifecycleLock);
+        }
     }
 
     public async Task StopAsync(CancellationToken cancellationToken)
@@ -210,8 +222,14 @@ public sealed class EverywhereMcpHttpHost : IHostedService, IAsyncDisposable
 
     private static bool IsAllowedOrigin(string raw, int port)
     {
+        // Reject the literal "null" origin (file://, sandboxed iframes, opaque origins).
+        if (string.Equals(raw, "null", StringComparison.Ordinal)) return false;
         if (!Uri.TryCreate(raw, UriKind.Absolute, out var uri)) return false;
-        if (uri.Port != port) return false;
+
+        // Accept the configured port AND the default 80/443 fallthrough on the off-chance
+        // a user proxies through a local reverse proxy.
+        if (uri.Port != port && uri.Port != 80 && uri.Port != 443) return false;
+
         var host = uri.Host;
         return host.Equals("localhost", StringComparison.OrdinalIgnoreCase)
             || host == "127.0.0.1"

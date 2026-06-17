@@ -2206,6 +2206,30 @@ Rotella o tasti numerici per cambiare modalità di selezione</value>
     <data name="ShortcutSettings_TakeScreenshot_Desription" xml:space="preserve">
         <value>Premi in qualsiasi momento per catturare uno screenshot, quindi si aprirà la finestra di chat.</value>
     </data>
+    <data name="ShortcutSettings_AgentPickElement_Header" xml:space="preserve">
+        <value>Fissa elemento per l'agente IA</value>
+    </data>
+    <data name="ShortcutSettings_AgentPickElement_Desription" xml:space="preserve">
+        <value>Premi per selezionare un elemento dell'interfaccia e fissarlo per gli agenti IA (letto tramite MCP). A differenza del normale tasto di selezione, non apre la finestra di chat.</value>
+    </data>
+    <data name="SettingsCategory_Settings_McpServer_Header" xml:space="preserve">
+        <value>Server MCP</value>
+    </data>
+    <data name="SettingsCategory_Settings_McpServer_Description" xml:space="preserve">
+        <value>Espone Everywhere come server Model Context Protocol affinché gli agenti IA possano leggere la selezione/il focus/l'output del terminale e operare l'interfaccia per tuo conto.</value>
+    </data>
+    <data name="McpServerSettings_HttpEnabled_Header" xml:space="preserve">
+        <value>Abilita trasporto HTTP</value>
+    </data>
+    <data name="McpServerSettings_HttpEnabled_Description" xml:space="preserve">
+        <value>Se abilitato, Everywhere accetta connessioni MCP su http://localhost:&lt;porta&gt;/mcp (solo loopback). Disabilitalo per usare esclusivamente il trasporto stdio tramite 'everywhere --mcp'.</value>
+    </data>
+    <data name="McpServerSettings_HttpPort_Header" xml:space="preserve">
+        <value>Porta HTTP</value>
+    </data>
+    <data name="McpServerSettings_HttpPort_Description" xml:space="preserve">
+        <value>Predefinita 7878. Se la porta è in uso, Everywhere prova fino a dieci porte alternative.</value>
+    </data>
     <data name="Strategy_BuiltIn_Browser_Name" xml:space="preserve">
         <value>Assistente Browser</value>
     </data>

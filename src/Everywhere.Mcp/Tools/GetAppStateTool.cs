@@ -12,7 +12,12 @@ namespace Everywhere.Mcp.Tools;
 public static class GetAppStateTool
 {
     [McpServerTool(Name = "get_app_state", ReadOnly = true)]
-    [Description("Bring the named app to focus, capture a screenshot, and emit an indented accessibility tree text where each visible element is prefixed with [<element_index>] — those indices are the values you pass to click/scroll/set_value/perform_secondary_action. Issues a fresh element_index map; previously vended indices for this app become invalid.")]
+    [Description(
+        "Snapshot a NAMED app's largest visible window: indexed a11y tree + screenshot. " +
+        "Each tree row is prefixed [<element_index>]; pass that index to click/scroll/set_value/" +
+        "perform_secondary_action. Issues a fresh index map; previously vended indices for this " +
+        "app become invalid. " +
+        "PREFER get_app_context(app_hint) when the app match is fuzzy — it does the matching for you.")]
     public static async Task<CallToolResult> GetAppState(
         string app,
         bool show_full_text,
@@ -47,6 +52,7 @@ public static class GetAppStateTool
         var bounds = window.BoundingRectangle;
         var result = new AppStateResult
         {
+            App = resolved.Value.AppKey,
             WindowTitle = window.Name,
             WindowBounds = new WindowBounds(bounds.X, bounds.Y, bounds.Width, bounds.Height),
             ScreenshotPngBase64 = screenshotBase64,

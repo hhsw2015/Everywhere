@@ -2207,6 +2207,30 @@
     <data name="ShortcutSettings_TakeScreenshot_Desription" xml:space="preserve">
         <value>在任何时候按下即可捕获屏幕截图，之后会唤起聊天窗口。</value>
     </data>
+    <data name="ShortcutSettings_AgentPickElement_Header" xml:space="preserve">
+        <value>为 AI 智能体固定元素</value>
+    </data>
+    <data name="ShortcutSettings_AgentPickElement_Desription" xml:space="preserve">
+        <value>按下后选取一个 UI 元素并固定给 AI 智能体（通过 MCP 读取）。与常规拾取快捷键不同，此操作不会打开聊天窗口。</value>
+    </data>
+    <data name="SettingsCategory_Settings_McpServer_Header" xml:space="preserve">
+        <value>MCP 服务器</value>
+    </data>
+    <data name="SettingsCategory_Settings_McpServer_Description" xml:space="preserve">
+        <value>将 Everywhere 暴露为 Model Context Protocol 服务器，使 AI 智能体可以读取选区/焦点/终端输出，并代为操作 UI。</value>
+    </data>
+    <data name="McpServerSettings_HttpEnabled_Header" xml:space="preserve">
+        <value>启用 HTTP 传输</value>
+    </data>
+    <data name="McpServerSettings_HttpEnabled_Description" xml:space="preserve">
+        <value>启用后，Everywhere 在 http://localhost:&lt;端口&gt;/mcp 接受 MCP 连接（仅本地回环）。禁用时仅通过 'everywhere --mcp' 的 stdio 传输使用。</value>
+    </data>
+    <data name="McpServerSettings_HttpPort_Header" xml:space="preserve">
+        <value>HTTP 端口</value>
+    </data>
+    <data name="McpServerSettings_HttpPort_Description" xml:space="preserve">
+        <value>默认 7878。如果端口被占用，Everywhere 会向后尝试最多十个备用端口。</value>
+    </data>
     <data name="Strategy_BuiltIn_Browser_Name" xml:space="preserve">
         <value>浏览器助手</value>
     </data>
