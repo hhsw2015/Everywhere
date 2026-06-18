@@ -219,7 +219,7 @@ public sealed class ContextStashWriter
     /// control bytes stripped, brackets neutralised, length capped on grapheme
     /// clusters (no surrogate splits).
     /// </summary>
-    private static string FormatForHook(ContextSnapshotPayload p)
+    private string FormatForHook(ContextSnapshotPayload p)
     {
         var sb = new StringBuilder();
         sb.Append("[everywhere-ctx] ");
@@ -252,7 +252,39 @@ public sealed class ContextStashWriter
             sb.Append("[everywhere-hint] If the user's question needs more than this pointer, call the relevant Everywhere MCP tool — don't guess.\n");
         }
 
+        // Per-app discovery hint: only for apps the user has registered in
+        // Settings -> MCP -> KnownApps. Each entry maps a title regex to
+        // a discovery URL. Everywhere stays ignorant of any specific app.
+        var discoveryUrl = ResolveDiscoveryUrl(p.WindowTitle);
+        if (discoveryUrl is not null)
+        {
+            sb.Append("[everywhere-discover] This app self-describes its agent skills. Fetch ");
+            sb.Append(discoveryUrl);
+            sb.Append(" to get the SKILL.md pointers — read those before answering questions about this app.\n");
+        }
+
         return sb.ToString();
+    }
+
+    private string? ResolveDiscoveryUrl(string? windowTitle)
+    {
+        if (string.IsNullOrEmpty(windowTitle)) return null;
+        var apps = _settings.McpServer.KnownApps;
+        if (apps is null || apps.Count == 0) return null;
+        foreach (var app in apps)
+        {
+            if (string.IsNullOrEmpty(app.TitlePattern) || string.IsNullOrEmpty(app.DiscoverUrl))
+                continue;
+            try
+            {
+                if (System.Text.RegularExpressions.Regex.IsMatch(
+                        windowTitle, app.TitlePattern,
+                        System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+                    return app.DiscoverUrl;
+            }
+            catch { }
+        }
+        return null;
     }
 
     /// <summary>
