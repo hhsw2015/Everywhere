@@ -258,12 +258,35 @@ public sealed class ContextStashWriter
         var discoveryUrl = ResolveDiscoveryUrl(p.WindowTitle);
         if (discoveryUrl is not null)
         {
-            sb.Append("[everywhere-discover] This app self-describes its agent skills at ");
+            // Two-tier hint: fast path for the common case ("what was I just
+            // doing"), discovery for deeper queries.
+            // Fast path is derived from discoveryUrl (replace skills suffix).
+            var statePath = ToStatePath(discoveryUrl);
+            sb.Append("[everywhere-discover] xlb-style local app self-describes its agent skills at ");
             sb.Append(discoveryUrl);
-            sb.Append(". First time in this conversation: fetch it once to learn the SKILL.md catalog. After that: reuse what you already know — call the skill commands directly, do not re-fetch and do not re-read SKILL.md unless the catalog might have changed.\n");
+            sb.Append(". Fast path: for 'what was the user just looking at / clicking', GET ");
+            sb.Append(statePath);
+            sb.Append("?consume=1 — returns a ready-to-use markdown summary, no skill discovery needed. For deeper / topic-content questions, fetch the discovery URL once and follow its skills[].doc paths.\n");
         }
 
         return sb.ToString();
+    }
+
+    /// <summary>
+    /// Derive the fast-path "agent-state" URL from a discovery URL by
+    /// substituting the well-known segment. Falls back to the raw
+    /// discoveryUrl if the convention isn't met (the agent will then
+    /// have to fetch the catalog and look up the fast_paths array).
+    /// </summary>
+    private static string ToStatePath(string discoveryUrl)
+    {
+        // Common convention: discovery URL ends in '/agent-skills'; the
+        // sibling fast path is '/agent-state'. Otherwise leave as-is.
+        if (discoveryUrl.EndsWith("/agent-skills", StringComparison.OrdinalIgnoreCase))
+            return discoveryUrl[..^"/agent-skills".Length] + "/agent-state";
+        if (discoveryUrl.EndsWith("/xlb-perception", StringComparison.OrdinalIgnoreCase))
+            return discoveryUrl[..^"/xlb-perception".Length] + "/agent-state";
+        return discoveryUrl;
     }
 
     private string? ResolveDiscoveryUrl(string? windowTitle)
