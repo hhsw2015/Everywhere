@@ -195,16 +195,20 @@ public sealed class ContextStashWriter
     private void ActivateAgentApp()
     {
         var id = _settings.McpServer.AgentAppId;
-        if (string.IsNullOrWhiteSpace(id)) return;
+        if (string.IsNullOrWhiteSpace(id))
+        {
+            _logger.LogInformation("Agent app id is empty; skipping activation.");
+            return;
+        }
         bool raised;
         try
         {
             raised = _appActivator.Activate(id);
-            if (raised) _logger.LogDebug("Activated agent app {Id} after context capture.", id);
+            _logger.LogInformation("AppActivator.Activate({Id}) returned {Raised}.", id, raised);
         }
         catch (Exception ex)
         {
-            _logger.LogDebug(ex, "Failed to activate agent app {Id}", id);
+            _logger.LogWarning(ex, "Failed to activate agent app {Id}", id);
             return;
         }
         if (!raised) return;
