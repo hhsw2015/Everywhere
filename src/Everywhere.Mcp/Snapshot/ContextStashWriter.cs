@@ -258,9 +258,9 @@ public sealed class ContextStashWriter
         var discoveryUrl = ResolveDiscoveryUrl(p.WindowTitle);
         if (discoveryUrl is not null)
         {
-            sb.Append("[everywhere-discover] This app self-describes its agent skills. Fetch ");
+            sb.Append("[everywhere-discover] This app self-describes its agent skills at ");
             sb.Append(discoveryUrl);
-            sb.Append(" to get the SKILL.md pointers — read those before answering questions about this app.\n");
+            sb.Append(". First time in this conversation: fetch it once to learn the SKILL.md catalog. After that: reuse what you already know — call the skill commands directly, do not re-fetch and do not re-read SKILL.md unless the catalog might have changed.\n");
         }
 
         return sb.ToString();
