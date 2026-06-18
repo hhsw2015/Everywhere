@@ -117,7 +117,7 @@ public sealed class MacInputSimulator : IInputSimulator
             var ev = CGEventCreateKeyboardEvent(nint.Zero, mkc, true);
             if (ev == nint.Zero) throw new InvalidOperationException("Failed to create modifier key down event.");
             CGEventSetFlags(ev, activeFlags);
-            CGEventPost(CGEventTapLocation.AnnotatedSessionEventTap,ev);
+            CGEventPost(CGEventTapLocation.SessionEventTap,ev);
             CFRelease(ev);
         }
 
@@ -134,8 +134,8 @@ public sealed class MacInputSimulator : IInputSimulator
         {
             CGEventSetFlags(down, activeFlags);
             CGEventSetFlags(up, activeFlags);
-            CGEventPost(CGEventTapLocation.AnnotatedSessionEventTap,down);
-            CGEventPost(CGEventTapLocation.AnnotatedSessionEventTap,up);
+            CGEventPost(CGEventTapLocation.SessionEventTap,down);
+            CGEventPost(CGEventTapLocation.SessionEventTap,up);
         }
         finally { CFRelease(down); CFRelease(up); }
 
@@ -146,7 +146,7 @@ public sealed class MacInputSimulator : IInputSimulator
             var ev = CGEventCreateKeyboardEvent(nint.Zero, mkc, false);
             if (ev == nint.Zero) throw new InvalidOperationException("Failed to create modifier key up event.");
             CGEventSetFlags(ev, activeFlags);
-            CGEventPost(CGEventTapLocation.AnnotatedSessionEventTap,ev);
+            CGEventPost(CGEventTapLocation.SessionEventTap,ev);
             CFRelease(ev);
             activeFlags &= ~flag;
         }
@@ -168,7 +168,7 @@ public sealed class MacInputSimulator : IInputSimulator
         try
         {
             CGEventSetIntegerValueField(ev, CGEventField.MouseEventClickState, clickState);
-            CGEventPost(CGEventTapLocation.AnnotatedSessionEventTap,ev);
+            CGEventPost(CGEventTapLocation.SessionEventTap,ev);
         }
         finally { CFRelease(ev); }
         Thread.Sleep(30);
@@ -196,8 +196,8 @@ public sealed class MacInputSimulator : IInputSimulator
                     CGEventKeyboardSetUnicodeString(up, units.Length, (ushort*)p);
                 }
             }
-            CGEventPost(CGEventTapLocation.AnnotatedSessionEventTap,down);
-            CGEventPost(CGEventTapLocation.AnnotatedSessionEventTap,up);
+            CGEventPost(CGEventTapLocation.SessionEventTap,down);
+            CGEventPost(CGEventTapLocation.SessionEventTap,up);
         }
         finally { CFRelease(down); CFRelease(up); }
     }
