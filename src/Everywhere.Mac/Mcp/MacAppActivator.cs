@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using Everywhere.Mcp.Input;
+using Microsoft.Extensions.Logging;
 
 namespace Everywhere.Mac.Mcp;
 
@@ -16,8 +17,14 @@ public sealed class MacAppActivator : IAppActivator
     private const ulong ActivateAllWindows = 1;
     private const ulong ActivateIgnoringOtherApps = 2;
 
-    public MacAppActivator()
+    private readonly ILogger<MacAppActivator>? _logger;
+
+    public MacAppActivator() : this(null) { }
+
+    public MacAppActivator(ILogger<MacAppActivator>? logger)
     {
+        _logger = logger;
+
         // Prime NSWorkspace eagerly. As an LSUIElement service process,
         // Everywhere doesn't always have AppKit fully spun up by the time
         // the first SnapshotContext press lands; the very first
@@ -25,7 +32,9 @@ public sealed class MacAppActivator : IAppActivator
         // return an empty / partial list, which is why activation only
         // started working after the user did one AgentPickElement (the
         // picker wakes AppKit). Calling sharedWorkspace + runningApplications
-        // once at DI construction makes the first Snapshot hot.
+        // once at DI construction makes the first Snapshot hot. We catch
+        // narrowly and log so a regression here doesn't silently bring back
+        // the original "first activation does nothing" symptom.
         try
         {
             var ws = objc_msgSend_get(objc_getClass("NSWorkspace"), sel_registerName("sharedWorkspace"));
@@ -34,8 +43,14 @@ public sealed class MacAppActivator : IAppActivator
                 _ = objc_msgSend_get(ws, sel_registerName("runningApplications"));
                 _ = objc_msgSend_get(ws, sel_registerName("frontmostApplication"));
             }
+            else
+            {
+                _logger?.LogWarning("MacAppActivator priming: NSWorkspace.sharedWorkspace returned 0; first activation may be cold.");
+            }
         }
-        catch { }
+        catch (DllNotFoundException ex) { _logger?.LogWarning(ex, "MacAppActivator priming: libobjc missing."); }
+        catch (EntryPointNotFoundException ex) { _logger?.LogWarning(ex, "MacAppActivator priming: P/Invoke entry missing."); }
+        catch (Exception ex) { _logger?.LogWarning(ex, "MacAppActivator priming failed; first activation may be cold."); }
     }
 
     public bool Activate(string appIdentifier)
