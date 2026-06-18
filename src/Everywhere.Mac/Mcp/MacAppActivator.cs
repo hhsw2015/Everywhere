@@ -16,6 +16,28 @@ public sealed class MacAppActivator : IAppActivator
     private const ulong ActivateAllWindows = 1;
     private const ulong ActivateIgnoringOtherApps = 2;
 
+    public MacAppActivator()
+    {
+        // Prime NSWorkspace eagerly. As an LSUIElement service process,
+        // Everywhere doesn't always have AppKit fully spun up by the time
+        // the first SnapshotContext press lands; the very first
+        // -[NSWorkspace runningApplications] call has been observed to
+        // return an empty / partial list, which is why activation only
+        // started working after the user did one AgentPickElement (the
+        // picker wakes AppKit). Calling sharedWorkspace + runningApplications
+        // once at DI construction makes the first Snapshot hot.
+        try
+        {
+            var ws = objc_msgSend_get(objc_getClass("NSWorkspace"), sel_registerName("sharedWorkspace"));
+            if (ws != 0)
+            {
+                _ = objc_msgSend_get(ws, sel_registerName("runningApplications"));
+                _ = objc_msgSend_get(ws, sel_registerName("frontmostApplication"));
+            }
+        }
+        catch { }
+    }
+
     public bool Activate(string appIdentifier)
     {
         if (string.IsNullOrWhiteSpace(appIdentifier)) return false;
