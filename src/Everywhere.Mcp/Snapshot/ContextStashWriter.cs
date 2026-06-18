@@ -220,23 +220,32 @@ public sealed class ContextStashWriter
         // the keystroke lands in the agent app, not the previously-focused
         // window. Prefer Main; fall back to Alternative if Main is empty.
         var triggerCombo = _settings.McpServer.AgentTriggerKey;
-        if (!triggerCombo.IsEnabled) return;
+        if (!triggerCombo.IsEnabled)
+        {
+            _logger.LogInformation("AgentTriggerKey: composite disabled, skipping keystroke.");
+            return;
+        }
         var keySpec = triggerCombo.Main.IsValid ? triggerCombo.Main.ToXdotool()
                     : triggerCombo.Alternative.IsValid ? triggerCombo.Alternative.ToXdotool()
                     : string.Empty;
-        if (string.IsNullOrEmpty(keySpec)) return;
+        if (string.IsNullOrEmpty(keySpec))
+        {
+            _logger.LogInformation("AgentTriggerKey: no valid key recorded (Main IsValid={Main}, Alt IsValid={Alt}).",
+                triggerCombo.Main.IsValid, triggerCombo.Alternative.IsValid);
+            return;
+        }
 
         _ = Task.Run(async () =>
         {
             try
             {
-                await Task.Delay(120);
+                await Task.Delay(250);
                 _input.PressKey(keySpec);
-                _logger.LogDebug("Sent agent trigger key {Key} after activation.", keySpec);
+                _logger.LogInformation("Sent agent trigger key '{Key}' after activation.", keySpec);
             }
             catch (Exception ex)
             {
-                _logger.LogDebug(ex, "Failed to send agent trigger key {Key}", keySpec);
+                _logger.LogWarning(ex, "Failed to send agent trigger key '{Key}'", keySpec);
             }
         });
     }
