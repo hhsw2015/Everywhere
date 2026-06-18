@@ -2254,12 +2254,6 @@
     <data name="McpServerSettings_AgentAppId_Description" xml:space="preserve">
         <value>設定咗之後，Everywhere 喺擷取上下文（用 SnapshotContext 熱鍵或者 AgentPickElement 釘住）之後就會自動將該 app 帶到最頂，唔使你自己切窗。可以填 bundle id（例如 com.github.cmux）、執行檔名或者本地化 app 名。留空就唔啟用。</value>
     </data>
-    <data name="McpServerSettings_AgentTriggerKey_Header" xml:space="preserve">
-        <value>Agent 觸發快捷鍵</value>
-    </data>
-    <data name="McpServerSettings_AgentTriggerKey_Description" xml:space="preserve">
-        <value>將 Agent app 帶到前景後，自動按下你錄低嘅呢組快捷鍵（例如 cmd+shift+space 喚醒語音輸入法，cmd+l 聚焦輸入框）。撳下面個鍵嚟錄製，停用就唔發。</value>
-    </data>
     <data name="Strategy_BuiltIn_Browser_Name" xml:space="preserve">
         <value>瀏覽器助手</value>
     </data>

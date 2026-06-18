@@ -45,20 +45,4 @@ public readonly record struct KeyboardShortcut(Key Key, KeyModifiers Modifiers)
         return sb.ToString();
     }
 
-    /// <summary>
-    /// xdotool-style key spec consumable by <c>IInputSimulator.PressKey</c>:
-    /// modifiers separated by '+', key name lowercased. Empty if shortcut
-    /// is empty / has only modifiers.
-    /// </summary>
-    public string ToXdotool()
-    {
-        if (Key == Key.None) return string.Empty;
-        var sb = new StringBuilder();
-        if (Modifiers.HasFlag(KeyModifiers.Meta)) sb.Append("cmd+");
-        if (Modifiers.HasFlag(KeyModifiers.Control)) sb.Append("ctrl+");
-        if (Modifiers.HasFlag(KeyModifiers.Alt)) sb.Append("alt+");
-        if (Modifiers.HasFlag(KeyModifiers.Shift)) sb.Append("shift+");
-        sb.Append(Key.ToString().ToLowerInvariant());
-        return sb.ToString();
-    }
 }

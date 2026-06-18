@@ -32,7 +32,6 @@ public sealed class ContextStashWriter
     private readonly SelectionCache _selectionCache;
     private readonly PickStash _pickStash;
     private readonly IAppActivator _appActivator;
-    private readonly IInputSimulator _input;
     private readonly Settings _settings;
     private readonly ILogger<ContextStashWriter> _logger;
     private readonly SemaphoreSlim _writeLock = new(1, 1);
@@ -43,7 +42,6 @@ public sealed class ContextStashWriter
         SelectionCache selectionCache,
         PickStash pickStash,
         IAppActivator appActivator,
-        IInputSimulator input,
         Settings settings,
         ILogger<ContextStashWriter> logger)
     {
@@ -52,7 +50,6 @@ public sealed class ContextStashWriter
         _selectionCache = selectionCache;
         _pickStash = pickStash;
         _appActivator = appActivator;
-        _input = input;
         _settings = settings;
         _logger = logger;
     }
@@ -213,41 +210,6 @@ public sealed class ContextStashWriter
         }
         if (!raised) return;
 
-        // Optional post-activation keystroke (e.g. cmd+shift+space to wake a
-        // dictation IME, cmd+l to focus the omnibar). macOS activation is
-        // async — the focus change is dispatched on the AppKit run loop and
-        // arrives a frame or two later, so we wait briefly before sending so
-        // the keystroke lands in the agent app, not the previously-focused
-        // window. Prefer Main; fall back to Alternative if Main is empty.
-        var triggerCombo = _settings.McpServer.AgentTriggerKey;
-        if (!triggerCombo.IsEnabled)
-        {
-            _logger.LogInformation("AgentTriggerKey: composite disabled, skipping keystroke.");
-            return;
-        }
-        var keySpec = triggerCombo.Main.IsValid ? triggerCombo.Main.ToXdotool()
-                    : triggerCombo.Alternative.IsValid ? triggerCombo.Alternative.ToXdotool()
-                    : string.Empty;
-        if (string.IsNullOrEmpty(keySpec))
-        {
-            _logger.LogInformation("AgentTriggerKey: no valid key recorded (Main IsValid={Main}, Alt IsValid={Alt}).",
-                triggerCombo.Main.IsValid, triggerCombo.Alternative.IsValid);
-            return;
-        }
-
-        _ = Task.Run(async () =>
-        {
-            try
-            {
-                await Task.Delay(250);
-                _input.PressKey(keySpec);
-                _logger.LogInformation("Sent agent trigger key '{Key}' after activation.", keySpec);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Failed to send agent trigger key '{Key}'", keySpec);
-            }
-        });
     }
 
     /// <summary>

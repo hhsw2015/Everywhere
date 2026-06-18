@@ -2254,12 +2254,6 @@ Utilisez la molette ou les touches numériques pour changer de mode de sélectio
     <data name="McpServerSettings_AgentAppId_Description" xml:space="preserve">
         <value>Quand renseigné, Everywhere place cette application au premier plan après une capture de contexte (raccourci SnapshotContext ou épinglage AgentPickElement), pour que tu puisses continuer à taper dans ton agent IA sans changer de fenêtre. Accepte un identifiant de bundle (ex. com.github.cmux), un nom d'exécutable ou un nom d'application localisé. Vide pour désactiver.</value>
     </data>
-    <data name="McpServerSettings_AgentTriggerKey_Header" xml:space="preserve">
-        <value>Touche déclencheur agent</value>
-    </data>
-    <data name="McpServerSettings_AgentTriggerKey_Description" xml:space="preserve">
-        <value>Après avoir mis l'application agent au premier plan, Everywhere y envoie le raccourci enregistré (ex. cmd+shift+space pour la dictée, cmd+l pour le champ de saisie). Clique sur les touches pour enregistrer ; désactive pour ne rien envoyer.</value>
-    </data>
     <data name="Strategy_BuiltIn_Browser_Name" xml:space="preserve">
         <value>Assistant Navigateur</value>
     </data>

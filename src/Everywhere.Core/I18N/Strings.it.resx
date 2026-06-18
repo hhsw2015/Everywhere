@@ -2254,12 +2254,6 @@ Rotella o tasti numerici per cambiare modalità di selezione</value>
     <data name="McpServerSettings_AgentAppId_Description" xml:space="preserve">
         <value>Se impostata, Everywhere porta questa app in primo piano dopo una cattura di contesto (tramite la scorciatoia SnapshotContext o il pin di AgentPickElement), così puoi continuare a digitare nel tuo agente IA senza cambiare finestra. Accetta bundle id (es. com.github.cmux), nome dell'eseguibile o nome localizzato dell'app. Lascia vuoto per disabilitare.</value>
     </data>
-    <data name="McpServerSettings_AgentTriggerKey_Header" xml:space="preserve">
-        <value>Tasto di attivazione dell'agente</value>
-    </data>
-    <data name="McpServerSettings_AgentTriggerKey_Description" xml:space="preserve">
-        <value>Dopo aver portato l'app dell'agente in primo piano, Everywhere le invia la scorciatoia registrata (es. cmd+shift+space per la dettatura, cmd+l per il campo di input). Clicca i tasti per registrare; disattiva per non inviare.</value>
-    </data>
     <data name="Strategy_BuiltIn_Browser_Name" xml:space="preserve">
         <value>Assistente Browser</value>
     </data>

@@ -2255,12 +2255,6 @@ Use a roda do mouse ou teclas numéricas para alternar o modo de seleção</valu
     <data name="McpServerSettings_AgentAppId_Description" xml:space="preserve">
         <value>Se definido, Everywhere traz esse app para a frente depois de capturar o contexto (pelo atalho SnapshotContext ou pin do AgentPickElement), para você continuar digitando no seu agente de IA sem trocar de janela manualmente. Aceita bundle id (ex.: com.github.cmux), nome do executável ou nome localizado. Deixe vazio para desativar.</value>
     </data>
-    <data name="McpServerSettings_AgentTriggerKey_Header" xml:space="preserve">
-        <value>Tecla de ativação do agente</value>
-    </data>
-    <data name="McpServerSettings_AgentTriggerKey_Description" xml:space="preserve">
-        <value>Depois de trazer o app do agente para frente, Everywhere envia para ele o atalho gravado (ex.: cmd+shift+space para ativar ditado, cmd+l para focar a caixa de entrada). Clique nas teclas para gravar; desative para não enviar.</value>
-    </data>
     <data name="Strategy_BuiltIn_Browser_Name" xml:space="preserve">
         <value>Assistente do Navegador</value>
     </data>

@@ -2254,12 +2254,6 @@
     <data name="McpServerSettings_AgentAppId_Description" xml:space="preserve">
         <value>設定すると Everywhere はコンテキスト取得（SnapshotContext ホットキーや AgentPickElement ピン留め）後にこのアプリを前面に切り替えます。手動でウィンドウを切り替えずに AI エージェントへ入力を続けられます。bundle id（例: com.github.cmux）、実行ファイル名、ローカライズされたアプリ名のいずれでも可。空にすると無効。</value>
     </data>
-    <data name="McpServerSettings_AgentTriggerKey_Header" xml:space="preserve">
-        <value>エージェント起動キー</value>
-    </data>
-    <data name="McpServerSettings_AgentTriggerKey_Description" xml:space="preserve">
-        <value>エージェントアプリを前面に切り替えた後、録音したこのショートカットをアプリに送信します（例: cmd+shift+space で音声入力起動、cmd+l で入力欄にフォーカス）。キーを押して録音、無効化で送信スキップ。</value>
-    </data>
     <data name="Strategy_BuiltIn_Browser_Name" xml:space="preserve">
         <value>ブラウザアシスタント</value>
     </data>

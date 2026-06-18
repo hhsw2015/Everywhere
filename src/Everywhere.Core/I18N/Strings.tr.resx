@@ -2253,12 +2253,6 @@ Seçim modunu değiştirmek için kaydırıcı veya rakam tuşlarını kullanın
     <data name="McpServerSettings_AgentAppId_Description" xml:space="preserve">
         <value>Doldurulduğunda, Everywhere bağlam yakalandıktan sonra (SnapshotContext kısayolu veya AgentPickElement sabitlemesi) bu uygulamayı öne getirir; pencere değiştirmeden AI ajanına yazmaya devam edebilirsin. Bundle id (örn. com.github.cmux), çalıştırılabilir dosya adı veya yerelleştirilmiş uygulama adı kabul eder. Devre dışı bırakmak için boş bırak.</value>
     </data>
-    <data name="McpServerSettings_AgentTriggerKey_Header" xml:space="preserve">
-        <value>Ajan tetik tuşu</value>
-    </data>
-    <data name="McpServerSettings_AgentTriggerKey_Description" xml:space="preserve">
-        <value>Ajan uygulaması öne getirildikten sonra Everywhere kaydettiğin kısayolu ona gönderir (ör. cmd+shift+space ile dikte, cmd+l ile giriş alanı). Tuşlara tıklayarak kaydet; devre dışı bırakırsan gönderilmez.</value>
-    </data>
     <data name="Strategy_BuiltIn_Browser_Name" xml:space="preserve">
         <value>Tarayıcı Asistanı</value>
     </data>

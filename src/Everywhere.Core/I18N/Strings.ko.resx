@@ -2254,12 +2254,6 @@
     <data name="McpServerSettings_AgentAppId_Description" xml:space="preserve">
         <value>설정하면 Everywhere 가 컨텍스트 캡처(SnapshotContext 단축키 또는 AgentPickElement 고정) 후 이 앱을 전면으로 가져옵니다. 창 전환 없이 AI 에이전트에 계속 입력할 수 있습니다. bundle id(예: com.github.cmux), 실행 파일 이름, 또는 로컬라이즈된 앱 이름을 지원합니다. 비워 두면 비활성화.</value>
     </data>
-    <data name="McpServerSettings_AgentTriggerKey_Header" xml:space="preserve">
-        <value>에이전트 트리거 키</value>
-    </data>
-    <data name="McpServerSettings_AgentTriggerKey_Description" xml:space="preserve">
-        <value>에이전트 앱을 전면으로 가져온 뒤 녹음한 이 단축키를 앱에 전송합니다(예: cmd+shift+space 음성 입력 호출, cmd+l 입력창 포커스). 키를 눌러 녹음, 비활성화하면 전송하지 않습니다.</value>
-    </data>
     <data name="Strategy_BuiltIn_Browser_Name" xml:space="preserve">
         <value>브라우저 도우미</value>
     </data>

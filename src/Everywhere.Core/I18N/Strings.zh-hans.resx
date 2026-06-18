@@ -2255,12 +2255,6 @@
     <data name="McpServerSettings_AgentAppId_Description" xml:space="preserve">
         <value>填写后，Everywhere 在抓取上下文（通过 SnapshotContext 热键或 AgentPickElement 固定）之后会自动把该应用切到前台，免去你手动切换窗口的麻烦。可以是 bundle id（例如 com.github.cmux）、可执行文件名或本地化应用名。留空则禁用。</value>
     </data>
-    <data name="McpServerSettings_AgentTriggerKey_Header" xml:space="preserve">
-        <value>Agent 触发快捷键</value>
-    </data>
-    <data name="McpServerSettings_AgentTriggerKey_Description" xml:space="preserve">
-        <value>把 Agent 应用切到前台之后，自动按下你录下的这组快捷键（例如 cmd+shift+space 唤醒语音输入法，cmd+l 聚焦输入框）。点击下方按键进行录制，关闭则不发送。</value>
-    </data>
     <data name="Strategy_BuiltIn_Browser_Name" xml:space="preserve">
         <value>浏览器助手</value>
     </data>

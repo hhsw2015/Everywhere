@@ -2254,12 +2254,6 @@ Rueda o teclas numéricas para cambiar el modo de selección</value>
     <data name="McpServerSettings_AgentAppId_Description" xml:space="preserve">
         <value>Si está definido, Everywhere trae esta app al frente tras capturar el contexto (con el atajo SnapshotContext o al fijar con AgentPickElement) para que sigas escribiendo en tu agente de IA sin cambiar de ventana manualmente. Acepta bundle id (p. ej. com.github.cmux), nombre del ejecutable o nombre localizado. Déjalo vacío para desactivarlo.</value>
     </data>
-    <data name="McpServerSettings_AgentTriggerKey_Header" xml:space="preserve">
-        <value>Tecla de activación del agente</value>
-    </data>
-    <data name="McpServerSettings_AgentTriggerKey_Description" xml:space="preserve">
-        <value>Después de traer la app del agente al frente, Everywhere reenvía el atajo grabado (p. ej. cmd+shift+space para activar el dictado, cmd+l para enfocar el input). Pulsa las teclas para grabar; desactívalo para no enviar nada.</value>
-    </data>
     <data name="Strategy_BuiltIn_Browser_Name" xml:space="preserve">
         <value>Asistente de Navegador</value>
     </data>
