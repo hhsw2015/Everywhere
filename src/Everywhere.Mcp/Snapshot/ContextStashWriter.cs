@@ -243,30 +243,44 @@ public sealed class ContextStashWriter
         sb.Append(JsonSerializer.Serialize(p, ContextSnapshotPayload.SerializerOptions));
         sb.Append('\n');
 
-        if (p.PinPending == true)
-        {
-            sb.Append("[everywhere-hint] The user pinned a UI element for this question. Call the Everywhere MCP `read_pick` tool now to consume it before answering — its bounds/tree/text are NOT in this envelope.\n");
-        }
-        else
-        {
-            sb.Append("[everywhere-hint] If the user's question needs more than this pointer, call the relevant Everywhere MCP tool — don't guess.\n");
-        }
-
         // Per-app discovery hint: only for apps the user has registered in
         // Settings -> MCP -> KnownApps. Each entry maps a title regex to
         // a discovery URL. Everywhere stays ignorant of any specific app.
         var discoveryUrl = ResolveDiscoveryUrl(p.WindowTitle);
-        if (discoveryUrl is not null)
+        var statePath = discoveryUrl is null ? null : ToStatePath(discoveryUrl);
+
+        // Hint priority:
+        //   1. Pin + known web app -> the pinned element is almost certainly
+        //      reflected in the app's event stream. Prefer the fast-path
+        //      state endpoint (returns markdown rendered by the app itself,
+        //      same as the user sees), fall back to read_pick only if state
+        //      doesn't cover the pin.
+        //   2. Pin only -> read_pick (use mode='auto' so popup-of-links pins
+        //      come back compact).
+        //   3. Known web app, no pin -> state for "what was the user doing",
+        //      discover catalog for deeper queries.
+        //   4. Neither -> generic MCP hint.
+        if (p.PinPending == true && statePath is not null)
         {
-            // Two-tier hint: fast path for the common case ("what was I just
-            // doing"), discovery for deeper queries.
-            // Fast path is derived from discoveryUrl (replace skills suffix).
-            var statePath = ToStatePath(discoveryUrl);
-            sb.Append("[everywhere-discover] xlb-style local app self-describes its agent skills at ");
+            sb.Append("[everywhere-hint] User pinned a UI element AND this is a known local web app. PREFER: GET ");
+            sb.Append(statePath);
+            sb.Append("?consume=1 — the app renders markdown for the pin's content (the same urls/labels the user sees, no a11y-tree token waste). FALLBACK only if the state response doesn't cover the pinned subtree: call read_pick with mode='auto'.\n");
+        }
+        else if (p.PinPending == true)
+        {
+            sb.Append("[everywhere-hint] The user pinned a UI element for this question. Call the Everywhere MCP `read_pick` tool with mode='auto' (default) — for a popup of links it auto-returns a compact url+label list (~30 tokens), not the full a11y tree.\n");
+        }
+        else if (statePath is not null)
+        {
+            sb.Append("[everywhere-discover] xlb-style local app self-describes at ");
             sb.Append(discoveryUrl);
             sb.Append(". Fast path: for 'what was the user just looking at / clicking', GET ");
             sb.Append(statePath);
-            sb.Append("?consume=1 — returns a ready-to-use markdown summary, no skill discovery needed. For deeper / topic-content questions, fetch the discovery URL once and follow its skills[].doc paths.\n");
+            sb.Append("?consume=1 — returns ready-to-use markdown summary, no skill discovery needed. For deeper / topic-content queries, fetch the discovery URL once and follow its skills[].doc paths.\n");
+        }
+        else
+        {
+            sb.Append("[everywhere-hint] If the user's question needs more than this pointer, call the relevant Everywhere MCP tool — don't guess.\n");
         }
 
         return sb.ToString();
