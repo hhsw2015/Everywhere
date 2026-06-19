@@ -55,15 +55,19 @@ public static class ReadPickTool
             object element;
             if (resolvedMode is "links" or "text")
             {
+                // Render to markdown directly (skill-style), not nested JSON.
+                // Saves another ~50% over a json wrapper since the agent
+                // would otherwise re-format anyway. Same shape as xlb-skill's
+                // browse output — agent treats it interchangeably.
+                var markdown = resolvedMode == "links"
+                    ? RenderLinksMarkdown(nodes)
+                    : RenderTextMarkdown(nodes);
                 element = new
                 {
                     app = appKey,
                     window_title = picked.Name,
-                    window_bounds = new WindowBounds(bounds.X, bounds.Y, bounds.Width, bounds.Height),
                     mode = resolvedMode,
-                    items = resolvedMode == "links"
-                        ? (object)ExtractLinks(nodes)
-                        : ExtractText(nodes),
+                    markdown,
                 };
             }
             else
@@ -124,42 +128,54 @@ public static class ReadPickTool
         return "full";
     }
 
-    private static List<LinkItem> ExtractLinks(IReadOnlyList<ElementIndexer.IndexedNode> nodes)
+    /// <summary>
+    /// Render the pinned subtree's hyperlinks as a flat markdown bullet list.
+    /// One link per line: <c>- &lt;url-or-label&gt;</c>. Skips icon-only links
+    /// (label too short to be meaningful) and de-duplicates exact repeats.
+    /// Output mirrors the shape skill scripts (xlb_local_reader browse) emit
+    /// so agents can treat both pipelines interchangeably.
+    /// </summary>
+    private static string RenderLinksMarkdown(IReadOnlyList<ElementIndexer.IndexedNode> nodes)
     {
-        var items = new List<LinkItem>();
+        var sb = new System.Text.StringBuilder();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
         foreach (var n in nodes)
         {
             if (n.Element.Type != VisualElementType.HyperLink) continue;
-            var label = n.Element.GetText(maxLength: 200) ?? string.Empty;
-            // anchor labels often live in a child Label rather than the Hyperlink itself.
-            if (string.IsNullOrWhiteSpace(label))
+            var label = (n.Element.GetText(maxLength: 200) ?? string.Empty).Trim();
+            if (string.IsNullOrEmpty(label))
             {
                 foreach (var child in nodes)
                 {
                     if (child.ParentIndex != n.Index) continue;
                     var ct = child.Element.GetText(maxLength: 200);
-                    if (!string.IsNullOrWhiteSpace(ct)) { label = ct; break; }
+                    if (!string.IsNullOrWhiteSpace(ct)) { label = ct.Trim(); break; }
                 }
             }
-            label = label.Trim();
-            // skip icon-only / single-character control buttons
             if (label.Length < 2) continue;
-            items.Add(new LinkItem(label));
+            if (!seen.Add(label)) continue;
+            sb.Append("- ").Append(label).Append('\n');
         }
-        return items;
+        return sb.ToString();
     }
 
-    private static List<string> ExtractText(IReadOnlyList<ElementIndexer.IndexedNode> nodes)
+    /// <summary>
+    /// Render the pinned subtree as a plain text paragraph (one Label per
+    /// line, blank-line separated when consecutive labels start far apart).
+    /// </summary>
+    private static string RenderTextMarkdown(IReadOnlyList<ElementIndexer.IndexedNode> nodes)
     {
-        var items = new List<string>();
+        var sb = new System.Text.StringBuilder();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
         foreach (var n in nodes)
         {
             if (n.Element.Type != VisualElementType.Label) continue;
             var t = n.Element.GetText(maxLength: 500);
-            if (!string.IsNullOrWhiteSpace(t)) items.Add(t.Trim());
+            if (string.IsNullOrWhiteSpace(t)) continue;
+            t = t.Trim();
+            if (!seen.Add(t)) continue;
+            sb.Append(t).Append('\n');
         }
-        return items;
+        return sb.ToString();
     }
-
-    private sealed record LinkItem(string Text);
 }
