@@ -264,7 +264,7 @@ public sealed class ContextStashWriter
         {
             sb.Append("[everywhere-hint] User pinned a UI element AND this is a known local web app. PREFER: GET ");
             sb.Append(statePath);
-            sb.Append("?consume=1 — the app renders markdown for the pin's content (the same urls/labels the user sees, no a11y-tree token waste). FALLBACK only if the state response doesn't cover the pinned subtree: call read_pick with mode='auto'.\n");
+            sb.Append("?consume=1 — returns markdown of recent view + pin contents (urls/labels). For deeper exploration of the topic (graph connections, tag groups, curated commands), follow up with the same URL plus &with_meta=1, or call the app's browse skill on the topic. Don't fetch meta unless the user actually needs it.\n");
         }
         else if (p.PinPending == true)
         {
@@ -274,9 +274,9 @@ public sealed class ContextStashWriter
         {
             sb.Append("[everywhere-discover] xlb-style local app self-describes at ");
             sb.Append(discoveryUrl);
-            sb.Append(". Fast path: for 'what was the user just looking at / clicking', GET ");
+            sb.Append(". Fast path: GET ");
             sb.Append(statePath);
-            sb.Append("?consume=1 — returns ready-to-use markdown summary, no skill discovery needed. For deeper / topic-content queries, fetch the discovery URL once and follow its skills[].doc paths.\n");
+            sb.Append("?consume=1 — recent view + interactions as markdown. For deeper exploration (topic graph, tag groups, curated commands), append &with_meta=1 OR fetch the discovery URL and call a skill — only when the user's question actually needs that context.\n");
         }
         else
         {
