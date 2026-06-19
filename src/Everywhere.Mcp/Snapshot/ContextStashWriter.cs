@@ -303,6 +303,8 @@ public sealed class ContextStashWriter
         return discoveryUrl;
     }
 
+    private static readonly TimeSpan _knownAppRegexTimeout = TimeSpan.FromMilliseconds(100);
+
     private string? ResolveDiscoveryUrl(string? windowTitle)
     {
         if (string.IsNullOrEmpty(windowTitle)) return null;
@@ -312,14 +314,30 @@ public sealed class ContextStashWriter
         {
             if (string.IsNullOrEmpty(app.TitlePattern) || string.IsNullOrEmpty(app.DiscoverUrl))
                 continue;
+            // Reject malformed / non-http URLs early — don't even try to
+            // match a pattern whose target is unusable. Prevents bad
+            // settings.json entries from leaking into stash hints.
+            if (!Uri.TryCreate(app.DiscoverUrl, UriKind.Absolute, out var uri)) continue;
+            if (uri.Scheme is not ("http" or "https")) continue;
             try
             {
+                // ReDoS guard: cap regex evaluation; pathological user
+                // patterns (e.g. (a+)+$) against long titles must not be
+                // able to freeze context capture.
                 if (System.Text.RegularExpressions.Regex.IsMatch(
                         windowTitle, app.TitlePattern,
-                        System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+                        System.Text.RegularExpressions.RegexOptions.IgnoreCase,
+                        _knownAppRegexTimeout))
                     return app.DiscoverUrl;
             }
-            catch { }
+            catch (System.Text.RegularExpressions.RegexMatchTimeoutException)
+            {
+                // pathological pattern, skip silently — next entry may match.
+            }
+            catch (ArgumentException)
+            {
+                // invalid pattern syntax, skip.
+            }
         }
         return null;
     }

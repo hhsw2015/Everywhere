@@ -121,7 +121,7 @@ public static class ReadPickTool
         foreach (var n in nodes)
         {
             totalCount++;
-            if (n.Element.Type == VisualElementType.HyperLink) hyperlinkCount++;
+            if (n.Element.Type == VisualElementType.Hyperlink) hyperlinkCount++;
         }
         // List-of-links heuristic: ≥3 hyperlinks AND ≥30% of nodes are hyperlinks
         if (hyperlinkCount >= 3 && hyperlinkCount * 100 >= totalCount * 30) return "links";
@@ -141,7 +141,7 @@ public static class ReadPickTool
         var seen = new HashSet<string>(StringComparer.Ordinal);
         foreach (var n in nodes)
         {
-            if (n.Element.Type != VisualElementType.HyperLink) continue;
+            if (n.Element.Type != VisualElementType.Hyperlink) continue;
             var label = (n.Element.GetText(maxLength: 200) ?? string.Empty).Trim();
             if (string.IsNullOrEmpty(label))
             {
