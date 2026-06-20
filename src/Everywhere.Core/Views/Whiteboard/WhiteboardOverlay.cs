@@ -89,15 +89,6 @@ public sealed class WhiteboardOverlay : ScreenSelectionTransparentWindow
         }
 
         Opened += (_, _) => Focus();
-
-        // Pointer handlers on the CANVAS, not the Window — non-canvas children
-        // (dim Border, hint) have IsHitTestVisible=false, so the canvas is the
-        // pointer target, but Avalonia delivers PointerPressed to the leaf,
-        // not necessarily bubbling up to Window in time for us to receive it.
-        // Subscribing directly on the canvas guarantees we get the events.
-        _drawingCanvas.PointerPressed += OnPointerPressed;
-        _drawingCanvas.PointerMoved += OnPointerMoved;
-        _drawingCanvas.PointerReleased += OnPointerReleased;
         KeyDown += OnKeyDown;
         Closed += (_, _) =>
         {
@@ -112,8 +103,9 @@ public sealed class WhiteboardOverlay : ScreenSelectionTransparentWindow
 
     public Task<WhiteboardCaptureResult> ResultTask => _result.Task;
 
-    private void OnPointerPressed(object? sender, PointerPressedEventArgs e)
+    protected override void OnPointerPressed(PointerPressedEventArgs e)
     {
+        base.OnPointerPressed(e);
         if (!e.GetCurrentPoint(_drawingCanvas).Properties.IsLeftButtonPressed) return;
         var p = e.GetPosition(_drawingCanvas);
         _activeStrokeRaw = [p];
@@ -132,8 +124,9 @@ public sealed class WhiteboardOverlay : ScreenSelectionTransparentWindow
         e.Handled = true;
     }
 
-    private void OnPointerMoved(object? sender, PointerEventArgs e)
+    protected override void OnPointerMoved(PointerEventArgs e)
     {
+        base.OnPointerMoved(e);
         if (_activeStrokeRaw is null
             || _activeStrokePolyline is null
             || _activePolylinePoints is null) return;
@@ -152,8 +145,9 @@ public sealed class WhiteboardOverlay : ScreenSelectionTransparentWindow
         e.Handled = true;
     }
 
-    private void OnPointerReleased(object? sender, PointerReleasedEventArgs e)
+    protected override void OnPointerReleased(PointerReleasedEventArgs e)
     {
+        base.OnPointerReleased(e);
         if (_activeStrokeRaw is null) return;
         if (_activeStrokeRaw.Count >= 2)
         {
