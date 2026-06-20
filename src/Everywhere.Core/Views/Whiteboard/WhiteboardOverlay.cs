@@ -28,7 +28,7 @@ public sealed class WhiteboardOverlay : ScreenSelectionTransparentWindow
 
     private List<Point>? _activeStrokeRaw;
     private List<double>? _activeStrokeTs;
-    private Path? _activePath;
+    private Avalonia.Controls.Shapes.Path? _activePath;
     private bool _committed;
     private Bitmap? _ownedBackground;
 
@@ -154,7 +154,7 @@ public sealed class WhiteboardOverlay : ScreenSelectionTransparentWindow
         var p = e.GetPosition(_drawingCanvas);
         _activeStrokeRaw = [p];
         _activeStrokeTs = [Elapsed()];
-        _activePath = new Path
+        _activePath = new Avalonia.Controls.Shapes.Path
         {
             Stroke = new SolidColorBrush(Color.Parse("#FFE53935")),
             StrokeThickness = 4,
