@@ -37,6 +37,10 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
     private readonly Lock _syncLock = new();
 
     private volatile WhiteboardOverlay? _activeOverlay;
+    // Reentry guard: set 1 the moment the hotkey starts opening an overlay,
+    // before the first await. Without it a second hotkey press during the
+    // capture-screen await would race-create a second overlay.
+    private int _opening;
 
     public WhiteboardHotkeyInitializer(
         Settings settings,
@@ -133,7 +137,22 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
                     _activeOverlay.Commit();
                     return;
                 }
-                await OpenOverlayAsync();
+                if (Interlocked.CompareExchange(ref _opening, 1, 0) != 0)
+                {
+                    // Another OpenOverlayAsync is mid-await (e.g. during screen
+                    // capture). Ignore this hotkey press — overlay will appear
+                    // shortly and the user can re-press to commit.
+                    _logger.LogInformation("Whiteboard hotkey ignored: overlay opening");
+                    return;
+                }
+                try
+                {
+                    await OpenOverlayAsync();
+                }
+                finally
+                {
+                    Interlocked.Exchange(ref _opening, 0);
+                }
             }
             catch (Exception ex)
             {

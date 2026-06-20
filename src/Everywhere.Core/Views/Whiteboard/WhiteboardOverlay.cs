@@ -31,12 +31,20 @@ public sealed class WhiteboardOverlay : Window
 
     private List<Point>? _activeStrokeRaw;
     private List<double>? _activeStrokeTs;
+    private Avalonia.Collections.AvaloniaList<Point>? _activePolylinePoints;
     private Polyline? _activeStrokePolyline;
     private bool _committed;
+    private IDisposable? _ownedBackground;
 
+    /// <summary>
+    /// Constructor takes ownership of <paramref name="backgroundImage"/> when it implements
+    /// <see cref="IDisposable"/> — the overlay disposes it on close so the caller doesn't
+    /// have to thread a finally block. Pass null for a dim solid background.
+    /// </summary>
     public WhiteboardOverlay(PixelRect screenBounds, IImage? backgroundImage = null)
     {
         _screenBounds = screenBounds;
+        _ownedBackground = backgroundImage as IDisposable;
 
         // Window chrome off
         SystemDecorations = SystemDecorations.None;
@@ -54,9 +62,11 @@ public sealed class WhiteboardOverlay : Window
         // overlay is active) if no image is supplied.
         if (backgroundImage is not null)
         {
+            // UniformToFill — bitmap was captured at exactly screenBounds size,
+            // so this matches 1:1 without distortion under fractional scaling.
             Background = new ImageBrush(backgroundImage)
             {
-                Stretch = Stretch.Fill,
+                Stretch = Stretch.UniformToFill,
             };
         }
         else
@@ -106,23 +116,42 @@ public sealed class WhiteboardOverlay : Window
             },
         };
 
+        // Position first — DesktopScaling reads correct only AFTER Position
+        // is set (matches ScreenSelectionTransparentWindow.SetPlacement).
+        // This ensures _scale is correct before any pointer event arrives,
+        // so Commit()'s DIP→pixel mapping is right from the first stroke.
         Position = screenBounds.Position;
-        Width = screenBounds.Width;
-        Height = screenBounds.Height;
+        _scale = DesktopScaling > 0 ? DesktopScaling : 1.0;
+        Width = screenBounds.Width / _scale;
+        Height = screenBounds.Height / _scale;
 
         Opened += (_, _) =>
         {
-            // After window is on screen, DesktopScaling is correct
-            _scale = DesktopScaling > 0 ? DesktopScaling : 1.0;
-            Width = screenBounds.Width / _scale;
-            Height = screenBounds.Height / _scale;
+            // Re-read in case DesktopScaling changed between ctor and Show
+            // (window moved by compositor before becoming visible).
+            var liveScale = DesktopScaling > 0 ? DesktopScaling : 1.0;
+            if (Math.Abs(liveScale - _scale) > 0.01)
+            {
+                _scale = liveScale;
+                Width = screenBounds.Width / _scale;
+                Height = screenBounds.Height / _scale;
+            }
         };
 
         PointerPressed += OnPointerPressed;
         PointerMoved += OnPointerMoved;
         PointerReleased += OnPointerReleased;
         KeyDown += OnKeyDown;
-        Closed += (_, _) => CompleteIfPending(canceled: true);
+        Closed += (_, _) =>
+        {
+            CompleteIfPending(canceled: true);
+            // Drop the screenshot brush so the underlying bitmap is collectable,
+            // then dispose if we own it. Full-screen 5K screenshots run ~50 MB.
+            Background = null;
+            var owned = _ownedBackground;
+            _ownedBackground = null;
+            owned?.Dispose();
+        };
     }
 
     public Task<WhiteboardCaptureResult> ResultTask => _result.Task;
@@ -133,14 +162,14 @@ public sealed class WhiteboardOverlay : Window
         var p = e.GetPosition(_drawingCanvas);
         _activeStrokeRaw = [p];
         _activeStrokeTs = [Elapsed()];
-        var pts = new Avalonia.Collections.AvaloniaList<Point> { p };
+        _activePolylinePoints = new Avalonia.Collections.AvaloniaList<Point> { p };
         _activeStrokePolyline = new Polyline
         {
             Stroke = new SolidColorBrush(Color.Parse("#FFE53935")),
             StrokeThickness = 3,
             StrokeJoin = PenLineJoin.Round,
             StrokeLineCap = PenLineCap.Round,
-            Points = pts,
+            Points = _activePolylinePoints,
             IsHitTestVisible = false,
         };
         _drawingCanvas.Children.Add(_activeStrokePolyline);
@@ -149,7 +178,9 @@ public sealed class WhiteboardOverlay : Window
 
     private void OnPointerMoved(object? sender, PointerEventArgs e)
     {
-        if (_activeStrokeRaw is null || _activeStrokePolyline is null) return;
+        if (_activeStrokeRaw is null
+            || _activeStrokePolyline is null
+            || _activePolylinePoints is null) return;
         if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
         var p = e.GetPosition(_drawingCanvas);
         if (_activeStrokeRaw.Count > 0)
@@ -160,11 +191,12 @@ public sealed class WhiteboardOverlay : Window
         }
         _activeStrokeRaw.Add(p);
         _activeStrokeTs!.Add(Elapsed());
-        // Replace Points with new list — AvaloniaList Add doesn't always
-        // invalidate the Polyline geometry on macOS; reassigning forces
-        // re-render.
-        var pts = new Avalonia.Collections.AvaloniaList<Point>(_activeStrokeRaw);
-        _activeStrokePolyline.Points = pts;
+        // Mutate the existing list (O(1) per point) and explicitly invalidate
+        // the polyline visual — Avalonia's AvaloniaList.Add fires CollectionChanged
+        // but on macOS the Polyline's StreamGeometry rebuild path occasionally
+        // misses the notification, so InvalidateVisual is the cheap insurance.
+        _activePolylinePoints.Add(p);
+        _activeStrokePolyline.InvalidateVisual();
         e.Handled = true;
     }
 
@@ -183,6 +215,7 @@ public sealed class WhiteboardOverlay : Window
         _activeStrokeRaw = null;
         _activeStrokeTs = null;
         _activeStrokePolyline = null;
+        _activePolylinePoints = null;
         e.Handled = true;
     }
 
