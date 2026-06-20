@@ -28,8 +28,7 @@ public sealed class WhiteboardOverlay : ScreenSelectionTransparentWindow
 
     private List<Point>? _activeStrokeRaw;
     private List<double>? _activeStrokeTs;
-    private Avalonia.Collections.AvaloniaList<Point>? _activePolylinePoints;
-    private Polyline? _activeStrokePolyline;
+    private Path? _activePath;
     private bool _committed;
     private Bitmap? _ownedBackground;
 
@@ -49,6 +48,11 @@ public sealed class WhiteboardOverlay : ScreenSelectionTransparentWindow
         _drawingCanvas = new Canvas
         {
             Background = Brushes.Transparent,
+            // Canvas defaults to 0×0 measure when it has no children, so it
+            // would never render polylines drawn into it after-the-fact.
+            // Stretch to fill the parent Panel.
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            VerticalAlignment = VerticalAlignment.Stretch,
         };
 
         var hint = new Border
@@ -136,34 +140,59 @@ public sealed class WhiteboardOverlay : ScreenSelectionTransparentWindow
     private void OnCanvasPointerPressed(object? sender, PointerPressedEventArgs e)
     {
         if (!e.GetCurrentPoint(_drawingCanvas).Properties.IsLeftButtonPressed) return;
-        // NOTE: do NOT call e.Pointer.Capture(_drawingCanvas). With Tunnel|
-        // Bubble + handledEventsToo, capture is taken on the tunnel pass and
-        // synthesizes PointerCaptureLost which short-circuits all subsequent
-        // routing — net effect: events stop entirely. Children that aren't
-        // the canvas already have IsHitTestVisible=false so the cursor can't
-        // wander to a non-hit-testable child mid-stroke.
+        // Defensive: a previous stroke may not have been released cleanly
+        // (capture is intentionally not used, so PointerReleased is not
+        // guaranteed when window deactivates / focus is lost mid-drag).
+        // Drop any orphaned in-progress path before starting a new one.
+        if (_activePath is not null)
+        {
+            _drawingCanvas.Children.Remove(_activePath);
+            _activePath = null;
+        }
+        _activeStrokeRaw = null;
+        _activeStrokeTs = null;
         var p = e.GetPosition(_drawingCanvas);
         _activeStrokeRaw = [p];
         _activeStrokeTs = [Elapsed()];
-        _activePolylinePoints = new Avalonia.Collections.AvaloniaList<Point> { p };
-        _activeStrokePolyline = new Polyline
+        _activePath = new Path
         {
             Stroke = new SolidColorBrush(Color.Parse("#FFE53935")),
             StrokeThickness = 4,
             StrokeJoin = PenLineJoin.Round,
             StrokeLineCap = PenLineCap.Round,
-            Points = _activePolylinePoints,
             IsHitTestVisible = false,
+            Data = BuildGeometry(_activeStrokeRaw),
         };
-        _drawingCanvas.Children.Add(_activeStrokePolyline);
+        _drawingCanvas.Children.Add(_activePath);
         e.Handled = true;
+    }
+
+    private static Geometry BuildGeometry(IReadOnlyList<Point> pts)
+    {
+        if (pts.Count == 0) return new StreamGeometry();
+        var sg = new StreamGeometry();
+        using var ctx = sg.Open();
+        if (pts.Count == 1)
+        {
+            // Zero-length figure with PenLineCap.Round renders a filled dot
+            // of diameter == StrokeThickness — visually consistent with
+            // the round caps at every stroke endpoint.
+            ctx.BeginFigure(pts[0], false);
+            ctx.LineTo(pts[0]);
+            ctx.EndFigure(false);
+        }
+        else
+        {
+            ctx.BeginFigure(pts[0], false);
+            for (var i = 1; i < pts.Count; i++) ctx.LineTo(pts[i]);
+            ctx.EndFigure(false);
+        }
+        return sg;
     }
 
     private void OnCanvasPointerMoved(object? sender, PointerEventArgs e)
     {
-        if (_activeStrokeRaw is null
-            || _activeStrokePolyline is null
-            || _activePolylinePoints is null) return;
+        if (_activeStrokeRaw is null || _activePath is null) return;
         if (!e.GetCurrentPoint(_drawingCanvas).Properties.IsLeftButtonPressed) return;
         var p = e.GetPosition(_drawingCanvas);
         if (_activeStrokeRaw.Count > 0)
@@ -174,8 +203,9 @@ public sealed class WhiteboardOverlay : ScreenSelectionTransparentWindow
         }
         _activeStrokeRaw.Add(p);
         _activeStrokeTs!.Add(Elapsed());
-        _activePolylinePoints.Add(p);
-        _activeStrokePolyline.InvalidateVisual();
+        // Reassign Data triggers a rebuild + render — the reliable
+        // refresh path on macOS Avalonia (Polyline.Points mutation does not).
+        _activePath.Data = BuildGeometry(_activeStrokeRaw);
         e.Handled = true;
     }
 
@@ -187,14 +217,13 @@ public sealed class WhiteboardOverlay : ScreenSelectionTransparentWindow
             _strokes.Add(_activeStrokeRaw);
             _strokeTimestamps.Add(_activeStrokeTs!);
         }
-        else if (_activeStrokePolyline is not null)
+        else if (_activePath is not null)
         {
-            _drawingCanvas.Children.Remove(_activeStrokePolyline);
+            _drawingCanvas.Children.Remove(_activePath);
         }
         _activeStrokeRaw = null;
         _activeStrokeTs = null;
-        _activeStrokePolyline = null;
-        _activePolylinePoints = null;
+        _activePath = null;
         e.Handled = true;
     }
 
