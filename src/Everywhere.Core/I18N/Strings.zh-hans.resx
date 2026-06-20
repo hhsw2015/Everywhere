@@ -2231,6 +2231,12 @@
     <data name="ShortcutSettings_ClearContextStash_Desription" xml:space="preserve">
         <value>把磁盘上的上下文 stash 文件和当前 pin 都清掉，这样下一次 Claude Code 提问就不会被注入。误抓了不想要的窗口时按这个键。</value>
     </data>
+    <data name="ShortcutSettings_Whiteboard_Header" xml:space="preserve">
+        <value>白板涂鸦</value>
+    </data>
+    <data name="ShortcutSettings_Whiteboard_Desription" xml:space="preserve">
+        <value>按下后在屏幕上涂鸦（圆圈/下划线/箭头/X），按 Enter 把圈中的内容发给 AI，按 Esc 取消，Cmd+Z 撤销上一笔。像给 AI 用的激光笔。</value>
+    </data>
     <data name="SettingsCategory_Settings_McpServer_Header" xml:space="preserve">
         <value>MCP 服务器</value>
     </data>

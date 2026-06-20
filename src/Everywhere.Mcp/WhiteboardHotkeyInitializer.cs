@@ -104,10 +104,15 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
     {
         using var _0 = _syncLock.EnterScope();
         DisposeHelper.DisposeToDefault(ref slot);
-        if (!shortcut.IsValid) return;
+        if (!shortcut.IsValid)
+        {
+            _logger.LogInformation("Whiteboard shortcut not yet bound; waiting for user input");
+            return;
+        }
         try
         {
             slot = _shortcutListener.Register(shortcut, OnHotkey);
+            _logger.LogInformation("Whiteboard shortcut registered: {Shortcut}", shortcut);
         }
         catch (Exception ex)
         {
@@ -117,12 +122,14 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
 
     private void OnHotkey()
     {
+        _logger.LogInformation("Whiteboard hotkey fired");
         Dispatcher.UIThread.Post(async () =>
         {
             try
             {
                 if (_activeOverlay is not null)
                 {
+                    _logger.LogInformation("Whiteboard re-press: committing active overlay");
                     _activeOverlay.Commit();
                     return;
                 }
@@ -130,7 +137,7 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "Whiteboard hotkey handler failed");
+                _logger.LogError(ex, "Whiteboard hotkey handler failed");
             }
         });
     }
@@ -139,29 +146,51 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
     {
         // Capture the focused element BEFORE the overlay steals focus, so
         // we have a stable a11y tree to snap against on commit.
-        IVisualElement? focusedRoot;
+        // Pre-capture the focused window's a11y root so we have a stable
+        // tree to snap against on commit. The OVERLAY itself covers the
+        // entire screen (not just the focused window) so the user can
+        // gesture across the full desktop.
+        IVisualElement? focusedRoot = null;
         PixelRect screen;
         try
         {
             var focused = _visualContext.FocusedElement;
             focusedRoot = focused?.Root() ?? focused;
-            screen = focusedRoot?.BoundingRectangle
-                     ?? _visualContext.Screens.FirstOrDefault()?.BoundingRectangle
+            // Pick the screen that contains the focused window if any,
+            // otherwise the first screen.
+            IVisualElement? targetScreen = null;
+            if (focusedRoot is not null)
+            {
+                var winRect = focusedRoot.BoundingRectangle;
+                var winCenter = new PixelPoint(
+                    winRect.X + winRect.Width / 2,
+                    winRect.Y + winRect.Height / 2);
+                foreach (var sc in _visualContext.Screens)
+                {
+                    var b = sc.BoundingRectangle;
+                    if (winCenter.X >= b.X && winCenter.X < b.X + b.Width
+                        && winCenter.Y >= b.Y && winCenter.Y < b.Y + b.Height)
+                    { targetScreen = sc; break; }
+                }
+            }
+            targetScreen ??= _visualContext.Screens.FirstOrDefault();
+            screen = targetScreen?.BoundingRectangle
                      ?? new PixelRect(0, 0, 1920, 1080);
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Whiteboard could not pre-capture focused root; using screen fallback");
-            focusedRoot = null;
+            _logger.LogWarning(ex, "Whiteboard could not resolve target screen; using fallback");
             screen = new PixelRect(0, 0, 1920, 1080);
         }
 
+        _logger.LogInformation("Whiteboard opening overlay on screen {Screen}", screen);
         var overlay = new WhiteboardOverlay(screen);
         _activeOverlay = overlay;
         try
         {
             overlay.Show();
             overlay.Activate();
+            _logger.LogInformation("Whiteboard overlay shown");
             var result = await overlay.ResultTask;
             if (result.Canceled || result.Strokes.Count == 0)
             {
