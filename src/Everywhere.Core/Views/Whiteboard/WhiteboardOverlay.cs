@@ -37,11 +37,11 @@ public sealed class WhiteboardOverlay : Window
     private IDisposable? _ownedBackground;
 
     /// <summary>
-    /// Constructor takes ownership of <paramref name="backgroundImage"/> when it implements
-    /// <see cref="IDisposable"/> — the overlay disposes it on close so the caller doesn't
-    /// have to thread a finally block. Pass null for a dim solid background.
+    /// Constructor takes ownership of <paramref name="backgroundImage"/>: the overlay
+    /// disposes it on close so the caller doesn't have to thread a finally block.
+    /// Pass null for a dim solid background.
     /// </summary>
-    public WhiteboardOverlay(PixelRect screenBounds, IImage? backgroundImage = null)
+    public WhiteboardOverlay(PixelRect screenBounds, Bitmap? backgroundImage = null)
     {
         _screenBounds = screenBounds;
         // _ownedBackground is assigned LAST — if any setter below throws, the
