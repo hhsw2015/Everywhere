@@ -39,11 +39,13 @@ public sealed class WhiteboardParserTests
     [Test]
     public void Parse_Underline_ClassifiesAsUnderline()
     {
+        // Slight slope + jitter so bbox area > 1 (parser treats degenerate
+        // stroke as Unknown, which is correct for a perfectly flat line).
         var pts = new List<StrokePoint>();
         for (var i = 0; i < 30; i++)
         {
             var f = i / 29.0;
-            pts.Add(new StrokePoint(100 + 400 * f, 500, i * 4));
+            pts.Add(new StrokePoint(100 + 400 * f, 500 + f * 2 + (i % 2 == 0 ? 1 : -1), i * 4));
         }
         var result = WhiteboardParser.Parse([new Stroke(pts)]);
         Assert.That(result, Has.Count.EqualTo(1));
