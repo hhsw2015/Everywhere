@@ -135,24 +135,14 @@ public sealed class WhiteboardOverlay : ScreenSelectionTransparentWindow
 
     private void OnCanvasPointerPressed(object? sender, PointerPressedEventArgs e)
     {
-        // Diagnostic feedback: every press drops a green dot at the cursor.
-        // If you see dots when clicking, pointer events ARE reaching the canvas
-        // and the bug is in stroke rendering. If no dots appear, events are
-        // being absorbed somewhere upstream.
-        var diag = e.GetPosition(_drawingCanvas);
-        var dot = new Avalonia.Controls.Shapes.Ellipse
-        {
-            Width = 12,
-            Height = 12,
-            Fill = new SolidColorBrush(Color.Parse("#FF00CC44")),
-            IsHitTestVisible = false,
-        };
-        Canvas.SetLeft(dot, diag.X - 6);
-        Canvas.SetTop(dot, diag.Y - 6);
-        _drawingCanvas.Children.Add(dot);
-
         if (!e.GetCurrentPoint(_drawingCanvas).Properties.IsLeftButtonPressed) return;
-        var p = diag;
+        // Capture the pointer to the canvas so we keep getting Move events
+        // even when the cursor wanders over a non-canvas child (e.g. a
+        // previously-drawn polyline). Without capture, Avalonia stops
+        // routing Move to us as soon as the cursor leaves the canvas's
+        // own hit area, which makes drawing impossible.
+        e.Pointer.Capture(_drawingCanvas);
+        var p = e.GetPosition(_drawingCanvas);
         _activeStrokeRaw = [p];
         _activeStrokeTs = [Elapsed()];
         _activePolylinePoints = new Avalonia.Collections.AvaloniaList<Point> { p };
@@ -191,6 +181,7 @@ public sealed class WhiteboardOverlay : ScreenSelectionTransparentWindow
 
     private void OnCanvasPointerReleased(object? sender, PointerReleasedEventArgs e)
     {
+        e.Pointer.Capture(null); // release capture
         if (_activeStrokeRaw is null) return;
         if (_activeStrokeRaw.Count >= 2)
         {
