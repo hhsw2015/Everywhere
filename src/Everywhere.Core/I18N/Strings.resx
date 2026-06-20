@@ -2230,6 +2230,12 @@ Use scroll wheel or number keys to switch selection mode</value>
     <data name="ShortcutSettings_ClearContextStash_Desription" xml:space="preserve">
         <value>Wipe the on-disk context stash and any pinned element so the next prompt to a Claude Code hook is NOT decorated. Use when you accidentally captured the wrong window.</value>
     </data>
+    <data name="ShortcutSettings_Whiteboard_Header" xml:space="preserve">
+        <value>Whiteboard</value>
+    </data>
+    <data name="ShortcutSettings_Whiteboard_Desription" xml:space="preserve">
+        <value>Press and hold to draw gestures (circle / underline / arrow / X) over the screen. Release to send the annotated regions to the agent. Like a laser pointer for AI.</value>
+    </data>
     <data name="SettingsCategory_Settings_McpServer_Header" xml:space="preserve">
         <value>MCP Server</value>
     </data>

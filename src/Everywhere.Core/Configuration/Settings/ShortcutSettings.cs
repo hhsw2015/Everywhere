@@ -69,4 +69,16 @@ public sealed partial class ShortcutSettings : SettingsBase, ISettingsCategory
         LocaleKey.ShortcutSettings_ClearContextStash_Desription)]
     [SettingsTemplatedItem]
     public CompositeKeyboardShortcut ClearContextStash { get; } = new();
+
+    /// <summary>
+    /// Press-and-hold to draw on a virtual whiteboard over the current screen:
+    /// hold the hotkey, draw any number of strokes (circle / underline / arrow / X)
+    /// on the content you want to highlight, release to snap each gesture to
+    /// real a11y leaves and hand the regions to the agent.
+    /// </summary>
+    [DynamicResourceKey(
+        LocaleKey.ShortcutSettings_Whiteboard_Header,
+        LocaleKey.ShortcutSettings_Whiteboard_Desription)]
+    [SettingsTemplatedItem]
+    public CompositeKeyboardShortcut Whiteboard { get; } = new();
 }
