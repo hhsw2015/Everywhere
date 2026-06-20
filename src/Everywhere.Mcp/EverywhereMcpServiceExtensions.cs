@@ -1,4 +1,5 @@
 using Everywhere.Interop;
+using Everywhere.Interop.Whiteboard;
 using Everywhere.Mcp.Input;
 using Everywhere.Mcp.Snapshot;
 using Everywhere.Mcp.Transport;
@@ -50,6 +51,7 @@ public static class EverywhereMcpServiceExtensions
     {
         services.TryAddSingleton<SessionStore>();
         services.TryAddSingleton<PickStash>();
+        services.TryAddSingleton<WhiteboardStash>();
         services.TryAddSingleton<IVisualElementContext, EmptyVisualElementContext>();
         services.TryAddSingleton<IInputSimulator, NotSupportedInputSimulator>();
         services.TryAddSingleton<IFocusBackend, NotSupportedFocusBackend>();
