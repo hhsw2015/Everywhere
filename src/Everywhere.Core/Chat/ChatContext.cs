@@ -7,15 +7,16 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Messaging;
 using DynamicData;
 using Everywhere.AI;
-using Everywhere.Collections;
 using Everywhere.Chat.Permissions;
 using Everywhere.Chat.Plugins;
+using Everywhere.Collections;
 using Everywhere.Common;
 using Everywhere.Configuration;
 using Everywhere.Interop;
 using Everywhere.Messages;
 using Everywhere.Utilities;
 using MessagePack;
+using ZLinq;
 
 namespace Everywhere.Chat;
 
@@ -110,7 +111,15 @@ public sealed partial class ChatContext : ObservableObject, IObservableList<Chat
     /// Backing store for MessagePack (de)serialization: nodes are persisted as a collection, and linked by Ids.
     /// </summary>
     [Key(1)]
-    private ICollection<ChatMessageNode> MessageNodes => _messageNodeMap.Values;
+    private ICollection<ChatMessageNode> MessageNodes
+    {
+        get
+        {
+            using var _ = _graphMutationLock.EnterScope();
+            
+            return _messageNodeMap.Values.AsValueEnumerable().ToList();
+        }
+    }
 
     /// <summary>
     /// Root node (Guid.Empty) which is important for branch resolution but not included in the message node map.
@@ -123,6 +132,7 @@ public sealed partial class ChatContext : ObservableObject, IObservableList<Chat
     /// NOTE that this map does not include the root node, which is always at Id = Guid.Empty.
     /// </summary>
     [IgnoreMember] private readonly Dictionary<Guid, ChatMessageNode> _messageNodeMap = new();
+    [IgnoreMember] private readonly Lock _graphMutationLock = new();
 
     /// <summary>
     /// Nodes on the currently selected branch. [0] is always the root node.
@@ -280,13 +290,22 @@ public sealed partial class ChatContext : ObservableObject, IObservableList<Chat
     /// </summary>
     public void CreateBranchOn(ChatMessageNode siblingNode, ChatMessage chatMessage)
     {
-        var index = _branchNodesSourceList.Items.IndexOf(siblingNode);
-        var afterNode = index switch
+        using var _ = _graphMutationLock.EnterScope();
+
+        var index = 0;
+        ChatMessageNode? afterNode = null;
+        _branchNodesSourceList.Edit(list =>
         {
-            < 0 => throw new ArgumentException("The specified node is not in the current branch.", nameof(siblingNode)),
-            0 => _rootNode,
-            _ => _branchNodesSourceList.Items[index - 1]
-        };
+            index = list.IndexOf(siblingNode);
+            afterNode = index switch
+            {
+                < 0 => throw new ArgumentException("The specified node is not in the current branch.", nameof(siblingNode)),
+                0 => _rootNode,
+                _ => list[index - 1]
+            };
+        });
+
+        if (afterNode is null) return;
 
         var newNode = new ChatMessageNode(chatMessage)
         {
@@ -299,17 +318,48 @@ public sealed partial class ChatContext : ObservableObject, IObservableList<Chat
         afterNode.Add(newNode.Id);
         afterNode.ChoiceIndex = afterNode.Children.Count - 1;
 
-        UpdateBranchAfter(index - 1, afterNode);
+        UpdateBranchAfterCore(index - 1, afterNode);
     }
-
-    public void Insert(int index, ChatMessage chatMessage) => Insert(index, new ChatMessageNode(chatMessage) { Context = this });
 
     /// <summary>
     /// Adds a message at the end of the current branch.
     /// </summary>
     public void Add(ChatMessage message)
     {
-        Insert(_branchNodesSourceList.Count, new ChatMessageNode(message) { Context = this });
+        using var _ = _graphMutationLock.EnterScope();
+
+        var index = _branchNodesSourceList.Count;
+        var newNode = new ChatMessageNode(message) { Context = this };
+
+        ChatMessageNode afterNode = null!;
+        _branchNodesSourceList.Edit(list =>
+        {
+            afterNode = index switch
+            {
+                0 => _rootNode,
+                _ => list[index - 1]
+            };
+        });
+
+        _messageNodeMap[newNode.Id] = newNode;
+
+        if (afterNode.Children.Count > 0)
+        {
+            newNode.AddRange(afterNode.Children);
+            newNode.ChoiceIndex = afterNode.ChoiceIndex;
+            foreach (var afterNodeChildId in afterNode.Children)
+            {
+                _messageNodeMap[afterNodeChildId].Parent = newNode;
+            }
+
+            afterNode.Clear();
+        }
+
+        newNode.Parent = afterNode;
+        newNode.PropertyChanged += HandleNodePropertyChanged;
+        afterNode.Add(newNode.Id);
+
+        UpdateBranchAfterCore(index - 1, afterNode);
     }
 
     /// <summary>
@@ -318,10 +368,38 @@ public sealed partial class ChatContext : ObservableObject, IObservableList<Chat
     /// <returns></returns>
     public IEnumerable<ChatMessageNode> GetAllNodes()
     {
-        yield return _rootNode;
-        foreach (var node in _messageNodeMap.Values)
+        using var _ = _graphMutationLock.EnterScope();
+
+        var results = new ChatMessageNode[_messageNodeMap.Count + 1];
+        results[0] = _rootNode;
+        _messageNodeMap.Values.CopyTo(results, 1);
+        return results;
+    }
+
+    /// <summary>
+    /// Gets a snapshot of the chat context for persistence, including all nodes in all branches and their relationships.
+    /// </summary>
+    /// <returns></returns>
+    public IReadOnlyList<PersistenceNodeSnapshot> GetPersistenceSnapshot()
+    {
+        using var _ = _graphMutationLock.EnterScope();
+
+        var snapshots = new List<PersistenceNodeSnapshot>(_messageNodeMap.Count + 1) { CreatePersistenceNodeSnapshot(_rootNode) };
+        snapshots.AddRange(_messageNodeMap.Values.Select(CreatePersistenceNodeSnapshot));
+        return snapshots;
+
+        static PersistenceNodeSnapshot CreatePersistenceNodeSnapshot(ChatMessageNode node)
         {
-            yield return node;
+            var children = node.Children;
+            var choiceIndex = node.ChoiceIndex;
+            var choiceChildId = choiceIndex >= 0 && choiceIndex < children.Count ? children[choiceIndex] : (Guid?)null;
+
+            return new PersistenceNodeSnapshot(
+                node.Id,
+                node.Parent?.Id,
+                choiceChildId,
+                node.Message,
+                node.DateModified);
         }
     }
 
@@ -343,6 +421,26 @@ public sealed partial class ChatContext : ObservableObject, IObservableList<Chat
     public IObservable<IChangeSet<ChatMessageNode>> Preview(Func<ChatMessageNode, bool>? predicate = null) =>
         _branchNodesSourceList.Preview(predicate);
 
+    /// <summary>
+    /// Used for get _branchNodesSourceList items in a no-copy way. Don't use this method to modify the list.
+    /// </summary>
+    /// <param name="updateAction"></param>
+    public void Read(Action<IExtendedList<ChatMessageNode>> updateAction)
+    {
+        _branchNodesSourceList.Edit(updateAction);
+    }
+
+    /// <summary>
+    /// Used for get _branchNodesSourceList items in a no-copy way. Don't use this method to modify the list.
+    /// </summary>
+    /// <param name="updateAction"></param>
+    public T Read<T>(Func<IExtendedList<ChatMessageNode>, T> updateAction)
+    {
+        T? result = default;
+        _branchNodesSourceList.Edit(list => result = updateAction(list));
+        return result!;
+    }
+
     private void HandleNodePropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName == nameof(ChatMessageNode.ChoiceIndex))
@@ -357,69 +455,66 @@ public sealed partial class ChatContext : ObservableObject, IObservableList<Chat
     /// <summary>
     /// Rebuilds the current branch from the specified node forward.
     /// </summary>
-    private void UpdateBranchAfterNode(ChatMessageNode node) => UpdateBranchAfter(_branchNodesSourceList.Items.IndexOf(node), node);
+    private void UpdateBranchAfterNode(ChatMessageNode node)
+    {
+        using var _ = _graphMutationLock.EnterScope();
+
+        _branchNodesSourceList.Edit(list =>
+        {
+            var index = list.IndexOf(node);
+            if (index == -1)
+                throw new ArgumentOutOfRangeException(nameof(node), "Node is not in the branch nodes.");
+
+            UpdateBranchAfterCore(list, index, node);
+        });
+    }
 
     private void UpdateBranchAfter(int index, ChatMessageNode node)
+    {
+        using var _ = _graphMutationLock.EnterScope();
+
+        UpdateBranchAfterCore(index, node);
+    }
+
+    private void UpdateBranchAfterCore(int index, ChatMessageNode node)
     {
         if (index == -1)
             throw new ArgumentOutOfRangeException(nameof(index), "Node is not in the branch nodes.");
 
-        for (var i = _branchNodesSourceList.Count - 1; i > index; i--) _branchNodesSourceList.RemoveAt(i);
+        _branchNodesSourceList.Edit(list => UpdateBranchAfterCore(list, index, node));
+    }
+
+    private void UpdateBranchAfterCore(IExtendedList<ChatMessageNode> list, int index, ChatMessageNode node)
+    {
+        for (var i = list.Count - 1; i > index; i--) list.RemoveAt(i);
 
         // Follow ChoiceIndex down the tree.
         while (true)
         {
-            if (node.ChoiceIndex < 0 || node.ChoiceIndex >= node.Children.Count) break;
-            _branchNodesSourceList.Add(node = _messageNodeMap[node.Children[node.ChoiceIndex]]);
+            var children = node.Children;
+            var choiceIndex = node.ChoiceIndex;
+            if (choiceIndex < 0 || choiceIndex >= children.Count) break;
+            list.Add(node = _messageNodeMap[children[choiceIndex]]);
         }
-    }
-
-    private void Insert(int index, ChatMessageNode newNode)
-    {
-        if (newNode.Id == Guid.Empty)
-            throw new ArgumentException("New node must have a non-empty ID.", nameof(newNode));
-
-        _messageNodeMap[newNode.Id] = newNode;
-        newNode.PropertyChanged += HandleNodePropertyChanged;
-
-        var afterNode = index switch
-        {
-            0 => _rootNode,
-            _ => _branchNodesSourceList.Items[index - 1]
-        };
-
-        if (afterNode.Children.Count > 0)
-        {
-            newNode.AddRange(afterNode.Children);
-            newNode.ChoiceIndex = afterNode.ChoiceIndex;
-            foreach (var afterNodeChildId in afterNode.Children)
-            {
-                _messageNodeMap[afterNodeChildId].Parent = newNode;
-            }
-
-            afterNode.Clear();
-        }
-
-        newNode.Parent = afterNode;
-        afterNode.Add(newNode.Id);
-
-        UpdateBranchAfter(index - 1, afterNode);
     }
 
     public void Dispose()
     {
-        foreach (var node in _messageNodeMap.Values)
+        using (_graphMutationLock.EnterScope())
         {
-            node.PropertyChanged -= HandleNodePropertyChanged;
-            node.Dispose();
-        }
+            foreach (var node in _messageNodeMap.Values)
+            {
+                node.PropertyChanged -= HandleNodePropertyChanged;
+                node.Dispose();
+            }
 
-        _rootNode.PropertyChanged -= HandleNodePropertyChanged;
-        _rootNode.Dispose();
-        _chatPluginUserInterfaceItemsSubscription.Dispose();
-        _displayItemsSubscription.Dispose();
-        _metadataSyncSubscription.Dispose();
-        _branchNodesSourceList.Dispose();
+            _rootNode.PropertyChanged -= HandleNodePropertyChanged;
+            _rootNode.Dispose();
+            _chatPluginUserInterfaceItemsSubscription.Dispose();
+            _displayItemsSubscription.Dispose();
+            _metadataSyncSubscription.Dispose();
+            _branchNodesSourceList.Dispose();
+        }
 
         Dispatcher.UIThread.Post(() => Metadata.States = ChatContextMetadataStates.None);
 
@@ -484,7 +579,6 @@ public sealed partial class ChatContext : ObservableObject, IObservableList<Chat
     /// <returns>
     /// Usually a temporary directory path like C:\Users\[UserName]\AppData\Roaming\Everywhere\plugins\2025-12-30
     /// </returns>
-
     public string EnsureWorkingDirectory() =>
         RuntimeConstants.EnsureWritableDataFolderPath("plugins", Metadata.DateCreated.ToString("yyyy-MM-dd"));
 
@@ -500,4 +594,11 @@ public sealed partial class ChatContext : ObservableObject, IObservableList<Chat
             new KeyValuePair<string, Func<string>>("DefaultSystemPrompt", () => Prompts.DefaultSystemPrompt),
         ]);
     }
+
+    public readonly record struct PersistenceNodeSnapshot(
+        Guid Id,
+        Guid? ParentId,
+        Guid? ChoiceChildId,
+        ChatMessage Message,
+        DateTimeOffset DateModified);
 }

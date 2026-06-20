@@ -1,3 +1,39 @@
+## [v0.8.0](https://github.com/DearVa/Everywhere/releases/tag/v0.8.0) - 2026-06-19
+
+### ✨ Features & 🚀 Improvements
+
+- **🔥 Modern UI & Home Page**: Introduced a brand new Home Page and a comprehensive "Modern UI" overhaul, delivering a more elegant and intuitive user experience.
+- **🔥 [SKILL.md](https://skill.md) Ecosystem**: Introduced support for `SKILL.md` file definitions. You can now deeply customize and manage agent abilities with ease.
+- **🔥 Advanced Prompting**: Added support for the `{DefaultSystemPrompt}` variable with recursive resolution, unlocking more dynamic and powerful prompt templating.
+- **🔥 Granular Model Controls**: Introduced per-schema model options and additional advanced parameter settings beyond just `Temperature` and `Top-p`.
+- **Software Update Channels**: You can now choose your preferred update channel (e.g., Stable vs. Canary) directly in the settings.
+- **AnySearch Integration**: Added `AnySearch` as a supported engine for web browsing tasks.
+- **New Models Support**: Added `Claude Opus 4.8`, `Claude Fable 5`, `Gemini 3.5 Flash`, and `MiniMax-M3` to the presets.
+- **Enhanced Global Shortcuts**: Added a system tray toggle for the chat window shortcut and introduced support for alternative shortcut keys.
+- **UI/UX Performance Leap**: Significantly optimized overall UI performance, delivering a smoother experience for Markdown text selection, rendering, and complex layout elements (like Web Search and MCP buttons).
+- Added cloud service quota limit displays and expanded cloud service internationalization.
+- The "ask_user_question" tool now includes a free-text field at any time, ensuring that when the assistant asks a question, the user can clearly explain the reason.
+
+### 🐛 Bug Fixes
+
+- Resolved a potential memory leak to ensure better performance and stability during extended background use.
+- Fixed an issue where dismissing system notifications (Toasts) could occasionally cause application crashes.
+- Fixed a bug where missing characters might appear during Markdown rendering.
+- Fixed rendering errors for models returning empty reasoning content.
+- Fixed Terminal tool issues where command lines could be truncated and emojis were not displaying properly.
+- Fixed an issue where button backgrounds would flicker in Dark Mode.
+- Fixed a minor issue where ToDo list items might intermittently fail to display.
+- Fixed an issue where chat titles were being truncated too aggressively.
+- Addressed various backend file-handling and threading issues to ensure stability.
+
+### 🎉 Contributors
+- @sstar16 made their first contribution in #404. Welcome to the project!
+- @Fillip74 made a contribution in #403. Thank you!
+
+**Full Changelog**: https://github.com/Sylinko/Everywhere/compare/v0.7.8...v0.8.0
+
+
+
 ## [v0.7.8](https://github.com/DearVa/Everywhere/releases/tag/v0.7.8) - 2026-05-27
 
 ### ⚠️ Important Notice

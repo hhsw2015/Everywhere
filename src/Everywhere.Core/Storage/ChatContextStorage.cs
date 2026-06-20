@@ -33,6 +33,8 @@ public sealed class ChatContextStorage(
         if (context.Metadata.Id.Version != 7)
             throw new ArgumentException("ChatContext.Metadata.Id must be Guid v7.", nameof(context));
 
+        var nodeSnapshots = context.GetPersistenceSnapshot();
+
         using var _ = await _lock.LockAsync(cancellationToken);
         await using var db = await dbFactory.CreateDbContextAsync(cancellationToken);
 
@@ -53,7 +55,7 @@ public sealed class ChatContextStorage(
         db.Chats.Add(ctxEntity);
 
         // Insert nodes (including root Guid.Empty if present)
-        foreach (var node in context.GetAllNodes().AsValueEnumerable())
+        foreach (var node in nodeSnapshots.AsValueEnumerable())
         {
             var entity = BuildNodeEntity(context.Metadata.Id, node);
             db.Nodes.Add(entity);
@@ -320,6 +322,8 @@ public sealed class ChatContextStorage(
         if (context.Metadata.Id.Version != 7)
             throw new ArgumentException("ChatContext.Metadata.Id must be Guid v7.", nameof(context));
 
+        var nodeSnapshots = context.GetPersistenceSnapshot();
+
         using var _ = await _lock.LockAsync(cancellationToken);
         await using var db = await dbFactory.CreateDbContextAsync(cancellationToken);
 
@@ -360,7 +364,7 @@ public sealed class ChatContextStorage(
             .ToHashSet();
 
         // Upsert / Update
-        var memNodes = context.GetAllNodes().AsValueEnumerable().ToDictionary(x => x.Id, x => x);
+        var memNodes = nodeSnapshots.AsValueEnumerable().ToDictionary(x => x.Id, x => x);
         foreach (var (id, node) in memNodes)
         {
             if (!dbNodes.TryGetValue(id, out var row))
@@ -368,15 +372,17 @@ public sealed class ChatContextStorage(
                 var entity = BuildNodeEntity(chatId, node);
                 db.Nodes.Add(entity);
             }
-            else if (row.UpdatedAt == node.DateModified)
+            else if (row.UpdatedAt == node.DateModified &&
+                row.ParentId == node.ParentId &&
+                row.ChoiceChildId == node.ChoiceChildId)
             {
                 continue; // No changes
             }
             else
             {
                 // Update fields
-                row.ParentId = node.Parent?.Id;
-                row.ChoiceChildId = ResolveChoiceChildId(node);
+                row.ParentId = node.ParentId;
+                row.ChoiceChildId = node.ChoiceChildId;
                 row.Payload = SerializeMessage(node.Message);
                 row.Author = node.Message.Role.Label.SafeSubstring(0, 10);
                 row.UpdatedAt = node.DateModified;
@@ -517,13 +523,13 @@ public sealed class ChatContextStorage(
         }
     }
 
-    private ChatNodeEntity BuildNodeEntity(Guid chatId, ChatMessageNode node) =>
+    private ChatNodeEntity BuildNodeEntity(Guid chatId, ChatContext.PersistenceNodeSnapshot node) =>
         new()
         {
             ChatContextId = chatId,
             Id = node.Id,
-            ParentId = node.Parent?.Id,
-            ChoiceChildId = ResolveChoiceChildId(node),
+            ParentId = node.ParentId,
+            ChoiceChildId = node.ChoiceChildId,
             Payload = SerializeMessage(node.Message),
             Author = node.Message.Role.Label.SafeSubstring(0, 10),
             CreatedAt = node.DateModified,
@@ -536,12 +542,6 @@ public sealed class ChatContextStorage(
 
     private static ChatMessage DeserializeMessage(byte[] payload) =>
         MessagePackSerializer.Deserialize<ChatMessage>(payload);
-
-    private static Guid? ResolveChoiceChildId(ChatMessageNode node)
-    {
-        if (node.ChoiceIndex < 0 || node.ChoiceIndex >= node.Children.Count) return null;
-        return node.Children[node.ChoiceIndex];
-    }
 
     private static long GetOrderKey(Guid id)
     {

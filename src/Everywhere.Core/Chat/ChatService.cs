@@ -1,8 +1,8 @@
 ﻿using System.Diagnostics;
 using System.Diagnostics.Metrics;
+using System.Reactive.Disposables;
 using System.Text;
 using CommunityToolkit.Mvvm.Messaging;
-using DynamicData;
 using Everywhere.AI;
 using Everywhere.Chat.Permissions;
 using Everywhere.Chat.Plugins;
@@ -11,6 +11,7 @@ using Everywhere.Configuration;
 using Everywhere.Interop;
 using Everywhere.Messages;
 using Everywhere.Skills;
+using Everywhere.Statistics;
 using Everywhere.Storage;
 using Everywhere.StrategyEngine;
 using Everywhere.Utilities;
@@ -36,7 +37,10 @@ public sealed partial class ChatService : IChatService
     private readonly Settings _settings;
     private readonly PersistentState _persistentState;
     private readonly ISkillPromptProvider _skillPromptProvider;
+    private readonly IStatisticsRecorder _statisticsRecorder;
     private readonly ILogger<ChatService> _logger;
+    private readonly AsyncLocal<Guid?> _currentTurnEventId = new();
+    private readonly AsyncLocal<Guid?> _currentModelInvocationEventId = new();
 
     private readonly ActivitySource _activitySource = new(typeof(ChatService).FullName.NotNull(), App.Version);
     private readonly Meter _meter = new(typeof(ChatService).FullName.NotNull(), App.Version);
@@ -57,6 +61,7 @@ public sealed partial class ChatService : IChatService
         Settings settings,
         PersistentState persistentState,
         ISkillPromptProvider skillPromptProvider,
+        IStatisticsRecorder statisticsRecorder,
         ILogger<ChatService> logger)
     {
         _chatContextManager = chatContextManager;
@@ -66,6 +71,7 @@ public sealed partial class ChatService : IChatService
         _settings = settings;
         _persistentState = persistentState;
         _skillPromptProvider = skillPromptProvider;
+        _statisticsRecorder = statisticsRecorder;
         _logger = logger;
 
         _chatRequestsCounter = _meter.CreateCounter<int>("gen_ai.chat.requests");
@@ -90,6 +96,12 @@ public sealed partial class ChatService : IChatService
                 activity?.SetTag("chat.context.id", chatContext.Metadata.Id);
 
                 chatContext.Add(message);
+                var turnEventId = await _statisticsRecorder.RecordTurnAsync(
+                    chatContext,
+                    FindMessageNode(chatContext, message),
+                    StatisticsTurnKind.Send,
+                    cancellationToken);
+                using var turnScope = BeginStatisticsTurn(turnEventId);
 
                 if (customAssistant is null)
                 {
@@ -130,6 +142,12 @@ public sealed partial class ChatService : IChatService
                 activity?.SetTag("chat.context.id", chatContext.Metadata.Id);
 
                 chatContext.CreateBranchOn(oldNode, newMessage);
+                var turnEventId = await _statisticsRecorder.RecordTurnAsync(
+                    chatContext,
+                    FindMessageNode(chatContext, newMessage),
+                    StatisticsTurnKind.Edit,
+                    cancellationToken);
+                using var turnScope = BeginStatisticsTurn(turnEventId);
 
                 if (customAssistant is null)
                 {
@@ -178,7 +196,23 @@ public sealed partial class ChatService : IChatService
                 var assistantChatMessage = new AssistantChatMessage { IsBusy = true };
                 chatContext.CreateBranchOn(node, assistantChatMessage);
 
+                var turnEventId = await _statisticsRecorder.RecordTurnAsync(
+                    chatContext,
+                    FindPreviousUserNode(chatContext, node),
+                    StatisticsTurnKind.Retry,
+                    cancellationToken);
+                using var turnScope = BeginStatisticsTurn(turnEventId);
+
                 await GenerateAsync(chatContext, customAssistant, assistantChatMessage, cancellationToken: cancellationToken);
+
+                static ChatMessageNode? FindPreviousUserNode(ChatContext chatContext, ChatMessageNode node)
+                {
+                    return chatContext.Read(list =>
+                    {
+                        var index = list.IndexOf(node);
+                        return index <= 0 ? null : list.AsValueEnumerable().Take(index).LastOrDefault(x => x.Message is UserChatMessage);
+                    });
+                }
             },
             _logger.ToExceptionHandler());
     }
@@ -191,11 +225,13 @@ public sealed partial class ChatService : IChatService
         }
 
         var chatContext = node.Context;
-        var branchNodes = chatContext.Items;
-        if (branchNodes.Count == 0 || branchNodes.IndexOf(node) != branchNodes.Count - 1)
+        chatContext.Read(list =>
         {
-            throw new InvalidOperationException("Only last assistant message can be continued.");
-        }
+            if (list.Count == 0 || list.IndexOf(node) != list.Count - 1)
+            {
+                throw new InvalidOperationException("Only last assistant message can be continued.");
+            }
+        });
 
         var customAssistant = _settings.Model.SelectedCustomAssistant;
 
@@ -214,7 +250,12 @@ public sealed partial class ChatService : IChatService
                 var assistantChatMessage = new AssistantChatMessage { IsBusy = true };
                 chatContext.Add(assistantChatMessage);
 
-                await GenerateAsync(chatContext, customAssistant, assistantChatMessage, cancellationToken: cancellationToken);
+                await GenerateAsync(
+                    chatContext,
+                    customAssistant,
+                    assistantChatMessage,
+                    purpose: StatisticsModelInvocationPurpose.ContinueResponse,
+                    cancellationToken: cancellationToken);
             },
             _logger.ToExceptionHandler());
     }
@@ -252,6 +293,7 @@ public sealed partial class ChatService : IChatService
             .AsValueEnumerable()
             .OfType<VisualElementAttachment>()
             .ToList();
+        RecordImageAttachmentStatistics(chatContext, userChatMessage);
 
         if (visualElementAttachments.Count == 0) return;
 
@@ -289,6 +331,14 @@ public sealed partial class ChatService : IChatService
 
             // Adds the visual elements to the chat context for future reference.
             chatContext.VisualElements.AddRange(builtVisualElements);
+            _statisticsRecorder.RecordVisualContextAsync(
+                    new StatisticsVisualContextDraft(
+                        _currentTurnEventId.Value,
+                        chatContext.Metadata.Id,
+                        StatisticsVisualContextSource.AutomaticAttachmentProcessing,
+                        ElementCount: builtVisualElements.Count),
+                    CancellationToken.None)
+                .Detach(IExceptionHandler.DangerouslyIgnoreAllException);
 
             // Then deactivate all the references, making them weak references.
             foreach (var reference in userChatMessage
@@ -347,7 +397,7 @@ public sealed partial class ChatService : IChatService
 
         if (kernelMixin.SupportsToolCall && _persistentState.IsToolCallEnabled)
         {
-            var userMessage = chatContext.Items.AsValueEnumerable().Select(n => n.Message).OfType<UserChatMessage>().LastOrDefault();
+            var userMessage = chatContext.Read(list => list.AsValueEnumerable().Select(n => n.Message).OfType<UserChatMessage>().LastOrDefault());
             var strategyToolRulesets = userMessage?.As<UserStrategyChatMessage>()?.Strategy.ToolRulesets;
             var toolRulesets = new ToolRulesets(1) { { "builtin.web.web_search", _persistentState.IsWebSearchEnabled } }
                 .Union(strategyToolRulesets)
@@ -378,6 +428,7 @@ public sealed partial class ChatService : IChatService
     /// <param name="assistantChatMessage"></param>
     /// <param name="systemPromptOverride"></param>
     /// <param name="enableNotifications"></param>
+    /// <param name="purpose">Statistics classification for model invocations produced by this generation.</param>
     /// <param name="cancellationToken"></param>
     public async Task GenerateAsync(
         ChatContext chatContext,
@@ -385,12 +436,14 @@ public sealed partial class ChatService : IChatService
         AssistantChatMessage assistantChatMessage,
         string? systemPromptOverride = null,
         bool enableNotifications = true,
+        StatisticsModelInvocationPurpose purpose = StatisticsModelInvocationPurpose.ChatResponse,
         CancellationToken cancellationToken = default)
     {
         using var activity = _activitySource.StartChatActivity("chat", assistant);
         activity?.SetTag("id", chatContext.Metadata.Id);
 
         KernelMixin? kernelMixin = null;
+        var previousModelInvocationEventId = _currentModelInvocationEventId.Value;
         try
         {
             kernelMixin = _kernelMixinFactory.Create(assistant);
@@ -451,6 +504,7 @@ public sealed partial class ChatService : IChatService
                     chatContext,
                     chatHistory,
                     assistantChatMessage,
+                    purpose,
                     cancellationToken);
                 if (functionCallContents.Count <= 0) break; // No more function calls, exit the loop.
 
@@ -481,6 +535,7 @@ public sealed partial class ChatService : IChatService
         }
         finally
         {
+            _currentModelInvocationEventId.Value = previousModelInvocationEventId;
             activity.SetChatUsageTags(assistantChatMessage.UsageDetails);
             RecordChatUsageMetrics(assistantChatMessage.UsageDetails, assistant.ModelId);
             _chatRequestsCounter.Add(1, GetModelTag(assistant.ModelId));
@@ -500,6 +555,7 @@ public sealed partial class ChatService : IChatService
     /// <param name="chatContext"></param>
     /// <param name="chatHistory"></param>
     /// <param name="assistantChatMessage"></param>
+    /// <param name="purpose"></param>
     /// <param name="cancellationToken"></param>
     /// <returns></returns>
     private async Task<IReadOnlyList<FunctionCallContent>> GetStreamingChatMessageContentsAsync(
@@ -508,6 +564,7 @@ public sealed partial class ChatService : IChatService
         ChatContext chatContext,
         ChatHistory chatHistory,
         AssistantChatMessage assistantChatMessage,
+        StatisticsModelInvocationPurpose purpose,
         CancellationToken cancellationToken)
     {
         using var activity = _activitySource.StartChatActivity("invoke_agent", kernelMixin);
@@ -524,6 +581,20 @@ public sealed partial class ChatService : IChatService
         var isFirstToken = true;
         var promptExecutionSettings = kernelMixin.GetPromptExecutionSettings(
             kernelMixin.SupportsToolCall && _persistentState.IsToolCallEnabled ? FunctionChoiceBehavior.Auto(autoInvoke: false) : null);
+
+        var invocationId = Guid.CreateVersion7();
+        await _statisticsRecorder.StartModelInvocationAsync(
+            new StatisticsModelInvocationDraft(
+                invocationId,
+                _currentTurnEventId.Value,
+                chatContext.Metadata.Id,
+                FindMessageNode(chatContext, assistantChatMessage)?.Id,
+                purpose,
+                kernelMixin.ModelId,
+                startTime),
+            cancellationToken);
+        _currentModelInvocationEventId.Value = invocationId;
+        Exception? invocationException = null;
 
         try
         {
@@ -623,10 +694,17 @@ public sealed partial class ChatService : IChatService
                 }
             }
         }
+        catch (Exception ex)
+        {
+            invocationException = ex;
+            throw;
+        }
         finally
         {
             var generationEndTime = DateTimeOffset.UtcNow;
             var generationSeconds = firstTokenAt.HasValue ? Math.Max((generationEndTime - firstTokenAt.Value).TotalSeconds, 0) : 0;
+            var invocationUsage = new ChatUsageDetails();
+            invocationUsage.Accumulate(usage, generationSeconds);
 
             assistantChatMessage.UsageDetails.Accumulate(usage, generationSeconds); // Accumulate usage details.
 
@@ -637,6 +715,14 @@ public sealed partial class ChatService : IChatService
                 spans[^1].FinishedAt ??= generationEndTime;
 
             callingToolsBusyMessage?.Dispose();
+            await _statisticsRecorder.CompleteModelInvocationAsync(
+                invocationId,
+                invocationUsage,
+                generationEndTime,
+                invocationException is null,
+                invocationException is OperationCanceledException || cancellationToken.IsCancellationRequested,
+                invocationException?.GetType().FullName,
+                CancellationToken.None);
         }
 
         var functionCallContents = functionCallContentBuilder.Build();
@@ -745,6 +831,12 @@ public sealed partial class ChatService : IChatService
 
                         // Add the function result content to the missing function chat message for DB storage.
                         errorFunctionMessage.Results.Add(missingFunctionResultContent);
+                        await RecordToolInvocationAsync(
+                            chatContext,
+                            functionCallContent,
+                            null,
+                            StatisticsToolInvocationStatus.Disabled,
+                            cancellationToken);
                     }
 
                     errorFunctionMessage.ErrorMessageKey = new FormattedDynamicResourceKey(
@@ -792,6 +884,12 @@ public sealed partial class ChatService : IChatService
 
                         // Add the function result content to the missing function chat message for DB storage.
                         errorFunctionMessage.Results.Add(missingFunctionResultContent);
+                        await RecordToolInvocationAsync(
+                            chatContext,
+                            functionCallContent,
+                            null,
+                            StatisticsToolInvocationStatus.NotFound,
+                            cancellationToken);
                     }
 
                     errorFunctionMessage.ErrorMessageKey = new FormattedDynamicResourceKey(
@@ -893,6 +991,19 @@ public sealed partial class ChatService : IChatService
         activity?.SetTag("gen_ai.tool.plugin", content.PluginName);
         activity?.SetTag("gen_ai.tool.name", content.FunctionName);
         activity?.SetTag("gen_ai.tool.input", content.Arguments?.ToString());
+        var toolInvocationId = Guid.CreateVersion7();
+        var toolStartedAt = DateTimeOffset.UtcNow;
+        var toolStatus = StatisticsToolInvocationStatus.Success;
+        await _statisticsRecorder.StartToolInvocationAsync(
+            new StatisticsToolInvocationDraft(
+                toolInvocationId,
+                _currentTurnEventId.Value,
+                _currentModelInvocationEventId.Value,
+                context.ChatContext.Metadata.Id,
+                context.ChatPlugin.Key,
+                content.FunctionName,
+                toolStartedAt),
+            cancellationToken);
 
         // We don't collect input arguments in metrics because they may contain sensitive information.
         _toolCallsCounter.Add(
@@ -921,6 +1032,7 @@ public sealed partial class ChatService : IChatService
                 }
                 case ConsentDecision.Deny:
                 {
+                    toolStatus = StatisticsToolInvocationStatus.Denied;
                     return new FunctionResultContent(content, consentDecision.FormatReason("Tool execution denied by user."));
                 }
             }
@@ -929,11 +1041,22 @@ public sealed partial class ChatService : IChatService
         }
         catch (Exception ex)
         {
+            toolStatus = ex is OperationCanceledException || cancellationToken.IsCancellationRequested
+                ? StatisticsToolInvocationStatus.Canceled
+                : StatisticsToolInvocationStatus.Error;
             ex = HandledFunctionInvokingException.Handle(ex);
             activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
             _logger.LogError(ex, "Error invoking tool '{FunctionName}'", content.FunctionName);
 
             resultContent = new FunctionResultContent(content, $"Error: {ex.Message}") { InnerContent = ex };
+        }
+        finally
+        {
+            await _statisticsRecorder.CompleteToolInvocationAsync(
+                toolInvocationId,
+                toolStatus,
+                DateTimeOffset.UtcNow,
+                CancellationToken.None);
         }
 
         return resultContent;
@@ -1017,6 +1140,20 @@ public sealed partial class ChatService : IChatService
 
         _chatTopicsCounter.Add(1, GetModelTag(kernelMixin.ModelId));
         using var activity = _activitySource.StartChatActivity("generate_topic", kernelMixin);
+        var startedAt = DateTimeOffset.UtcNow;
+        var invocationId = Guid.CreateVersion7();
+        var usage = new ChatUsageDetails();
+        Exception? invocationException = null;
+        await _statisticsRecorder.StartModelInvocationAsync(
+            new StatisticsModelInvocationDraft(
+                invocationId,
+                null,
+                metadata.Id,
+                null,
+                StatisticsModelInvocationPurpose.TopicGeneration,
+                kernelMixin.ModelId,
+                startedAt),
+            cancellationToken);
         try
         {
             var language = _settings.Display.Language.ToEnglishName();
@@ -1040,7 +1177,6 @@ public sealed partial class ChatService : IChatService
                             _ => null
                         })),
             };
-            var usage = new ChatUsageDetails();
             var titleBuilder = new StringBuilder();
 
             await foreach (var content in kernelMixin.ChatCompletionService.GetStreamingChatMessageContentsAsync(
@@ -1078,15 +1214,79 @@ public sealed partial class ChatService : IChatService
         }
         catch (Exception ex)
         {
+            invocationException = ex;
             ex = HandledChatException.Handle(ex, kernelMixin);
             activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
             _logger.LogError(ex, "Failed to generate chat title");
         }
         finally
         {
+            await _statisticsRecorder.CompleteModelInvocationAsync(
+                invocationId,
+                usage,
+                DateTimeOffset.UtcNow,
+                invocationException is null,
+                invocationException is OperationCanceledException || cancellationToken.IsCancellationRequested,
+                invocationException?.GetType().FullName,
+                CancellationToken.None);
             metadata.IsGeneratingTopic.FlipIfTrue();
         }
     }
+
+    private async Task RecordToolInvocationAsync(
+        ChatContext chatContext,
+        FunctionCallContent content,
+        ChatPlugin? plugin,
+        StatisticsToolInvocationStatus status,
+        CancellationToken cancellationToken)
+    {
+        var invocationId = Guid.CreateVersion7();
+        var startedAt = DateTimeOffset.UtcNow;
+        await _statisticsRecorder.StartToolInvocationAsync(
+            new StatisticsToolInvocationDraft(
+                invocationId,
+                _currentTurnEventId.Value,
+                _currentModelInvocationEventId.Value,
+                chatContext.Metadata.Id,
+                plugin?.Key,
+                content.FunctionName,
+                startedAt),
+            cancellationToken);
+        await _statisticsRecorder.CompleteToolInvocationAsync(
+            invocationId,
+            status,
+            DateTimeOffset.UtcNow,
+            CancellationToken.None);
+    }
+
+    private void RecordImageAttachmentStatistics(ChatContext chatContext, UserChatMessage userChatMessage)
+    {
+        var imageAttachments = userChatMessage.Attachments
+            .AsValueEnumerable()
+            .OfType<FileAttachment>()
+            .Where(x => x.IsImage)
+            .ToList();
+        if (imageAttachments.Count == 0) return;
+
+        _statisticsRecorder.RecordVisualContextAsync(
+                new StatisticsVisualContextDraft(
+                    _currentTurnEventId.Value,
+                    chatContext.Metadata.Id,
+                    StatisticsVisualContextSource.ImageAttachment,
+                    ImageCount: imageAttachments.Count),
+                CancellationToken.None)
+            .Detach(IExceptionHandler.DangerouslyIgnoreAllException);
+    }
+
+    private IDisposable BeginStatisticsTurn(Guid? turnEventId)
+    {
+        var previousTurnEventId = _currentTurnEventId.Value;
+        _currentTurnEventId.Value = turnEventId;
+        return Disposable.Create(() => _currentTurnEventId.Value = previousTurnEventId);
+    }
+
+    private static ChatMessageNode? FindMessageNode(ChatContext chatContext, ChatMessage message) =>
+        chatContext.GetAllNodes().FirstOrDefault(x => ReferenceEquals(x.Message, message));
 
     #region Telemetry
 

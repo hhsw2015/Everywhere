@@ -47,24 +47,24 @@ public class _20260614154350_0_8_0 : SettingsMigration
 
         if (root.TryGetPropertyValue("Key", out var keyNode))
         {
-            if (!root.TryGetPropertyValue("Main", out var mainNode))
+            if (!root.TryGetPropertyValue("Main", out var mainNode) || mainNode is null)
             {
-                mainNode = new JsonObject();
-                mainNode["Key"] = keyNode?.DeepClone();
+                root["Main"] = mainNode = new JsonObject();
             }
 
+            mainNode["Key"] ??= keyNode?.DeepClone();
             root.Remove("Key");
             modified = true;
         }
 
         if (root.TryGetPropertyValue("Modifiers", out var modifiersNode))
         {
-            if (!root.TryGetPropertyValue("Main", out var mainNode))
+            if (!root.TryGetPropertyValue("Main", out var mainNode) || mainNode is null)
             {
-                mainNode = new JsonObject();
-                mainNode["Modifiers"] = modifiersNode?.DeepClone();
+                root["Main"] = mainNode = new JsonObject();
             }
 
+            mainNode["Modifiers"] ??= modifiersNode?.DeepClone();
             root.Remove("Modifiers");
             modified = true;
         }

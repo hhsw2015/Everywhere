@@ -6,7 +6,7 @@ public partial class SkillPage : ReactiveUserControl<SkillPageViewModel>, IMainV
 {
     public int Index => 2;
 
-    public LucideIconKind Icon => LucideIconKind.Sparkles;
+    public LucideIconKind Icon => LucideIconKind.Box;
 
     public IDynamicResourceKey TitleKey { get; } = new DynamicResourceKey(LocaleKey.SkillPage_Title);
 

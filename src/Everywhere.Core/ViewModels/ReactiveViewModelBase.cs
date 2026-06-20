@@ -7,6 +7,7 @@ using Avalonia.Platform.Storage;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Everywhere.Common;
 using Everywhere.Interop;
+using Everywhere.Utilities;
 using Everywhere.Views;
 using ShadUI;
 
@@ -77,14 +78,19 @@ public abstract class ReactiveViewModelBase : ObservableValidator, IDisposable
     public void Bind(Control target, bool disposeOnUnloaded = false)
     {
         target.DataContext = this;
+        CancellationTokenSource? cancellationTokenSource = null;
 
-        var cancellationSource = new CancellationTokenSource();
-
+        // ReSharper disable once AsyncVoidEventHandlerMethod
         async void LoadedHandler(object? sender, RoutedEventArgs args)
         {
+            var cancellationToken = CancellationToken.None;
             try
             {
                 if (_isDisposed || _isLoaded) return;
+
+                cancellationTokenSource?.Dispose();
+                cancellationTokenSource = new CancellationTokenSource();
+                cancellationToken = cancellationTokenSource.Token;
 
                 _isLoaded = true;
                 _topLevel = TopLevel.GetTopLevel(target);
@@ -94,7 +100,10 @@ public abstract class ReactiveViewModelBase : ObservableValidator, IDisposable
                     DialogManager = reactiveHost.DialogHost.Manager;
                     ToastHost = reactiveHost.ToastHost;
                 }
-                await ViewLoaded(cancellationSource.Token);
+                await ViewLoaded(cancellationToken);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
             }
             catch (Exception e)
             {
@@ -109,7 +118,10 @@ public abstract class ReactiveViewModelBase : ObservableValidator, IDisposable
                 if (!_isLoaded) return;
 
                 _isLoaded = false;
-                await cancellationSource.CancelAsync();
+                if (cancellationTokenSource is not null)
+                {
+                    await cancellationTokenSource.CancelAsync();
+                }
 
                 try
                 {
@@ -118,6 +130,7 @@ public abstract class ReactiveViewModelBase : ObservableValidator, IDisposable
                 finally
                 {
                     _topLevel = null;
+                    DisposeHelper.DisposeToDefault(ref cancellationTokenSource);
                 }
 
                 if (disposeOnUnloaded)

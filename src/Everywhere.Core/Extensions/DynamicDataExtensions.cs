@@ -14,19 +14,41 @@ public static class DynamicDataExtensions
     /// <param name="disposables"></param>
     public static void AddTo(this IDisposable disposable, ICollection<IDisposable> disposables) => disposables.Add(disposable);
 
-    /// <summary>
-    /// Clears the source list and adds the new data.
-    /// </summary>
     /// <param name="source"></param>
-    /// <param name="data"></param>
     /// <typeparam name="T"></typeparam>
-    public static void Reset<T>(this ISourceList<T> source, IEnumerable<T> data) where T : notnull
+    extension<T>(ISourceList<T> source) where T : notnull
     {
-        source.Edit(list =>
+        /// <summary>
+        /// Clears the source list and adds the new data.
+        /// </summary>
+        /// <param name="data"></param>
+        public void Reset(IEnumerable<T> data)
         {
-            list.Clear();
-            list.AddRange(data);
-        });
+            source.Edit(list =>
+            {
+                list.Clear();
+                list.AddRange(data);
+            });
+        }
+
+        /// <summary>
+        /// Gets the index of the specified item in the source list.
+        /// </summary>
+        /// <param name="item"></param>
+        /// <returns></returns>
+        public int IndexOf(T item)
+        {
+            var index = 0;
+            source.Edit(list => index = list.IndexOf(item));
+            return index;
+        }
+
+        public T ItemAt(int index)
+        {
+            T? item = default;
+            source.Edit(list => item = list[index]);
+            return item!;
+        }
     }
 
     /// <summary>
