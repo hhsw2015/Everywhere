@@ -40,9 +40,10 @@ public sealed class WhiteboardOverlay : ScreenSelectionTransparentWindow
 
         _dimBorder = new Border
         {
-            Background = Brushes.Black,
-            Opacity = 0.20,            // 20% dim — content readable
-            IsHitTestVisible = false,  // pointer events go to canvas
+            // No dim layer — keep dim out of the children panel entirely
+            // so it cannot interfere with hit testing. Dim is applied via
+            // ImageBrush.Opacity below.
+            IsHitTestVisible = false,
         };
 
         _drawingCanvas = new Canvas
@@ -85,11 +86,40 @@ public sealed class WhiteboardOverlay : ScreenSelectionTransparentWindow
         // the captured screenshot as the window's actual Background.
         if (backgroundImage is not null)
         {
-            Background = new ImageBrush(backgroundImage);
+            // Slight opacity acts as the dim — no separate dim Border needed.
+            Background = new ImageBrush(backgroundImage)
+            {
+                Opacity = 0.85,
+            };
+        }
+        else
+        {
+            Background = new SolidColorBrush(Color.FromArgb(0x80, 0, 0, 0));
         }
 
         Opened += (_, _) => Focus();
         KeyDown += OnKeyDown;
+
+        // AddHandler with handledEventsToo=true so we receive pointer events
+        // even if a child marks them Handled. Routing on macOS Avalonia is
+        // unreliable for both bubbling and class-handler overrides; this
+        // listens at the canvas with both Tunnel and Bubble strategies, so
+        // we get the event no matter which way it travels.
+        _drawingCanvas.AddHandler(
+            InputElement.PointerPressedEvent,
+            OnCanvasPointerPressed,
+            Avalonia.Interactivity.RoutingStrategies.Tunnel | Avalonia.Interactivity.RoutingStrategies.Bubble,
+            handledEventsToo: true);
+        _drawingCanvas.AddHandler(
+            InputElement.PointerMovedEvent,
+            OnCanvasPointerMoved,
+            Avalonia.Interactivity.RoutingStrategies.Tunnel | Avalonia.Interactivity.RoutingStrategies.Bubble,
+            handledEventsToo: true);
+        _drawingCanvas.AddHandler(
+            InputElement.PointerReleasedEvent,
+            OnCanvasPointerReleased,
+            Avalonia.Interactivity.RoutingStrategies.Tunnel | Avalonia.Interactivity.RoutingStrategies.Bubble,
+            handledEventsToo: true);
         Closed += (_, _) =>
         {
             CompleteIfPending(canceled: true);
@@ -103,11 +133,26 @@ public sealed class WhiteboardOverlay : ScreenSelectionTransparentWindow
 
     public Task<WhiteboardCaptureResult> ResultTask => _result.Task;
 
-    protected override void OnPointerPressed(PointerPressedEventArgs e)
+    private void OnCanvasPointerPressed(object? sender, PointerPressedEventArgs e)
     {
-        base.OnPointerPressed(e);
+        // Diagnostic feedback: every press drops a green dot at the cursor.
+        // If you see dots when clicking, pointer events ARE reaching the canvas
+        // and the bug is in stroke rendering. If no dots appear, events are
+        // being absorbed somewhere upstream.
+        var diag = e.GetPosition(_drawingCanvas);
+        var dot = new Avalonia.Controls.Shapes.Ellipse
+        {
+            Width = 12,
+            Height = 12,
+            Fill = new SolidColorBrush(Color.Parse("#FF00CC44")),
+            IsHitTestVisible = false,
+        };
+        Canvas.SetLeft(dot, diag.X - 6);
+        Canvas.SetTop(dot, diag.Y - 6);
+        _drawingCanvas.Children.Add(dot);
+
         if (!e.GetCurrentPoint(_drawingCanvas).Properties.IsLeftButtonPressed) return;
-        var p = e.GetPosition(_drawingCanvas);
+        var p = diag;
         _activeStrokeRaw = [p];
         _activeStrokeTs = [Elapsed()];
         _activePolylinePoints = new Avalonia.Collections.AvaloniaList<Point> { p };
@@ -124,9 +169,8 @@ public sealed class WhiteboardOverlay : ScreenSelectionTransparentWindow
         e.Handled = true;
     }
 
-    protected override void OnPointerMoved(PointerEventArgs e)
+    private void OnCanvasPointerMoved(object? sender, PointerEventArgs e)
     {
-        base.OnPointerMoved(e);
         if (_activeStrokeRaw is null
             || _activeStrokePolyline is null
             || _activePolylinePoints is null) return;
@@ -145,9 +189,8 @@ public sealed class WhiteboardOverlay : ScreenSelectionTransparentWindow
         e.Handled = true;
     }
 
-    protected override void OnPointerReleased(PointerReleasedEventArgs e)
+    private void OnCanvasPointerReleased(object? sender, PointerReleasedEventArgs e)
     {
-        base.OnPointerReleased(e);
         if (_activeStrokeRaw is null) return;
         if (_activeStrokeRaw.Count >= 2)
         {
