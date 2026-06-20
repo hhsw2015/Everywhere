@@ -38,9 +38,19 @@ public sealed class WhiteboardOverlay : ScreenSelectionTransparentWindow
     {
         _screenBounds = screenBounds;
 
-        Background = new SolidColorBrush(Colors.Black, 0.18);
+        // Transparent first; if the platform refuses, fall back to a barely
+        // visible tint instead of a full opaque window. Some compositors
+        // (and Avalonia on certain macOS GPUs) silently fall back to opaque
+        // when only Transparent is hinted, which is what was making the
+        // whole screen go white.
+        Background = new SolidColorBrush(Colors.Black, 0.05);
         Cursor = new Cursor(StandardCursorType.Cross);
-        TransparencyLevelHint = [WindowTransparencyLevel.Transparent];
+        TransparencyLevelHint =
+        [
+            WindowTransparencyLevel.Transparent,
+            WindowTransparencyLevel.AcrylicBlur,
+            WindowTransparencyLevel.Blur,
+        ];
         SystemDecorations = SystemDecorations.None;
 
         _drawingCanvas = new Canvas
