@@ -90,9 +90,14 @@ public sealed class WhiteboardOverlay : ScreenSelectionTransparentWindow
 
         Opened += (_, _) => Focus();
 
-        PointerPressed += OnPointerPressed;
-        PointerMoved += OnPointerMoved;
-        PointerReleased += OnPointerReleased;
+        // Pointer handlers on the CANVAS, not the Window — non-canvas children
+        // (dim Border, hint) have IsHitTestVisible=false, so the canvas is the
+        // pointer target, but Avalonia delivers PointerPressed to the leaf,
+        // not necessarily bubbling up to Window in time for us to receive it.
+        // Subscribing directly on the canvas guarantees we get the events.
+        _drawingCanvas.PointerPressed += OnPointerPressed;
+        _drawingCanvas.PointerMoved += OnPointerMoved;
+        _drawingCanvas.PointerReleased += OnPointerReleased;
         KeyDown += OnKeyDown;
         Closed += (_, _) =>
         {
@@ -109,7 +114,7 @@ public sealed class WhiteboardOverlay : ScreenSelectionTransparentWindow
 
     private void OnPointerPressed(object? sender, PointerPressedEventArgs e)
     {
-        if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
+        if (!e.GetCurrentPoint(_drawingCanvas).Properties.IsLeftButtonPressed) return;
         var p = e.GetPosition(_drawingCanvas);
         _activeStrokeRaw = [p];
         _activeStrokeTs = [Elapsed()];
@@ -132,7 +137,7 @@ public sealed class WhiteboardOverlay : ScreenSelectionTransparentWindow
         if (_activeStrokeRaw is null
             || _activeStrokePolyline is null
             || _activePolylinePoints is null) return;
-        if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
+        if (!e.GetCurrentPoint(_drawingCanvas).Properties.IsLeftButtonPressed) return;
         var p = e.GetPosition(_drawingCanvas);
         if (_activeStrokeRaw.Count > 0)
         {
