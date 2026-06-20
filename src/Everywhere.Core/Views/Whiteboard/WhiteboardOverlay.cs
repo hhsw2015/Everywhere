@@ -44,7 +44,9 @@ public sealed class WhiteboardOverlay : Window
     public WhiteboardOverlay(PixelRect screenBounds, IImage? backgroundImage = null)
     {
         _screenBounds = screenBounds;
-        _ownedBackground = backgroundImage as IDisposable;
+        // _ownedBackground is assigned LAST — if any setter below throws, the
+        // caller still owns the bitmap and will dispose it. Assigning early
+        // would silently leak the bitmap on construction failure.
 
         // Window chrome off
         SystemDecorations = SystemDecorations.None;
@@ -62,8 +64,12 @@ public sealed class WhiteboardOverlay : Window
         // overlay is active) if no image is supplied.
         if (backgroundImage is not null)
         {
-            // UniformToFill — bitmap was captured at exactly screenBounds size,
-            // so this matches 1:1 without distortion under fractional scaling.
+            // UniformToFill: bitmap was captured at exactly screenBounds size
+            // so the aspect ratio matches the window's client area. Under
+            // fractional DesktopScaling (e.g. 1.5x) sub-pixel rounding can
+            // crop a hairline strip on one edge; that's preferable to the
+            // letterbox bands Stretch.Uniform would produce — the user would
+            // visually notice a black gap more than a 1-2 px crop.
             Background = new ImageBrush(backgroundImage)
             {
                 Stretch = Stretch.UniformToFill,
@@ -150,8 +156,22 @@ public sealed class WhiteboardOverlay : Window
             Background = null;
             var owned = _ownedBackground;
             _ownedBackground = null;
-            owned?.Dispose();
+            try
+            {
+                owned?.Dispose();
+            }
+            catch
+            {
+                // Already disposed / disposed during a teardown race — swallow.
+                // The whole point of taking ownership is robust cleanup; an
+                // exception here would destabilize Avalonia's window teardown.
+            }
         };
+
+        // Last statement: take ownership of the bitmap. From this line on,
+        // the Closed handler is wired and will dispose the bitmap. Anything
+        // before this line that throws leaves ownership with the caller.
+        _ownedBackground = backgroundImage as IDisposable;
     }
 
     public Task<WhiteboardCaptureResult> ResultTask => _result.Task;
@@ -191,12 +211,16 @@ public sealed class WhiteboardOverlay : Window
         }
         _activeStrokeRaw.Add(p);
         _activeStrokeTs!.Add(Elapsed());
-        // Mutate the existing list (O(1) per point) and explicitly invalidate
-        // the polyline visual — Avalonia's AvaloniaList.Add fires CollectionChanged
-        // but on macOS the Polyline's StreamGeometry rebuild path occasionally
-        // misses the notification, so InvalidateVisual is the cheap insurance.
+        // Mutate the existing list — O(1) per point, no GC churn.
         _activePolylinePoints.Add(p);
-        _activeStrokePolyline.InvalidateVisual();
+        // macOS-only insurance: AvaloniaList.Add raises CollectionChanged
+        // but on macOS the Polyline's StreamGeometry rebuild occasionally
+        // misses the notification. Windows/Linux refresh correctly so we
+        // skip the extra work there (~100 invalidations/sec on long strokes).
+        if (OperatingSystem.IsMacOS())
+        {
+            _activeStrokePolyline.InvalidateVisual();
+        }
         e.Handled = true;
     }
 
