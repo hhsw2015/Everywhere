@@ -4,20 +4,19 @@ using Avalonia.Controls.Shapes;
 using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
-using Avalonia.Platform;
 using Avalonia.Threading;
-using Everywhere.Interop;
 
 namespace Everywhere.Views.Whiteboard;
 
 /// <summary>
 /// Full-screen overlay capturing whiteboard strokes.
 ///
-/// Approach: take a screenshot of the screen FIRST (caller responsibility),
-/// then show that screenshot as the window background. The user draws on
-/// top of the screenshot — it visually feels like drawing on the screen,
-/// without depending on Avalonia macOS Transparent which falls back to
-/// opaque on some GPUs.
+/// Layout: a single Image showing the captured screenshot (full-window,
+/// dimmed via Opacity), a Canvas on TOP receiving pointer events and
+/// rendering strokes, and a top-right hint label. Pointer events go to
+/// the Canvas because it's the topmost hit-testable element with a
+/// transparent background; the Image is non-hit-testable so it doesn't
+/// steal events.
 /// </summary>
 public sealed class WhiteboardOverlay : Window
 {
@@ -36,19 +35,10 @@ public sealed class WhiteboardOverlay : Window
     private bool _committed;
     private IDisposable? _ownedBackground;
 
-    /// <summary>
-    /// Constructor takes ownership of <paramref name="backgroundImage"/>: the overlay
-    /// disposes it on close so the caller doesn't have to thread a finally block.
-    /// Pass null for a dim solid background.
-    /// </summary>
     public WhiteboardOverlay(PixelRect screenBounds, Bitmap? backgroundImage = null)
     {
         _screenBounds = screenBounds;
-        // _ownedBackground is assigned LAST — if any setter below throws, the
-        // caller still owns the bitmap and will dispose it. Assigning early
-        // would silently leak the bitmap on construction failure.
 
-        // Window chrome off
         SystemDecorations = SystemDecorations.None;
         ShowInTaskbar = false;
         CanResize = false;
@@ -58,33 +48,11 @@ public sealed class WhiteboardOverlay : Window
         WindowStartupLocation = WindowStartupLocation.Manual;
         BorderThickness = new Thickness(0);
         SizeToContent = SizeToContent.Manual;
-
-        // Use the captured screen image as the window background. Falls back
-        // to a solid dim tint (so the user sees SOMETHING and knows the
-        // overlay is active) if no image is supplied.
-        if (backgroundImage is not null)
-        {
-            // UniformToFill: bitmap was captured at exactly screenBounds size
-            // so the aspect ratio matches the window's client area. Under
-            // fractional DesktopScaling (e.g. 1.5x) sub-pixel rounding can
-            // crop a hairline strip on one edge; that's preferable to the
-            // letterbox bands Stretch.Uniform would produce — the user would
-            // visually notice a black gap more than a 1-2 px crop.
-            Background = new ImageBrush(backgroundImage)
-            {
-                Stretch = Stretch.UniformToFill,
-            };
-        }
-        else
-        {
-            Background = new SolidColorBrush(Color.FromArgb(0x66, 0, 0, 0));
-        }
-
-        Cursor = new Cursor(StandardCursorType.Cross);
+        Background = Brushes.Black;     // base — masked by the screenshot Image
 
         _drawingCanvas = new Canvas
         {
-            Background = Brushes.Transparent, // hit-test transparent
+            Background = Brushes.Transparent, // hit-test on but visually transparent
         };
 
         var hint = new Border
@@ -97,6 +65,7 @@ public sealed class WhiteboardOverlay : Window
             Margin = new Thickness(0, 24, 24, 0),
             HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right,
             VerticalAlignment = Avalonia.Layout.VerticalAlignment.Top,
+            IsHitTestVisible = false,    // never steal pointer events
             Child = new TextBlock
             {
                 Foreground = Brushes.White,
@@ -105,27 +74,37 @@ public sealed class WhiteboardOverlay : Window
             },
         };
 
-        // Subtle dim overlay over the screenshot so it's clear the screen
-        // is "frozen" but the content is still readable.
-        var dim = new Border
-        {
-            Background = new SolidColorBrush(Color.FromArgb(0x33, 0, 0, 0)),
-        };
+        var children = new Avalonia.Controls.Controls();
 
-        Content = new Panel
+        if (backgroundImage is not null)
         {
-            Children =
+            // Image as a child (not as Background ImageBrush) so we can
+            // make it non-hit-testable individually. Slight dim via Opacity
+            // tells the user the screen is "frozen".
+            var img = new Image
             {
-                dim,
-                _drawingCanvas,
-                hint,
-            },
-        };
+                Source = backgroundImage,
+                Stretch = Stretch.Fill,    // Image at full window size
+                Opacity = 0.85,             // 15% dim — content readable
+                IsHitTestVisible = false,   // pointer events go to canvas
+            };
+            children.Add(img);
+        }
+        else
+        {
+            // No screenshot: dim solid backplate so the user knows the
+            // overlay is active.
+            children.Add(new Border
+            {
+                Background = new SolidColorBrush(Color.FromArgb(0x80, 0, 0, 0)),
+                IsHitTestVisible = false,
+            });
+        }
 
-        // Position first — DesktopScaling reads correct only AFTER Position
-        // is set (matches ScreenSelectionTransparentWindow.SetPlacement).
-        // This ensures _scale is correct before any pointer event arrives,
-        // so Commit()'s DIP→pixel mapping is right from the first stroke.
+        children.Add(_drawingCanvas);
+        children.Add(hint);
+        Content = new Panel { Children = { } }.SetWith(children);
+
         Position = screenBounds.Position;
         _scale = DesktopScaling > 0 ? DesktopScaling : 1.0;
         Width = screenBounds.Width / _scale;
@@ -133,8 +112,6 @@ public sealed class WhiteboardOverlay : Window
 
         Opened += (_, _) =>
         {
-            // Re-read in case DesktopScaling changed between ctor and Show
-            // (window moved by compositor before becoming visible).
             var liveScale = DesktopScaling > 0 ? DesktopScaling : 1.0;
             if (Math.Abs(liveScale - _scale) > 0.01)
             {
@@ -142,6 +119,8 @@ public sealed class WhiteboardOverlay : Window
                 Width = screenBounds.Width / _scale;
                 Height = screenBounds.Height / _scale;
             }
+            // Make sure we receive keyboard events the moment the window appears.
+            Focus();
         };
 
         PointerPressed += OnPointerPressed;
@@ -151,27 +130,13 @@ public sealed class WhiteboardOverlay : Window
         Closed += (_, _) =>
         {
             CompleteIfPending(canceled: true);
-            // Drop the screenshot brush so the underlying bitmap is collectable,
-            // then dispose if we own it. Full-screen 5K screenshots run ~50 MB.
-            Background = null;
             var owned = _ownedBackground;
             _ownedBackground = null;
-            try
-            {
-                owned?.Dispose();
-            }
-            catch
-            {
-                // Already disposed / disposed during a teardown race — swallow.
-                // The whole point of taking ownership is robust cleanup; an
-                // exception here would destabilize Avalonia's window teardown.
-            }
+            try { owned?.Dispose(); }
+            catch { /* swallow — teardown must not throw */ }
         };
 
-        // Last statement: take ownership of the bitmap. From this line on,
-        // the Closed handler is wired and will dispose the bitmap. Anything
-        // before this line that throws leaves ownership with the caller.
-        _ownedBackground = backgroundImage as IDisposable;
+        _ownedBackground = backgroundImage;
     }
 
     public Task<WhiteboardCaptureResult> ResultTask => _result.Task;
@@ -186,7 +151,7 @@ public sealed class WhiteboardOverlay : Window
         _activeStrokePolyline = new Polyline
         {
             Stroke = new SolidColorBrush(Color.Parse("#FFE53935")),
-            StrokeThickness = 3,
+            StrokeThickness = 4,
             StrokeJoin = PenLineJoin.Round,
             StrokeLineCap = PenLineCap.Round,
             Points = _activePolylinePoints,
@@ -211,16 +176,10 @@ public sealed class WhiteboardOverlay : Window
         }
         _activeStrokeRaw.Add(p);
         _activeStrokeTs!.Add(Elapsed());
-        // Mutate the existing list — O(1) per point, no GC churn.
         _activePolylinePoints.Add(p);
-        // macOS-only insurance: AvaloniaList.Add raises CollectionChanged
-        // but on macOS the Polyline's StreamGeometry rebuild occasionally
-        // misses the notification. Windows/Linux refresh correctly so we
-        // skip the extra work there (~100 invalidations/sec on long strokes).
-        if (OperatingSystem.IsMacOS())
-        {
-            _activeStrokePolyline.InvalidateVisual();
-        }
+        // Force re-render on every platform — cheap, eliminates the macOS
+        // refresh skip and there's no visible difference on Win/Linux.
+        _activeStrokePolyline.InvalidateVisual();
         e.Handled = true;
     }
 
@@ -306,6 +265,16 @@ public sealed class WhiteboardOverlay : Window
         if (_committed) return;
         _committed = true;
         _result.TrySetResult(new WhiteboardCaptureResult(canceled, strokes ?? []));
+    }
+}
+
+internal static class PanelChildrenExt
+{
+    public static T SetWith<T>(this T panel, Avalonia.Controls.Controls children)
+        where T : Panel
+    {
+        foreach (var c in children) panel.Children.Add(c);
+        return panel;
     }
 }
 
