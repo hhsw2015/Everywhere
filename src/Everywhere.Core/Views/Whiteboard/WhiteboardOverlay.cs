@@ -108,17 +108,17 @@ public sealed class WhiteboardOverlay : ScreenSelectionTransparentWindow
         _drawingCanvas.AddHandler(
             InputElement.PointerPressedEvent,
             OnCanvasPointerPressed,
-            Avalonia.Interactivity.RoutingStrategies.Bubble,
+            Avalonia.Interactivity.RoutingStrategies.Tunnel | Avalonia.Interactivity.RoutingStrategies.Bubble,
             handledEventsToo: true);
         _drawingCanvas.AddHandler(
             InputElement.PointerMovedEvent,
             OnCanvasPointerMoved,
-            Avalonia.Interactivity.RoutingStrategies.Bubble,
+            Avalonia.Interactivity.RoutingStrategies.Tunnel | Avalonia.Interactivity.RoutingStrategies.Bubble,
             handledEventsToo: true);
         _drawingCanvas.AddHandler(
             InputElement.PointerReleasedEvent,
             OnCanvasPointerReleased,
-            Avalonia.Interactivity.RoutingStrategies.Bubble,
+            Avalonia.Interactivity.RoutingStrategies.Tunnel | Avalonia.Interactivity.RoutingStrategies.Bubble,
             handledEventsToo: true);
         Closed += (_, _) =>
         {
@@ -136,12 +136,12 @@ public sealed class WhiteboardOverlay : ScreenSelectionTransparentWindow
     private void OnCanvasPointerPressed(object? sender, PointerPressedEventArgs e)
     {
         if (!e.GetCurrentPoint(_drawingCanvas).Properties.IsLeftButtonPressed) return;
-        // Capture the pointer to the canvas so we keep getting Move events
-        // even when the cursor wanders over a non-canvas child (e.g. a
-        // previously-drawn polyline). Without capture, Avalonia stops
-        // routing Move to us as soon as the cursor leaves the canvas's
-        // own hit area, which makes drawing impossible.
-        e.Pointer.Capture(_drawingCanvas);
+        // NOTE: do NOT call e.Pointer.Capture(_drawingCanvas). With Tunnel|
+        // Bubble + handledEventsToo, capture is taken on the tunnel pass and
+        // synthesizes PointerCaptureLost which short-circuits all subsequent
+        // routing — net effect: events stop entirely. Children that aren't
+        // the canvas already have IsHitTestVisible=false so the cursor can't
+        // wander to a non-hit-testable child mid-stroke.
         var p = e.GetPosition(_drawingCanvas);
         _activeStrokeRaw = [p];
         _activeStrokeTs = [Elapsed()];
@@ -181,7 +181,6 @@ public sealed class WhiteboardOverlay : ScreenSelectionTransparentWindow
 
     private void OnCanvasPointerReleased(object? sender, PointerReleasedEventArgs e)
     {
-        e.Pointer.Capture(null); // release capture
         if (_activeStrokeRaw is null) return;
         if (_activeStrokeRaw.Count >= 2)
         {
