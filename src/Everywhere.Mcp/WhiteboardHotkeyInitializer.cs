@@ -151,14 +151,12 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
         // entire screen (not just the focused window) so the user can
         // gesture across the full desktop.
         IVisualElement? focusedRoot = null;
+        IVisualElement? targetScreen = null;
         PixelRect screen;
         try
         {
             var focused = _visualContext.FocusedElement;
             focusedRoot = focused?.Root() ?? focused;
-            // Pick the screen that contains the focused window if any,
-            // otherwise the first screen.
-            IVisualElement? targetScreen = null;
             if (focusedRoot is not null)
             {
                 var winRect = focusedRoot.BoundingRectangle;
@@ -183,8 +181,27 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
             screen = new PixelRect(0, 0, 1920, 1080);
         }
 
-        _logger.LogInformation("Whiteboard opening overlay on screen {Screen}", screen);
-        var overlay = new WhiteboardOverlay(screen);
+        // Capture the screen image to use as the overlay background. This
+        // sidesteps Avalonia macOS Transparent-window unreliability — we
+        // paint the captured screenshot UNDER the user's strokes, so the
+        // overlay visually IS the screen even though the window is opaque.
+        Avalonia.Media.Imaging.Bitmap? backgroundImage = null;
+        if (targetScreen is not null)
+        {
+            try
+            {
+                using var capture = await targetScreen.CaptureAsync(CancellationToken.None);
+                backgroundImage = capture.ToAvaloniaBitmap();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Whiteboard: screen capture for background failed; using dim overlay");
+            }
+        }
+
+        _logger.LogInformation("Whiteboard opening overlay on screen {Screen}, background={HasBg}",
+            screen, backgroundImage is not null);
+        var overlay = new WhiteboardOverlay(screen, backgroundImage);
         _activeOverlay = overlay;
         try
         {

@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.Shapes;
 using Avalonia.Input;
 using Avalonia.Media;
+using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Avalonia.Threading;
 using Everywhere.Interop;
@@ -10,19 +11,18 @@ using Everywhere.Interop;
 namespace Everywhere.Views.Whiteboard;
 
 /// <summary>
-/// Full-screen transparent overlay capturing whiteboard strokes.
+/// Full-screen overlay capturing whiteboard strokes.
 ///
-/// UX: hotkey opens this; user draws any number of strokes (mouse-down /
-/// drag / up = one stroke). Release of the hotkey, or Enter / clicking the
-/// "Done" button, commits. Esc cancels.
-///
-/// Strokes are captured in screen-pixel coordinates so the parser/snapper
-/// outputs match a11y BoundingRectangle directly.
+/// Approach: take a screenshot of the screen FIRST (caller responsibility),
+/// then show that screenshot as the window background. The user draws on
+/// top of the screenshot — it visually feels like drawing on the screen,
+/// without depending on Avalonia macOS Transparent which falls back to
+/// opaque on some GPUs.
 /// </summary>
-public sealed class WhiteboardOverlay : ScreenSelectionTransparentWindow
+public sealed class WhiteboardOverlay : Window
 {
     private readonly PixelRect _screenBounds;
-    private readonly double _scale;
+    private double _scale = 1.0;
     private readonly Canvas _drawingCanvas;
     private readonly TaskCompletionSource<WhiteboardCaptureResult> _result = new();
     private readonly List<List<Point>> _strokes = [];
@@ -34,33 +34,46 @@ public sealed class WhiteboardOverlay : ScreenSelectionTransparentWindow
     private Polyline? _activeStrokePolyline;
     private bool _committed;
 
-    public WhiteboardOverlay(PixelRect screenBounds)
+    public WhiteboardOverlay(PixelRect screenBounds, IImage? backgroundImage = null)
     {
         _screenBounds = screenBounds;
 
-        // Transparent first; if the platform refuses, fall back to a barely
-        // visible tint instead of a full opaque window. Some compositors
-        // (and Avalonia on certain macOS GPUs) silently fall back to opaque
-        // when only Transparent is hinted, which is what was making the
-        // whole screen go white.
-        Background = new SolidColorBrush(Colors.Black, 0.05);
-        Cursor = new Cursor(StandardCursorType.Cross);
-        TransparencyLevelHint =
-        [
-            WindowTransparencyLevel.Transparent,
-            WindowTransparencyLevel.AcrylicBlur,
-            WindowTransparencyLevel.Blur,
-        ];
+        // Window chrome off
         SystemDecorations = SystemDecorations.None;
+        ShowInTaskbar = false;
+        CanResize = false;
+        CanMaximize = false;
+        CanMinimize = false;
+        Topmost = true;
+        WindowStartupLocation = WindowStartupLocation.Manual;
+        BorderThickness = new Thickness(0);
+        SizeToContent = SizeToContent.Manual;
+
+        // Use the captured screen image as the window background. Falls back
+        // to a solid dim tint (so the user sees SOMETHING and knows the
+        // overlay is active) if no image is supplied.
+        if (backgroundImage is not null)
+        {
+            Background = new ImageBrush(backgroundImage)
+            {
+                Stretch = Stretch.Fill,
+            };
+        }
+        else
+        {
+            Background = new SolidColorBrush(Color.FromArgb(0x66, 0, 0, 0));
+        }
+
+        Cursor = new Cursor(StandardCursorType.Cross);
 
         _drawingCanvas = new Canvas
         {
-            Background = Brushes.Transparent,
+            Background = Brushes.Transparent, // hit-test transparent
         };
 
         var hint = new Border
         {
-            Background = new SolidColorBrush(Color.Parse("#FF1A1A1A"), 0.85),
+            Background = new SolidColorBrush(Color.Parse("#FF1A1A1A"), 0.92),
             BorderBrush = new SolidColorBrush(Color.Parse("#FFFFCC00")),
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(8),
@@ -76,16 +89,34 @@ public sealed class WhiteboardOverlay : ScreenSelectionTransparentWindow
             },
         };
 
+        // Subtle dim overlay over the screenshot so it's clear the screen
+        // is "frozen" but the content is still readable.
+        var dim = new Border
+        {
+            Background = new SolidColorBrush(Color.FromArgb(0x33, 0, 0, 0)),
+        };
+
         Content = new Panel
         {
             Children =
             {
+                dim,
                 _drawingCanvas,
                 hint,
             },
         };
 
-        SetPlacement(screenBounds, out _scale);
+        Position = screenBounds.Position;
+        Width = screenBounds.Width;
+        Height = screenBounds.Height;
+
+        Opened += (_, _) =>
+        {
+            // After window is on screen, DesktopScaling is correct
+            _scale = DesktopScaling > 0 ? DesktopScaling : 1.0;
+            Width = screenBounds.Width / _scale;
+            Height = screenBounds.Height / _scale;
+        };
 
         PointerPressed += OnPointerPressed;
         PointerMoved += OnPointerMoved;
@@ -99,35 +130,42 @@ public sealed class WhiteboardOverlay : ScreenSelectionTransparentWindow
     private void OnPointerPressed(object? sender, PointerPressedEventArgs e)
     {
         if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
-        var p = e.GetPosition(this);
+        var p = e.GetPosition(_drawingCanvas);
         _activeStrokeRaw = [p];
         _activeStrokeTs = [Elapsed()];
+        var pts = new Avalonia.Collections.AvaloniaList<Point> { p };
         _activeStrokePolyline = new Polyline
         {
             Stroke = new SolidColorBrush(Color.Parse("#FFE53935")),
             StrokeThickness = 3,
             StrokeJoin = PenLineJoin.Round,
             StrokeLineCap = PenLineCap.Round,
-            Points = { p },
+            Points = pts,
+            IsHitTestVisible = false,
         };
         _drawingCanvas.Children.Add(_activeStrokePolyline);
+        e.Handled = true;
     }
 
     private void OnPointerMoved(object? sender, PointerEventArgs e)
     {
         if (_activeStrokeRaw is null || _activeStrokePolyline is null) return;
         if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
-        var p = e.GetPosition(this);
+        var p = e.GetPosition(_drawingCanvas);
         if (_activeStrokeRaw.Count > 0)
         {
             var last = _activeStrokeRaw[^1];
-            // skip pixels < 1 device-pixel apart to keep stroke compact
             var dx = last.X - p.X; var dy = last.Y - p.Y;
             if (dx * dx + dy * dy < 1.0) return;
         }
         _activeStrokeRaw.Add(p);
         _activeStrokeTs!.Add(Elapsed());
-        _activeStrokePolyline.Points.Add(p);
+        // Replace Points with new list — AvaloniaList Add doesn't always
+        // invalidate the Polyline geometry on macOS; reassigning forces
+        // re-render.
+        var pts = new Avalonia.Collections.AvaloniaList<Point>(_activeStrokeRaw);
+        _activeStrokePolyline.Points = pts;
+        e.Handled = true;
     }
 
     private void OnPointerReleased(object? sender, PointerReleasedEventArgs e)
@@ -140,12 +178,12 @@ public sealed class WhiteboardOverlay : ScreenSelectionTransparentWindow
         }
         else if (_activeStrokePolyline is not null)
         {
-            // single-point clicks: drop the visual too
             _drawingCanvas.Children.Remove(_activeStrokePolyline);
         }
         _activeStrokeRaw = null;
         _activeStrokeTs = null;
         _activeStrokePolyline = null;
+        e.Handled = true;
     }
 
     private void OnKeyDown(object? sender, KeyEventArgs e)
@@ -169,14 +207,9 @@ public sealed class WhiteboardOverlay : ScreenSelectionTransparentWindow
         }
     }
 
-    /// <summary>
-    /// Programmatic commit (used by hotkey-release or "Done" button).
-    /// Safe to call multiple times.
-    /// </summary>
     public void Commit()
     {
-        // Convert client-space points back to screen pixels
-        var converted = new List<(IReadOnlyList<(double X, double Y, double T)> Points, int _)>();
+        var converted = new List<IReadOnlyList<(double X, double Y, double T)>>();
         for (var i = 0; i < _strokes.Count; i++)
         {
             var pts = _strokes[i];
@@ -189,10 +222,9 @@ public sealed class WhiteboardOverlay : ScreenSelectionTransparentWindow
                     _screenBounds.Y + pts[j].Y * _scale,
                     ts[j]);
             }
-            converted.Add((screenPts, i));
+            converted.Add(screenPts);
         }
-        var strokes = converted.Select(c => c.Points).ToArray();
-        CompleteIfPending(canceled: false, strokes: strokes);
+        CompleteIfPending(canceled: false, strokes: converted);
         Dispatcher.UIThread.Post(Close);
     }
 
@@ -203,8 +235,6 @@ public sealed class WhiteboardOverlay : ScreenSelectionTransparentWindow
         if (_strokes.Count == 0) return;
         _strokes.RemoveAt(_strokes.Count - 1);
         _strokeTimestamps.RemoveAt(_strokeTimestamps.Count - 1);
-        // The last child of the canvas is the most recent committed stroke
-        // (active stroke is null at the time Undo is allowed).
         if (_drawingCanvas.Children.Count > 0)
         {
             _drawingCanvas.Children.RemoveAt(_drawingCanvas.Children.Count - 1);
