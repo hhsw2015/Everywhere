@@ -108,17 +108,17 @@ public sealed class WhiteboardOverlay : ScreenSelectionTransparentWindow
         _drawingCanvas.AddHandler(
             InputElement.PointerPressedEvent,
             OnCanvasPointerPressed,
-            Avalonia.Interactivity.RoutingStrategies.Tunnel | Avalonia.Interactivity.RoutingStrategies.Bubble,
+            Avalonia.Interactivity.RoutingStrategies.Bubble,
             handledEventsToo: true);
         _drawingCanvas.AddHandler(
             InputElement.PointerMovedEvent,
             OnCanvasPointerMoved,
-            Avalonia.Interactivity.RoutingStrategies.Tunnel | Avalonia.Interactivity.RoutingStrategies.Bubble,
+            Avalonia.Interactivity.RoutingStrategies.Bubble,
             handledEventsToo: true);
         _drawingCanvas.AddHandler(
             InputElement.PointerReleasedEvent,
             OnCanvasPointerReleased,
-            Avalonia.Interactivity.RoutingStrategies.Tunnel | Avalonia.Interactivity.RoutingStrategies.Bubble,
+            Avalonia.Interactivity.RoutingStrategies.Bubble,
             handledEventsToo: true);
         Closed += (_, _) =>
         {
