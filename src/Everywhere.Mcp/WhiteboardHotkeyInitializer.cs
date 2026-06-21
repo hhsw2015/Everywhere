@@ -208,31 +208,45 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
         // paint the captured screenshot UNDER the user's strokes, so the
         // overlay visually IS the screen even though the window is opaque.
         Avalonia.Media.Imaging.Bitmap? backgroundImage = null;
-        // Decoded ONCE for OCR; survives past the overlay's ownership-take
-        // because we keep a separate reference here. Disposed in finally
-        // after all per-region OCR calls.
         Avalonia.Media.Imaging.Bitmap? ocrBitmap = null;
-        if (targetScreen is not null)
+        // The bitmap covers ocrBitmapBounds in screen-pixel space; OCR
+        // bbox math compares against this, not the full target screen.
+        PixelRect ocrBitmapBounds = screen;
+        // Capture source preference: focused window first (Mac uses
+        // CGSHWCaptureWindowList — works on macOS 14+), then fall back to
+        // the target screen (CGImage.ScreenImage, deprecated and may
+        // return null on macOS 14+).
+        var captureSources = new List<(string Name, IVisualElement Element)>();
+        if (focusedRoot is not null) captureSources.Add(("focused window", focusedRoot));
+        if (targetScreen is not null) captureSources.Add(("target screen", targetScreen));
+
+        foreach (var (name, source) in captureSources)
         {
             try
             {
-                using var capture = await targetScreen.CaptureAsync(CancellationToken.None);
+                using var capture = await source.CaptureAsync(CancellationToken.None);
                 backgroundImage = capture.ToAvaloniaBitmap();
                 if (backgroundImage is not null)
                 {
-                    // Re-encode once + decode once into a separate bitmap so
-                    // we own a copy independent of the overlay.
                     using var ms = new System.IO.MemoryStream();
                     backgroundImage.Save(ms);
                     ms.Position = 0;
                     ocrBitmap = new Avalonia.Media.Imaging.Bitmap(ms);
+                    ocrBitmapBounds = source.BoundingRectangle;
+                    _logger.LogInformation(
+                        "Whiteboard captured background from {Source}, bbox {Bbox}",
+                        name, ocrBitmapBounds);
+                    break;
                 }
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "Whiteboard: screen capture for background failed; using dim overlay");
+                _logger.LogWarning(ex,
+                    "Whiteboard: capture from {Source} failed; trying next", name);
             }
         }
+        if (backgroundImage is null)
+            _logger.LogWarning("Whiteboard: no capture source produced a bitmap; using dim overlay (OCR disabled)");
 
         _logger.LogInformation("Whiteboard opening overlay on screen {Screen}, background={HasBg}",
             screen, backgroundImage is not null);
@@ -281,7 +295,7 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
                 // adjacent windows / unrelated text from polluting the OCR
                 // result. Cropped to the snapped rect (which already hugs
                 // the captured a11y leaves).
-                var ocrLines = RunOcrForRegion(ocrBitmap, screen, snap.Rect);
+                var ocrLines = RunOcrForRegion(ocrBitmap, ocrBitmapBounds, snap.Rect);
                 regions.Add(new WhiteboardRegion(
                     ann.Kind, snap.Rect, snap.Leaves, snap.Confidence, ocrLines));
             }
