@@ -68,12 +68,18 @@ public static class HybridSlicer
         if (nonemptyA11y.Count > 0 && logical.Count < nonemptyA11y.Count * OcrReliabilityRatio)
             return SliceByLeafFraction(regionRect, leafBbox, a11yLines);
 
-        // 3. Pick logical lines whose y-center sits inside region rect.
+        // 3. Pick logical lines whose vertical band overlaps the region rect
+        //    by at least 60%. Pure y-center inclusion was over-permissive:
+        //    an X / circle drawn slightly larger than the visual content
+        //    would slip the title-line center inside the bbox even when
+        //    the user clearly didn't mean to include the title.
         var selectedLogical = new List<int>();
         for (var i = 0; i < logical.Count; i++)
         {
-            var yCenter = (logical[i].YTop + logical[i].YBottom) / 2;
-            if (yCenter >= regionRect.Y && yCenter <= regionRect.Bottom)
+            var ll = logical[i];
+            var inter = Math.Min(ll.YBottom, regionRect.Bottom) - Math.Max(ll.YTop, regionRect.Y);
+            var lineH = ll.YBottom - ll.YTop;
+            if (inter > 0 && lineH > 0 && inter / lineH >= 0.6)
                 selectedLogical.Add(i);
         }
         if (selectedLogical.Count == 0)
