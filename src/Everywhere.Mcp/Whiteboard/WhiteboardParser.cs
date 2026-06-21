@@ -93,9 +93,11 @@ public static class WhiteboardParser
         var aDiag = Math.Sqrt(a.Width * a.Width + a.Height * a.Height);
         var bDiag = Math.Sqrt(b.Width * b.Width + b.Height * b.Height);
         // Use the LARGER diagonal so a small new stroke can still merge
-        // into a big group. Hard-cap at 250px so two genuinely-distant
-        // gestures don't merge just because one is screen-sized.
-        var threshold = Math.Min(250.0, Math.Max(1.0, Math.Max(aDiag, bDiag)));
+        // into a big group, but cap at 100px — three independent gestures
+        // drawn ~150px apart on the same screen MUST stay separate, even
+        // when one is large. 100px tracks the visual "this stroke clearly
+        // belongs with that one" threshold for hand-drawn gestures.
+        var threshold = Math.Min(100.0, Math.Max(1.0, Math.Max(aDiag, bDiag)));
         var dx = a.Center.X - b.Center.X;
         var dy = a.Center.Y - b.Center.Y;
         return Math.Sqrt(dx * dx + dy * dy) < threshold;

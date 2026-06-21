@@ -128,11 +128,13 @@ public static class AnnotationSnapper
         IVisualElement root,
         IReadOnlyList<Stroke> strokes)
     {
-        double strokeTop = double.PositiveInfinity, strokeX1 = double.PositiveInfinity, strokeX2 = double.NegativeInfinity;
+        double strokeTop = double.PositiveInfinity, strokeBottom = double.NegativeInfinity,
+               strokeX1 = double.PositiveInfinity, strokeX2 = double.NegativeInfinity;
         foreach (var s in strokes)
         foreach (var p in s.Points)
         {
             if (p.Y < strokeTop) strokeTop = p.Y;
+            if (p.Y > strokeBottom) strokeBottom = p.Y;
             if (p.X < strokeX1) strokeX1 = p.X;
             if (p.X > strokeX2) strokeX2 = p.X;
         }
@@ -140,18 +142,14 @@ public static class AnnotationSnapper
             return Reject(ann.BoundingRect, "empty stroke");
 
         var strokeWidth = Math.Max(strokeX2 - strokeX1, 1);
-        var candidates = new List<IVisualElement>();
-        foreach (var e in Descendants(root))
-        {
-            if (!LeafTextRoles.Contains(e.Type)) continue;
-            var bb = ToRect(e.BoundingRectangle);
-            if (bb.Bottom > strokeTop + 5) continue;
-            if (strokeTop - bb.Bottom > 80) continue;
-            var xInter = Math.Min(bb.Right, strokeX2) - Math.Max(bb.X, strokeX1);
-            if (xInter <= 0) continue;
-            if (xInter / strokeWidth < 0.5) continue;
-            candidates.Add(e);
-        }
+        var candidates = CollectUnderlineCandidates(
+            root, strokeTop, strokeX1, strokeX2, strokeWidth, above: true);
+        // Tolerate users who draw the line ABOVE the text (overline-style
+        // emphasis) — fall back to looking for a line just below the
+        // stroke when nothing is above.
+        if (candidates.Count == 0)
+            candidates = CollectUnderlineCandidates(
+                root, strokeBottom, strokeX1, strokeX2, strokeWidth, above: false);
         if (candidates.Count == 0)
         {
             return new SnapResult(
@@ -159,29 +157,73 @@ public static class AnnotationSnapper
                 Rejected: true,
                 RejectReason: "no text line above the underline — draw under a line of text");
         }
-        // Sort: closest above (smallest gap), then best x-overlap.
-        candidates.Sort((a, b) =>
+        // Sort: closest gap (above OR below depending on which path matched),
+        // then best x-overlap.
+        var anchor = candidates[0].Tag == UnderlineSide.Above ? strokeTop : strokeBottom;
+        var bands = candidates
+            .Select(c => (Leaf: c.Leaf,
+                          EdgeY: c.Tag == UnderlineSide.Above
+                              ? ToRect(c.Leaf.BoundingRectangle).Bottom
+                              : ToRect(c.Leaf.BoundingRectangle).Y,
+                          c.Tag))
+            .ToList();
+        bands.Sort((a, b) =>
         {
-            var gapA = strokeTop - ToRect(a.BoundingRectangle).Bottom;
-            var gapB = strokeTop - ToRect(b.BoundingRectangle).Bottom;
+            var gapA = Math.Abs(anchor - a.EdgeY);
+            var gapB = Math.Abs(anchor - b.EdgeY);
             var c = gapA.CompareTo(gapB);
             if (c != 0) return c;
-            var oxA = Math.Min(ToRect(a.BoundingRectangle).Right, strokeX2)
-                      - Math.Max(ToRect(a.BoundingRectangle).X, strokeX1);
-            var oxB = Math.Min(ToRect(b.BoundingRectangle).Right, strokeX2)
-                      - Math.Max(ToRect(b.BoundingRectangle).X, strokeX1);
-            return oxB.CompareTo(oxA); // larger overlap wins
+            var oxA = Math.Min(ToRect(a.Leaf.BoundingRectangle).Right, strokeX2)
+                      - Math.Max(ToRect(a.Leaf.BoundingRectangle).X, strokeX1);
+            var oxB = Math.Min(ToRect(b.Leaf.BoundingRectangle).Right, strokeX2)
+                      - Math.Max(ToRect(b.Leaf.BoundingRectangle).X, strokeX1);
+            return oxB.CompareTo(oxA);
         });
-        var topY = ToRect(candidates[0].BoundingRectangle).Bottom;
-        var chosen = candidates
-            .Where(c => Math.Abs(ToRect(c.BoundingRectangle).Bottom - topY) < 8)
+        var topY = bands[0].EdgeY;
+        var chosen = bands
+            .Where(c => Math.Abs(c.EdgeY - topY) < 8)
+            .Select(c => c.Leaf)
             .ToList();
-        var gapTop = strokeTop - topY;
+        var gapTop = Math.Abs(anchor - topY);
         var conf = Math.Max(0.4, 1.0 - gapTop / 60);
         return new SnapResult(
             Rect: AdjustRectToLeaves(ann.BoundingRect, chosen),
             Leaves: chosen,
             Confidence: conf);
+    }
+
+    private enum UnderlineSide { Above, Below }
+    private record UnderlineCandidate(IVisualElement Leaf, UnderlineSide Tag);
+
+    private static List<UnderlineCandidate> CollectUnderlineCandidates(
+        IVisualElement root,
+        double strokeY, double strokeX1, double strokeX2, double strokeWidth,
+        bool above)
+    {
+        var list = new List<UnderlineCandidate>();
+        foreach (var e in Descendants(root))
+        {
+            if (!LeafTextRoles.Contains(e.Type)) continue;
+            var bb = ToRect(e.BoundingRectangle);
+            // above: leaf bottom must be near & above strokeY (the stroke top)
+            // below: leaf top must be near & below strokeY (the stroke bottom)
+            if (above)
+            {
+                if (bb.Bottom > strokeY + 5) continue;
+                if (strokeY - bb.Bottom > 80) continue;
+            }
+            else
+            {
+                if (bb.Y < strokeY - 5) continue;
+                if (bb.Y - strokeY > 80) continue;
+            }
+            var xInter = Math.Min(bb.Right, strokeX2) - Math.Max(bb.X, strokeX1);
+            if (xInter <= 0) continue;
+            if (xInter / strokeWidth < 0.5) continue;
+            list.Add(new UnderlineCandidate(e,
+                above ? UnderlineSide.Above : UnderlineSide.Below));
+        }
+        return list;
     }
 
     // -------------------------------------------------------------------
