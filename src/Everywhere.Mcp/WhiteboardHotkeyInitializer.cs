@@ -203,11 +203,15 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
             screen = new PixelRect(0, 0, 1920, 1080);
         }
 
-        // Sync capture BEFORE opening the overlay. The async background
-        // path (v0.8.22) was supposed to remove the "screen jolt" but
-        // produced TWO redraws (dim then screenshot) that read worse.
-        // Restore the v0.8.21 single-redraw behaviour.
-        Avalonia.Media.Imaging.Bitmap? backgroundImage = null;
+        // Open transparent overlay IMMEDIATELY. No screenshot is shown
+        // underneath — user draws directly on top of the live screen,
+        // so there's no chance of pixel mismatch / 'frame shrink'.
+        _logger.LogInformation("Whiteboard opening overlay on screen {Screen}", screen);
+        var overlay = new WhiteboardOverlay(screen, backgroundImage: null);
+        _activeOverlay = overlay;
+
+        // OCR-only screenshot, taken in the background while user draws.
+        // Doesn't affect the overlay visually.
         Avalonia.Media.Imaging.Bitmap? ocrBitmap = null;
         PixelRect ocrBitmapBounds = screen;
         var captureSources = new List<(string Name, IVisualElement Element)>();
@@ -215,34 +219,42 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
         if (targetScreen is not null && !ReferenceEquals(targetScreen, focusedRoot))
             captureSources.Add(("target screen", targetScreen));
 
-        foreach (var (name, source) in captureSources)
+        var captureCompleted = new TaskCompletionSource();
+        _ = Task.Run(async () =>
         {
             try
             {
-                using var capture = await source.CaptureAsync(CancellationToken.None);
-                backgroundImage = capture.ToAvaloniaBitmap();
-                if (backgroundImage is null) continue;
-                using var ms = new System.IO.MemoryStream();
-                backgroundImage.Save(ms);
-                ms.Position = 0;
-                ocrBitmap = new Avalonia.Media.Imaging.Bitmap(ms);
-                ocrBitmapBounds = source.BoundingRectangle;
-                _logger.LogInformation(
-                    "Whiteboard captured background from {Source}, bbox {Bbox}",
-                    name, ocrBitmapBounds);
-                break;
+                foreach (var (name, source) in captureSources)
+                {
+                    try
+                    {
+                        using var capture = await source.CaptureAsync(CancellationToken.None);
+                        var bg = capture.ToAvaloniaBitmap();
+                        if (bg is null) continue;
+                        using var ms = new System.IO.MemoryStream();
+                        bg.Save(ms);
+                        ms.Position = 0;
+                        ocrBitmap = new Avalonia.Media.Imaging.Bitmap(ms);
+                        ocrBitmapBounds = source.BoundingRectangle;
+                        _logger.LogInformation(
+                            "Whiteboard async capture from {Source}, bbox {Bbox}",
+                            name, ocrBitmapBounds);
+                        bg.Dispose();
+                        return;
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex,
+                            "Whiteboard: capture from {Source} failed; trying next", name);
+                    }
+                }
+                _logger.LogWarning("Whiteboard: no capture source produced a bitmap (OCR will fall back to leaf-fraction)");
             }
-            catch (Exception ex)
+            finally
             {
-                _logger.LogWarning(ex,
-                    "Whiteboard: capture from {Source} failed; trying next", name);
+                captureCompleted.TrySetResult();
             }
-        }
-
-        _logger.LogInformation("Whiteboard opening overlay on screen {Screen}, hasBg={HasBg}",
-            screen, backgroundImage is not null);
-        var overlay = new WhiteboardOverlay(screen, backgroundImage);
-        _activeOverlay = overlay;
+        });
 
         try
         {
@@ -255,6 +267,10 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
                 _logger.LogDebug("Whiteboard cancelled or empty; nothing to stash");
                 return;
             }
+            // Wait for the OCR-only capture task to finish (typically
+            // 100-300ms). Bounded so a stuck screencapture doesn't hang
+            // the user; if it times out, OCR falls back to leaf-fraction.
+            await Task.WhenAny(captureCompleted.Task, Task.Delay(2_000));
 
             var strokes = result.Strokes
                 .Select(pts => new Stroke(pts

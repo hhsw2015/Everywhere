@@ -86,27 +86,15 @@ public sealed class WhiteboardOverlay : ScreenSelectionTransparentWindow
 
         SetPlacement(screenBounds, out _scale);
 
-        // Start with a transparent-looking dim. If a screenshot was passed
-        // in (sync capture path), use it as the background. If not, the
-        // caller can call SetBackgroundLater(bitmap) once the async capture
-        // returns — this lets the overlay APPEAR INSTANTLY without waiting
-        // for screencapture CLI, eliminating the perceptible "screen jolts"
-        // user reported when the hotkey fires.
-        if (backgroundImage is not null)
-        {
-            Background = new ImageBrush(backgroundImage)
-            {
-                Opacity = 0.85,
-            };
-        }
-        else
-        {
-            // Translucent dim — hides nothing under it because Avalonia
-            // window opacity treats this as a regular fill. The user sees
-            // a dimmed overlay and then the screenshot pops in shortly
-            // after; the visual change is small (just the alpha shifting).
-            Background = new SolidColorBrush(Color.FromArgb(0x60, 0, 0, 0));
-        }
+        // Real transparency — base class already wires Transparent +
+        // TransparencyLevelHint = Transparent. The user draws directly on
+        // top of the live screen content, no static screenshot underneath.
+        // Eliminates the 'frame shrink / screen jolt' caused by ImageBrush
+        // re-rasterization vs the OS's native rendering pipeline. The dim
+        // border below provides a subtle 'overlay active' visual cue.
+        Background = Brushes.Transparent;
+        _dimBorder.Background = new SolidColorBrush(Color.FromArgb(0x33, 0, 0, 0));
+        _ownedBackground = null;
 
         Opened += (_, _) => Focus();
         KeyDown += OnKeyDown;
@@ -152,14 +140,13 @@ public sealed class WhiteboardOverlay : ScreenSelectionTransparentWindow
     /// </summary>
     public void SetBackgroundLater(Bitmap bitmap)
     {
+        // Transparent overlay path doesn't display screenshots — kept for
+        // API compat with the OCR-side capture pipeline which still wants
+        // to dispose its bitmap eventually.
         if (_committed) { bitmap.Dispose(); return; }
         Dispatcher.UIThread.Post(() =>
         {
             if (_committed) { bitmap.Dispose(); return; }
-            // Replace dim with the screenshot. Same Opacity that the sync
-            // path uses, so the visual style stays consistent.
-            Background = new ImageBrush(bitmap) { Opacity = 0.85 };
-            // Take ownership for disposal.
             _ownedBackground = bitmap;
         });
     }
