@@ -207,19 +207,26 @@ public static class AnnotationSnapper
             var bb = ToRect(e.BoundingRectangle);
             // above: leaf bottom must be near & above strokeY (the stroke top)
             // below: leaf top must be near & below strokeY (the stroke bottom)
+            // Tolerate small jitter — leaf may extend slightly past the
+            // stroke's top/bottom edge when the user grazed the text. 15px
+            // covers font ascender/descender + light hand jitter.
             if (above)
             {
-                if (bb.Bottom > strokeY + 5) continue;
+                if (bb.Bottom > strokeY + 15) continue;
                 if (strokeY - bb.Bottom > 80) continue;
             }
             else
             {
-                if (bb.Y < strokeY - 5) continue;
+                if (bb.Y < strokeY - 15) continue;
                 if (bb.Y - strokeY > 80) continue;
             }
             var xInter = Math.Min(bb.Right, strokeX2) - Math.Max(bb.X, strokeX1);
             if (xInter <= 0) continue;
-            if (xInter / strokeWidth < 0.5) continue;
+            // Compare overlap to the SHORTER of stroke or leaf width — so
+            // a long stroke under a short leaf (or vice versa) still passes
+            // when one is essentially fully inside the other's x-band.
+            var shorter = Math.Max(1, Math.Min(strokeWidth, bb.Width));
+            if (xInter / shorter < 0.5) continue;
             list.Add(new UnderlineCandidate(e,
                 above ? UnderlineSide.Above : UnderlineSide.Below));
         }
