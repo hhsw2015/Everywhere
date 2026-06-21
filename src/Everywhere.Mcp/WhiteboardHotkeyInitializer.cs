@@ -203,72 +203,72 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
             screen = new PixelRect(0, 0, 1920, 1080);
         }
 
-        // Capture the screen image to use as the overlay background. This
-        // sidesteps Avalonia macOS Transparent-window unreliability — we
-        // paint the captured screenshot UNDER the user's strokes, so the
-        // overlay visually IS the screen even though the window is opaque.
-        Avalonia.Media.Imaging.Bitmap? backgroundImage = null;
+        // Open overlay IMMEDIATELY without waiting for screencapture —
+        // user reported a perceptible "screen jolt" when the screencapture
+        // CLI fired. Show the dim overlay first, run the capture in the
+        // background, and patch the screenshot in once it completes.
+        _logger.LogInformation("Whiteboard opening overlay on screen {Screen}", screen);
+        var overlay = new WhiteboardOverlay(screen, backgroundImage: null);
+        _activeOverlay = overlay;
+
+        // The bitmap covers ocrBitmapBounds in DIP space (a11y bboxes are DIP).
         Avalonia.Media.Imaging.Bitmap? ocrBitmap = null;
-        // The bitmap covers ocrBitmapBounds in screen-pixel space; OCR
-        // bbox math compares against this, not the full target screen.
         PixelRect ocrBitmapBounds = screen;
-        // Capture source preference: focused window first (Mac uses
-        // CGSHWCaptureWindowList — works on macOS 14+), then fall back to
-        // the target screen (CGImage.ScreenImage, deprecated and may
-        // return null on macOS 14+).
         var captureSources = new List<(string Name, IVisualElement Element)>();
-        // Capture order:
-        //   1. focused window — what the user is actually looking at
-        //   2. target screen — full-screen capture (screencapture CLI fallback
-        //      handles the case where focused window CaptureAsync fails)
-        // We deliberately do NOT enumerate screen.Children for fallbacks:
-        // its first entry is often the macOS menu bar or an unrelated
-        // floating window, which would silently substitute the user's
-        // current window with random content.
         if (focusedRoot is not null) captureSources.Add(("focused window", focusedRoot));
         if (targetScreen is not null && !ReferenceEquals(targetScreen, focusedRoot))
             captureSources.Add(("target screen", targetScreen));
-        _logger.LogInformation("Whiteboard capture sources: {Sources}",
-            string.Join(", ", captureSources.Select(s => $"{s.Name}({s.Element.BoundingRectangle.Width}x{s.Element.BoundingRectangle.Height})")));
 
-        foreach (var (name, source) in captureSources)
+        var captureCompleted = new TaskCompletionSource();
+        _ = Task.Run(async () =>
         {
             try
             {
-                using var capture = await source.CaptureAsync(CancellationToken.None);
-                backgroundImage = capture.ToAvaloniaBitmap();
-                if (backgroundImage is not null)
+                foreach (var (name, source) in captureSources)
                 {
-                    using var ms = new System.IO.MemoryStream();
-                    backgroundImage.Save(ms);
-                    ms.Position = 0;
-                    ocrBitmap = new Avalonia.Media.Imaging.Bitmap(ms);
-                    ocrBitmapBounds = source.BoundingRectangle;
-                    _logger.LogInformation(
-                        "Whiteboard captured background from {Source}, bbox {Bbox}",
-                        name, ocrBitmapBounds);
-                    break;
+                    try
+                    {
+                        using var capture = await source.CaptureAsync(CancellationToken.None);
+                        var bg = capture.ToAvaloniaBitmap();
+                        if (bg is null) continue;
+                        // Encode + decode into a separate bitmap so the
+                        // overlay can own one and OCR can use another.
+                        using var ms = new System.IO.MemoryStream();
+                        bg.Save(ms);
+                        ms.Position = 0;
+                        ocrBitmap = new Avalonia.Media.Imaging.Bitmap(ms);
+                        ocrBitmapBounds = source.BoundingRectangle;
+                        _logger.LogInformation(
+                            "Whiteboard async capture from {Source}, bbox {Bbox}",
+                            name, ocrBitmapBounds);
+                        // Hand the bitmap to the overlay (pretty background).
+                        overlay.SetBackgroundLater(bg);
+                        return;
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex,
+                            "Whiteboard: async capture from {Source} failed; trying next", name);
+                    }
                 }
+                _logger.LogWarning("Whiteboard: async capture produced no bitmap (OCR will fall back to leaf-fraction)");
             }
-            catch (Exception ex)
+            finally
             {
-                _logger.LogWarning(ex,
-                    "Whiteboard: capture from {Source} failed; trying next", name);
+                captureCompleted.TrySetResult();
             }
-        }
-        if (backgroundImage is null)
-            _logger.LogWarning("Whiteboard: no capture source produced a bitmap; using dim overlay (OCR disabled)");
+        });
 
-        _logger.LogInformation("Whiteboard opening overlay on screen {Screen}, background={HasBg}",
-            screen, backgroundImage is not null);
-        var overlay = new WhiteboardOverlay(screen, backgroundImage);
-        _activeOverlay = overlay;
         try
         {
             overlay.Show();
             overlay.Activate();
             _logger.LogInformation("Whiteboard overlay shown");
             var result = await overlay.ResultTask;
+            // Make sure the background-capture task has finished by the time
+            // we slice — OCR needs the bitmap. If the user committed extremely
+            // quickly (faster than ~200ms typical), wait briefly.
+            await Task.WhenAny(captureCompleted.Task, Task.Delay(2_000));
             if (result.Canceled || result.Strokes.Count == 0)
             {
                 _logger.LogDebug("Whiteboard cancelled or empty; nothing to stash");

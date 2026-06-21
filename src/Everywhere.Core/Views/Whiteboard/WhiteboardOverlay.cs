@@ -86,11 +86,14 @@ public sealed class WhiteboardOverlay : ScreenSelectionTransparentWindow
 
         SetPlacement(screenBounds, out _scale);
 
-        // ImageBrush mode matches ScreenSelectionMaskWindow.SetImage — uses
-        // the captured screenshot as the window's actual Background.
+        // Start with a transparent-looking dim. If a screenshot was passed
+        // in (sync capture path), use it as the background. If not, the
+        // caller can call SetBackgroundLater(bitmap) once the async capture
+        // returns — this lets the overlay APPEAR INSTANTLY without waiting
+        // for screencapture CLI, eliminating the perceptible "screen jolts"
+        // user reported when the hotkey fires.
         if (backgroundImage is not null)
         {
-            // Slight opacity acts as the dim — no separate dim Border needed.
             Background = new ImageBrush(backgroundImage)
             {
                 Opacity = 0.85,
@@ -98,7 +101,11 @@ public sealed class WhiteboardOverlay : ScreenSelectionTransparentWindow
         }
         else
         {
-            Background = new SolidColorBrush(Color.FromArgb(0x80, 0, 0, 0));
+            // Translucent dim — hides nothing under it because Avalonia
+            // window opacity treats this as a regular fill. The user sees
+            // a dimmed overlay and then the screenshot pops in shortly
+            // after; the visual change is small (just the alpha shifting).
+            Background = new SolidColorBrush(Color.FromArgb(0x60, 0, 0, 0));
         }
 
         Opened += (_, _) => Focus();
@@ -136,6 +143,26 @@ public sealed class WhiteboardOverlay : ScreenSelectionTransparentWindow
     }
 
     public Task<WhiteboardCaptureResult> ResultTask => _result.Task;
+
+    /// <summary>
+    /// Replace the dim background with the captured screenshot AFTER the
+    /// overlay has opened. Caller passes the bitmap once their async
+    /// capture pipeline returns; ownership transfers to the overlay (it
+    /// will dispose on Closed).
+    /// </summary>
+    public void SetBackgroundLater(Bitmap bitmap)
+    {
+        if (_committed) { bitmap.Dispose(); return; }
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (_committed) { bitmap.Dispose(); return; }
+            // Replace dim with the screenshot. Same Opacity that the sync
+            // path uses, so the visual style stays consistent.
+            Background = new ImageBrush(bitmap) { Opacity = 0.85 };
+            // Take ownership for disposal.
+            _ownedBackground = bitmap;
+        });
+    }
 
     private void OnCanvasPointerPressed(object? sender, PointerPressedEventArgs e)
     {
