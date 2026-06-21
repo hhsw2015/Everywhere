@@ -66,6 +66,9 @@ public static class Program
                 .AddSingleton<IWindowHelper, WindowHelper>()
                 .AddSingleton<IPlatformUpdateHandler, WindowsUpdateHandler>()
                 .AddSingleton<ISoftwareUpdater, SoftwareUpdater>()
+                // Register Windows OCR BEFORE AddEverywhereMcp so the
+                // latter's TryAddSingleton<NullOcrEngine> doesn't shadow it.
+                .AddSingleton<Everywhere.Interop.Whiteboard.IOcrEngine, Everywhere.Windows.Interop.WindowsOcrEngine>()
                 .AddSettings()
                 .AddWatchdogManager()
                 .ConfigureNetwork()

@@ -68,6 +68,10 @@ public static class Program
                 .AddSingleton<INativeHelper, NativeHelper>()
                 .AddSingleton<IPlatformUpdateHandler, LinuxUpdateHandler>()
                 .AddSingleton<ISoftwareUpdater, SoftwareUpdater>()
+                // Register Linux OCR BEFORE AddEverywhereMcp so the latter's
+                // TryAddSingleton<NullOcrEngine> doesn't shadow it.
+                // No-op when tesseract isn't installed; slicer falls back.
+                .AddSingleton<Everywhere.Interop.Whiteboard.IOcrEngine, Everywhere.Linux.Interop.LinuxTesseractOcrEngine>()
                 .AddSettings()
                 .AddWatchdogManager()
                 .ConfigureNetwork()
