@@ -218,26 +218,32 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
         // return null on macOS 14+).
         var captureSources = new List<(string Name, IVisualElement Element)>();
         if (focusedRoot is not null) captureSources.Add(("focused window", focusedRoot));
-        // Last-resort window source: traverse the target screen's children
-        // to find a top-level window we can capture via AX. Useful when
-        // FocusedElement returned null (timing race when overlay is opening).
-        if (targetScreen is not null && focusedRoot is null)
+        // Last-resort window source: traverse target screen's Children to
+        // find a top-level window. Always try (not just when focusedRoot is
+        // null) since even a non-null focusedRoot's CaptureAsync may fail.
+        if (targetScreen is not null)
         {
             try
             {
+                int added = 0;
                 foreach (var child in targetScreen.Children)
                 {
+                    if (ReferenceEquals(child, focusedRoot)) continue;
                     captureSources.Add(("frontmost window", child));
-                    break;  // first one is the topmost
+                    added++;
+                    if (added >= 3) break;  // try top 3 in case the first is a tooltip
                 }
+                _logger.LogInformation("Whiteboard: added {Count} screen-child capture source(s)", added);
             }
             catch (Exception ex)
             {
-                _logger.LogDebug(ex, "Whiteboard: enumerating screen children for capture failed");
+                _logger.LogWarning(ex, "Whiteboard: enumerating screen children for capture failed");
             }
         }
         if (targetScreen is not null && !ReferenceEquals(targetScreen, focusedRoot))
             captureSources.Add(("target screen", targetScreen));
+        _logger.LogInformation("Whiteboard capture sources: {Sources}",
+            string.Join(", ", captureSources.Select(s => s.Name)));
 
         foreach (var (name, source) in captureSources)
         {
