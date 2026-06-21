@@ -217,39 +217,15 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
         // the target screen (CGImage.ScreenImage, deprecated and may
         // return null on macOS 14+).
         var captureSources = new List<(string Name, IVisualElement Element)>();
+        // Capture order:
+        //   1. focused window — what the user is actually looking at
+        //   2. target screen — full-screen capture (screencapture CLI fallback
+        //      handles the case where focused window CaptureAsync fails)
+        // We deliberately do NOT enumerate screen.Children for fallbacks:
+        // its first entry is often the macOS menu bar or an unrelated
+        // floating window, which would silently substitute the user's
+        // current window with random content.
         if (focusedRoot is not null) captureSources.Add(("focused window", focusedRoot));
-        // Fallback windows from screen.Children: filter out things that
-        // can't be the user's intended capture target — menu bar (extremely
-        // short height), status items, off-screen windows.
-        if (targetScreen is not null)
-        {
-            try
-            {
-                var screenBox = targetScreen.BoundingRectangle;
-                int added = 0;
-                foreach (var child in targetScreen.Children)
-                {
-                    if (ReferenceEquals(child, focusedRoot)) continue;
-                    var bb = child.BoundingRectangle;
-                    // Skip menu bar / status item / tiny / off-screen sources.
-                    // A real content window is at least ~200px tall and has
-                    // its center inside the screen.
-                    if (bb.Height < 200 || bb.Width < 200) continue;
-                    var cx = bb.X + bb.Width / 2;
-                    var cy = bb.Y + bb.Height / 2;
-                    if (cx < screenBox.X || cx > screenBox.X + screenBox.Width
-                        || cy < screenBox.Y || cy > screenBox.Y + screenBox.Height) continue;
-                    captureSources.Add(("content window", child));
-                    added++;
-                    if (added >= 3) break;
-                }
-                _logger.LogInformation("Whiteboard: added {Count} content-window capture source(s)", added);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Whiteboard: enumerating screen children for capture failed");
-            }
-        }
         if (targetScreen is not null && !ReferenceEquals(targetScreen, focusedRoot))
             captureSources.Add(("target screen", targetScreen));
         _logger.LogInformation("Whiteboard capture sources: {Sources}",
