@@ -20,9 +20,6 @@ namespace Everywhere.Mcp.Whiteboard;
 /// </summary>
 public static class WhiteboardParser
 {
-    private const double TimeGapMs = 600;
-    private const double SpaceDist = 300;
-
     public static IReadOnlyList<Annotation> Parse(IReadOnlyList<Stroke> strokes)
     {
         if (strokes is null || strokes.Count == 0) return [];
@@ -38,29 +35,39 @@ public static class WhiteboardParser
     }
 
     // -------------------------------------------------------------------
-    // Grouping
+    // Grouping (geometric: bbox overlap or close center distance)
     // -------------------------------------------------------------------
 
     private static List<List<Stroke>> GroupStrokes(IReadOnlyList<Stroke> strokes)
     {
+        // Geometric merge — no time window. Two strokes belong to the
+        // same gesture if their bboxes intersect, OR their centers are
+        // within the shorter bbox's diagonal. The X case (two strokes
+        // crossing each other) always satisfies bbox-intersect; circles
+        // drawn in two arcs satisfy center-distance.
         var groups = new List<List<Stroke>>();
-        if (strokes.Count == 0) return groups;
-        groups.Add([strokes[0]]);
-        for (var i = 1; i < strokes.Count; i++)
+        foreach (var s in strokes)
         {
-            var s = strokes[i];
-            var prevGroup = groups[^1];
-            var prev = prevGroup[^1];
-            var gap = s.TStart - prev.TEnd;
-            var c1 = StrokeBBox(prev);
-            var c2 = StrokeBBox(s);
-            var dx = c1.Center.X - c2.Center.X;
-            var dy = c1.Center.Y - c2.Center.Y;
-            var dist = Math.Sqrt(dx * dx + dy * dy);
-            if (gap < TimeGapMs && dist < SpaceDist)
-                prevGroup.Add(s);
-            else
-                groups.Add([s]);
+            var bb = StrokeBBox(s);
+            var merged = false;
+            for (var gi = 0; gi < groups.Count; gi++)
+            {
+                var gbb = MultiStrokeBBox(groups[gi]);
+                var inter = bb.Intersect(gbb);
+                var bbDiag = Math.Sqrt(bb.Width * bb.Width + bb.Height * bb.Height);
+                var gbbDiag = Math.Sqrt(gbb.Width * gbb.Width + gbb.Height * gbb.Height);
+                var minDiag = Math.Max(1.0, Math.Min(bbDiag, gbbDiag));
+                var dx = bb.Center.X - gbb.Center.X;
+                var dy = bb.Center.Y - gbb.Center.Y;
+                var centerDist = Math.Sqrt(dx * dx + dy * dy);
+                if ((inter.Width > 0 && inter.Height > 0) || centerDist < minDiag)
+                {
+                    groups[gi].Add(s);
+                    merged = true;
+                    break;
+                }
+            }
+            if (!merged) groups.Add([s]);
         }
         return groups;
     }
