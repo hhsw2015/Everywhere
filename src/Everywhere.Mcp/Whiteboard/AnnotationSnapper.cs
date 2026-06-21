@@ -154,17 +154,39 @@ public static class AnnotationSnapper
         {
             if (!LeafTextRoles.Contains(e.Type)) continue;
             var bb = ToRect(e.BoundingRectangle);
-            if (bb.Center.X >= ann.BoundingRect.X
-                && bb.Center.X <= ann.BoundingRect.Right
-                && bb.Center.Y >= ann.BoundingRect.Y
-                && bb.Center.Y <= ann.BoundingRect.Bottom)
+            // Strict containment: the leaf must be FULLY inside the gesture
+            // rect. Avoids picking up the line above/below when the user's
+            // circle was drawn slightly larger than the visual content —
+            // their visual intent is the line whose entire bbox sits inside
+            // the circle, not lines whose centerline merely happens to be
+            // grazed by the rect's edge.
+            if (bb.Y >= ann.BoundingRect.Y
+                && bb.Bottom <= ann.BoundingRect.Bottom
+                && bb.X >= ann.BoundingRect.X - 4   // slight horizontal slack
+                && bb.Right <= ann.BoundingRect.Right + 4)
             {
                 leaves.Add(e);
             }
         }
         if (leaves.Count == 0)
         {
-            // Fallback: 50% overlap.
+            // Fallback 1: leaf center in rect (older permissive criterion).
+            foreach (var e in Descendants(root))
+            {
+                if (!LeafTextRoles.Contains(e.Type)) continue;
+                var bb = ToRect(e.BoundingRectangle);
+                if (bb.Center.X >= ann.BoundingRect.X
+                    && bb.Center.X <= ann.BoundingRect.Right
+                    && bb.Center.Y >= ann.BoundingRect.Y
+                    && bb.Center.Y <= ann.BoundingRect.Bottom)
+                {
+                    leaves.Add(e);
+                }
+            }
+        }
+        if (leaves.Count == 0)
+        {
+            // Fallback 2: 50% overlap.
             foreach (var e in Descendants(root))
             {
                 if (!LeafTextRoles.Contains(e.Type)) continue;
