@@ -48,13 +48,14 @@ public static class ReadWhiteboardTool
                   .Append(r.Leaves.Count).Append(' ').Append(r.Leaves.Count == 1 ? "leaf" : "leaves")
                   .Append(", confidence ").Append(r.Confidence.ToString("F2"))
                   .Append(")\n\n");
+                // De-duplicate leaves whose text is fully contained in
+                // another selected leaf's text — happens when a Hyperlink
+                // and its child Label both pass the snapper filter.
+                var emitted = new HashSet<string>(StringComparer.Ordinal);
                 foreach (var leaf in r.Leaves)
                 {
                     // Use a generous cap so long code-block Labels aren't
-                    // truncated before the slicer can index into them. The
-                    // slicer trims the result down to the user's region;
-                    // truncating BEFORE slicing would shift line indices
-                    // and break the OCR <-> a11y mapping.
+                    // truncated before the slicer can index into them.
                     var text = (leaf.GetText(maxLength: 64000) ?? string.Empty).Trim();
                     if (string.IsNullOrEmpty(text)) continue;
                     // Hybrid slice: OCR-detected per-line bboxes pick which
@@ -65,6 +66,9 @@ public static class ReadWhiteboardTool
                         ocrLines: r.OcrLines,
                         a11yText: text,
                         leafBbox: leaf.BoundingRectangle);
+                    text = text.Trim();
+                    if (string.IsNullOrEmpty(text)) continue;
+                    if (!emitted.Add(text)) continue;
                     sb.Append(leaf.Type == VisualElementType.Hyperlink ? "- " : "")
                       .Append(text).Append('\n');
                 }
