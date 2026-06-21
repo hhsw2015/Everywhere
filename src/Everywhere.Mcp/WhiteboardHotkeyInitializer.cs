@@ -292,8 +292,14 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
 
             var annotations = WhiteboardParser.Parse(strokes);
             var regions = new List<WhiteboardRegion>(annotations.Count);
+            _logger.LogInformation(
+                "Whiteboard snap context: focusedRoot bbox={FrootBbox}, ocrBitmap bbox={OcrBbox}",
+                focusedRoot.BoundingRectangle, ocrBitmapBounds);
             foreach (var ann in annotations)
             {
+                _logger.LogInformation(
+                    "Whiteboard ann: kind={Kind} parserRect={Rect}",
+                    ann.Kind, ann.BoundingRect);
                 var snap = AnnotationSnapper.Snap(ann, focusedRoot, strokes);
                 if (snap.Rejected || snap.Leaves.Count == 0)
                 {
@@ -301,6 +307,11 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
                         ann.Kind, string.IsNullOrEmpty(snap.RejectReason) ? "no leaves" : snap.RejectReason);
                     continue;
                 }
+                _logger.LogInformation(
+                    "Whiteboard snap: snapRect={SnapRect} leaves=[{Leaves}]",
+                    snap.Rect,
+                    string.Join("; ", snap.Leaves.Select(l =>
+                        $"{l.Type} bbox={l.BoundingRectangle} text=\"{TruncateForLog(l.GetText())}\"")));
                 // Per-region OCR: cropping the screenshot to ONLY this region's
                 // rect saves work (small image vs full screen) and prevents
                 // adjacent windows / unrelated text from polluting the OCR
@@ -423,6 +434,13 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
             _logger.LogDebug(ex, "Whiteboard: per-region OCR failed; falling back to leaf-fraction slice");
             return [];
         }
+    }
+
+    private static string TruncateForLog(string? s, int max = 60)
+    {
+        if (string.IsNullOrEmpty(s)) return "";
+        var t = s.Replace('\n', ' ').Replace('\r', ' ');
+        return t.Length > max ? t.Substring(0, max) + "…" : t;
     }
 }
 
