@@ -1,3 +1,4 @@
+using System.IO;
 using Avalonia;
 using Avalonia.Threading;
 using Everywhere.Common;
@@ -324,6 +325,7 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
 
             var annotations = WhiteboardParser.Parse(strokes);
             var regions = new List<WhiteboardRegion>(annotations.Count);
+            var snapTrace = new List<(Annotation Ann, SnapResult Snap)>();
             _logger.LogInformation(
                 "Whiteboard snap context: focusedRoot bbox={FrootBbox}, ocrBitmap bbox={OcrBbox}",
                 focusedRoot.BoundingRectangle, ocrBitmapBounds);
@@ -340,6 +342,10 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
                 // degenerate-bbox focusedRoot has the right Children in
                 // its subtree.
                 var snap = AnnotationSnapper.Snap(ann, focusedRoot, strokes);
+                snapTrace.Add((ann, snap));
+                if (!string.IsNullOrEmpty(snap.Diagnostics))
+                    _logger.LogInformation("Whiteboard snap diag ({Kind}): {Diag}",
+                        ann.Kind, snap.Diagnostics);
                 if (snap.Rejected || snap.Leaves.Count == 0)
                 {
                     _logger.LogInformation("Whiteboard region rejected ({Kind}): {Reason}",
@@ -378,11 +384,13 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
             if (regions.Count == 0)
             {
                 _logger.LogInformation("Whiteboard produced no usable regions; nothing to stash");
+                TryDumpDebugBundle(strokes, ocrBitmap, ocrBitmapBounds, focusedRoot, snapTrace);
                 return;
             }
 
             _whiteboardStash.Set(regions);
             _logger.LogInformation("Whiteboard stash filled with {Count} region(s)", regions.Count);
+            TryDumpDebugBundle(strokes, ocrBitmap, ocrBitmapBounds, focusedRoot, snapTrace);
 
             try
             {
@@ -398,6 +406,101 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
             _activeOverlay = null;
             ocrBitmap?.Dispose();
         }
+    }
+
+    /// <summary>
+    /// Dump a self-contained snapshot of one whiteboard session to disk —
+    /// the OCR-captured screenshot, every stroke point, every parser
+    /// annotation, every snap result + diagnostics, every text leaf bbox
+    /// in the focused tree. Lets us reproduce/diagnose bad gestures from
+    /// a single bundle without re-running the app. Best-effort: failure
+    /// here never affects the user-visible flow.
+    /// </summary>
+    private void TryDumpDebugBundle(
+        IReadOnlyList<Stroke> strokes,
+        Avalonia.Media.Imaging.Bitmap? ocrBitmap,
+        PixelRect ocrBounds,
+        IVisualElement focusedRoot,
+        IReadOnlyList<(Annotation Ann, SnapResult Snap)> snapTrace)
+    {
+        try
+        {
+            var root = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                "Everywhere", "whiteboard-debug");
+            Directory.CreateDirectory(root);
+            var stamp = DateTimeOffset.Now.ToString("yyyyMMdd-HHmmss-fff",
+                System.Globalization.CultureInfo.InvariantCulture);
+            var dir = Path.Combine(root, stamp);
+            Directory.CreateDirectory(dir);
+
+            // 1. Screenshot.
+            if (ocrBitmap is not null)
+            {
+                using var fs = File.Create(Path.Combine(dir, "screen.png"));
+                ocrBitmap.Save(fs);
+            }
+
+            // 2. Trace JSON.
+            var leaves = new List<object>();
+            foreach (var e in DescendantsOf(focusedRoot))
+            {
+                var bb = e.BoundingRectangle;
+                if (bb.Width <= 0 || bb.Height <= 0) continue;
+                leaves.Add(new
+                {
+                    type = e.Type.ToString(),
+                    x = bb.X, y = bb.Y, w = bb.Width, h = bb.Height,
+                    text = e.GetText(maxLength: 200) ?? "",
+                });
+            }
+            var trace = new
+            {
+                timestamp = DateTimeOffset.Now.ToString("o"),
+                screen_bounds = new { x = ocrBounds.X, y = ocrBounds.Y, w = ocrBounds.Width, h = ocrBounds.Height },
+                strokes = strokes.Select(s => new
+                {
+                    points = s.Points.Select(p => new[] { p.X, p.Y, p.T }).ToArray(),
+                }).ToArray(),
+                annotations = snapTrace.Select(t => new
+                {
+                    kind = t.Ann.Kind.ToString(),
+                    rect = new { x = t.Ann.BoundingRect.X, y = t.Ann.BoundingRect.Y,
+                                 w = t.Ann.BoundingRect.Width, h = t.Ann.BoundingRect.Height },
+                    rejected = t.Snap.Rejected,
+                    reject_reason = t.Snap.RejectReason,
+                    diagnostics = t.Snap.Diagnostics,
+                    confidence = t.Snap.Confidence,
+                    snap_rect = new { x = t.Snap.Rect.X, y = t.Snap.Rect.Y,
+                                      w = t.Snap.Rect.Width, h = t.Snap.Rect.Height },
+                    snap_leaves = t.Snap.Leaves.Select(l => new
+                    {
+                        type = l.Type.ToString(),
+                        x = l.BoundingRectangle.X, y = l.BoundingRectangle.Y,
+                        w = l.BoundingRectangle.Width, h = l.BoundingRectangle.Height,
+                        text = l.GetText(maxLength: 200) ?? "",
+                    }).ToArray(),
+                }).ToArray(),
+                leaves,
+            };
+            var json = System.Text.Json.JsonSerializer.Serialize(trace,
+                new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+            File.WriteAllText(Path.Combine(dir, "trace.json"), json);
+
+            _logger.LogInformation("Whiteboard debug bundle written to {Dir}", dir);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Whiteboard: failed to write debug bundle");
+        }
+    }
+
+    private static IEnumerable<IVisualElement> DescendantsOf(IVisualElement root)
+    {
+        yield return root;
+        foreach (var c in root.Children)
+        foreach (var d in DescendantsOf(c))
+            yield return d;
     }
 
     /// <summary>

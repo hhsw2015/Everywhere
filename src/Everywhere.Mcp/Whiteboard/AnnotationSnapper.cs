@@ -1,3 +1,5 @@
+using System.Globalization;
+using System.Text;
 using Avalonia;
 using Everywhere.Interop;
 using Everywhere.Interop.Whiteboard;
@@ -45,6 +47,8 @@ public static class AnnotationSnapper
         IVisualElement root,
         IReadOnlyList<Stroke> strokes)
     {
+        var diag = new StringBuilder();
+        diag.Append("arrow: ");
         // Direction-agnostic: the arrow tip is whichever stroke endpoint
         // sits closer to text. Users draw arrows in both directions
         // ("look at this!" from left or right), so we cannot assume
@@ -52,6 +56,9 @@ public static class AnnotationSnapper
         var endpoints = StrokeEndpoints(strokes);
         if (endpoints.Count == 0)
             return Reject(ann.BoundingRect, "no usable stroke points");
+        diag.Append("endpoints=[")
+            .AppendJoin(",", endpoints.Select(e => F(e.X, e.Y)))
+            .Append("] ");
         // Evaluate ALL endpoints — don't short-circuit on the first hit.
         // When tail and tip both happen to land inside text leaves, we
         // need to compare and pick the better one (smaller leaf area =
@@ -67,8 +74,7 @@ public static class AnnotationSnapper
             {
                 var bb = ToRect(inLeaf.BoundingRectangle);
                 var area = RectArea(bb);
-                // Inside-leaf hit beats any nearest-leaf candidate (dist=0).
-                // Among multiple inside-hits, the tighter leaf wins.
+                diag.Append($"in@{F(ex, ey)}->\"{Trunc(inLeaf.GetText())}\" ");
                 if (bestDist > 0 || area < bestArea)
                 {
                     bestDist = 0; bestArea = area; bestLeaf = inLeaf;
@@ -76,9 +82,13 @@ public static class AnnotationSnapper
                 continue;
             }
             var (nearLeaf, d) = NearestLeaf(root, ex, ey);
-            if (nearLeaf is not null && bestDist > 0 && d < bestDist)
+            if (nearLeaf is not null)
             {
-                bestDist = d; bestLeaf = nearLeaf;
+                diag.Append($"near@{F(ex, ey)}->\"{Trunc(nearLeaf.GetText())}\" d={d:F0} ");
+                if (bestDist > 0 && d < bestDist)
+                {
+                    bestDist = d; bestLeaf = nearLeaf;
+                }
             }
         }
         if (bestLeaf is null)
@@ -88,7 +98,8 @@ public static class AnnotationSnapper
                 Rect: new Rect(cx - 30, cy - 30, 60, 60),
                 Leaves: [],
                 Rejected: true,
-                RejectReason: "no text leaf on this screen");
+                RejectReason: "no text leaf on this screen",
+                Diagnostics: diag.ToString());
         }
         if (bestDist > 100)
         {
@@ -96,13 +107,15 @@ public static class AnnotationSnapper
                 Rect: ToRect(bestLeaf.BoundingRectangle),
                 Leaves: [],
                 Rejected: true,
-                RejectReason: $"arrow tip is {(int)bestDist}px from the nearest text — please point closer");
+                RejectReason: $"arrow tip is {(int)bestDist}px from the nearest text — please point closer",
+                Diagnostics: diag.ToString());
         }
         var conf = bestDist == 0 ? 1.0 : Math.Max(0.4, 1.0 - bestDist / 100);
         return new SnapResult(
             Rect: ToRect(bestLeaf.BoundingRectangle),
             Leaves: [bestLeaf],
-            Confidence: conf);
+            Confidence: conf,
+            Diagnostics: diag.ToString());
     }
 
     private static List<(double X, double Y)> StrokeEndpoints(IReadOnlyList<Stroke> strokes)
@@ -141,21 +154,33 @@ public static class AnnotationSnapper
         if (double.IsPositiveInfinity(strokeTop))
             return Reject(ann.BoundingRect, "empty stroke");
 
+        var diag = new StringBuilder();
+        diag.Append("underline: ")
+            .Append($"strokeTop={strokeTop:F0} strokeBottom={strokeBottom:F0} ")
+            .Append($"strokeX=[{strokeX1:F0},{strokeX2:F0}] ");
+
         var strokeWidth = Math.Max(strokeX2 - strokeX1, 1);
-        var candidates = CollectUnderlineCandidates(
+        var (above, aboveDiag) = CollectUnderlineCandidatesV(
             root, strokeTop, strokeX1, strokeX2, strokeWidth, above: true);
+        diag.Append("above=").Append(aboveDiag).Append(' ');
+        var candidates = above;
         // Tolerate users who draw the line ABOVE the text (overline-style
         // emphasis) — fall back to looking for a line just below the
         // stroke when nothing is above.
         if (candidates.Count == 0)
-            candidates = CollectUnderlineCandidates(
+        {
+            var (below, belowDiag) = CollectUnderlineCandidatesV(
                 root, strokeBottom, strokeX1, strokeX2, strokeWidth, above: false);
+            diag.Append("below=").Append(belowDiag);
+            candidates = below;
+        }
         if (candidates.Count == 0)
         {
             return new SnapResult(
                 Rect: ann.BoundingRect, Leaves: [],
                 Rejected: true,
-                RejectReason: "no text line above the underline — draw under a line of text");
+                RejectReason: "no text line above the underline — draw under a line of text",
+                Diagnostics: diag.ToString());
         }
         // Sort: closest gap (above OR below depending on which path matched),
         // then best x-overlap.
@@ -189,48 +214,52 @@ public static class AnnotationSnapper
         return new SnapResult(
             Rect: AdjustRectToLeaves(ann.BoundingRect, chosen),
             Leaves: chosen,
-            Confidence: conf);
+            Confidence: conf,
+            Diagnostics: diag.ToString());
     }
 
     private enum UnderlineSide { Above, Below }
     private record UnderlineCandidate(IVisualElement Leaf, UnderlineSide Tag);
 
-    private static List<UnderlineCandidate> CollectUnderlineCandidates(
+    private static (List<UnderlineCandidate>, string) CollectUnderlineCandidatesV(
         IVisualElement root,
         double strokeY, double strokeX1, double strokeX2, double strokeWidth,
         bool above)
     {
         var list = new List<UnderlineCandidate>();
+        int seen = 0, failedSide = 0, failedGap = 0, failedXBand = 0, failedXRatio = 0;
         foreach (var e in Descendants(root))
         {
             if (!LeafTextRoles.Contains(e.Type)) continue;
+            seen++;
             var bb = ToRect(e.BoundingRectangle);
-            // above: leaf bottom must be near & above strokeY (the stroke top)
-            // below: leaf top must be near & below strokeY (the stroke bottom)
             // Tolerate small jitter — leaf may extend slightly past the
             // stroke's top/bottom edge when the user grazed the text. 15px
             // covers font ascender/descender + light hand jitter.
             if (above)
             {
-                if (bb.Bottom > strokeY + 15) continue;
-                if (strokeY - bb.Bottom > 80) continue;
+                if (bb.Bottom > strokeY + 15) { failedSide++; continue; }
+                if (strokeY - bb.Bottom > 80) { failedGap++; continue; }
             }
             else
             {
-                if (bb.Y < strokeY - 15) continue;
-                if (bb.Y - strokeY > 80) continue;
+                if (bb.Y < strokeY - 15) { failedSide++; continue; }
+                if (bb.Y - strokeY > 80) { failedGap++; continue; }
             }
             var xInter = Math.Min(bb.Right, strokeX2) - Math.Max(bb.X, strokeX1);
-            if (xInter <= 0) continue;
+            if (xInter <= 0) { failedXBand++; continue; }
             // Compare overlap to the SHORTER of stroke or leaf width — so
             // a long stroke under a short leaf (or vice versa) still passes
             // when one is essentially fully inside the other's x-band.
             var shorter = Math.Max(1, Math.Min(strokeWidth, bb.Width));
-            if (xInter / shorter < 0.5) continue;
+            if (xInter / shorter < 0.5) { failedXRatio++; continue; }
             list.Add(new UnderlineCandidate(e,
                 above ? UnderlineSide.Above : UnderlineSide.Below));
         }
-        return list;
+        var diag =
+            $"[seen={seen} kept={list.Count} failedSide={failedSide} " +
+            $"failedGap={failedGap} failedXBand={failedXBand} failedXRatio={failedXRatio}]";
+        return (list, diag);
     }
 
     // -------------------------------------------------------------------
@@ -239,10 +268,14 @@ public static class AnnotationSnapper
 
     private static SnapResult SnapCircleOrX(Annotation ann, IVisualElement root)
     {
+        var diag = new StringBuilder();
+        diag.Append("circle/x: rect=").Append(F(ann.BoundingRect)).Append(' ');
         var leaves = new List<IVisualElement>();
+        int totalLeaves = 0;
         foreach (var e in Descendants(root))
         {
             if (!LeafTextRoles.Contains(e.Type)) continue;
+            totalLeaves++;
             var bb = ToRect(e.BoundingRectangle);
             // Strict containment: the leaf must be FULLY inside the gesture
             // rect. Avoids picking up the line above/below when the user's
@@ -258,6 +291,7 @@ public static class AnnotationSnapper
                 leaves.Add(e);
             }
         }
+        diag.Append($"totalLeaves={totalLeaves} pass1Strict={leaves.Count} ");
         if (leaves.Count == 0)
         {
             // Fallback 1: leaf has >=50% vertical overlap with the rect.
@@ -279,6 +313,7 @@ public static class AnnotationSnapper
                 if (xInter <= 0) continue;
                 leaves.Add(e);
             }
+            diag.Append($"pass2VOverlap={leaves.Count} ");
         }
         if (leaves.Count == 0)
         {
@@ -289,20 +324,24 @@ public static class AnnotationSnapper
                 if (OverlapRatio(ToRect(e.BoundingRectangle), ann.BoundingRect) >= 0.5)
                     leaves.Add(e);
             }
+            diag.Append($"pass3Area={leaves.Count} ");
         }
         if (leaves.Count == 0)
         {
             var (nearest, dist) = NearestLeaf(root, ann.BoundingRect.Center.X, ann.BoundingRect.Center.Y);
+            diag.Append($"nearest=\"{Trunc(nearest?.GetText())}\" d={dist:F0} ");
             if (nearest is null || dist > 120)
             {
                 return new SnapResult(
                     Rect: ann.BoundingRect, Leaves: [],
                     Rejected: true,
-                    RejectReason: "no text inside the gesture — please redraw closer to the content");
+                    RejectReason: "no text inside the gesture — please redraw closer to the content",
+                    Diagnostics: diag.ToString());
             }
             return new SnapResult(
                 Rect: ToRect(nearest.BoundingRectangle), Leaves: [nearest],
-                Confidence: Math.Max(0.3, 1.0 - dist / 120));
+                Confidence: Math.Max(0.3, 1.0 - dist / 120),
+                Diagnostics: diag.ToString());
         }
         // Sanity: leaves area shouldn't massively exceed gesture bbox.
         var leafArea = leaves.Sum(lf => RectArea(ToRect(lf.BoundingRectangle)));
@@ -312,11 +351,13 @@ public static class AnnotationSnapper
             return new SnapResult(
                 Rect: ann.BoundingRect, Leaves: [],
                 Rejected: true,
-                RejectReason: $"gesture is too small for {leaves.Count} text elements — please redraw");
+                RejectReason: $"gesture is too small for {leaves.Count} text elements — please redraw",
+                Diagnostics: diag.ToString());
         }
         return new SnapResult(
             Rect: AdjustRectToLeaves(ann.BoundingRect, leaves),
-            Leaves: leaves);
+            Leaves: leaves,
+            Diagnostics: diag.ToString());
     }
 
     // -------------------------------------------------------------------
@@ -392,5 +433,17 @@ public static class AnnotationSnapper
         foreach (var c in root.Children)
         foreach (var d in Descendants(c))
             yield return d;
+    }
+
+    private static string F(Rect r) =>
+        string.Format(CultureInfo.InvariantCulture, "({0:F0},{1:F0},{2:F0}x{3:F0})",
+            r.X, r.Y, r.Width, r.Height);
+    private static string F(double x, double y) =>
+        string.Format(CultureInfo.InvariantCulture, "({0:F0},{1:F0})", x, y);
+    private static string Trunc(string? s, int n = 30)
+    {
+        if (string.IsNullOrEmpty(s)) return "";
+        var t = s.Replace('\n', ' ').Replace('\r', ' ');
+        return t.Length > n ? t[..n] + "…" : t;
     }
 }

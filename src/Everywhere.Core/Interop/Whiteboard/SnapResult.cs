@@ -13,4 +13,10 @@ public sealed record SnapResult(
     IReadOnlyList<IVisualElement> Leaves,
     bool Rejected = false,
     string RejectReason = "",
-    double Confidence = 1.0);
+    double Confidence = 1.0,
+    /// <summary>
+    /// Per-snap diagnostic trace: which path matched, which leaves were
+    /// considered, why others were filtered. Logged at Information level
+    /// by the orchestrator so we don't have to spelunk after-the-fact.
+    /// </summary>
+    string Diagnostics = "");
