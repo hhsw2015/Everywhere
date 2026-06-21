@@ -37,6 +37,22 @@ public sealed class WindowsOcrEngine : IOcrEngine
         IReadOnlyList<string>? languages = null)
     {
         if (pngStream is null) return [];
+        // Windows.Media.Ocr offers no quality knob — note the limitation
+        // so callers can decide on a different engine for image-only PDFs.
+        if (quality == OcrQuality.Accurate)
+        {
+            _logger.LogDebug(
+                "Windows.Media.Ocr does not expose Accurate vs Fast levels; treating as Fast.");
+        }
+        // Run on a thread-pool thread to avoid sync-over-async deadlocks
+        // when called from a UI/dispatcher SynchronizationContext.
+        return Task.Run(() => RecognizeCore(pngStream, originPx, languages))
+            .GetAwaiter().GetResult();
+    }
+
+    private IReadOnlyList<OcrLine> RecognizeCore(
+        Stream pngStream, PixelPoint originPx, IReadOnlyList<string>? languages)
+    {
         try
         {
             var engine = ResolveEngine(languages);
@@ -46,16 +62,15 @@ public sealed class WindowsOcrEngine : IOcrEngine
                 return [];
             }
 
-            // Stream -> InMemoryRandomAccessStream (UWP API requirement)
+            // Stream -> IRandomAccessStream. AsStreamForWrite gives us a
+            // managed Stream wrapper that writes directly into raStream,
+            // skipping the DataWriter detour and the extra MemoryStream
+            // copy.
             using var raStream = new InMemoryRandomAccessStream();
-            using (var writer = new DataWriter(raStream.GetOutputStreamAt(0)))
+            using (var outStream = raStream.AsStreamForWrite())
             {
-                using var ms = new MemoryStream();
-                pngStream.CopyTo(ms);
-                writer.WriteBytes(ms.ToArray());
-                writer.StoreAsync().GetAwaiter().GetResult();
-                writer.FlushAsync().GetAwaiter().GetResult();
-                writer.DetachStream();
+                if (pngStream.CanSeek) pngStream.Position = 0;
+                pngStream.CopyTo(outStream);
             }
             raStream.Seek(0);
 
@@ -69,7 +84,6 @@ public sealed class WindowsOcrEngine : IOcrEngine
             foreach (var line in result.Lines)
             {
                 if (line.Words is null || line.Words.Count == 0) continue;
-                // Union of all word polygons -> line bounding rect.
                 double minX = double.PositiveInfinity, minY = double.PositiveInfinity;
                 double maxX = double.NegativeInfinity, maxY = double.NegativeInfinity;
                 foreach (var w in line.Words)
@@ -88,7 +102,10 @@ public sealed class WindowsOcrEngine : IOcrEngine
                 lines.Add(new OcrLine(
                     Text: line.Text ?? string.Empty,
                     Bounds: new PixelRect(x, y, w2, h2),
-                    Confidence: 1.0));  // UWP API doesn't expose per-line confidence
+                    // Windows.Media.Ocr does not expose per-line confidence.
+                    // Use NaN so consumers can detect "unknown" rather than
+                    // mistaking it for high confidence.
+                    Confidence: double.NaN));
             }
             lines.Sort((a, b) => a.Bounds.Y.CompareTo(b.Bounds.Y));
             return lines;
@@ -100,7 +117,7 @@ public sealed class WindowsOcrEngine : IOcrEngine
         }
     }
 
-    private static OcrEngine? ResolveEngine(IReadOnlyList<string>? languages)
+    private OcrEngine? ResolveEngine(IReadOnlyList<string>? languages)
     {
         if (languages is { Count: > 0 })
         {
@@ -112,9 +129,10 @@ public sealed class WindowsOcrEngine : IOcrEngine
                     if (OcrEngine.IsLanguageSupported(lang))
                         return OcrEngine.TryCreateFromLanguage(lang);
                 }
-                catch
+                catch (Exception ex)
                 {
-                    // Bad tag, try next
+                    _logger.LogDebug(ex,
+                        "Windows OCR: invalid language tag {Tag}, skipping", tag);
                 }
             }
         }

@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using Avalonia;
 using Everywhere.Interop.Whiteboard;
@@ -43,25 +44,43 @@ public sealed class LinuxTesseractOcrEngine : IOcrEngine
         var tmpPng = Path.Combine(Path.GetTempPath(), $"ev-ocr-{Guid.NewGuid():N}.png");
         try
         {
+            if (pngStream.CanSeek) pngStream.Position = 0;
             using (var fs = File.Create(tmpPng)) pngStream.CopyTo(fs);
 
             var lang = ResolveLangArg(languages);
-            // -psm 6: assume a single uniform block of text. Good for the
+            // --psm 6: assume a single uniform block of text. Good for the
             // typical whiteboard case (a code block / paragraph).
-            // Fast: tesseract has no Fast/Accurate split — its default LSTM
-            // engine is the only option in modern versions.
-            var args = $"\"{tmpPng}\" - --psm 6 -l {lang} tsv";
-            var psi = new ProcessStartInfo("tesseract", args)
+            // tesseract has no Fast/Accurate split — its default LSTM
+            // engine is the only option in modern versions, so OcrQuality
+            // is accepted but has no effect here.
+            var psi = new ProcessStartInfo("tesseract")
             {
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 UseShellExecute = false,
                 CreateNoWindow = true,
             };
+            // ArgumentList: per-OS escaping, no shell-quoting bugs.
+            psi.ArgumentList.Add(tmpPng);
+            psi.ArgumentList.Add("-");
+            psi.ArgumentList.Add("--psm");
+            psi.ArgumentList.Add("6");
+            psi.ArgumentList.Add("-l");
+            psi.ArgumentList.Add(lang);
+            psi.ArgumentList.Add("tsv");
             using var p = Process.Start(psi);
             if (p is null) return [];
+            // Drain stderr concurrently to avoid pipe-buffer deadlock when
+            // tesseract emits warnings — stderr is small for the success
+            // path but unbounded on missing-language errors.
+            p.ErrorDataReceived += (_, _) => { };
+            p.BeginErrorReadLine();
             string tsv = p.StandardOutput.ReadToEnd();
-            p.WaitForExit(10_000);
+            if (!p.WaitForExit(10_000))
+            {
+                try { p.Kill(entireProcessTree: true); } catch { /* ignore */ }
+                return [];
+            }
             if (p.ExitCode != 0) return [];
 
             return ParseTsv(tsv, originPx);
@@ -81,6 +100,8 @@ public sealed class LinuxTesseractOcrEngine : IOcrEngine
     {
         try
         {
+            // --version writes to stderr historically; redirect both and
+            // discard so this never deadlocks on a slow disk / SSD warmup.
             using var p = Process.Start(new ProcessStartInfo("tesseract", "--version")
             {
                 RedirectStandardOutput = true,
@@ -88,7 +109,12 @@ public sealed class LinuxTesseractOcrEngine : IOcrEngine
                 UseShellExecute = false,
                 CreateNoWindow = true,
             });
-            return p is not null && p.WaitForExit(2000) && p.ExitCode == 0;
+            if (p is null) return false;
+            p.ErrorDataReceived += (_, _) => { };
+            p.OutputDataReceived += (_, _) => { };
+            p.BeginErrorReadLine();
+            p.BeginOutputReadLine();
+            return p.WaitForExit(2000) && p.ExitCode == 0;
         }
         catch
         {
@@ -127,6 +153,9 @@ public sealed class LinuxTesseractOcrEngine : IOcrEngine
     {
         // TSV columns: level page_num block_num par_num line_num word_num
         //              left top width height conf text
+        // Use InvariantCulture: tesseract emits '.' decimals, but
+        // current-culture parsing fails silently on de-DE/fr-FR/etc.
+        var inv = CultureInfo.InvariantCulture;
         var byLine = new Dictionary<(int blk, int par, int ln), List<(int x, int y, int w, int h, string text, double conf)>>();
         using var sr = new StringReader(tsv);
         string? line;
@@ -136,18 +165,21 @@ public sealed class LinuxTesseractOcrEngine : IOcrEngine
             if (firstHeader) { firstHeader = false; continue; }
             var cols = line.Split('\t');
             if (cols.Length < 12) continue;
-            if (!int.TryParse(cols[0], out var level)) continue;
+            if (!int.TryParse(cols[0], NumberStyles.Integer, inv, out var level)) continue;
             if (level != 5) continue;  // word level
             var text = cols[11];
             if (string.IsNullOrWhiteSpace(text)) continue;
-            if (!int.TryParse(cols[2], out var blk)) continue;
-            if (!int.TryParse(cols[3], out var par)) continue;
-            if (!int.TryParse(cols[4], out var ln)) continue;
-            if (!int.TryParse(cols[6], out var x)) continue;
-            if (!int.TryParse(cols[7], out var y)) continue;
-            if (!int.TryParse(cols[8], out var w)) continue;
-            if (!int.TryParse(cols[9], out var h)) continue;
-            double.TryParse(cols[10], out var conf);
+            if (!int.TryParse(cols[2], NumberStyles.Integer, inv, out var blk)) continue;
+            if (!int.TryParse(cols[3], NumberStyles.Integer, inv, out var par)) continue;
+            if (!int.TryParse(cols[4], NumberStyles.Integer, inv, out var ln)) continue;
+            if (!int.TryParse(cols[6], NumberStyles.Integer, inv, out var x)) continue;
+            if (!int.TryParse(cols[7], NumberStyles.Integer, inv, out var y)) continue;
+            if (!int.TryParse(cols[8], NumberStyles.Integer, inv, out var w)) continue;
+            if (!int.TryParse(cols[9], NumberStyles.Integer, inv, out var h)) continue;
+            double.TryParse(cols[10], NumberStyles.Float, inv, out var conf);
+            // tesseract emits -1 for non-words; clamp so the average
+            // doesn't go negative.
+            if (conf < 0) conf = 0;
             var key = (blk, par, ln);
             if (!byLine.TryGetValue(key, out var list))
             {
