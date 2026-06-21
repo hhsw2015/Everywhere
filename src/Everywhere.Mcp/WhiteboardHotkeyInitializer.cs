@@ -297,7 +297,15 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
                 _logger.LogInformation(
                     "Whiteboard ann: kind={Kind} parserRect={Rect}",
                     ann.Kind, ann.BoundingRect);
-                var snap = AnnotationSnapper.Snap(ann, focusedRoot, strokes);
+                // Snap against the broader screen tree when focusedRoot is
+                // degenerate (0x0 — happens when AX FocusedElement returns
+                // an off-screen / virtual element). targetScreen.Descendants
+                // covers all top-level windows and their content.
+                var snapRoot = focusedRoot.BoundingRectangle.Width > 0
+                               && focusedRoot.BoundingRectangle.Height > 0
+                    ? focusedRoot
+                    : (targetScreen ?? focusedRoot);
+                var snap = AnnotationSnapper.Snap(ann, snapRoot, strokes);
                 if (snap.Rejected || snap.Leaves.Count == 0)
                 {
                     _logger.LogInformation("Whiteboard region rejected ({Kind}): {Reason}",
