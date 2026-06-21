@@ -476,7 +476,7 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
                 screen_bounds = new { x = ocrBounds.X, y = ocrBounds.Y, w = ocrBounds.Width, h = ocrBounds.Height },
                 strokes = strokes.Select(s => new
                 {
-                    points = s.Points.Select(p => new[] { p.X, p.Y, p.T }).ToArray(),
+                    points = s.Points.Select(p => new[] { p.X, p.Y, p.TimestampMs }).ToArray(),
                 }).ToArray(),
                 annotations = snapTrace.Select(t => new
                 {

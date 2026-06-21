@@ -193,10 +193,10 @@ public static class AnnotationSnapper
         // then best x-overlap.
         var anchor = pickedSide == UnderlineSide.Above ? strokeTop : strokeBottom;
         var bands = candidates
-            .Select(c => (Leaf: c.Leaf,
+            .Select(c => (Leaf: c,
                           EdgeY: pickedSide == UnderlineSide.Above
-                              ? ToRect(c.Leaf.BoundingRectangle).Bottom
-                              : ToRect(c.Leaf.BoundingRectangle).Y))
+                              ? ToRect(c.BoundingRectangle).Bottom
+                              : ToRect(c.BoundingRectangle).Y))
             .ToList();
         bands.Sort((a, b) =>
         {
