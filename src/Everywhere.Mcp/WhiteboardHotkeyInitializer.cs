@@ -218,7 +218,8 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
         // return null on macOS 14+).
         var captureSources = new List<(string Name, IVisualElement Element)>();
         if (focusedRoot is not null) captureSources.Add(("focused window", focusedRoot));
-        if (targetScreen is not null) captureSources.Add(("target screen", targetScreen));
+        if (targetScreen is not null && !ReferenceEquals(targetScreen, focusedRoot))
+            captureSources.Add(("target screen", targetScreen));
 
         foreach (var (name, source) in captureSources)
         {
@@ -347,6 +348,22 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
         if (fullBitmap is null) return [];
         try
         {
+            // Skip when the region doesn't overlap the captured area at all
+            // — this happens when the user gestures over a popup/child
+            // window that lives outside the focused-window bounds. Without
+            // this guard, the clamps below collapse the crop to a 1-pixel
+            // edge slice and OCR would return spurious results.
+            var screenRectDip = new Avalonia.Rect(
+                screenBounds.X, screenBounds.Y, screenBounds.Width, screenBounds.Height);
+            var overlap = regionRectScreenPx.Intersect(screenRectDip);
+            if (overlap.Width <= 0 || overlap.Height <= 0)
+            {
+                _logger.LogDebug(
+                    "Whiteboard: region {Rect} doesn't overlap captured area {Bounds}; skipping OCR",
+                    regionRectScreenPx, screenBounds);
+                return [];
+            }
+
             // Recover the physical-px-per-DIP scale from the captured image
             // size vs the screen bounds. Both axes computed independently
             // in case of non-uniform scaling (uncommon but possible).
@@ -355,11 +372,13 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
             var scaleX = screenBounds.Width > 0 ? pxW / (double)screenBounds.Width : 1.0;
             var scaleY = screenBounds.Height > 0 ? pxH / (double)screenBounds.Height : 1.0;
 
-            // DIP -> physical px, translated by -screenBounds.
-            var imgX = (int)Math.Round((regionRectScreenPx.X - screenBounds.X) * scaleX);
-            var imgY = (int)Math.Round((regionRectScreenPx.Y - screenBounds.Y) * scaleY);
-            var imgW = (int)Math.Round(regionRectScreenPx.Width * scaleX);
-            var imgH = (int)Math.Round(regionRectScreenPx.Height * scaleY);
+            // Use the OVERLAP rect (already clipped to capture bounds), not
+            // the raw region rect — avoids needing the per-axis clamps to
+            // do partial-overlap correction.
+            var imgX = (int)Math.Round((overlap.X - screenBounds.X) * scaleX);
+            var imgY = (int)Math.Round((overlap.Y - screenBounds.Y) * scaleY);
+            var imgW = (int)Math.Round(overlap.Width * scaleX);
+            var imgH = (int)Math.Round(overlap.Height * scaleY);
 
             imgX = Math.Max(0, Math.Min(pxW - 1, imgX));
             imgY = Math.Max(0, Math.Min(pxH - 1, imgY));
