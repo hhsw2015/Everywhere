@@ -1,8 +1,10 @@
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using Avalonia;
 using Everywhere.Interop;
 using Foundation;
+using ImageIO;
 
 namespace Everywhere.Mac.Interop;
 
@@ -127,9 +129,10 @@ public class NSScreenVisualElement(NSScreen screen) : IVisualElement
             };
             psi.ArgumentList.Add("-x");
             psi.ArgumentList.Add("-R");
-            psi.ArgumentList.Add(
-                System.Globalization.CultureInfo.InvariantCulture,
-                $"{(int)rect.X},{(int)rect.Y},{(int)rect.Width},{(int)rect.Height}");
+            psi.ArgumentList.Add(string.Format(
+                CultureInfo.InvariantCulture,
+                "{0},{1},{2},{3}",
+                (int)rect.X, (int)rect.Y, (int)rect.Width, (int)rect.Height));
             psi.ArgumentList.Add(tmp);
             using var p = Process.Start(psi);
             if (p is null) return null;
