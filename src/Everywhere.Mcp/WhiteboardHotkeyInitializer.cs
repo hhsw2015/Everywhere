@@ -425,10 +425,10 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
         IVisualElement focusedRoot,
         IReadOnlyList<(Annotation Ann, SnapResult Snap)> snapTrace)
     {
-        // Gated on the user's diagnostic-data preference — same flag the
-        // settings UI exposes ("Send diagnostic data"). Avoids dumping
-        // screenshots + a11y text to disk for users who didn't opt in.
-        if (!_settings.Common.DiagnosticData) return;
+        // Always dump locally — bundles never leave the machine and
+        // retention is bounded to DebugBundleRetention. The Settings
+        // "user experience program" flag governs telemetry uploads,
+        // not local diagnostic files, so we don't gate on it.
         try
         {
             var root = Path.Combine(
