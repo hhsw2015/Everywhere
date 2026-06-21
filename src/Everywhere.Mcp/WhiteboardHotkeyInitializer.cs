@@ -218,6 +218,24 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
         // return null on macOS 14+).
         var captureSources = new List<(string Name, IVisualElement Element)>();
         if (focusedRoot is not null) captureSources.Add(("focused window", focusedRoot));
+        // Last-resort window source: traverse the target screen's children
+        // to find a top-level window we can capture via AX. Useful when
+        // FocusedElement returned null (timing race when overlay is opening).
+        if (targetScreen is not null && focusedRoot is null)
+        {
+            try
+            {
+                foreach (var child in targetScreen.Children)
+                {
+                    captureSources.Add(("frontmost window", child));
+                    break;  // first one is the topmost
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Whiteboard: enumerating screen children for capture failed");
+            }
+        }
         if (targetScreen is not null && !ReferenceEquals(targetScreen, focusedRoot))
             captureSources.Add(("target screen", targetScreen));
 
