@@ -77,6 +77,9 @@ public static class Program
                 .AddSingleton<IFinderReader, MacFinderReader>()
                 .AddSingleton<IBrowserTabsReader, MacBrowserTabsReader>()
                 .AddSingleton<IAppActivator, MacAppActivator>()
+                // Register Mac OCR BEFORE AddEverywhereMcp so the latter's
+                // TryAddSingleton<NullOcrEngine> doesn't shadow it.
+                .AddSingleton<Everywhere.Interop.Whiteboard.IOcrEngine, MacVisionOcrEngine>()
                 .AddEverywhereMcp()
 
                 #endregion

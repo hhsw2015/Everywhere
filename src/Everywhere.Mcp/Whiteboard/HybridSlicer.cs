@@ -17,6 +17,26 @@ namespace Everywhere.Mcp.Whiteboard;
 public static class HybridSlicer
 {
     /// <summary>
+    /// OCR-vs-a11y reliability threshold: when OCR finds fewer than this
+    /// fraction of a11y's non-empty lines, treat OCR as unreliable and
+    /// fall back to leaf-bbox proportional slicing. Calibrated against
+    /// the sandbox CJK fixture where Vision drops paragraph-level
+    /// Chinese — reducing this makes the fallback trigger less often
+    /// (worse CJK), increasing makes it trigger more often (worse on
+    /// codes blocks where OCR legitimately splits long lines).
+    /// </summary>
+    private const double OcrReliabilityRatio = 0.7;
+
+    /// <summary>
+    /// Vertical-IoU threshold for merging two OCR detections into one
+    /// logical line. Below this, they're considered separate physical
+    /// rows; at-or-above, they're merged (Vision's "split long line into
+    /// 2 detections" case).
+    /// </summary>
+    private const double LogicalLineMergeThreshold = 0.5;
+
+
+    /// <summary>
     /// Slice <paramref name="a11yText"/> by <paramref name="regionRect"/>,
     /// returning the lines actually under the region. Falls back to leaf
     /// bbox proportional slicing when OCR is missing or unreliable.
@@ -45,7 +65,7 @@ public static class HybridSlicer
         for (var i = 0; i < a11yLines.Length; i++)
             if (!string.IsNullOrWhiteSpace(a11yLines[i]))
                 nonemptyA11y.Add(i);
-        if (nonemptyA11y.Count > 0 && logical.Count < nonemptyA11y.Count * 0.7)
+        if (nonemptyA11y.Count > 0 && logical.Count < nonemptyA11y.Count * OcrReliabilityRatio)
             return SliceByLeafFraction(regionRect, leafBbox, a11yLines);
 
         // 3. Pick logical lines whose y-center sits inside region rect.
@@ -88,11 +108,7 @@ public static class HybridSlicer
 
             var topFrac = Math.Max(0.0, (selTop - blockTop) / blockH);
             var botFrac = Math.Min(1.0, (selBot - blockTop) / blockH);
-            int n = nonemptyA11y.Count;
-            int first = Math.Max(0, Math.Min(n - 1, (int)(topFrac * n)));
-            int last = botFrac >= 1.0 ? n - 1
-                : Math.Max(first, Math.Min(n - 1, (int)Math.Round(botFrac * n) - 1));
-            if (last < first) last = first;
+            var (first, last) = FractionToIndexRange(topFrac, botFrac, nonemptyA11y.Count);
             for (var k = first; k <= last; k++)
                 chosen.Add(nonemptyA11y[k]);
         }
@@ -119,7 +135,7 @@ public static class HybridSlicer
     private record LogicalLine(double YTop, double YBottom);
 
     private static List<LogicalLine> GroupLogicalLines(IReadOnlyList<OcrLine> lines,
-                                                         double mergeThreshold = 0.5)
+                                                         double mergeThreshold = LogicalLineMergeThreshold)
     {
         var result = new List<LogicalLine>();
         if (lines.Count == 0) return result;
@@ -131,14 +147,29 @@ public static class HybridSlicer
             var l = sorted[i];
             var lTop = (double)l.Bounds.Y;
             var lBottom = (double)l.Bounds.Y + l.Bounds.Height;
-            var last = result[^1];
-            var inter = Math.Min(last.YBottom, lBottom) - Math.Max(last.YTop, lTop);
-            var smaller = Math.Min(last.YBottom - last.YTop, l.Bounds.Height);
-            if (inter > 0 && smaller > 0 && inter / smaller >= mergeThreshold)
+            // Check overlap against ALL existing logical lines, not just
+            // the last one. Without this, sequence (A, B, C) where A∩C
+            // overlap but B doesn't fully overlap with A would yield two
+            // logical lines for what visually is one row (Vision's split-
+            // into-multiple-detections case).
+            var mergedIdx = -1;
+            for (var j = result.Count - 1; j >= 0; j--)
             {
-                result[^1] = new LogicalLine(
-                    Math.Min(last.YTop, lTop),
-                    Math.Max(last.YBottom, lBottom));
+                var ll = result[j];
+                var inter = Math.Min(ll.YBottom, lBottom) - Math.Max(ll.YTop, lTop);
+                var smaller = Math.Min(ll.YBottom - ll.YTop, l.Bounds.Height);
+                if (inter > 0 && smaller > 0 && inter / smaller >= mergeThreshold)
+                {
+                    mergedIdx = j;
+                    break;
+                }
+            }
+            if (mergedIdx >= 0)
+            {
+                var existing = result[mergedIdx];
+                result[mergedIdx] = new LogicalLine(
+                    Math.Min(existing.YTop, lTop),
+                    Math.Max(existing.YBottom, lBottom));
             }
             else
             {
@@ -155,10 +186,23 @@ public static class HybridSlicer
             return string.Join('\n', a11yLines);
         var topFrac = Math.Max(0.0, (regionRect.Y - leafBbox.Y) / leafBbox.Height);
         var botFrac = Math.Min(1.0, (regionRect.Bottom - leafBbox.Y) / leafBbox.Height);
-        int n = a11yLines.Length;
-        int first = Math.Max(0, Math.Min(n - 1, (int)(topFrac * n)));
-        int last = Math.Max(first, Math.Min(n - 1, (int)(botFrac * n)));
-        if (last < first) last = first;
+        var (first, last) = FractionToIndexRange(topFrac, botFrac, a11yLines.Length);
         return string.Join('\n', a11yLines.Skip(first).Take(last - first + 1));
+    }
+
+    /// <summary>
+    /// Map a [topFrac, botFrac] range over n items to an inclusive index
+    /// range. Used by both the OCR-bbox-fraction and leaf-bbox-fraction
+    /// paths so they always agree on how a y-fraction lands on a line.
+    /// </summary>
+    private static (int First, int Last) FractionToIndexRange(double topFrac, double botFrac, int n)
+    {
+        if (n <= 0) return (0, -1);
+        int first = Math.Max(0, Math.Min(n - 1, (int)(topFrac * n)));
+        int last = botFrac >= 1.0
+            ? n - 1
+            : Math.Max(first, Math.Min(n - 1, (int)Math.Round(botFrac * n) - 1));
+        if (last < first) last = first;
+        return (first, last);
     }
 }

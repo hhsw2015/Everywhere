@@ -50,7 +50,12 @@ public static class ReadWhiteboardTool
                   .Append(")\n\n");
                 foreach (var leaf in r.Leaves)
                 {
-                    var text = (leaf.GetText(maxLength: 4000) ?? string.Empty).Trim();
+                    // Use a generous cap so long code-block Labels aren't
+                    // truncated before the slicer can index into them. The
+                    // slicer trims the result down to the user's region;
+                    // truncating BEFORE slicing would shift line indices
+                    // and break the OCR <-> a11y mapping.
+                    var text = (leaf.GetText(maxLength: 64000) ?? string.Empty).Trim();
                     if (string.IsNullOrEmpty(text)) continue;
                     // Hybrid slice: OCR-detected per-line bboxes pick which
                     // a11y lines fall under the region; falls back to

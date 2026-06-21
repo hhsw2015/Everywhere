@@ -34,12 +34,13 @@ public sealed class MacVisionOcrEngine : IOcrEngine
         OcrQuality quality = OcrQuality.Fast,
         IReadOnlyList<string>? languages = null)
     {
+        // Contract per IOcrEngine.Recognize: never throw, return empty on failure.
+        if (pngStream is null) return [];
+        CGImage? cg = null;
         try
         {
             using var pool = new NSAutoreleasePool();
 
-            // Load PNG -> CGImage
-            CGImage? cg = null;
             using (var data = NSData.FromStream(pngStream))
             {
                 if (data is null) return [];
@@ -49,7 +50,6 @@ public sealed class MacVisionOcrEngine : IOcrEngine
             }
             if (cg is null) return [];
 
-            try
             {
                 var imgW = (int)cg.Width;
                 var imgH = (int)cg.Height;
@@ -89,10 +89,13 @@ public sealed class MacVisionOcrEngine : IOcrEngine
 
                     // Convert to upper-left-origin pixel coords + translate
                     // by originPx so output is in screen-pixel space.
-                    var x = (int)(nx * imgW) + originPx.X;
-                    var w = (int)(nw * imgW);
-                    var y = (int)((1.0 - ny - nh) * imgH) + originPx.Y;
-                    var h = (int)(nh * imgH);
+                    // Round (not truncate) and clamp to >=1 — sub-pixel
+                    // truncation would zero-out thin glyphs, which the
+                    // hybrid slicer's 'smaller > 0' guard then drops.
+                    var x = (int)Math.Round(nx * imgW) + originPx.X;
+                    var w = Math.Max(1, (int)Math.Round(nw * imgW));
+                    var y = (int)Math.Round((1.0 - ny - nh) * imgH) + originPx.Y;
+                    var h = Math.Max(1, (int)Math.Round(nh * imgH));
 
                     lines.Add(new OcrLine(
                         Text: text,
@@ -103,15 +106,15 @@ public sealed class MacVisionOcrEngine : IOcrEngine
                 lines.Sort((a, b) => a.Bounds.Y.CompareTo(b.Bounds.Y));
                 return lines;
             }
-            finally
-            {
-                cg.Dispose();
-            }
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Vision OCR failed");
             return [];
+        }
+        finally
+        {
+            cg?.Dispose();
         }
     }
 }
