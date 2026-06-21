@@ -42,25 +42,23 @@ public static class WhiteboardParser
     {
         // Geometric merge — no time window. Two strokes belong to the
         // same gesture if their bboxes intersect, OR their centers are
-        // within the shorter bbox's diagonal. The X case (two strokes
+        // within the LARGER bbox's diagonal. The X case (two strokes
         // crossing each other) always satisfies bbox-intersect; circles
-        // drawn in two arcs satisfy center-distance.
+        // drawn in two arcs satisfy center-distance. Using the larger
+        // diagonal lets a small new stroke land inside a big group.
+        //
+        // We then iterate to a fixed point: a stroke that bridges two
+        // distinct groups should pull both into one. Without this pass,
+        // first-match-wins greediness leaves them split.
         var groups = new List<List<Stroke>>();
         foreach (var s in strokes)
         {
+            if (s.Points.Count == 0) continue;
             var bb = StrokeBBox(s);
             var merged = false;
             for (var gi = 0; gi < groups.Count; gi++)
             {
-                var gbb = MultiStrokeBBox(groups[gi]);
-                var inter = bb.Intersect(gbb);
-                var bbDiag = Math.Sqrt(bb.Width * bb.Width + bb.Height * bb.Height);
-                var gbbDiag = Math.Sqrt(gbb.Width * gbb.Width + gbb.Height * gbb.Height);
-                var minDiag = Math.Max(1.0, Math.Min(bbDiag, gbbDiag));
-                var dx = bb.Center.X - gbb.Center.X;
-                var dy = bb.Center.Y - gbb.Center.Y;
-                var centerDist = Math.Sqrt(dx * dx + dy * dy);
-                if ((inter.Width > 0 && inter.Height > 0) || centerDist < minDiag)
+                if (CanMerge(bb, MultiStrokeBBox(groups[gi])))
                 {
                     groups[gi].Add(s);
                     merged = true;
@@ -69,7 +67,38 @@ public static class WhiteboardParser
             }
             if (!merged) groups.Add([s]);
         }
+        // Fixed-point group-vs-group merge.
+        var changed = true;
+        while (changed)
+        {
+            changed = false;
+            for (var i = 0; i < groups.Count && !changed; i++)
+            for (var j = i + 1; j < groups.Count && !changed; j++)
+            {
+                if (CanMerge(MultiStrokeBBox(groups[i]), MultiStrokeBBox(groups[j])))
+                {
+                    groups[i].AddRange(groups[j]);
+                    groups.RemoveAt(j);
+                    changed = true;
+                }
+            }
+        }
         return groups;
+    }
+
+    private static bool CanMerge(Rect a, Rect b)
+    {
+        var inter = a.Intersect(b);
+        if (inter.Width > 0 && inter.Height > 0) return true;
+        var aDiag = Math.Sqrt(a.Width * a.Width + a.Height * a.Height);
+        var bDiag = Math.Sqrt(b.Width * b.Width + b.Height * b.Height);
+        // Use the LARGER diagonal so a small new stroke can still merge
+        // into a big group. Hard-cap at 250px so two genuinely-distant
+        // gestures don't merge just because one is screen-sized.
+        var threshold = Math.Min(250.0, Math.Max(1.0, Math.Max(aDiag, bDiag)));
+        var dx = a.Center.X - b.Center.X;
+        var dy = a.Center.Y - b.Center.Y;
+        return Math.Sqrt(dx * dx + dy * dy) < threshold;
     }
 
     // -------------------------------------------------------------------

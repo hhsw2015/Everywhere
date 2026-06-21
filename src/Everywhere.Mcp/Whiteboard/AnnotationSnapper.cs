@@ -50,23 +50,35 @@ public static class AnnotationSnapper
         // ("look at this!" from left or right), so we cannot assume
         // start = tail / end = tip.
         var endpoints = StrokeEndpoints(strokes);
+        if (endpoints.Count == 0)
+            return Reject(ann.BoundingRect, "no usable stroke points");
+        // Evaluate ALL endpoints — don't short-circuit on the first hit.
+        // When tail and tip both happen to land inside text leaves, we
+        // need to compare and pick the better one (smaller leaf area =
+        // tighter target — usually the tip), not whichever the stroke
+        // happened to start with.
         IVisualElement? bestLeaf = null;
         var bestDist = double.PositiveInfinity;
-        double bestX = 0, bestY = 0;
+        var bestArea = double.PositiveInfinity;
         foreach (var (ex, ey) in endpoints)
         {
             var inLeaf = LeafAtPoint(root, ex, ey);
             if (inLeaf is not null)
             {
-                return new SnapResult(
-                    Rect: ToRect(inLeaf.BoundingRectangle),
-                    Leaves: [inLeaf],
-                    Confidence: 1.0);
+                var bb = ToRect(inLeaf.BoundingRectangle);
+                var area = RectArea(bb);
+                // Inside-leaf hit beats any nearest-leaf candidate (dist=0).
+                // Among multiple inside-hits, the tighter leaf wins.
+                if (bestDist > 0 || area < bestArea)
+                {
+                    bestDist = 0; bestArea = area; bestLeaf = inLeaf;
+                }
+                continue;
             }
             var (nearLeaf, d) = NearestLeaf(root, ex, ey);
-            if (nearLeaf is not null && d < bestDist)
+            if (nearLeaf is not null && bestDist > 0 && d < bestDist)
             {
-                bestDist = d; bestLeaf = nearLeaf; bestX = ex; bestY = ey;
+                bestDist = d; bestLeaf = nearLeaf;
             }
         }
         if (bestLeaf is null)
@@ -86,10 +98,11 @@ public static class AnnotationSnapper
                 Rejected: true,
                 RejectReason: $"arrow tip is {(int)bestDist}px from the nearest text — please point closer");
         }
+        var conf = bestDist == 0 ? 1.0 : Math.Max(0.4, 1.0 - bestDist / 100);
         return new SnapResult(
             Rect: ToRect(bestLeaf.BoundingRectangle),
             Leaves: [bestLeaf],
-            Confidence: Math.Max(0.4, 1.0 - bestDist / 100));
+            Confidence: conf);
     }
 
     private static List<(double X, double Y)> StrokeEndpoints(IReadOnlyList<Stroke> strokes)
@@ -264,7 +277,7 @@ public static class AnnotationSnapper
     private static SnapResult Reject(Rect rect, string reason) =>
         new(rect, [], Rejected: true, RejectReason: reason);
 
-private static IVisualElement? LeafAtPoint(IVisualElement root, double x, double y)
+    private static IVisualElement? LeafAtPoint(IVisualElement root, double x, double y)
     {
         IVisualElement? best = null;
         var bestArea = double.PositiveInfinity;
