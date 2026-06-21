@@ -61,11 +61,20 @@ public static class ReadWhiteboardTool
                     // Hybrid slice: OCR-detected per-line bboxes pick which
                     // a11y lines fall under the region; falls back to
                     // leaf-bbox proportional slice when OCR is missing.
-                    text = HybridSlicer.Slice(
+                    var sliced = HybridSlicer.Slice(
                         regionRect: r.Rect,
                         ocrLines: r.OcrLines,
                         a11yText: text,
                         leafBbox: leaf.BoundingRectangle);
+                    // Arrow points AT a paragraph — expand the slice to
+                    // the nearest blank-line boundaries on each side so
+                    // the agent receives the whole paragraph, not just
+                    // whichever rows happened to overlap the small arrow
+                    // tip rect. Circle/X/underline already imply
+                    // user-drawn boundaries, so they keep the tight slice.
+                    text = r.Kind == AnnotationKind.Arrow
+                        ? ExpandToParagraph(text, sliced)
+                        : sliced;
                     text = text.Trim();
                     if (string.IsNullOrEmpty(text)) continue;
                     if (!emitted.Add(text)) continue;
@@ -109,6 +118,30 @@ public static class ReadWhiteboardTool
         {
             return ToolErrors.FromException(ex, "read_whiteboard");
         }
+    }
+
+    /// <summary>
+    /// Expand <paramref name="sliced"/> to the paragraph boundaries it
+    /// sits inside in <paramref name="full"/>. Paragraphs are
+    /// blank-line-separated. Used for Arrow gestures: the tip naturally
+    /// points at "this paragraph", but a row-bbox slice cuts mid-paragraph.
+    /// </summary>
+    private static string ExpandToParagraph(string full, string sliced)
+    {
+        var fullLines = full.Split('\n');
+        var slicedLines = sliced.Split('\n');
+        // Find slice's first non-empty line in full.
+        var anchor = slicedLines.FirstOrDefault(l => !string.IsNullOrWhiteSpace(l));
+        if (string.IsNullOrEmpty(anchor)) return sliced;
+        var idx = Array.IndexOf(fullLines, anchor);
+        if (idx < 0) return sliced;
+        // Walk up to previous blank line (or start).
+        var start = idx;
+        while (start > 0 && !string.IsNullOrWhiteSpace(fullLines[start - 1])) start--;
+        // Walk down to next blank line (or end).
+        var end = idx;
+        while (end < fullLines.Length - 1 && !string.IsNullOrWhiteSpace(fullLines[end + 1])) end++;
+        return string.Join('\n', fullLines.Skip(start).Take(end - start + 1));
     }
 
     private static string KindLabel(AnnotationKind k) => k switch
