@@ -292,7 +292,8 @@ public sealed class WhiteboardOverlay : ScreenSelectionTransparentWindow
             }
             converted.Add(screenPts);
         }
-        CompleteIfPending(canceled: false, strokes: converted);
+        CompleteIfPending(canceled: false, strokes: converted,
+                          windowPos: Position, screenBounds: _screenBounds);
         Dispatcher.UIThread.Post(Close);
     }
 
@@ -312,14 +313,25 @@ public sealed class WhiteboardOverlay : ScreenSelectionTransparentWindow
     private double Elapsed() => (DateTimeOffset.UtcNow - _epoch).TotalMilliseconds;
 
     private void CompleteIfPending(bool canceled,
-                                    IReadOnlyList<IReadOnlyList<(double X, double Y, double T)>>? strokes = null)
+                                    IReadOnlyList<IReadOnlyList<(double X, double Y, double T)>>? strokes = null,
+                                    Avalonia.PixelPoint? windowPos = null,
+                                    Avalonia.PixelRect? screenBounds = null)
     {
         if (_committed) return;
         _committed = true;
-        _result.TrySetResult(new WhiteboardCaptureResult(canceled, strokes ?? []));
+        _result.TrySetResult(new WhiteboardCaptureResult(
+            canceled, strokes ?? [],
+            WindowPosition: windowPos ?? default,
+            ScreenBounds: screenBounds ?? default));
     }
 }
 
 public sealed record WhiteboardCaptureResult(
     bool Canceled,
-    IReadOnlyList<IReadOnlyList<(double X, double Y, double T)>> Strokes);
+    IReadOnlyList<IReadOnlyList<(double X, double Y, double T)>> Strokes,
+    /// <summary>Window's actual Position when overlay was open. For diagnosing
+    /// canvas/screen coordinate mismatches.</summary>
+    Avalonia.PixelPoint WindowPosition = default,
+    /// <summary>screenBounds passed to the overlay (the source-of-truth for
+    /// stroke coord conversion).</summary>
+    Avalonia.PixelRect ScreenBounds = default);

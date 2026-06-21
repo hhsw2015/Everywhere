@@ -262,6 +262,17 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
             overlay.Activate();
             _logger.LogInformation("Whiteboard overlay shown");
             var result = await overlay.ResultTask;
+            // Diagnostic: report the overlay window's actual Position vs the
+            // screenBounds we used for stroke conversion. If they differ in
+            // Y, that's the source of any vertical offset between visual and
+            // computed stroke coordinates.
+            if (!result.Canceled && result.Strokes.Count > 0 && result.Strokes[0].Count > 0)
+            {
+                var first = result.Strokes[0][0];
+                _logger.LogInformation(
+                    "Whiteboard coords: window.Position={WinPos} screenBounds={Sb} firstStrokeScreenPt=({X:F1},{Y:F1})",
+                    result.WindowPosition, result.ScreenBounds, first.X, first.Y);
+            }
             if (result.Canceled || result.Strokes.Count == 0)
             {
                 _logger.LogDebug("Whiteboard cancelled or empty; nothing to stash");
