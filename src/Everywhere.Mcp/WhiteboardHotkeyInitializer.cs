@@ -317,12 +317,23 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
                 // adjacent windows / unrelated text from polluting the OCR
                 // result. Cropped to the snapped rect (which already hugs
                 // the captured a11y leaves).
-                var ocrLines = RunOcrForRegion(ocrBitmap, ocrBitmapBounds, snap.Rect);
+                // OCR the user's GESTURE area, not the snapped leaf bounds.
+                // We need OCR to give us per-line bboxes over what the user
+                // actually drew so the slicer can keep the lines they
+                // gestured over — slicing across the entire leaf would
+                // produce too many candidate rows.
+                var ocrLines = RunOcrForRegion(ocrBitmap, ocrBitmapBounds, ann.BoundingRect);
                 _logger.LogInformation(
                     "Whiteboard OCR: bitmap={HasBitmap} region={Region} -> {LineCount} lines",
                     ocrBitmap is not null, snap.Rect, ocrLines.Count);
+                // Use the parser-output rect (user's actual gesture bbox)
+                // for downstream slicing, NOT snap.Rect — snapper expands
+                // its rect to the full a11y leaf bounds so the agent sees a
+                // visual highlight tied to the leaf, but the slicer needs
+                // the user's GESTURE rect to extract just the lines they
+                // drew over within a multi-line leaf.
                 regions.Add(new WhiteboardRegion(
-                    ann.Kind, snap.Rect, snap.Leaves, snap.Confidence, ocrLines));
+                    ann.Kind, ann.BoundingRect, snap.Leaves, snap.Confidence, ocrLines));
             }
 
             if (regions.Count == 0)

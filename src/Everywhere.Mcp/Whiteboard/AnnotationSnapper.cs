@@ -170,18 +170,24 @@ public static class AnnotationSnapper
         }
         if (leaves.Count == 0)
         {
-            // Fallback 1: leaf center in rect (older permissive criterion).
+            // Fallback 1: leaf has >=50% vertical overlap with the rect.
+            // Better than 'center inside': handles slightly mis-drawn
+            // gestures that miss the visual center but still cover most
+            // of the line.
             foreach (var e in Descendants(root))
             {
                 if (!LeafTextRoles.Contains(e.Type)) continue;
                 var bb = ToRect(e.BoundingRectangle);
-                if (bb.Center.X >= ann.BoundingRect.X
-                    && bb.Center.X <= ann.BoundingRect.Right
-                    && bb.Center.Y >= ann.BoundingRect.Y
-                    && bb.Center.Y <= ann.BoundingRect.Bottom)
-                {
-                    leaves.Add(e);
-                }
+                var inter = Math.Min(bb.Bottom, ann.BoundingRect.Bottom)
+                            - Math.Max(bb.Y, ann.BoundingRect.Y);
+                if (inter <= 0 || bb.Height <= 0) continue;
+                if (inter / bb.Height < 0.5) continue;
+                // Horizontal: require x-overlap so a stray gesture in the
+                // far margin doesn't grab a line on the same y band.
+                var xInter = Math.Min(bb.Right, ann.BoundingRect.Right)
+                             - Math.Max(bb.X, ann.BoundingRect.X);
+                if (xInter <= 0) continue;
+                leaves.Add(e);
             }
         }
         if (leaves.Count == 0)
