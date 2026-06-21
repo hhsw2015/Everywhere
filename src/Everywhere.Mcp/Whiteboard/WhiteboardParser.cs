@@ -22,16 +22,35 @@ public static class WhiteboardParser
 {
     public static IReadOnlyList<Annotation> Parse(IReadOnlyList<Stroke> strokes)
     {
-        if (strokes is null || strokes.Count == 0) return [];
+        var (anns, _) = ParseGrouped(strokes);
+        return anns;
+    }
+
+    /// <summary>
+    /// Parse strokes into annotations AND return the strokes that backed
+    /// each annotation. The snapper needs the latter so that, e.g.,
+    /// SnapArrow inspects only that arrow's stroke endpoints — not every
+    /// endpoint in the session. Critical when a session has multiple
+    /// gestures: passing the full list pulls in unrelated coordinates and
+    /// lands snaps on whatever leaf happens to sit under an unrelated
+    /// stroke endpoint.
+    /// </summary>
+    public static (IReadOnlyList<Annotation> Annotations,
+                   IReadOnlyList<IReadOnlyList<Stroke>> StrokeGroups)
+        ParseGrouped(IReadOnlyList<Stroke> strokes)
+    {
+        if (strokes is null || strokes.Count == 0) return ([], []);
         var groups = GroupStrokes(strokes);
         var annotations = new List<Annotation>(groups.Count);
+        var groupViews = new List<IReadOnlyList<Stroke>>(groups.Count);
         foreach (var g in groups)
         {
             var kind = Classify(g);
             var rect = KindToRect(kind, g);
             annotations.Add(new Annotation(rect, kind));
+            groupViews.Add(g);
         }
-        return annotations;
+        return (annotations, groupViews);
     }
 
     // -------------------------------------------------------------------
@@ -39,108 +58,43 @@ public static class WhiteboardParser
     // -------------------------------------------------------------------
 
     /// <summary>
-    /// Pen-up to next pen-down gap allowed within the same gesture. 1.5s
-    /// covers an X (lift, move to opposite corner, draw) but excludes
-    /// "user finished one shape, paused to pick the next location". This
-    /// gating is REQUIRED to disambiguate near-by independent gestures
-    /// (4 separate shapes on one screen) from multi-stroke gestures
-    /// (X, double-arrow): geometry alone keeps merging them.
+    /// Default to one-stroke-per-gesture. Two strokes only merge when
+    /// they form a recognisable multi-stroke shape: an X (chords cross
+    /// at near-right angles, similar lengths) or an arrow (axis + small
+    /// head meeting near an endpoint). Anything else stays independent.
+    ///
+    /// Why: prior versions used geometric proximity + a time window. Both
+    /// signals fail when the user draws several distinct gestures within
+    /// 2 seconds and < 200 px apart — they merged unrelated shapes,
+    /// poisoning the snapper with stroke endpoints from other gestures.
+    /// Strict shape recognition is the only reliable boundary.
     /// </summary>
-    private const double SameGestureMaxGapMs = 1500;
-
     private static List<List<Stroke>> GroupStrokes(IReadOnlyList<Stroke> strokes)
     {
-        // Combined gating: two strokes merge only if BOTH
-        //   (a) their bboxes are close geometrically (intersect or center
-        //       within larger diagonal, capped at 100px), AND
-        //   (b) the gap between when the user lifted the pen on one and
-        //       pressed it down on the other is short enough that it could
-        //       have been the same gesture (≤ SameGestureMaxGapMs).
-        //
-        // We iterate to a fixed point so a bridge stroke pulls two
-        // existing groups together. Group bboxes are CACHED and updated
-        // by Rect.Union on merge — recomputing per pair would be
-        // O(G^3 × points).
-        var bboxes = new List<Rect>();
-        var spans = new List<(double TStart, double TEnd)>();
-        var members = new List<List<Stroke>>();
+        var groups = new List<List<Stroke>>();
         foreach (var s in strokes)
         {
             if (s.Points.Count == 0) continue;
-            var bb = StrokeBBox(s);
-            var sStart = s.Points[0].TimestampMs;
-            var sEnd = s.Points[^1].TimestampMs;
-            var merged = false;
-            for (var gi = 0; gi < members.Count; gi++)
+            groups.Add([s]);
+        }
+        // Try to merge each pair into an X or Arrow gesture. First match
+        // wins per stroke; we scan in order and remove the merged stroke
+        // so each stroke participates in at most one merger.
+        for (var i = 0; i < groups.Count; i++)
+        {
+            for (var j = i + 1; j < groups.Count; j++)
             {
-                if (CanMerge(bb, bboxes[gi]) && TimeAdjacent(spans[gi], sStart, sEnd))
+                if (groups[i].Count != 1 || groups[j].Count != 1) continue;
+                var pair = new List<Stroke> { groups[i][0], groups[j][0] };
+                if (LooksLikeX(pair) || LooksLikeArrow(pair))
                 {
-                    members[gi].Add(s);
-                    bboxes[gi] = bboxes[gi].Union(bb);
-                    spans[gi] = (Math.Min(spans[gi].TStart, sStart),
-                                  Math.Max(spans[gi].TEnd, sEnd));
-                    merged = true;
+                    groups[i].Add(groups[j][0]);
+                    groups.RemoveAt(j);
                     break;
                 }
             }
-            if (!merged)
-            {
-                members.Add([s]);
-                bboxes.Add(bb);
-                spans.Add((sStart, sEnd));
-            }
         }
-        var changed = true;
-        while (changed)
-        {
-            changed = false;
-            for (var i = 0; i < members.Count && !changed; i++)
-            for (var j = i + 1; j < members.Count && !changed; j++)
-            {
-                if (CanMerge(bboxes[i], bboxes[j])
-                    && TimeAdjacent(spans[i], spans[j].TStart, spans[j].TEnd))
-                {
-                    members[i].AddRange(members[j]);
-                    bboxes[i] = bboxes[i].Union(bboxes[j]);
-                    spans[i] = (Math.Min(spans[i].TStart, spans[j].TStart),
-                                Math.Max(spans[i].TEnd, spans[j].TEnd));
-                    members.RemoveAt(j);
-                    bboxes.RemoveAt(j);
-                    spans.RemoveAt(j);
-                    changed = true;
-                }
-            }
-        }
-        return members;
-    }
-
-    private static bool CanMerge(Rect a, Rect b)
-    {
-        var inter = a.Intersect(b);
-        if (inter.Width > 0 && inter.Height > 0) return true;
-        var aDiag = Math.Sqrt(a.Width * a.Width + a.Height * a.Height);
-        var bDiag = Math.Sqrt(b.Width * b.Width + b.Height * b.Height);
-        // Use the LARGER diagonal so a small new stroke can still merge
-        // into a big group, but cap at 100px — three independent gestures
-        // drawn ~150px apart on the same screen MUST stay separate, even
-        // when one is large. 100px tracks the visual "this stroke clearly
-        // belongs with that one" threshold for hand-drawn gestures.
-        var threshold = Math.Min(100.0, Math.Max(1.0, Math.Max(aDiag, bDiag)));
-        var dx = a.Center.X - b.Center.X;
-        var dy = a.Center.Y - b.Center.Y;
-        return Math.Sqrt(dx * dx + dy * dy) < threshold;
-    }
-
-    private static bool TimeAdjacent((double TStart, double TEnd) span,
-                                      double otherStart, double otherEnd)
-    {
-        // Compute pen-up-to-pen-down gap regardless of which span came
-        // first — both directions matter when the iteration order isn't
-        // strictly chronological.
-        var gap = Math.Min(
-            Math.Abs(otherStart - span.TEnd),
-            Math.Abs(span.TStart - otherEnd));
-        return gap <= SameGestureMaxGapMs;
+        return groups;
     }
 
     // -------------------------------------------------------------------
@@ -149,17 +103,13 @@ public static class WhiteboardParser
 
     private static AnnotationKind Classify(List<Stroke> strokes)
     {
-        if (strokes.Count >= 2)
+        if (strokes.Count == 2)
         {
-            // X: two strokes that CROSS at near-right angles AND have
-            // similar lengths. Without these constraints, an axis+arrowhead
-            // pair (small head crossing the long axis) or any two random
-            // crossing scribbles silently classify as X.
+            // GroupStrokes only ever merges pairs that already pass
+            // LooksLikeX or LooksLikeArrow. Re-check to disambiguate.
             if (LooksLikeX(strokes)) return AnnotationKind.X;
-            // 2-stroke axis+head pattern → Arrow.
-            if (strokes.Count == 2 && LooksLikeArrow(strokes)) return AnnotationKind.Arrow;
-            // Otherwise treat as a multi-stroke loose enclosure.
-            return AnnotationKind.Circle;
+            if (LooksLikeArrow(strokes)) return AnnotationKind.Arrow;
+            return AnnotationKind.Circle; // shouldn't happen with the new grouper
         }
         var s = strokes[0];
         var bb = StrokeBBox(s);

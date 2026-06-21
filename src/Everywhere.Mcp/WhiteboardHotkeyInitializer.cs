@@ -323,14 +323,16 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
                 return;
             }
 
-            var annotations = WhiteboardParser.Parse(strokes);
+            var (annotations, strokeGroups) = WhiteboardParser.ParseGrouped(strokes);
             var regions = new List<WhiteboardRegion>(annotations.Count);
             var snapTrace = new List<(Annotation Ann, SnapResult Snap)>();
             _logger.LogInformation(
                 "Whiteboard snap context: focusedRoot bbox={FrootBbox}, ocrBitmap bbox={OcrBbox}",
                 focusedRoot.BoundingRectangle, ocrBitmapBounds);
-            foreach (var ann in annotations)
+            for (var ai = 0; ai < annotations.Count; ai++)
             {
+                var ann = annotations[ai];
+                var annStrokes = strokeGroups[ai];
                 _logger.LogInformation(
                     "Whiteboard ann: kind={Kind} parserRect={Rect}",
                     ann.Kind, ann.BoundingRect);
@@ -341,7 +343,12 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
                 // like 'VLESS' / 'Downloads' from other windows. Even a
                 // degenerate-bbox focusedRoot has the right Children in
                 // its subtree.
-                var snap = AnnotationSnapper.Snap(ann, focusedRoot, strokes);
+                //
+                // Pass ONLY this annotation's strokes (annStrokes) to the
+                // snapper, NOT all strokes — otherwise endpoints from
+                // unrelated gestures contaminate SnapArrow's "nearest
+                // text" lookup and SnapUnderline's strokeTop/Bottom.
+                var snap = AnnotationSnapper.Snap(ann, focusedRoot, annStrokes);
                 snapTrace.Add((ann, snap));
                 if (!string.IsNullOrEmpty(snap.Diagnostics))
                     _logger.LogInformation("Whiteboard snap diag ({Kind}): {Diag}",
