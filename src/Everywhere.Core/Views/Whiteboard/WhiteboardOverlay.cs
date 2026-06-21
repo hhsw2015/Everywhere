@@ -39,9 +39,9 @@ public sealed class WhiteboardOverlay : ScreenSelectionTransparentWindow
 
         _dimBorder = new Border
         {
-            // No dim layer — keep dim out of the children panel entirely
-            // so it cannot interfere with hit testing. Dim is applied via
-            // ImageBrush.Opacity below.
+            // Dim layer that signals 'overlay active'; its Background is
+            // assigned below. IsHitTestVisible=false so pointer events
+            // fall through to the canvas behind it.
             IsHitTestVisible = false,
         };
 
@@ -94,6 +94,9 @@ public sealed class WhiteboardOverlay : ScreenSelectionTransparentWindow
         // border below provides a subtle 'overlay active' visual cue.
         Background = Brushes.Transparent;
         _dimBorder.Background = new SolidColorBrush(Color.FromArgb(0x33, 0, 0, 0));
+        // Transparent overlay no longer renders any constructor-supplied
+        // bitmap; dispose to avoid leaking a caller-passed Bitmap.
+        try { backgroundImage?.Dispose(); } catch { /* swallow */ }
         _ownedBackground = null;
 
         Opened += (_, _) => Focus();
@@ -140,14 +143,18 @@ public sealed class WhiteboardOverlay : ScreenSelectionTransparentWindow
     /// </summary>
     public void SetBackgroundLater(Bitmap bitmap)
     {
-        // Transparent overlay path doesn't display screenshots — kept for
-        // API compat with the OCR-side capture pipeline which still wants
-        // to dispose its bitmap eventually.
+        // Transparent overlay does NOT render screenshots. Dispose the
+        // incoming bitmap immediately so the API doesn't accumulate
+        // unrendered bitmaps in memory across repeated calls.
         if (_committed) { bitmap.Dispose(); return; }
         Dispatcher.UIThread.Post(() =>
         {
-            if (_committed) { bitmap.Dispose(); return; }
-            _ownedBackground = bitmap;
+            // Dispose any prior held bitmap (defensive — there should be
+            // none, but a stale path may have set one).
+            var prior = _ownedBackground;
+            _ownedBackground = null;
+            try { prior?.Dispose(); } catch { /* swallow */ }
+            bitmap.Dispose();
         });
     }
 
@@ -319,10 +326,12 @@ public sealed class WhiteboardOverlay : ScreenSelectionTransparentWindow
     {
         if (_committed) return;
         _committed = true;
+        // Always populate diagnostic fields, even on cancel paths, so
+        // callers can distinguish 'not measured' from a real (0,0) origin.
         _result.TrySetResult(new WhiteboardCaptureResult(
             canceled, strokes ?? [],
-            WindowPosition: windowPos ?? default,
-            ScreenBounds: screenBounds ?? default));
+            WindowPosition: windowPos ?? Position,
+            ScreenBounds: screenBounds ?? _screenBounds));
     }
 }
 

@@ -212,36 +212,40 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
 
         // OCR-only screenshot, taken in the background while user draws.
         // Doesn't affect the overlay visually.
-        Avalonia.Media.Imaging.Bitmap? ocrBitmap = null;
-        PixelRect ocrBitmapBounds = screen;
         var captureSources = new List<(string Name, IVisualElement Element)>();
         if (focusedRoot is not null) captureSources.Add(("focused window", focusedRoot));
         if (targetScreen is not null && !ReferenceEquals(targetScreen, focusedRoot))
             captureSources.Add(("target screen", targetScreen));
 
-        var captureCompleted = new TaskCompletionSource();
-        _ = Task.Run(async () =>
+        // Pre-read each source's bbox on the UI thread (AX calls are not
+        // documented as thread-safe on macOS / Windows backends).
+        var sourcesWithBounds = captureSources
+            .Select(s => (s.Name, s.Element, Bounds: s.Element.BoundingRectangle))
+            .ToList();
+
+        var ocrCts = new CancellationTokenSource();
+        var captureTcs = new TaskCompletionSource<(Avalonia.Media.Imaging.Bitmap? Bitmap, PixelRect Bounds)>();
+        var captureTask = Task.Run(async () =>
         {
             try
             {
-                foreach (var (name, source) in captureSources)
+                foreach (var (name, source, bounds) in sourcesWithBounds)
                 {
+                    if (ocrCts.Token.IsCancellationRequested) break;
                     try
                     {
-                        using var capture = await source.CaptureAsync(CancellationToken.None);
+                        using var capture = await source.CaptureAsync(ocrCts.Token);
+                        // Capture-result -> Bitmap. Take ownership directly,
+                        // no PNG round-trip — we never share with overlay.
                         var bg = capture.ToAvaloniaBitmap();
                         if (bg is null) continue;
-                        using var ms = new System.IO.MemoryStream();
-                        bg.Save(ms);
-                        ms.Position = 0;
-                        ocrBitmap = new Avalonia.Media.Imaging.Bitmap(ms);
-                        ocrBitmapBounds = source.BoundingRectangle;
                         _logger.LogInformation(
                             "Whiteboard async capture from {Source}, bbox {Bbox}",
-                            name, ocrBitmapBounds);
-                        bg.Dispose();
+                            name, bounds);
+                        captureTcs.TrySetResult((bg, bounds));
                         return;
                     }
+                    catch (OperationCanceledException) { throw; }
                     catch (Exception ex)
                     {
                         _logger.LogWarning(ex,
@@ -249,23 +253,26 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
                     }
                 }
                 _logger.LogWarning("Whiteboard: no capture source produced a bitmap (OCR will fall back to leaf-fraction)");
+                captureTcs.TrySetResult((null, screen));
             }
-            finally
+            catch (OperationCanceledException)
             {
-                captureCompleted.TrySetResult();
+                captureTcs.TrySetResult((null, screen));
             }
         });
+        // Surface unobserved exceptions in logs.
+        _ = captureTask.ContinueWith(t =>
+            _logger.LogError(t.Exception, "Whiteboard: capture task faulted"),
+            TaskContinuationOptions.OnlyOnFaulted);
 
+        Avalonia.Media.Imaging.Bitmap? ocrBitmap = null;
+        PixelRect ocrBitmapBounds = screen;
         try
         {
             overlay.Show();
             overlay.Activate();
             _logger.LogInformation("Whiteboard overlay shown");
             var result = await overlay.ResultTask;
-            // Diagnostic: report the overlay window's actual Position vs the
-            // screenBounds we used for stroke conversion. If they differ in
-            // Y, that's the source of any vertical offset between visual and
-            // computed stroke coordinates.
             if (!result.Canceled && result.Strokes.Count > 0 && result.Strokes[0].Count > 0)
             {
                 var first = result.Strokes[0][0];
@@ -276,12 +283,29 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
             if (result.Canceled || result.Strokes.Count == 0)
             {
                 _logger.LogDebug("Whiteboard cancelled or empty; nothing to stash");
+                ocrCts.Cancel();
                 return;
             }
-            // Wait for the OCR-only capture task to finish (typically
-            // 100-300ms). Bounded so a stuck screencapture doesn't hang
-            // the user; if it times out, OCR falls back to leaf-fraction.
-            await Task.WhenAny(captureCompleted.Task, Task.Delay(2_000));
+            // Wait for the OCR-only capture task (typically 100-300ms).
+            // Bounded so a stuck screencapture doesn't hang the user.
+            var done = await Task.WhenAny(captureTcs.Task, Task.Delay(2_000));
+            if (ReferenceEquals(done, captureTcs.Task))
+            {
+                var (bm, bb) = captureTcs.Task.Result;
+                ocrBitmap = bm;
+                ocrBitmapBounds = bb;
+            }
+            else
+            {
+                // Timed out — cancel the capture and dispose any bitmap that
+                // arrives later so it isn't leaked.
+                ocrCts.Cancel();
+                _ = captureTcs.Task.ContinueWith(t =>
+                {
+                    if (t.Status == TaskStatus.RanToCompletion)
+                        t.Result.Bitmap?.Dispose();
+                });
+            }
 
             var strokes = result.Strokes
                 .Select(pts => new Stroke(pts
