@@ -46,7 +46,7 @@ public sealed class MacVisionOcrEngine : IOcrEngine
                 if (data is null) return [];
                 using var src = CGImageSource.FromData(data);
                 if (src is null || src.ImageCount == 0) return [];
-                cg = src.CreateImage(0, null);
+                cg = src.CreateImage(0, new CGImageOptions());
             }
             if (cg is null) return [];
 
@@ -82,10 +82,10 @@ public sealed class MacVisionOcrEngine : IOcrEngine
 
                     // Vision normalized rect: origin lower-left, 0..1 axes.
                     var bb = obs.BoundingBox;
-                    var nx = bb.Origin.X;
-                    var ny = bb.Origin.Y;
-                    var nw = bb.Size.Width;
-                    var nh = bb.Size.Height;
+                    var nx = bb.X;
+                    var ny = bb.Y;
+                    var nw = bb.Width;
+                    var nh = bb.Height;
 
                     // Convert to upper-left-origin pixel coords + translate
                     // by originPx so output is in screen-pixel space.
