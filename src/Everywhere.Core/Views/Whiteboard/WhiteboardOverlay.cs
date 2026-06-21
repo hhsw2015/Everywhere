@@ -250,6 +250,19 @@ public sealed class WhiteboardOverlay : ScreenSelectionTransparentWindow
 
     public void Commit()
     {
+        // Coordinate convention used downstream (snapper / OCR):
+        //   a11y BoundingRectangle is exposed as PixelRect but its values
+        //   come straight from NSPoint, i.e. they are in DIP/points on
+        //   macOS — NOT physical pixels. We must therefore emit stroke
+        //   points in the SAME coordinate space.
+        //
+        //   _screenBounds itself is in DIP (NSScreenVisualElement returns
+        //   NSScreen.Frame values without scaling), and canvas points are
+        //   already in DIP (Avalonia layout space). So the conversion is
+        //   just: screen_point = _screenBounds.origin + canvas_point.
+        //   Multiplying by DesktopScaling was the long-standing bug —
+        //   it pushed stroke y into physical-pixel space and the snapper
+        //   then could not match it against the (DIP-valued) a11y bboxes.
         var converted = new List<IReadOnlyList<(double X, double Y, double T)>>();
         for (var i = 0; i < _strokes.Count; i++)
         {
@@ -259,8 +272,8 @@ public sealed class WhiteboardOverlay : ScreenSelectionTransparentWindow
             for (var j = 0; j < pts.Count; j++)
             {
                 screenPts[j] = (
-                    _screenBounds.X + pts[j].X * _scale,
-                    _screenBounds.Y + pts[j].Y * _scale,
+                    _screenBounds.X + pts[j].X,
+                    _screenBounds.Y + pts[j].Y,
                     ts[j]);
             }
             converted.Add(screenPts);
