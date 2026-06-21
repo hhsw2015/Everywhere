@@ -284,6 +284,13 @@ public sealed class WhiteboardOverlay : ScreenSelectionTransparentWindow
         //   Multiplying by DesktopScaling was the long-standing bug —
         //   it pushed stroke y into physical-pixel space and the snapper
         //   then could not match it against the (DIP-valued) a11y bboxes.
+        // Use the WINDOW'S ACTUAL Position, not screenBounds origin. macOS
+        // LSUIElement apps cannot cover the menu bar, so even when we
+        // request screenBounds.Position = (0,0), the OS clips the window
+        // to (0, 30). Canvas y=0 corresponds to screen y=Position.Y, not
+        // 0. Diagnostic confirmed Position=(0,30) for a screen origin
+        // (0,0) request, producing a 30px upward error in stroke y.
+        var origin = Position;
         var converted = new List<IReadOnlyList<(double X, double Y, double T)>>();
         for (var i = 0; i < _strokes.Count; i++)
         {
@@ -293,8 +300,8 @@ public sealed class WhiteboardOverlay : ScreenSelectionTransparentWindow
             for (var j = 0; j < pts.Count; j++)
             {
                 screenPts[j] = (
-                    _screenBounds.X + pts[j].X,
-                    _screenBounds.Y + pts[j].Y,
+                    origin.X + pts[j].X,
+                    origin.Y + pts[j].Y,
                     ts[j]);
             }
             converted.Add(screenPts);
