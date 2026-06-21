@@ -1,3 +1,4 @@
+#pragma warning disable CS0618 // tests intentionally exercise the obsolete Parse overload
 using Avalonia;
 using Everywhere.Interop.Whiteboard;
 using Everywhere.Mcp.Whiteboard;

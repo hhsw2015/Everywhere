@@ -20,6 +20,7 @@ namespace Everywhere.Mcp.Whiteboard;
 /// </summary>
 public static class WhiteboardParser
 {
+    [Obsolete("Use ParseGrouped — Parse drops the per-annotation strokes the snapper needs.")]
     public static IReadOnlyList<Annotation> Parse(IReadOnlyList<Stroke> strokes)
     {
         var (anns, _) = ParseGrouped(strokes);
@@ -116,7 +117,6 @@ public static class WhiteboardParser
         if (bb.Width * bb.Height < 1.0) return AnnotationKind.Unknown;
 
         var straight = Straightness(s);
-        if (straight > 0.85) return AnnotationKind.Underline;
         // Closed-loop: start ≈ end and curvy → Circle even if not
         // particularly twisty.
         var pts = s.Points;
@@ -126,6 +126,12 @@ public static class WhiteboardParser
         var closure = pathLen > 0 ? Math.Sqrt(dx * dx + dy * dy) / pathLen : 1.0;
         if (closure < 0.2 && straight < 0.5) return AnnotationKind.Circle;
         if (straight < 0.3) return AnnotationKind.Circle;
+        // Straight stroke without closing back on itself = underline.
+        // 0.75 was the historical cutoff; we fall through to it after
+        // the closure check so a barely-curved underline still classifies
+        // correctly (drift to Arrow only happens when neither closed nor
+        // straight enough — i.e. the user actually drew a curved arc).
+        if (straight > 0.75) return AnnotationKind.Underline;
         return AnnotationKind.Arrow;
     }
 
@@ -155,18 +161,20 @@ public static class WhiteboardParser
         // Axis + head: longer stroke is the axis, shorter is the head;
         // they meet near one of the axis's endpoints with a small angle
         // (the arrowhead pinches in).
+        if (strokes.Count < 2) return false;
         var a = strokes[0].Points;
         var b = strokes[1].Points;
         if (a.Count < 2 || b.Count < 2) return false;
         var lenA = Math.Sqrt(Sq(a[^1].X - a[0].X) + Sq(a[^1].Y - a[0].Y));
         var lenB = Math.Sqrt(Sq(b[^1].X - b[0].X) + Sq(b[^1].Y - b[0].Y));
         if (lenA < 5 || lenB < 5) return false;
-        // Head ≤ ~50% of axis.
+        var axisLen = Math.Max(lenA, lenB);
+        var headLen = Math.Min(lenA, lenB);
         var (axis, head) = lenA >= lenB ? (a, b) : (b, a);
-        var ratio = (lenA >= lenB ? lenB : lenA) / (lenA >= lenB ? lenA : lenB);
-        if (ratio > 0.55) return false;
+        // Head ≤ ~50% of axis.
+        if (headLen / axisLen > 0.55) return false;
         // Endpoints within 25% of axis length.
-        var thr = Math.Max(15, (lenA >= lenB ? lenA : lenB) * 0.25);
+        var thr = Math.Max(15, axisLen * 0.25);
         bool NearEither(StrokePoint p) =>
             Math.Sqrt(Sq(p.X - axis[0].X) + Sq(p.Y - axis[0].Y)) < thr ||
             Math.Sqrt(Sq(p.X - axis[^1].X) + Sq(p.Y - axis[^1].Y)) < thr;

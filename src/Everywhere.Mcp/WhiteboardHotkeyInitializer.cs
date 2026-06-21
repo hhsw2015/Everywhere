@@ -324,6 +324,8 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
             }
 
             var (annotations, strokeGroups) = WhiteboardParser.ParseGrouped(strokes);
+            System.Diagnostics.Debug.Assert(annotations.Count == strokeGroups.Count,
+                "WhiteboardParser.ParseGrouped contract: annotations and strokeGroups are 1:1");
             var regions = new List<WhiteboardRegion>(annotations.Count);
             var snapTrace = new List<(Annotation Ann, SnapResult Snap)>();
             _logger.LogInformation(
@@ -424,6 +426,13 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
     /// here never affects the user-visible flow.
     /// </summary>
     private const int DebugBundleRetention = 20;
+    /// <summary>
+    /// Opt-in env var to enable on-disk whiteboard debug bundles. The
+    /// bundle is a screenshot + a11y text dump — sensitive even though
+    /// it never leaves the machine, since other local tools (backups,
+    /// screen recording, support uploads) can read it. Off by default.
+    /// </summary>
+    private const string DebugBundleEnvVar = "EVERYWHERE_WHITEBOARD_DEBUG";
 
     private void TryDumpDebugBundle(
         IReadOnlyList<Stroke> strokes,
@@ -432,10 +441,11 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
         IVisualElement focusedRoot,
         IReadOnlyList<(Annotation Ann, SnapResult Snap)> snapTrace)
     {
-        // Always dump locally — bundles never leave the machine and
-        // retention is bounded to DebugBundleRetention. The Settings
-        // "user experience program" flag governs telemetry uploads,
-        // not local diagnostic files, so we don't gate on it.
+        // Gated on an explicit env var. The DiagnosticData setting
+        // governs telemetry uploads — different concern. Local files are
+        // still PII, so we never write them by default.
+        if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable(DebugBundleEnvVar)))
+            return;
         try
         {
             var root = Path.Combine(
