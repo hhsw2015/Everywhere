@@ -148,10 +148,24 @@ public static class WhiteboardParser
             var lenB = Math.Sqrt(Sq(b[^1].X - b[0].X) + Sq(b[^1].Y - b[0].Y));
             if (lenA < 5 || lenB < 5) continue;
             var ratio = lenA / lenB;
-            if (ratio < 0.4 || ratio > 2.5) continue;
+            if (ratio < 0.3 || ratio > 3.3) continue;
+            // Mid-point coincidence: a real X has both chords passing
+            // through a common centre — their midpoints sit close
+            // together. Angle alone misses wide-flat X drawings (8-15°
+            // between two near-horizontal chords that still cross at the
+            // middle).
+            var midAX = (a[0].X + a[^1].X) * 0.5;
+            var midAY = (a[0].Y + a[^1].Y) * 0.5;
+            var midBX = (b[0].X + b[^1].X) * 0.5;
+            var midBY = (b[0].Y + b[^1].Y) * 0.5;
+            var midDist = Math.Sqrt(Sq(midAX - midBX) + Sq(midAY - midBY));
+            var avgLen = (lenA + lenB) * 0.5;
+            // Two near-parallel strokes that happen to cross briefly at
+            // their tails (like ⪥) would have far-apart midpoints; a
+            // proper X has midpoints within ~30% of the average length.
+            if (avgLen > 0 && midDist / avgLen <= 0.3) return true;
             var angle = AngleBetween(a[0], a[^1], b[0], b[^1]);
-            if (angle < 35 || angle > 145) continue;
-            return true;
+            if (angle >= 35 && angle <= 145) return true;
         }
         return false;
     }
