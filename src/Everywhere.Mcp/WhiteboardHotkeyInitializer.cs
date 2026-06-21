@@ -218,22 +218,32 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
         // return null on macOS 14+).
         var captureSources = new List<(string Name, IVisualElement Element)>();
         if (focusedRoot is not null) captureSources.Add(("focused window", focusedRoot));
-        // Last-resort window source: traverse target screen's Children to
-        // find a top-level window. Always try (not just when focusedRoot is
-        // null) since even a non-null focusedRoot's CaptureAsync may fail.
+        // Fallback windows from screen.Children: filter out things that
+        // can't be the user's intended capture target — menu bar (extremely
+        // short height), status items, off-screen windows.
         if (targetScreen is not null)
         {
             try
             {
+                var screenBox = targetScreen.BoundingRectangle;
                 int added = 0;
                 foreach (var child in targetScreen.Children)
                 {
                     if (ReferenceEquals(child, focusedRoot)) continue;
-                    captureSources.Add(("frontmost window", child));
+                    var bb = child.BoundingRectangle;
+                    // Skip menu bar / status item / tiny / off-screen sources.
+                    // A real content window is at least ~200px tall and has
+                    // its center inside the screen.
+                    if (bb.Height < 200 || bb.Width < 200) continue;
+                    var cx = bb.X + bb.Width / 2;
+                    var cy = bb.Y + bb.Height / 2;
+                    if (cx < screenBox.X || cx > screenBox.X + screenBox.Width
+                        || cy < screenBox.Y || cy > screenBox.Y + screenBox.Height) continue;
+                    captureSources.Add(("content window", child));
                     added++;
-                    if (added >= 3) break;  // try top 3 in case the first is a tooltip
+                    if (added >= 3) break;
                 }
-                _logger.LogInformation("Whiteboard: added {Count} screen-child capture source(s)", added);
+                _logger.LogInformation("Whiteboard: added {Count} content-window capture source(s)", added);
             }
             catch (Exception ex)
             {
@@ -243,7 +253,7 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
         if (targetScreen is not null && !ReferenceEquals(targetScreen, focusedRoot))
             captureSources.Add(("target screen", targetScreen));
         _logger.LogInformation("Whiteboard capture sources: {Sources}",
-            string.Join(", ", captureSources.Select(s => s.Name)));
+            string.Join(", ", captureSources.Select(s => $"{s.Name}({s.Element.BoundingRectangle.Width}x{s.Element.BoundingRectangle.Height})")));
 
         foreach (var (name, source) in captureSources)
         {
