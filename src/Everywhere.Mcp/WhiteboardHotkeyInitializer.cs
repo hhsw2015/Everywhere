@@ -318,6 +318,9 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
                 // result. Cropped to the snapped rect (which already hugs
                 // the captured a11y leaves).
                 var ocrLines = RunOcrForRegion(ocrBitmap, ocrBitmapBounds, snap.Rect);
+                _logger.LogInformation(
+                    "Whiteboard OCR: bitmap={HasBitmap} region={Region} -> {LineCount} lines",
+                    ocrBitmap is not null, snap.Rect, ocrLines.Count);
                 regions.Add(new WhiteboardRegion(
                     ann.Kind, snap.Rect, snap.Leaves, snap.Confidence, ocrLines));
             }
@@ -431,7 +434,7 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
         }
         catch (Exception ex)
         {
-            _logger.LogDebug(ex, "Whiteboard: per-region OCR failed; falling back to leaf-fraction slice");
+            _logger.LogWarning(ex, "Whiteboard: per-region OCR failed; falling back to leaf-fraction slice");
             return [];
         }
     }
