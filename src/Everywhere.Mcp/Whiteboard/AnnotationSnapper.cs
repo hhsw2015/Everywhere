@@ -45,37 +45,65 @@ public static class AnnotationSnapper
         IVisualElement root,
         IReadOnlyList<Stroke> strokes)
     {
-        var (tx, ty) = ArrowTip(strokes);
-        var leaf = LeafAtPoint(root, tx, ty);
-        if (leaf is not null)
+        // Direction-agnostic: the arrow tip is whichever stroke endpoint
+        // sits closer to text. Users draw arrows in both directions
+        // ("look at this!" from left or right), so we cannot assume
+        // start = tail / end = tip.
+        var endpoints = StrokeEndpoints(strokes);
+        IVisualElement? bestLeaf = null;
+        var bestDist = double.PositiveInfinity;
+        double bestX = 0, bestY = 0;
+        foreach (var (ex, ey) in endpoints)
         {
-            return new SnapResult(
-                Rect: ToRect(leaf.BoundingRectangle),
-                Leaves: [leaf],
-                Confidence: 1.0);
+            var inLeaf = LeafAtPoint(root, ex, ey);
+            if (inLeaf is not null)
+            {
+                return new SnapResult(
+                    Rect: ToRect(inLeaf.BoundingRectangle),
+                    Leaves: [inLeaf],
+                    Confidence: 1.0);
+            }
+            var (nearLeaf, d) = NearestLeaf(root, ex, ey);
+            if (nearLeaf is not null && d < bestDist)
+            {
+                bestDist = d; bestLeaf = nearLeaf; bestX = ex; bestY = ey;
+            }
         }
-
-        var (nearest, dist) = NearestLeaf(root, tx, ty);
-        if (nearest is null)
+        if (bestLeaf is null)
         {
+            var (cx, cy) = endpoints[0];
             return new SnapResult(
-                Rect: new Rect(tx - 30, ty - 30, 60, 60),
+                Rect: new Rect(cx - 30, cy - 30, 60, 60),
                 Leaves: [],
                 Rejected: true,
                 RejectReason: "no text leaf on this screen");
         }
-        if (dist > 100)
+        if (bestDist > 100)
         {
             return new SnapResult(
-                Rect: ToRect(nearest.BoundingRectangle),
+                Rect: ToRect(bestLeaf.BoundingRectangle),
                 Leaves: [],
                 Rejected: true,
-                RejectReason: $"arrow tip is {(int)dist}px from the nearest text — please point closer");
+                RejectReason: $"arrow tip is {(int)bestDist}px from the nearest text — please point closer");
         }
         return new SnapResult(
-            Rect: ToRect(nearest.BoundingRectangle),
-            Leaves: [nearest],
-            Confidence: Math.Max(0.4, 1.0 - dist / 100));
+            Rect: ToRect(bestLeaf.BoundingRectangle),
+            Leaves: [bestLeaf],
+            Confidence: Math.Max(0.4, 1.0 - bestDist / 100));
+    }
+
+    private static List<(double X, double Y)> StrokeEndpoints(IReadOnlyList<Stroke> strokes)
+    {
+        var pts = new List<(double, double)>(strokes.Count * 2);
+        foreach (var s in strokes)
+        {
+            if (s.Points.Count == 0) continue;
+            var first = s.Points[0];
+            var last = s.Points[^1];
+            pts.Add((first.X, first.Y));
+            pts.Add((last.X, last.Y));
+        }
+        return pts;
     }
 
     // -------------------------------------------------------------------
@@ -236,22 +264,7 @@ public static class AnnotationSnapper
     private static SnapResult Reject(Rect rect, string reason) =>
         new(rect, [], Rejected: true, RejectReason: reason);
 
-    private static (double x, double y) ArrowTip(IReadOnlyList<Stroke> strokes)
-    {
-        var start = strokes[0].Points[0];
-        double bestX = start.X, bestY = start.Y, bestD2 = -1.0;
-        foreach (var s in strokes)
-        foreach (var p in s.Points)
-        {
-            var dx = p.X - start.X;
-            var dy = p.Y - start.Y;
-            var d2 = dx * dx + dy * dy;
-            if (d2 > bestD2) { bestD2 = d2; bestX = p.X; bestY = p.Y; }
-        }
-        return (bestX, bestY);
-    }
-
-    private static IVisualElement? LeafAtPoint(IVisualElement root, double x, double y)
+private static IVisualElement? LeafAtPoint(IVisualElement root, double x, double y)
     {
         IVisualElement? best = null;
         var bestArea = double.PositiveInfinity;
