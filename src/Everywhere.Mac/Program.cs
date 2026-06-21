@@ -38,7 +38,8 @@ public static class Program
                     .AddSingleton<IAppleScriptRunner, MacAppleScriptRunner>()
                     .AddSingleton<IFinderReader, MacFinderReader>()
                     .AddSingleton<IBrowserTabsReader, MacBrowserTabsReader>()
-                    .AddSingleton<IAppActivator, MacAppActivator>());
+                    .AddSingleton<IAppActivator, MacAppActivator>()
+                    .AddSingleton<Everywhere.Interop.Whiteboard.IOcrEngine, MacVisionOcrEngine>());
             return;
         }
 

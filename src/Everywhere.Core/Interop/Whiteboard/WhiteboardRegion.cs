@@ -11,4 +11,11 @@ public sealed record WhiteboardRegion(
     AnnotationKind Kind,
     Rect Rect,
     IReadOnlyList<IVisualElement> Leaves,
-    double Confidence);
+    double Confidence,
+    /// <summary>
+    /// Per-line OCR detections covering this region's screenshot, in
+    /// screen-pixel coords. Used by HybridSlicer to slice a giant Label's
+    /// text by the user's gesture rect. Empty when the OCR engine is the
+    /// no-op stub or capture failed.
+    /// </summary>
+    IReadOnlyList<OcrLine> OcrLines);

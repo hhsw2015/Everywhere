@@ -64,6 +64,9 @@ public static class EverywhereMcpServiceExtensions
         services.TryAddSingleton<IFinderReader, NullFinderReader>();
         services.TryAddSingleton<IBrowserTabsReader, NullBrowserTabsReader>();
         services.TryAddSingleton<IAppActivator, NullAppActivator>();
+        // Default OCR is no-op; platform projects (Everywhere.Mac etc.) replace
+        // this with a real engine via AddSingleton<IOcrEngine, MacVisionOcrEngine>().
+        services.TryAddSingleton<IOcrEngine, NullOcrEngine>();
         services.TryAddSingleton<ContextStashWriter>();
         services.TryAddSingleton<AutoCaptureService>();
         return services;

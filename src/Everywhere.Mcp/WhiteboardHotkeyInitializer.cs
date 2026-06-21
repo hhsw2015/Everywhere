@@ -33,6 +33,7 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
     private readonly IVisualElementContext _visualContext;
     private readonly WhiteboardStash _whiteboardStash;
     private readonly ContextStashWriter _contextWriter;
+    private readonly Everywhere.Interop.Whiteboard.IOcrEngine _ocrEngine;
     private readonly ILogger<WhiteboardHotkeyInitializer> _logger;
     private readonly Lock _syncLock = new();
 
@@ -48,6 +49,7 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
         IVisualElementContext visualContext,
         WhiteboardStash whiteboardStash,
         ContextStashWriter contextWriter,
+        Everywhere.Interop.Whiteboard.IOcrEngine ocrEngine,
         ILogger<WhiteboardHotkeyInitializer> logger)
     {
         _settings = settings;
@@ -55,6 +57,7 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
         _visualContext = visualContext;
         _whiteboardStash = whiteboardStash;
         _contextWriter = contextWriter;
+        _ocrEngine = ocrEngine;
         _logger = logger;
     }
 
@@ -205,12 +208,19 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
         // paint the captured screenshot UNDER the user's strokes, so the
         // overlay visually IS the screen even though the window is opaque.
         Avalonia.Media.Imaging.Bitmap? backgroundImage = null;
+        byte[]? screenshotPng = null;  // kept for OCR after overlay closes
         if (targetScreen is not null)
         {
             try
             {
                 using var capture = await targetScreen.CaptureAsync(CancellationToken.None);
                 backgroundImage = capture.ToAvaloniaBitmap();
+                if (backgroundImage is not null)
+                {
+                    using var ms = new System.IO.MemoryStream();
+                    backgroundImage.Save(ms);
+                    screenshotPng = ms.ToArray();
+                }
             }
             catch (Exception ex)
             {
@@ -260,7 +270,14 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
                         ann.Kind, string.IsNullOrEmpty(snap.RejectReason) ? "no leaves" : snap.RejectReason);
                     continue;
                 }
-                regions.Add(new WhiteboardRegion(ann.Kind, snap.Rect, snap.Leaves, snap.Confidence));
+                // Per-region OCR: cropping the screenshot to ONLY this region's
+                // rect saves work (small image vs full screen) and prevents
+                // adjacent windows / unrelated text from polluting the OCR
+                // result. Cropped to the snapped rect (which already hugs
+                // the captured a11y leaves).
+                var ocrLines = RunOcrForRegion(screenshotPng, screen, snap.Rect);
+                regions.Add(new WhiteboardRegion(
+                    ann.Kind, snap.Rect, snap.Leaves, snap.Confidence, ocrLines));
             }
 
             if (regions.Count == 0)
@@ -284,6 +301,69 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
         finally
         {
             _activeOverlay = null;
+        }
+    }
+}
+
+    /// <summary>
+    /// Crop the cached screenshot PNG to the region rect, run OCR on the
+    /// crop, and return lines in screen-pixel coords.
+    /// </summary>
+    private IReadOnlyList<Everywhere.Interop.Whiteboard.OcrLine> RunOcrForRegion(
+        byte[]? screenshotPng,
+        PixelRect screenBounds,
+        Avalonia.Rect regionRectScreenPx)
+    {
+        if (screenshotPng is null || screenshotPng.Length == 0)
+            return [];
+        try
+        {
+            // Decode the screenshot, crop to the region's rect (in IMAGE
+            // pixel coords — translate by -screenBounds.Position).
+            using var inputMs = new System.IO.MemoryStream(screenshotPng);
+            using var fullBitmap = new Avalonia.Media.Imaging.Bitmap(inputMs);
+
+            var imgX = (int)Math.Round(regionRectScreenPx.X - screenBounds.X);
+            var imgY = (int)Math.Round(regionRectScreenPx.Y - screenBounds.Y);
+            var imgW = (int)Math.Round(regionRectScreenPx.Width);
+            var imgH = (int)Math.Round(regionRectScreenPx.Height);
+
+            // Clamp to image bounds.
+            var pxW = (int)fullBitmap.PixelSize.Width;
+            var pxH = (int)fullBitmap.PixelSize.Height;
+            imgX = Math.Max(0, Math.Min(pxW - 1, imgX));
+            imgY = Math.Max(0, Math.Min(pxH - 1, imgY));
+            imgW = Math.Max(1, Math.Min(pxW - imgX, imgW));
+            imgH = Math.Max(1, Math.Min(pxH - imgY, imgH));
+
+            // Avalonia Bitmap doesn't expose a straightforward crop;
+            // re-encode the cropped pixel range via a RenderTargetBitmap.
+            var cropRect = new Avalonia.PixelRect(imgX, imgY, imgW, imgH);
+            using var cropTarget = new Avalonia.Media.Imaging.RenderTargetBitmap(
+                cropRect.Size, fullBitmap.Dpi);
+            using (var ctx = cropTarget.CreateDrawingContext())
+            {
+                ctx.DrawImage(
+                    fullBitmap,
+                    new Avalonia.Rect(cropRect.X, cropRect.Y, cropRect.Width, cropRect.Height),
+                    new Avalonia.Rect(0, 0, cropRect.Width, cropRect.Height));
+            }
+
+            using var outMs = new System.IO.MemoryStream();
+            cropTarget.Save(outMs);
+            outMs.Position = 0;
+
+            // Originate the OCR coords back in SCREEN pixel space, so the
+            // hybrid slicer can intersect with the region rect directly.
+            var origin = new Avalonia.PixelPoint(
+                screenBounds.X + cropRect.X,
+                screenBounds.Y + cropRect.Y);
+            return _ocrEngine.Recognize(outMs, origin);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Whiteboard: per-region OCR failed; falling back to leaf-fraction slice");
+            return [];
         }
     }
 }
