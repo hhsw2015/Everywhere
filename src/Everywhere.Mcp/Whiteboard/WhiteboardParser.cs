@@ -42,48 +42,51 @@ public static class WhiteboardParser
     {
         // Geometric merge — no time window. Two strokes belong to the
         // same gesture if their bboxes intersect, OR their centers are
-        // within the LARGER bbox's diagonal. The X case (two strokes
-        // crossing each other) always satisfies bbox-intersect; circles
-        // drawn in two arcs satisfy center-distance. Using the larger
-        // diagonal lets a small new stroke land inside a big group.
+        // within the LARGER bbox's diagonal (capped). The X case always
+        // satisfies bbox-intersect; circles drawn in two arcs satisfy
+        // center-distance.
         //
-        // We then iterate to a fixed point: a stroke that bridges two
-        // distinct groups should pull both into one. Without this pass,
-        // first-match-wins greediness leaves them split.
-        var groups = new List<List<Stroke>>();
+        // Then iterate to a fixed point so a bridge stroke pulls two
+        // existing groups together. Group bboxes are CACHED and updated
+        // by Rect.Union on merge — recomputing per pair would be
+        // O(G^3 × points).
+        var bboxes = new List<Rect>();
+        var members = new List<List<Stroke>>();
         foreach (var s in strokes)
         {
             if (s.Points.Count == 0) continue;
             var bb = StrokeBBox(s);
             var merged = false;
-            for (var gi = 0; gi < groups.Count; gi++)
+            for (var gi = 0; gi < members.Count; gi++)
             {
-                if (CanMerge(bb, MultiStrokeBBox(groups[gi])))
+                if (CanMerge(bb, bboxes[gi]))
                 {
-                    groups[gi].Add(s);
+                    members[gi].Add(s);
+                    bboxes[gi] = bboxes[gi].Union(bb);
                     merged = true;
                     break;
                 }
             }
-            if (!merged) groups.Add([s]);
+            if (!merged) { members.Add([s]); bboxes.Add(bb); }
         }
-        // Fixed-point group-vs-group merge.
         var changed = true;
         while (changed)
         {
             changed = false;
-            for (var i = 0; i < groups.Count && !changed; i++)
-            for (var j = i + 1; j < groups.Count && !changed; j++)
+            for (var i = 0; i < members.Count && !changed; i++)
+            for (var j = i + 1; j < members.Count && !changed; j++)
             {
-                if (CanMerge(MultiStrokeBBox(groups[i]), MultiStrokeBBox(groups[j])))
+                if (CanMerge(bboxes[i], bboxes[j]))
                 {
-                    groups[i].AddRange(groups[j]);
-                    groups.RemoveAt(j);
+                    members[i].AddRange(members[j]);
+                    bboxes[i] = bboxes[i].Union(bboxes[j]);
+                    members.RemoveAt(j);
+                    bboxes.RemoveAt(j);
                     changed = true;
                 }
             }
         }
-        return groups;
+        return members;
     }
 
     private static bool CanMerge(Rect a, Rect b)
@@ -109,7 +112,15 @@ public static class WhiteboardParser
 
     private static AnnotationKind Classify(List<Stroke> strokes)
     {
-        if (strokes.Count >= 2) return AnnotationKind.X;
+        if (strokes.Count >= 2)
+        {
+            // Real X: two strokes that actually CROSS (line segments
+            // intersect). Without this check, two near-parallel scribbles
+            // that the grouper bridged would silently classify as X.
+            return HasCrossingStrokes(strokes)
+                ? AnnotationKind.X
+                : AnnotationKind.Circle;
+        }
         var s = strokes[0];
         var bb = StrokeBBox(s);
         if (bb.Width * bb.Height < 1.0) return AnnotationKind.Unknown;
@@ -118,6 +129,34 @@ public static class WhiteboardParser
         if (straight < 0.3) return AnnotationKind.Circle;
         if (straight > 0.75) return AnnotationKind.Underline;
         return AnnotationKind.Arrow;
+    }
+
+    private static bool HasCrossingStrokes(List<Stroke> strokes)
+    {
+        // Approximate each stroke by its endpoint-to-endpoint segment;
+        // sample a few midpoint pairs as well so curvy strokes aren't
+        // miscalled as parallel. For X we just need ONE pair of strokes
+        // whose chord lines cross.
+        for (var i = 0; i < strokes.Count; i++)
+        for (var j = i + 1; j < strokes.Count; j++)
+        {
+            var a = strokes[i].Points;
+            var b = strokes[j].Points;
+            if (a.Count < 2 || b.Count < 2) continue;
+            if (SegmentsCross(a[0], a[^1], b[0], b[^1])) return true;
+        }
+        return false;
+    }
+
+    private static bool SegmentsCross(StrokePoint p1, StrokePoint p2, StrokePoint p3, StrokePoint p4)
+    {
+        static double Cross(double ax, double ay, double bx, double by) => ax * by - ay * bx;
+        var d1 = Cross(p4.X - p3.X, p4.Y - p3.Y, p1.X - p3.X, p1.Y - p3.Y);
+        var d2 = Cross(p4.X - p3.X, p4.Y - p3.Y, p2.X - p3.X, p2.Y - p3.Y);
+        var d3 = Cross(p2.X - p1.X, p2.Y - p1.Y, p3.X - p1.X, p3.Y - p1.Y);
+        var d4 = Cross(p2.X - p1.X, p2.Y - p1.Y, p4.X - p1.X, p4.Y - p1.Y);
+        return ((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0))
+            && ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0));
     }
 
     private static double Straightness(Stroke s)

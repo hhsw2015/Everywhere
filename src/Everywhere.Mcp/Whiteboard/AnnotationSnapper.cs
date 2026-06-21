@@ -67,6 +67,7 @@ public static class AnnotationSnapper
         IVisualElement? bestLeaf = null;
         var bestDist = double.PositiveInfinity;
         var bestArea = double.PositiveInfinity;
+        var foundInLeaf = false;
         foreach (var (ex, ey) in endpoints)
         {
             var inLeaf = LeafAtPoint(root, ex, ey);
@@ -75,17 +76,21 @@ public static class AnnotationSnapper
                 var bb = ToRect(inLeaf.BoundingRectangle);
                 var area = RectArea(bb);
                 diag.Append($"in@{F(ex, ey)}->\"{Trunc(inLeaf.GetText())}\" ");
-                if (bestDist > 0 || area < bestArea)
+                // In-leaf hit always beats any nearest-leaf candidate.
+                // Among multiple in-leaf hits, the tighter (smaller area)
+                // leaf wins — usually the arrow's tip end.
+                if (!foundInLeaf || area < bestArea)
                 {
-                    bestDist = 0; bestArea = area; bestLeaf = inLeaf;
+                    foundInLeaf = true; bestDist = 0; bestArea = area; bestLeaf = inLeaf;
                 }
                 continue;
             }
+            if (foundInLeaf) continue;
             var (nearLeaf, d) = NearestLeaf(root, ex, ey);
             if (nearLeaf is not null)
             {
                 diag.Append($"near@{F(ex, ey)}->\"{Trunc(nearLeaf.GetText())}\" d={d:F0} ");
-                if (bestDist > 0 && d < bestDist)
+                if (d < bestDist)
                 {
                     bestDist = d; bestLeaf = nearLeaf;
                 }
@@ -164,6 +169,7 @@ public static class AnnotationSnapper
             root, strokeTop, strokeX1, strokeX2, strokeWidth, above: true);
         diag.Append("above=").Append(aboveDiag).Append(' ');
         var candidates = above;
+        var pickedSide = UnderlineSide.Above;
         // Tolerate users who draw the line ABOVE the text (overline-style
         // emphasis) — fall back to looking for a line just below the
         // stroke when nothing is above.
@@ -173,24 +179,24 @@ public static class AnnotationSnapper
                 root, strokeBottom, strokeX1, strokeX2, strokeWidth, above: false);
             diag.Append("below=").Append(belowDiag);
             candidates = below;
+            pickedSide = UnderlineSide.Below;
         }
         if (candidates.Count == 0)
         {
             return new SnapResult(
                 Rect: ann.BoundingRect, Leaves: [],
                 Rejected: true,
-                RejectReason: "no text line above the underline — draw under a line of text",
+                RejectReason: "no text line near the underline — draw the line directly above or below a line of text",
                 Diagnostics: diag.ToString());
         }
         // Sort: closest gap (above OR below depending on which path matched),
         // then best x-overlap.
-        var anchor = candidates[0].Tag == UnderlineSide.Above ? strokeTop : strokeBottom;
+        var anchor = pickedSide == UnderlineSide.Above ? strokeTop : strokeBottom;
         var bands = candidates
             .Select(c => (Leaf: c.Leaf,
-                          EdgeY: c.Tag == UnderlineSide.Above
+                          EdgeY: pickedSide == UnderlineSide.Above
                               ? ToRect(c.Leaf.BoundingRectangle).Bottom
-                              : ToRect(c.Leaf.BoundingRectangle).Y,
-                          c.Tag))
+                              : ToRect(c.Leaf.BoundingRectangle).Y))
             .ToList();
         bands.Sort((a, b) =>
         {
@@ -219,14 +225,13 @@ public static class AnnotationSnapper
     }
 
     private enum UnderlineSide { Above, Below }
-    private record UnderlineCandidate(IVisualElement Leaf, UnderlineSide Tag);
 
-    private static (List<UnderlineCandidate>, string) CollectUnderlineCandidatesV(
+    private static (List<IVisualElement>, string) CollectUnderlineCandidatesV(
         IVisualElement root,
         double strokeY, double strokeX1, double strokeX2, double strokeWidth,
         bool above)
     {
-        var list = new List<UnderlineCandidate>();
+        var list = new List<IVisualElement>();
         int seen = 0, failedSide = 0, failedGap = 0, failedXBand = 0, failedXRatio = 0;
         foreach (var e in Descendants(root))
         {
@@ -248,13 +253,17 @@ public static class AnnotationSnapper
             }
             var xInter = Math.Min(bb.Right, strokeX2) - Math.Max(bb.X, strokeX1);
             if (xInter <= 0) { failedXBand++; continue; }
-            // Compare overlap to the SHORTER of stroke or leaf width — so
-            // a long stroke under a short leaf (or vice versa) still passes
-            // when one is essentially fully inside the other's x-band.
-            var shorter = Math.Max(1, Math.Min(strokeWidth, bb.Width));
-            if (xInter / shorter < 0.5) { failedXRatio++; continue; }
-            list.Add(new UnderlineCandidate(e,
-                above ? UnderlineSide.Above : UnderlineSide.Below));
+            // Primary: stroke must cover ≥50% of itself with the leaf's
+            // x-band — a 30px tick under a 500px line is NOT an underline.
+            // Secondary: when the leaf is much shorter than the stroke
+            // (e.g. user drew long line, leaf is a single short link),
+            // accept if the leaf is mostly inside the stroke's band.
+            var ratioVsStroke = xInter / strokeWidth;
+            var leafW = Math.Max(1, bb.Width);
+            var ratioVsLeaf = xInter / leafW;
+            var shortLeaf = bb.Width < strokeWidth * 0.5;
+            if (ratioVsStroke < 0.5 && !(shortLeaf && ratioVsLeaf >= 0.5)) { failedXRatio++; continue; }
+            list.Add(e);
         }
         var diag =
             $"[seen={seen} kept={list.Count} failedSide={failedSide} " +

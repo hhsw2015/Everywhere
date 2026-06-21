@@ -416,6 +416,8 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
     /// a single bundle without re-running the app. Best-effort: failure
     /// here never affects the user-visible flow.
     /// </summary>
+    private const int DebugBundleRetention = 20;
+
     private void TryDumpDebugBundle(
         IReadOnlyList<Stroke> strokes,
         Avalonia.Media.Imaging.Bitmap? ocrBitmap,
@@ -423,13 +425,27 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
         IVisualElement focusedRoot,
         IReadOnlyList<(Annotation Ann, SnapResult Snap)> snapTrace)
     {
+        // Gated on the user's diagnostic-data preference — same flag the
+        // settings UI exposes ("Send diagnostic data"). Avoids dumping
+        // screenshots + a11y text to disk for users who didn't opt in.
+        if (!_settings.Common.DiagnosticData) return;
         try
         {
             var root = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
                 "Everywhere", "whiteboard-debug");
             Directory.CreateDirectory(root);
-            var stamp = DateTimeOffset.Now.ToString("yyyyMMdd-HHmmss-fff",
+            // Keep at most N most-recent bundles to bound disk growth.
+            try
+            {
+                var existing = Directory.GetDirectories(root)
+                    .OrderByDescending(d => d, StringComparer.Ordinal)
+                    .Skip(DebugBundleRetention - 1)
+                    .ToList();
+                foreach (var old in existing) Directory.Delete(old, recursive: true);
+            }
+            catch { /* best effort */ }
+            var stamp = DateTimeOffset.Now.ToString("yyyyMMdd-HHmmss-fffffff",
                 System.Globalization.CultureInfo.InvariantCulture);
             var dir = Path.Combine(root, stamp);
             Directory.CreateDirectory(dir);
@@ -495,12 +511,23 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
         }
     }
 
-    private static IEnumerable<IVisualElement> DescendantsOf(IVisualElement root)
+    private static IEnumerable<IVisualElement> DescendantsOf(
+        IVisualElement root, int maxNodes = 5000, int maxDepth = 64)
     {
-        yield return root;
-        foreach (var c in root.Children)
-        foreach (var d in DescendantsOf(c))
-            yield return d;
+        var visited = new HashSet<IVisualElement>(ReferenceEqualityComparer.Instance);
+        var stack = new Stack<(IVisualElement Node, int Depth)>();
+        stack.Push((root, 0));
+        var emitted = 0;
+        while (stack.Count > 0 && emitted < maxNodes)
+        {
+            var (node, depth) = stack.Pop();
+            if (!visited.Add(node)) continue;
+            yield return node;
+            emitted++;
+            if (depth >= maxDepth) continue;
+            foreach (var c in node.Children)
+                stack.Push((c, depth + 1));
+        }
     }
 
     /// <summary>
