@@ -31,6 +31,7 @@ public sealed class WhiteboardOverlay : ScreenSelectionTransparentWindow
     private Avalonia.Controls.Shapes.Path? _activePath;
     private bool _committed;
     private Bitmap? _ownedBackground;
+    private KeyModifiers _enterKeyModifiers;
 
     public WhiteboardOverlay(PixelRect screenBounds, Bitmap? backgroundImage = null,
                               IReadOnlyList<string>? stashedSummaries = null)
@@ -310,6 +311,10 @@ public sealed class WhiteboardOverlay : ScreenSelectionTransparentWindow
             case Key.Enter:
                 // Shift+Enter = keep session open across screens (Append),
                 // plain Enter = commit and switch to chat (Set + jump).
+                // Capture the raw modifier set so the orchestrator can log
+                // diagnostics when Shift+Enter does NOT make it through —
+                // some macOS keyboard layouts swallow Shift on Enter.
+                _enterKeyModifiers = e.KeyModifiers;
                 Commit(continueSession: (e.KeyModifiers & KeyModifiers.Shift) != 0);
                 e.Handled = true;
                 break;
@@ -393,7 +398,8 @@ public sealed class WhiteboardOverlay : ScreenSelectionTransparentWindow
             canceled, strokes ?? [],
             WindowPosition: windowPos ?? Position,
             ScreenBounds: screenBounds ?? _screenBounds,
-            ContinueSession: continueSession));
+            ContinueSession: continueSession,
+            EnterKeyModifiers: _enterKeyModifiers));
     }
 }
 
@@ -410,4 +416,8 @@ public sealed record WhiteboardCaptureResult(
     /// open across screens. Orchestrator should Append (not Set) and
     /// must NOT switch to the chat window; the user will press the
     /// Whiteboard hotkey again after scrolling.</summary>
-    bool ContinueSession = false);
+    bool ContinueSession = false,
+    /// <summary>Raw KeyModifiers observed when the user pressed Enter,
+    /// for diagnosing cases where Shift+Enter is reported without the
+    /// expected Shift bit.</summary>
+    Avalonia.Input.KeyModifiers EnterKeyModifiers = default);

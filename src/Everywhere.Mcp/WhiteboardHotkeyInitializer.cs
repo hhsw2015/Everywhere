@@ -287,6 +287,9 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
             overlay.Activate();
             _logger.LogInformation("Whiteboard overlay shown");
             var result = await overlay.ResultTask;
+            _logger.LogInformation(
+                "Whiteboard commit: continueSession={Continue} enterKeyModifiers={Mods}",
+                result.ContinueSession, result.EnterKeyModifiers);
             if (!result.Canceled && result.Strokes.Count > 0 && result.Strokes[0].Count > 0)
             {
                 var first = result.Strokes[0][0];
