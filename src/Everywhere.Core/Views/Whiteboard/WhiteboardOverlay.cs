@@ -32,7 +32,8 @@ public sealed class WhiteboardOverlay : ScreenSelectionTransparentWindow
     private bool _committed;
     private Bitmap? _ownedBackground;
 
-    public WhiteboardOverlay(PixelRect screenBounds, Bitmap? backgroundImage = null)
+    public WhiteboardOverlay(PixelRect screenBounds, Bitmap? backgroundImage = null,
+                              IReadOnlyList<string>? stashedSummaries = null)
     {
         _screenBounds = screenBounds;
         _ownedBackground = backgroundImage;
@@ -55,6 +56,57 @@ public sealed class WhiteboardOverlay : ScreenSelectionTransparentWindow
             VerticalAlignment = VerticalAlignment.Stretch,
         };
 
+        var hintLines = new StackPanel { Orientation = Avalonia.Layout.Orientation.Vertical };
+        if (stashedSummaries is { Count: > 0 })
+        {
+            hintLines.Children.Add(new TextBlock
+            {
+                Foreground = new SolidColorBrush(Color.Parse("#FFFFCC00")),
+                FontSize = 13,
+                FontWeight = Avalonia.Media.FontWeight.Bold,
+                Text = $"Continuing session — {stashedSummaries.Count} stashed:",
+            });
+            for (var i = 0; i < stashedSummaries.Count && i < 8; i++)
+            {
+                hintLines.Children.Add(new TextBlock
+                {
+                    Foreground = Brushes.White,
+                    FontSize = 12,
+                    Margin = new Thickness(0, 1, 0, 0),
+                    Text = $"  {i + 1}. {stashedSummaries[i]}",
+                });
+            }
+            if (stashedSummaries.Count > 8)
+                hintLines.Children.Add(new TextBlock
+                {
+                    Foreground = new SolidColorBrush(Color.Parse("#FFAAAAAA")),
+                    FontSize = 11,
+                    Text = $"  + {stashedSummaries.Count - 8} more",
+                });
+            hintLines.Children.Add(new TextBlock
+            {
+                Foreground = Brushes.White,
+                FontSize = 12,
+                Margin = new Thickness(0, 6, 0, 0),
+                Text = "Enter = send all  |  Shift+Enter = add more  |  Esc = cancel this batch",
+            });
+        }
+        else
+        {
+            hintLines.Children.Add(new TextBlock
+            {
+                Foreground = Brushes.White,
+                FontSize = 13,
+                Text = "Whiteboard — draw gestures (○ ─ → ✗).",
+            });
+            hintLines.Children.Add(new TextBlock
+            {
+                Foreground = Brushes.White,
+                FontSize = 12,
+                Margin = new Thickness(0, 4, 0, 0),
+                Text = "Enter = send  |  Shift+Enter = save & continue across screens  |  Esc = cancel",
+            });
+        }
         var hint = new Border
         {
             Background = new SolidColorBrush(Color.Parse("#FF1A1A1A"), 0.92),
@@ -66,12 +118,7 @@ public sealed class WhiteboardOverlay : ScreenSelectionTransparentWindow
             HorizontalAlignment = HorizontalAlignment.Right,
             VerticalAlignment = VerticalAlignment.Top,
             IsHitTestVisible = false,
-            Child = new TextBlock
-            {
-                Foreground = Brushes.White,
-                FontSize = 13,
-                Text = "Whiteboard — draw gestures (○ ─ → ✗). Enter = send, Esc = cancel.",
-            },
+            Child = hintLines,
         };
 
         Content = new Panel
@@ -258,7 +305,9 @@ public sealed class WhiteboardOverlay : ScreenSelectionTransparentWindow
                 e.Handled = true;
                 break;
             case Key.Enter:
-                Commit();
+                // Shift+Enter = keep session open across screens (Append),
+                // plain Enter = commit and switch to chat (Set + jump).
+                Commit(continueSession: (e.KeyModifiers & KeyModifiers.Shift) != 0);
                 e.Handled = true;
                 break;
             case Key.Z when (e.KeyModifiers & KeyModifiers.Meta) != 0
@@ -269,7 +318,7 @@ public sealed class WhiteboardOverlay : ScreenSelectionTransparentWindow
         }
     }
 
-    public void Commit()
+    public void Commit(bool continueSession = false)
     {
         // Coordinate convention used downstream (snapper / OCR):
         //   a11y BoundingRectangle is exposed as PixelRect but its values
@@ -307,7 +356,8 @@ public sealed class WhiteboardOverlay : ScreenSelectionTransparentWindow
             converted.Add(screenPts);
         }
         CompleteIfPending(canceled: false, strokes: converted,
-                          windowPos: Position, screenBounds: _screenBounds);
+                          windowPos: Position, screenBounds: _screenBounds,
+                          continueSession: continueSession);
         Dispatcher.UIThread.Post(Close);
     }
 
@@ -329,7 +379,8 @@ public sealed class WhiteboardOverlay : ScreenSelectionTransparentWindow
     private void CompleteIfPending(bool canceled,
                                     IReadOnlyList<IReadOnlyList<(double X, double Y, double T)>>? strokes = null,
                                     Avalonia.PixelPoint? windowPos = null,
-                                    Avalonia.PixelRect? screenBounds = null)
+                                    Avalonia.PixelRect? screenBounds = null,
+                                    bool continueSession = false)
     {
         if (_committed) return;
         _committed = true;
@@ -338,7 +389,8 @@ public sealed class WhiteboardOverlay : ScreenSelectionTransparentWindow
         _result.TrySetResult(new WhiteboardCaptureResult(
             canceled, strokes ?? [],
             WindowPosition: windowPos ?? Position,
-            ScreenBounds: screenBounds ?? _screenBounds));
+            ScreenBounds: screenBounds ?? _screenBounds,
+            ContinueSession: continueSession));
     }
 }
 
@@ -350,4 +402,9 @@ public sealed record WhiteboardCaptureResult(
     Avalonia.PixelPoint WindowPosition = default,
     /// <summary>screenBounds passed to the overlay (the source-of-truth for
     /// stroke coord conversion).</summary>
-    Avalonia.PixelRect ScreenBounds = default);
+    Avalonia.PixelRect ScreenBounds = default,
+    /// <summary>True when the user pressed Shift+Enter — keep the session
+    /// open across screens. Orchestrator should Append (not Set) and
+    /// must NOT switch to the chat window; the user will press the
+    /// Whiteboard hotkey again after scrolling.</summary>
+    bool ContinueSession = false);

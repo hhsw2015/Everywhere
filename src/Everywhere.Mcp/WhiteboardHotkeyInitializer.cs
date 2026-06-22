@@ -204,11 +204,24 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
             screen = new PixelRect(0, 0, 1920, 1080);
         }
 
+        // If there's a fresh in-progress session (user pressed
+        // Shift+Enter previously), surface a short summary of what's
+        // already stashed so they remember what they're adding to.
+        IReadOnlyList<string>? stashedSummaries = null;
+        var existingStash = _whiteboardStash.Peek();
+        if (existingStash is { Count: > 0 })
+        {
+            stashedSummaries = existingStash.Select(SummarizeRegion).ToList();
+        }
+
         // Open transparent overlay IMMEDIATELY. No screenshot is shown
         // underneath — user draws directly on top of the live screen,
         // so there's no chance of pixel mismatch / 'frame shrink'.
-        _logger.LogInformation("Whiteboard opening overlay on screen {Screen}", screen);
-        var overlay = new WhiteboardOverlay(screen, backgroundImage: null);
+        _logger.LogInformation("Whiteboard opening overlay on screen {Screen}{Continuing}",
+            screen,
+            stashedSummaries is null ? "" : $" (continuing session, {stashedSummaries.Count} stashed)");
+        var overlay = new WhiteboardOverlay(screen, backgroundImage: null,
+                                              stashedSummaries: stashedSummaries);
         _activeOverlay = overlay;
 
         // OCR-only screenshot, taken in the background while user draws.
@@ -411,17 +424,35 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
                 return;
             }
 
-            _whiteboardStash.Set(regions);
-            _logger.LogInformation("Whiteboard stash filled with {Count} region(s)", regions.Count);
+            // Shift+Enter (ContinueSession) keeps the session open for
+            // cross-screen capture: Append to any existing stash and
+            // skip the chat-window switch. The user will press the
+            // Whiteboard hotkey again after scrolling.
+            // Plain Enter performs the original behaviour: Set + switch.
+            if (result.ContinueSession)
+            {
+                _whiteboardStash.Append(regions);
+                _logger.LogInformation(
+                    "Whiteboard appended {Count} region(s); session stays open across screens",
+                    regions.Count);
+            }
+            else
+            {
+                _whiteboardStash.Set(regions);
+                _logger.LogInformation("Whiteboard stash filled with {Count} region(s)", regions.Count);
+            }
             TryDumpDebugBundle(strokes, ocrBitmap, ocrBitmapBounds, focusedRoot, snapTrace);
 
-            try
+            if (!result.ContinueSession)
             {
-                await _contextWriter.CaptureAsync();
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Whiteboard: ContextStashWriter.CaptureAsync failed");
+                try
+                {
+                    await _contextWriter.CaptureAsync();
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Whiteboard: ContextStashWriter.CaptureAsync failed");
+                }
             }
         }
         finally
@@ -782,6 +813,32 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
             _logger.LogWarning(ex, "Whiteboard: per-region OCR failed; falling back to leaf-fraction slice");
             return [];
         }
+    }
+
+    /// <summary>
+    /// Build a one-line summary of a stashed region for the overlay's
+    /// continuing-session banner. Picks the first non-empty leaf text,
+    /// prefixes with a kind glyph, and caps the length.
+    /// </summary>
+    private static string SummarizeRegion(WhiteboardRegion r)
+    {
+        var glyph = r.Kind switch
+        {
+            AnnotationKind.Circle => "○",
+            AnnotationKind.Underline => "─",
+            AnnotationKind.Arrow => "→",
+            AnnotationKind.X => "✗",
+            _ => "?",
+        };
+        var firstText = r.Leaves
+            .Select(l => (l.GetText(maxLength: 80) ?? "").Replace('\n', ' ').Trim())
+            .FirstOrDefault(t => !string.IsNullOrEmpty(t)) ?? "";
+        if (r.Leaves.Count == 0 && r.ImageLeaves.Count > 0)
+            firstText = $"({r.ImageLeaves.Count} image" + (r.ImageLeaves.Count > 1 ? "s" : "") + ")";
+        if (string.IsNullOrEmpty(firstText)) firstText = "(no text)";
+        const int Cap = 60;
+        if (firstText.Length > Cap) firstText = firstText.Substring(0, Cap) + "…";
+        return $"{glyph} {firstText}";
     }
 
     private static string TruncateForLog(string? s, int max = 60)

@@ -65,6 +65,71 @@ public sealed class WhiteboardStash
     }
 
     /// <summary>
+    /// Append more regions to an existing in-progress session. Use when
+    /// the user pressed Shift+Enter in the overlay (continue session)
+    /// and then drew more regions in a later overlay invocation.
+    ///
+    /// If the existing entry is missing or expired, falls back to Set
+    /// semantics — equivalent to starting a fresh session.
+    ///
+    /// Image bytes from the new regions are merged into the side-table
+    /// keyed by image_id; the TTL is reset to DefaultTtl so the whole
+    /// combined session lives for another 5 minutes from the most
+    /// recent commit, not from the original first-commit time.
+    /// </summary>
+    public void Append(IReadOnlyList<WhiteboardRegion> moreRegions, TimeSpan? ttl = null)
+    {
+        ArgumentNullException.ThrowIfNull(moreRegions);
+        if (moreRegions.Count == 0)
+            throw new ArgumentException("At least one region required", nameof(moreRegions));
+        var now = _clock.GetUtcNow();
+        var expiry = now + (ttl ?? DefaultTtl);
+        IReadOnlyList<WhiteboardRegion> combined;
+        lock (_gate)
+        {
+            if (_current is null || _current.ExpiresAtUtc <= now)
+            {
+                // No fresh session to append to — treat as a new Set.
+                // Reuse Set's image-snapshot logic by recursing once,
+                // out-of-lock to avoid re-entry. We just emit a fresh
+                // entry inline instead.
+                var imagesNew = new Dictionary<string, byte[]>();
+                foreach (var r in moreRegions)
+                {
+                    foreach (var img in r.ImageLeaves)
+                    {
+                        if (img.PngBytes is { } b && !imagesNew.ContainsKey(img.ImageId))
+                            imagesNew[img.ImageId] = b;
+                    }
+                }
+                _current = new Entry(moreRegions, expiry);
+                _imageBytesById = imagesNew;
+                _imageBytesExpiresAtUtc = expiry;
+                combined = moreRegions;
+            }
+            else
+            {
+                var list = new List<WhiteboardRegion>(_current.Regions.Count + moreRegions.Count);
+                list.AddRange(_current.Regions);
+                list.AddRange(moreRegions);
+                _current = new Entry(list, expiry);
+                _imageBytesById ??= new Dictionary<string, byte[]>();
+                foreach (var r in moreRegions)
+                {
+                    foreach (var img in r.ImageLeaves)
+                    {
+                        if (img.PngBytes is { } b)
+                            _imageBytesById[img.ImageId] = b;
+                    }
+                }
+                _imageBytesExpiresAtUtc = expiry;
+                combined = list;
+            }
+        }
+        Drawn?.Invoke(combined);
+    }
+
+    /// <summary>
     /// Look up cropped image PNG bytes by the image_id surfaced in a
     /// previously consumed region's markdown. Returns null when expired
     /// or unknown. Does NOT consume the entry — agents may re-request
