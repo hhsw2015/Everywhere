@@ -43,7 +43,10 @@ public static class ReadWhiteboardImageTool
             {
                 Content = [new ImageContentBlock
                 {
-                    Data = Convert.ToBase64String(bytes),
+                    // SDK serialises ReadOnlyMemory<byte> -> base64 string
+                    // in the MCP wire format; passing already-base64'd
+                    // text would double-encode it.
+                    Data = bytes,
                     MimeType = "image/png",
                 }],
             };
