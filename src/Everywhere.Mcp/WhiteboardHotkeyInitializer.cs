@@ -288,8 +288,8 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
             _logger.LogInformation("Whiteboard overlay shown");
             var result = await overlay.ResultTask;
             _logger.LogInformation(
-                "Whiteboard commit: continueSession={Continue} enterKeyModifiers={Mods}",
-                result.ContinueSession, result.EnterKeyModifiers);
+                "Whiteboard commit: continueSession={Continue} commitKeyModifiers={Mods}",
+                result.ContinueSession, result.CommitKeyModifiers);
             if (!result.Canceled && result.Strokes.Count > 0 && result.Strokes[0].Count > 0)
             {
                 var first = result.Strokes[0][0];
@@ -517,9 +517,34 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
             var bb = e.BoundingRectangle;
             if (bb.Width < ImageLeafMinDip || bb.Height < ImageLeafMinDip) continue;
             var isImage = e.Type == VisualElementType.Image;
-            var isImageLikeHyperlink =
-                e.Type == VisualElementType.Hyperlink
-                && string.IsNullOrWhiteSpace(e.GetText(maxLength: 1));
+            // Hyperlink-as-image: empty own-text + no text-bearing
+            // descendant + aspect ratio not extremely off (rules out
+            // button-styled card links whose content comes from spans).
+            // Also skip when the Hyperlink HAS an Image descendant —
+            // we'll pick the Image leaf directly on the next iteration
+            // (avoids cropping the same on-screen image twice on
+            // Windows UIA / AT-SPI which expose both levels).
+            var isImageLikeHyperlink = false;
+            if (!isImage
+                && e.Type == VisualElementType.Hyperlink
+                && string.IsNullOrWhiteSpace(e.GetText(maxLength: 1)))
+            {
+                var hasImageChild = false;
+                var hasTextDescendant = false;
+                foreach (var d in DescendantsOf(e))
+                {
+                    if (ReferenceEquals(d, e)) continue;
+                    if (d.Type == VisualElementType.Image) { hasImageChild = true; }
+                    if (d.Type == VisualElementType.Label
+                        && !string.IsNullOrWhiteSpace(d.GetText(maxLength: 1)))
+                    { hasTextDescendant = true; }
+                    if (hasImageChild || hasTextDescendant) break;
+                }
+                if (hasImageChild) continue;        // Image leaf handles it
+                if (hasTextDescendant) continue;    // text-card link, not an image
+                var aspect = (double)bb.Width / Math.Max(1, bb.Height);
+                if (aspect >= 0.2 && aspect <= 8.0) isImageLikeHyperlink = true;
+            }
             if (!isImage && !isImageLikeHyperlink) continue;
             var bbRect = new Avalonia.Rect(bb.X, bb.Y, bb.Width, bb.Height);
             // Only collect images that intersect the gesture rect — the

@@ -31,7 +31,7 @@ public sealed class WhiteboardOverlay : ScreenSelectionTransparentWindow
     private Avalonia.Controls.Shapes.Path? _activePath;
     private bool _committed;
     private Bitmap? _ownedBackground;
-    private KeyModifiers _enterKeyModifiers;
+    private KeyModifiers _commitKeyModifiers;
 
     public WhiteboardOverlay(PixelRect screenBounds, Bitmap? backgroundImage = null,
                               IReadOnlyList<string>? stashedSummaries = null)
@@ -151,7 +151,12 @@ public sealed class WhiteboardOverlay : ScreenSelectionTransparentWindow
         _ownedBackground = null;
 
         Opened += (_, _) => Focus();
-        KeyDown += OnKeyDown;
+        // Tunnel-phase + handledEventsToo so Tab reaches us before Avalonia's
+        // built-in focus navigation consumes it. Direct `KeyDown += ...`
+        // subscribes to bubble — Tab gets swallowed by focus traversal first.
+        AddHandler(InputElement.KeyDownEvent, OnKeyDown,
+            Avalonia.Interactivity.RoutingStrategies.Tunnel | Avalonia.Interactivity.RoutingStrategies.Bubble,
+            handledEventsToo: true);
 
         // AddHandler with handledEventsToo=true so we receive pointer events
         // even if a child marks them Handled. Routing on macOS Avalonia is
@@ -310,7 +315,7 @@ public sealed class WhiteboardOverlay : ScreenSelectionTransparentWindow
                 break;
             case Key.Enter:
                 // Enter = commit and switch to chat (Set + jump).
-                _enterKeyModifiers = e.KeyModifiers;
+                _commitKeyModifiers = e.KeyModifiers;
                 Commit(continueSession: false);
                 e.Handled = true;
                 break;
@@ -318,7 +323,7 @@ public sealed class WhiteboardOverlay : ScreenSelectionTransparentWindow
                 // Tab = save & continue across screens. Avoids the
                 // Shift+Enter chord, which Avalonia/macOS occasionally
                 // drops the Shift bit on.
-                _enterKeyModifiers = e.KeyModifiers;
+                _commitKeyModifiers = e.KeyModifiers;
                 Commit(continueSession: true);
                 e.Handled = true;
                 break;
@@ -403,7 +408,7 @@ public sealed class WhiteboardOverlay : ScreenSelectionTransparentWindow
             WindowPosition: windowPos ?? Position,
             ScreenBounds: screenBounds ?? _screenBounds,
             ContinueSession: continueSession,
-            EnterKeyModifiers: _enterKeyModifiers));
+            CommitKeyModifiers: _commitKeyModifiers));
     }
 }
 
@@ -416,12 +421,12 @@ public sealed record WhiteboardCaptureResult(
     /// <summary>screenBounds passed to the overlay (the source-of-truth for
     /// stroke coord conversion).</summary>
     Avalonia.PixelRect ScreenBounds = default,
-    /// <summary>True when the user pressed Shift+Enter — keep the session
+    /// <summary>True when the user pressed Tab — keep the session
     /// open across screens. Orchestrator should Append (not Set) and
     /// must NOT switch to the chat window; the user will press the
     /// Whiteboard hotkey again after scrolling.</summary>
     bool ContinueSession = false,
-    /// <summary>Raw KeyModifiers observed when the user pressed Enter,
-    /// for diagnosing cases where Shift+Enter is reported without the
-    /// expected Shift bit.</summary>
-    Avalonia.Input.KeyModifiers EnterKeyModifiers = default);
+    /// <summary>Raw KeyModifiers observed when the user pressed either
+    /// commit key (Enter or Tab). Kept for diagnostic logging — we
+    /// previously needed it to debug Shift+Enter chord delivery.</summary>
+    Avalonia.Input.KeyModifiers CommitKeyModifiers = default);
