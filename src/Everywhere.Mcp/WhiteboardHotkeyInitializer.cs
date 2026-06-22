@@ -699,6 +699,27 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
             // user's intent. Avoids dumping every image on screen.
             var inter = bbRect.Intersect(regionRectScreenPx);
             if (inter.Width <= 0 || inter.Height <= 0) { rejNoOverlap++; continue; }
+            // Bbox dedup: a single visual image is often exposed by a11y
+            // as nested elements (e.g. an outer wrapper + the inner img,
+            // sized 822x577 vs 822x574). Skip when we already have an
+            // image at this position with >=85% mutual area overlap.
+            var dup = false;
+            foreach (var prev in result)
+            {
+                var prevRect = new Avalonia.Rect(
+                    prev.Bbox.X, prev.Bbox.Y, prev.Bbox.Width, prev.Bbox.Height);
+                var ovl = bbRect.Intersect(prevRect);
+                if (ovl.Width <= 0 || ovl.Height <= 0) continue;
+                var ovlArea = ovl.Width * ovl.Height;
+                var bbArea = bbRect.Width * bbRect.Height;
+                var prevArea = prevRect.Width * prevRect.Height;
+                var minArea = Math.Min(bbArea, prevArea);
+                if (minArea > 0 && ovlArea / minArea >= 0.85)
+                {
+                    dup = true; break;
+                }
+            }
+            if (dup) { rejNotImageLike++; continue; }
             if (sessionImageCount >= MaxImagesPerSession)
             {
                 _logger.LogInformation(
