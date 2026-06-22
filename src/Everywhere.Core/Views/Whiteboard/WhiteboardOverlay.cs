@@ -92,7 +92,7 @@ public sealed class WhiteboardOverlay : ScreenSelectionTransparentWindow
                 Foreground = Brushes.White,
                 FontSize = 12,
                 Margin = new Thickness(0, 6, 0, 0),
-                Text = "Enter = send all  |  Shift+Enter = add more  |  Esc = cancel this batch",
+                Text = "Enter = send all  |  Tab = add more  |  Esc = cancel this batch",
             });
         }
         else
@@ -108,7 +108,7 @@ public sealed class WhiteboardOverlay : ScreenSelectionTransparentWindow
                 Foreground = Brushes.White,
                 FontSize = 12,
                 Margin = new Thickness(0, 4, 0, 0),
-                Text = "Enter = send  |  Shift+Enter = save & continue across screens  |  Esc = cancel",
+                Text = "Enter = send  |  Tab = save & continue across screens  |  Esc = cancel",
             });
         }
         var hint = new Border
@@ -309,13 +309,17 @@ public sealed class WhiteboardOverlay : ScreenSelectionTransparentWindow
                 e.Handled = true;
                 break;
             case Key.Enter:
-                // Shift+Enter = keep session open across screens (Append),
-                // plain Enter = commit and switch to chat (Set + jump).
-                // Capture the raw modifier set so the orchestrator can log
-                // diagnostics when Shift+Enter does NOT make it through —
-                // some macOS keyboard layouts swallow Shift on Enter.
+                // Enter = commit and switch to chat (Set + jump).
                 _enterKeyModifiers = e.KeyModifiers;
-                Commit(continueSession: (e.KeyModifiers & KeyModifiers.Shift) != 0);
+                Commit(continueSession: false);
+                e.Handled = true;
+                break;
+            case Key.Tab:
+                // Tab = save & continue across screens. Avoids the
+                // Shift+Enter chord, which Avalonia/macOS occasionally
+                // drops the Shift bit on.
+                _enterKeyModifiers = e.KeyModifiers;
+                Commit(continueSession: true);
                 e.Handled = true;
                 break;
             case Key.Z when (e.KeyModifiers & KeyModifiers.Meta) != 0
