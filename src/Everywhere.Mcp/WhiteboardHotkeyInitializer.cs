@@ -321,6 +321,11 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
             if (result.Canceled || result.Strokes.Count == 0)
             {
                 _logger.LogDebug("Whiteboard cancelled or empty; nothing to stash");
+                // Drop the session focusedRoot cache — a cancel breaks the
+                // 'user is still in the same app' assumption. Leaving it
+                // populated would resurrect a stale IVisualElement on the
+                // next Continue press.
+                _sessionFocusedRoot = null;
                 ocrCts.Cancel();
                 return;
             }
@@ -443,6 +448,9 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
             if (regions.Count == 0)
             {
                 _logger.LogInformation("Whiteboard produced no usable regions; nothing to stash");
+                // Same reasoning as the cancel path: no commit happened,
+                // don't keep a stale cache around for a future Continue.
+                _sessionFocusedRoot = null;
                 TryDumpDebugBundle(strokes, ocrBitmap, ocrBitmapBounds, focusedRoot, snapTrace);
                 return;
             }
@@ -506,6 +514,16 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
     private const int ImageLeafMinDip = 32;
 
     /// <summary>
+    /// Aspect-ratio guardrails for "hyperlink looks like an image".
+    /// 0.2 = 1×5 (excludes a tall thin column-style nav link), 8.0 = 5×1
+    /// (excludes a long thin banner). Real thumbnails / icons / hero
+    /// images sit comfortably in [0.5, 4.0]; we keep the bounds loose
+    /// to catch wide-aspect product shots and tall portrait thumbnails.
+    /// </summary>
+    private const double HyperlinkImageMinAspect = 0.2;
+    private const double HyperlinkImageMaxAspect = 8.0;
+
+    /// <summary>
     /// Cap memory pinned by the stash. A 1080p PNG can easily reach 1-2 MB;
     /// 10 images = up to 20 MB held for 5 minutes per session. That's our
     /// upper bound. We reject additional images once the running byte
@@ -542,6 +560,38 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
         var screenRect = new Avalonia.Rect(
             ocrBitmapBounds.X, ocrBitmapBounds.Y,
             ocrBitmapBounds.Width, ocrBitmapBounds.Height);
+
+        // Precompute, in a single tree walk, which empty-text Hyperlinks
+        // contain an Image descendant or a text-bearing Label descendant.
+        // The nested-walk version was O(N·H) — every Hyperlink retraversed
+        // its subtree, with each descendant triggering a (potentially
+        // cross-process) GetText call on UIA/AT-SPI.
+        var hyperlinkHasImage = new HashSet<IVisualElement>(ReferenceEqualityComparer.Instance);
+        var hyperlinkHasText = new HashSet<IVisualElement>(ReferenceEqualityComparer.Instance);
+        {
+            var stack = new Stack<(IVisualElement Node, IVisualElement? AncestorHyperlink)>();
+            stack.Push((root, null));
+            while (stack.Count > 0)
+            {
+                var (node, ancestor) = stack.Pop();
+                var nextAncestor = ancestor;
+                if (node.Type == VisualElementType.Hyperlink && nextAncestor is null
+                    && string.IsNullOrWhiteSpace(node.GetText(maxLength: 1)))
+                {
+                    nextAncestor = node;
+                }
+                if (ancestor is not null)
+                {
+                    if (node.Type == VisualElementType.Image)
+                        hyperlinkHasImage.Add(ancestor);
+                    else if (node.Type == VisualElementType.Label
+                             && !string.IsNullOrWhiteSpace(node.GetText(maxLength: 1)))
+                        hyperlinkHasText.Add(ancestor);
+                }
+                foreach (var c in node.Children)
+                    stack.Push((c, nextAncestor));
+            }
+        }
         foreach (var e in DescendantsOf(root))
         {
             totalLeaves++;
@@ -568,22 +618,15 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
                 && string.IsNullOrWhiteSpace(e.GetText(maxLength: 1)))
             {
                 hyperlinkEmpty++;
-                var hasImageChild = false;
-                var hasTextDescendant = false;
-                foreach (var d in DescendantsOf(e))
-                {
-                    if (ReferenceEquals(d, e)) continue;
-                    if (d.Type == VisualElementType.Image) { hasImageChild = true; }
-                    if (d.Type == VisualElementType.Label
-                        && !string.IsNullOrWhiteSpace(d.GetText(maxLength: 1)))
-                    { hasTextDescendant = true; }
-                    if (hasImageChild || hasTextDescendant) break;
-                }
-                if (hasImageChild) { rejHasImageChild++; continue; }
-                if (hasTextDescendant) { rejHasTextChild++; continue; }
-                var aspect = (double)bb.Width / Math.Max(1, bb.Height);
-                if (aspect >= 0.2 && aspect <= 8.0) isImageLikeHyperlink = true;
-                else rejAspect++;
+                if (hyperlinkHasImage.Contains(e)) { rejHasImageChild++; continue; }
+                if (hyperlinkHasText.Contains(e)) { rejHasTextChild++; continue; }
+                // bb.Height already passed the ImageLeafMinDip guard so
+                // it's safely > 0 here.
+                var aspect = (double)bb.Width / bb.Height;
+                if (aspect >= HyperlinkImageMinAspect && aspect <= HyperlinkImageMaxAspect)
+                    isImageLikeHyperlink = true;
+                else
+                    rejAspect++;
             }
             if (!isImage && !isImageLikeHyperlink) { rejNotImageLike++; continue; }
             var bbRect = new Avalonia.Rect(bb.X, bb.Y, bb.Width, bb.Height);

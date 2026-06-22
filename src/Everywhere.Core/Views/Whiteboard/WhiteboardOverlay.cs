@@ -151,11 +151,14 @@ public sealed class WhiteboardOverlay : ScreenSelectionTransparentWindow
         _ownedBackground = null;
 
         Opened += (_, _) => Focus();
-        // Tunnel-phase + handledEventsToo so Tab reaches us before Avalonia's
-        // built-in focus navigation consumes it. Direct `KeyDown += ...`
-        // subscribes to bubble — Tab gets swallowed by focus traversal first.
+        // Tunnel-only + handledEventsToo so Tab reaches us before Avalonia's
+        // built-in focus navigation consumes it. Plain 'KeyDown +=' would
+        // subscribe to bubble (where focus traversal has already absorbed
+        // Tab). Bubble subscription is intentionally NOT added — combining
+        // both phases would fire OnKeyDown twice and double-trigger
+        // Ctrl+Z's UndoLastStroke (deleting two strokes per press).
         AddHandler(InputElement.KeyDownEvent, OnKeyDown,
-            Avalonia.Interactivity.RoutingStrategies.Tunnel | Avalonia.Interactivity.RoutingStrategies.Bubble,
+            Avalonia.Interactivity.RoutingStrategies.Tunnel,
             handledEventsToo: true);
 
         // AddHandler with handledEventsToo=true so we receive pointer events
