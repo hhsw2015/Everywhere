@@ -43,12 +43,9 @@ public static class ReadWhiteboardImageTool
             {
                 Content = [new ImageContentBlock
                 {
-                    // MCP wire format wants a base64 STRING in `data`.
-                    // ImageContentBlock.Data is declared as a binary type
-                    // with implicit byte[] conversion, but that path
-                    // serialises as a raw byte array (or unicode-escaped
-                    // bytes), NOT base64. Convert explicitly.
-                    Data = Convert.ToBase64String(bytes),
+                    // ImageContentBlock.Data type is ReadOnlyMemory<byte>.
+                    // The SDK's JSON converter base64-encodes on the wire.
+                    Data = bytes,
                     MimeType = "image/png",
                 }],
             };
