@@ -407,14 +407,13 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
                 // visual highlight tied to the leaf, but the slicer needs
                 // the user's GESTURE rect to extract just the lines they
                 // drew over within a multi-line leaf.
-                var imageLeaves = CollectImageLeaves(
+                var (imageLeaves, imageDiag) = CollectImageLeavesWithDiag(
                     focusedRoot, ann.BoundingRect, ocrBitmap, ocrBitmapBounds,
                     ref sessionImageCount, ref sessionImageBytes);
-                if (imageLeaves.Count > 0)
-                    _logger.LogInformation(
-                        "Whiteboard region images: {Count} (ids=[{Ids}])",
-                        imageLeaves.Count,
-                        string.Join(",", imageLeaves.Select(i => i.ImageId)));
+                _logger.LogInformation(
+                    "Whiteboard image collect: {Diag} -> {Count} ids=[{Ids}]",
+                    imageDiag, imageLeaves.Count,
+                    string.Join(",", imageLeaves.Select(i => i.ImageId)));
                 regions.Add(new WhiteboardRegion(
                     ann.Kind, ann.BoundingRect, snap.Leaves, snap.Confidence,
                     ocrLines, imageLeaves));
@@ -494,7 +493,7 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
     /// skipped to keep noise out. Total memory bounded by
     /// MaxImagesPerSession and MaxImageBytesPerSession.
     /// </summary>
-    private IReadOnlyList<WhiteboardImageLeaf> CollectImageLeaves(
+    private (IReadOnlyList<WhiteboardImageLeaf> Leaves, string Diag) CollectImageLeavesWithDiag(
         IVisualElement root,
         Avalonia.Rect regionRectScreenPx,
         Avalonia.Media.Imaging.Bitmap? ocrBitmap,
@@ -502,12 +501,22 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
         ref int sessionImageCount,
         ref long sessionImageBytes)
     {
+        var totalLeaves = 0;
+        var imageType = 0;
+        var hyperlinkEmpty = 0;
+        var rejTooSmall = 0;
+        var rejNoOverlap = 0;
+        var rejHasImageChild = 0;
+        var rejHasTextChild = 0;
+        var rejAspect = 0;
+        var rejNotImageLike = 0;
         var result = new List<WhiteboardImageLeaf>();
         var screenRect = new Avalonia.Rect(
             ocrBitmapBounds.X, ocrBitmapBounds.Y,
             ocrBitmapBounds.Width, ocrBitmapBounds.Height);
         foreach (var e in DescendantsOf(root))
         {
+            totalLeaves++;
             // Accept either an explicit Image leaf, or a Hyperlink whose
             // text is empty and bbox is sized like an image. Browsers
             // expose <a href><img></a> patterns as Hyperlink leaves on
@@ -515,7 +524,8 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
             // logo links would be classified as "empty text" and the
             // image-leaf collector would never see them.
             var bb = e.BoundingRectangle;
-            if (bb.Width < ImageLeafMinDip || bb.Height < ImageLeafMinDip) continue;
+            if (e.Type == VisualElementType.Image) imageType++;
+            if (bb.Width < ImageLeafMinDip || bb.Height < ImageLeafMinDip) { rejTooSmall++; continue; }
             var isImage = e.Type == VisualElementType.Image;
             // Hyperlink-as-image: empty own-text + no text-bearing
             // descendant + aspect ratio not extremely off (rules out
@@ -529,6 +539,7 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
                 && e.Type == VisualElementType.Hyperlink
                 && string.IsNullOrWhiteSpace(e.GetText(maxLength: 1)))
             {
+                hyperlinkEmpty++;
                 var hasImageChild = false;
                 var hasTextDescendant = false;
                 foreach (var d in DescendantsOf(e))
@@ -540,17 +551,18 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
                     { hasTextDescendant = true; }
                     if (hasImageChild || hasTextDescendant) break;
                 }
-                if (hasImageChild) continue;        // Image leaf handles it
-                if (hasTextDescendant) continue;    // text-card link, not an image
+                if (hasImageChild) { rejHasImageChild++; continue; }
+                if (hasTextDescendant) { rejHasTextChild++; continue; }
                 var aspect = (double)bb.Width / Math.Max(1, bb.Height);
                 if (aspect >= 0.2 && aspect <= 8.0) isImageLikeHyperlink = true;
+                else rejAspect++;
             }
-            if (!isImage && !isImageLikeHyperlink) continue;
+            if (!isImage && !isImageLikeHyperlink) { rejNotImageLike++; continue; }
             var bbRect = new Avalonia.Rect(bb.X, bb.Y, bb.Width, bb.Height);
             // Only collect images that intersect the gesture rect — the
             // user's intent. Avoids dumping every image on screen.
             var inter = bbRect.Intersect(regionRectScreenPx);
-            if (inter.Width <= 0 || inter.Height <= 0) continue;
+            if (inter.Width <= 0 || inter.Height <= 0) { rejNoOverlap++; continue; }
             if (sessionImageCount >= MaxImagesPerSession)
             {
                 _logger.LogInformation(
@@ -584,7 +596,11 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
             sessionImageCount++;
             if (pngBytes is not null) sessionImageBytes += pngBytes.Length;
         }
-        return result;
+        var diag = $"totalLeaves={totalLeaves} imageType={imageType} hyperlinkEmpty={hyperlinkEmpty} " +
+                    $"rejTooSmall={rejTooSmall} rejNotImageLike={rejNotImageLike} " +
+                    $"rejNoOverlap={rejNoOverlap} rejHasImageChild={rejHasImageChild} " +
+                    $"rejHasTextChild={rejHasTextChild} rejAspect={rejAspect}";
+        return (result, diag);
     }
 
     private byte[]? TryCropImage(
