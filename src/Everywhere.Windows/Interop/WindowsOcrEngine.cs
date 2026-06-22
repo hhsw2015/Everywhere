@@ -6,6 +6,11 @@ using Windows.Globalization;
 using Windows.Graphics.Imaging;
 using Windows.Media.Ocr;
 using Windows.Storage.Streams;
+// Disambiguate: Windows.Media.Ocr.OcrLine vs our own OcrLine. Our type
+// is the public contract for the IOcrEngine interface so it wins on
+// the bare name.
+using OcrLine = Everywhere.Interop.Whiteboard.OcrLine;
+using WinOcrLine = Windows.Media.Ocr.OcrLine;
 
 namespace Everywhere.Windows.Interop;
 
