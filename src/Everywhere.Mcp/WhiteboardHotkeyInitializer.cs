@@ -473,11 +473,20 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
             }
             else
             {
-                _whiteboardStash.Set(regions);
+                // Final commit. If a Continue session is in flight, the
+                // user's intent is "send THIS batch PLUS everything I've
+                // stashed so far" — Append, not Set. Set would silently
+                // discard prior continue-batches the user thought were
+                // already saved. Brand-new session (no fresh stash) falls
+                // back to Set semantics inside Append.
+                if (_whiteboardStash.HasFreshWhiteboard)
+                    _whiteboardStash.Append(regions);
+                else
+                    _whiteboardStash.Set(regions);
                 // Final commit — drop the cached root so a brand-new
                 // session next time starts fresh.
                 _sessionFocusedRoot = null;
-                _logger.LogInformation("Whiteboard stash filled with {Count} region(s)", regions.Count);
+                _logger.LogInformation("Whiteboard stash filled with {Count} new region(s)", regions.Count);
                 TryDumpDebugBundle(strokes, ocrBitmap, ocrBitmapBounds, focusedRoot, snapTrace);
                 try
                 {
