@@ -406,6 +406,27 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
                 {
                     _logger.LogInformation("Whiteboard region rejected ({Kind}): {Reason}",
                         ann.Kind, string.IsNullOrEmpty(snap.RejectReason) ? "no leaves" : snap.RejectReason);
+                    // Fallback for Circle / X: when a11y exposes no
+                    // matching leaf inside the gesture (canvas-rendered
+                    // thumbnails, infinite-scroll cards, etc.), crop the
+                    // gesture rect itself as a single fallback image so
+                    // the user's selection isn't lost.
+                    if (ann.Kind is AnnotationKind.Circle or AnnotationKind.X
+                        && TryFallbackRegionImage(ann.BoundingRect, ocrBitmap, ocrBitmapBounds,
+                                                    ref sessionImageCount, ref sessionImageBytes,
+                                                    out var fallbackImage))
+                    {
+                        _logger.LogInformation(
+                            "Whiteboard region fallback image: id={Id} bbox=({X},{Y},{W}x{H})",
+                            fallbackImage.ImageId,
+                            fallbackImage.Bbox.X, fallbackImage.Bbox.Y,
+                            fallbackImage.Bbox.Width, fallbackImage.Bbox.Height);
+                        regions.Add(new WhiteboardRegion(
+                            ann.Kind, ann.BoundingRect,
+                            Array.Empty<IVisualElement>(), 0.3,
+                            Array.Empty<OcrLine>(),
+                            new[] { fallbackImage }));
+                    }
                     continue;
                 }
                 _logger.LogInformation(
@@ -441,6 +462,25 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
                     imageDiag, imageLeaves.Count,
                     string.Join(",", imageLeaves.Select(i => i.ImageId)),
                     string.Join("; ", imageLeaves.Select(i => $"{i.Bbox.X},{i.Bbox.Y},{i.Bbox.Width}x{i.Bbox.Height} alt=\"{TruncateForLog(i.Alt)}\"")));
+                // Region passed snap but all leaves yielded empty text
+                // AND no a11y image leaf was found inside the gesture.
+                // Canvas-rendered video cards / icon-only links land here.
+                // Crop the gesture rect itself so the user gets *something*
+                // back instead of an empty region.
+                var allLeavesEmpty = snap.Leaves.All(l =>
+                    string.IsNullOrWhiteSpace(l.GetText(maxLength: 1)));
+                if (ann.Kind is AnnotationKind.Circle or AnnotationKind.X
+                    && imageLeaves.Count == 0 && allLeavesEmpty
+                    && TryFallbackRegionImage(ann.BoundingRect, ocrBitmap, ocrBitmapBounds,
+                                                ref sessionImageCount, ref sessionImageBytes,
+                                                out var fallback))
+                {
+                    _logger.LogInformation(
+                        "Whiteboard region fallback image (empty-leaf): id={Id} bbox=({X},{Y},{W}x{H})",
+                        fallback.ImageId,
+                        fallback.Bbox.X, fallback.Bbox.Y, fallback.Bbox.Width, fallback.Bbox.Height);
+                    imageLeaves = new[] { fallback };
+                }
                 regions.Add(new WhiteboardRegion(
                     ann.Kind, ann.BoundingRect, snap.Leaves, snap.Confidence,
                     ocrLines, imageLeaves));
@@ -681,6 +721,46 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
                     $"rejNoOverlap={rejNoOverlap} rejHasImageChild={rejHasImageChild} " +
                     $"rejHasTextChild={rejHasTextChild} rejAspect={rejAspect}";
         return (result, diag);
+    }
+
+    /// <summary>
+    /// When SnapCircleOrX rejects (no a11y leaf inside the gesture) AND
+    /// no image leaf was found, crop the gesture rect itself from the
+    /// OCR screenshot and emit it as a single fallback image. Lets the
+    /// agent see what the user circled even when the page is rendered
+    /// via canvas / virtualized lists.
+    /// </summary>
+    private bool TryFallbackRegionImage(
+        Avalonia.Rect regionRectScreenPx,
+        Avalonia.Media.Imaging.Bitmap? ocrBitmap,
+        PixelRect ocrBitmapBounds,
+        ref int sessionImageCount,
+        ref long sessionImageBytes,
+        out WhiteboardImageLeaf image)
+    {
+        image = null!;
+        if (ocrBitmap is null) return false;
+        if (regionRectScreenPx.Width < ImageLeafMinDip
+            || regionRectScreenPx.Height < ImageLeafMinDip) return false;
+        if (sessionImageCount >= MaxImagesPerSession) return false;
+        var screenRect = new Avalonia.Rect(
+            ocrBitmapBounds.X, ocrBitmapBounds.Y,
+            ocrBitmapBounds.Width, ocrBitmapBounds.Height);
+        var pngBytes = TryCropImage(ocrBitmap, screenRect, regionRectScreenPx);
+        if (pngBytes is null) return false;
+        if (sessionImageBytes + pngBytes.Length > MaxImageBytesPerSession) return false;
+        var bbox = new PixelRect(
+            (int)regionRectScreenPx.X, (int)regionRectScreenPx.Y,
+            (int)regionRectScreenPx.Width, (int)regionRectScreenPx.Height);
+        var imageId = "wb-img-" + Convert.ToHexString(
+            System.Security.Cryptography.SHA256.HashData(
+                System.Text.Encoding.UTF8.GetBytes(
+                    $"fallback|{bbox.X}|{bbox.Y}|{bbox.Width}|{bbox.Height}")))
+            .Substring(0, 16).ToLowerInvariant();
+        image = new WhiteboardImageLeaf(imageId, "(region crop — no a11y leaf)", bbox, pngBytes);
+        sessionImageCount++;
+        sessionImageBytes += pngBytes.Length;
+        return true;
     }
 
     private byte[]? TryCropImage(
