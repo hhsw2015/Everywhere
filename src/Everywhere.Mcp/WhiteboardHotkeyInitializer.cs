@@ -473,16 +473,15 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
             }
             else
             {
-                // Final commit. If a Continue session is in flight, the
-                // user's intent is "send THIS batch PLUS everything I've
-                // stashed so far" — Append, not Set. Set would silently
-                // discard prior continue-batches the user thought were
-                // already saved. Brand-new session (no fresh stash) falls
-                // back to Set semantics inside Append.
-                if (_whiteboardStash.HasFreshWhiteboard)
-                    _whiteboardStash.Append(regions);
-                else
-                    _whiteboardStash.Set(regions);
+                // Final commit. Always Append: when a Continue session is
+                // in flight we union with what's already stashed (Set would
+                // silently overwrite prior batches the user thought were
+                // saved); when no fresh stash exists Append falls back to
+                // Set semantics in-line. Calling Append unconditionally
+                // keeps the freshness decision under the stash's lock and
+                // avoids a TOCTOU window between HasFreshWhiteboard and
+                // the mutation.
+                _whiteboardStash.Append(regions);
                 // Final commit — drop the cached root so a brand-new
                 // session next time starts fresh.
                 _sessionFocusedRoot = null;
