@@ -23,6 +23,19 @@ public static class AnnotationSnapper
         VisualElementType.Hyperlink,
     ];
 
+    /// <summary>
+    /// Circle and X gestures may target images too — users circle photos
+    /// and diagrams as often as text. Arrow/Underline keep the strict
+    /// text-only set because pointing at or underlining a Label has a
+    /// concrete meaning while pointing at an image is ambiguous.
+    /// </summary>
+    private static readonly HashSet<VisualElementType> LeafTextOrImageRoles =
+    [
+        VisualElementType.Label,
+        VisualElementType.Hyperlink,
+        VisualElementType.Image,
+    ];
+
     public static SnapResult Snap(
         Annotation ann,
         IVisualElement root,
@@ -283,7 +296,7 @@ public static class AnnotationSnapper
         int totalLeaves = 0;
         foreach (var e in Descendants(root))
         {
-            if (!LeafTextRoles.Contains(e.Type)) continue;
+            if (!LeafTextOrImageRoles.Contains(e.Type)) continue;
             totalLeaves++;
             var bb = ToRect(e.BoundingRectangle);
             // Strict containment: the leaf must be FULLY inside the gesture
@@ -309,7 +322,7 @@ public static class AnnotationSnapper
             // of the line.
             foreach (var e in Descendants(root))
             {
-                if (!LeafTextRoles.Contains(e.Type)) continue;
+                if (!LeafTextOrImageRoles.Contains(e.Type)) continue;
                 var bb = ToRect(e.BoundingRectangle);
                 var inter = Math.Min(bb.Bottom, ann.BoundingRect.Bottom)
                             - Math.Max(bb.Y, ann.BoundingRect.Y);
@@ -329,7 +342,7 @@ public static class AnnotationSnapper
             // Fallback 2: 50% overlap.
             foreach (var e in Descendants(root))
             {
-                if (!LeafTextRoles.Contains(e.Type)) continue;
+                if (!LeafTextOrImageRoles.Contains(e.Type)) continue;
                 if (OverlapRatio(ToRect(e.BoundingRectangle), ann.BoundingRect) >= 0.5)
                     leaves.Add(e);
             }

@@ -437,9 +437,10 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
                     focusedRoot, ann.BoundingRect, ocrBitmap, ocrBitmapBounds,
                     ref sessionImageCount, ref sessionImageBytes);
                 _logger.LogInformation(
-                    "Whiteboard image collect: {Diag} -> {Count} ids=[{Ids}]",
+                    "Whiteboard image collect: {Diag} -> {Count} ids=[{Ids}] bboxes=[{Bboxes}]",
                     imageDiag, imageLeaves.Count,
-                    string.Join(",", imageLeaves.Select(i => i.ImageId)));
+                    string.Join(",", imageLeaves.Select(i => i.ImageId)),
+                    string.Join("; ", imageLeaves.Select(i => $"{i.Bbox.X},{i.Bbox.Y},{i.Bbox.Width}x{i.Bbox.Height} alt=\"{TruncateForLog(i.Alt)}\"")));
                 regions.Add(new WhiteboardRegion(
                     ann.Kind, ann.BoundingRect, snap.Leaves, snap.Confidence,
                     ocrLines, imageLeaves));
