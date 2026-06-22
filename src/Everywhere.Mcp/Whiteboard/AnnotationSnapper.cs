@@ -366,7 +366,13 @@ public static class AnnotationSnapper
                 Diagnostics: diag.ToString());
         }
         // Sanity: leaves area shouldn't massively exceed gesture bbox.
-        var leafArea = leaves.Sum(lf => RectArea(ToRect(lf.BoundingRectangle)));
+        // Exclude Image leaves from the area sanity check — image
+        // bboxes are typically much larger than text labels, so a row
+        // of thumbnails would trip this gate even when the gesture
+        // intentionally circles all of them.
+        var leafArea = leaves
+            .Where(lf => lf.Type != VisualElementType.Image)
+            .Sum(lf => RectArea(ToRect(lf.BoundingRectangle)));
         var annArea = RectArea(ann.BoundingRect);
         if (leafArea > annArea * 4 && leaves.Count > 8)
         {

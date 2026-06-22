@@ -416,15 +416,20 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
                                                     ref sessionImageCount, ref sessionImageBytes,
                                                     out var fallbackImage))
                     {
+                        // Run OCR on the gesture rect even on the rejected
+                        // path — the cropped image may contain rasterized
+                        // text the agent should be able to reason over.
+                        var fallbackOcr = RunOcrForRegion(ocrBitmap, ocrBitmapBounds, ann.BoundingRect);
                         _logger.LogInformation(
-                            "Whiteboard region fallback image: id={Id} bbox=({X},{Y},{W}x{H})",
+                            "Whiteboard region fallback image: id={Id} bbox=({X},{Y},{W}x{H}) ocrLines={Ocr}",
                             fallbackImage.ImageId,
                             fallbackImage.Bbox.X, fallbackImage.Bbox.Y,
-                            fallbackImage.Bbox.Width, fallbackImage.Bbox.Height);
+                            fallbackImage.Bbox.Width, fallbackImage.Bbox.Height,
+                            fallbackOcr.Count);
                         regions.Add(new WhiteboardRegion(
                             ann.Kind, ann.BoundingRect,
                             Array.Empty<IVisualElement>(), 0.3,
-                            Array.Empty<OcrLine>(),
+                            fallbackOcr,
                             new[] { fallbackImage }));
                     }
                     continue;
@@ -454,6 +459,17 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
                 // visual highlight tied to the leaf, but the slicer needs
                 // the user's GESTURE rect to extract just the lines they
                 // drew over within a multi-line leaf.
+                // Split Image-type leaves out of snap.Leaves so they
+                // flow exclusively through ImageLeaves. SnapCircleOrX
+                // now includes Image in its leaf set (so a Circle over
+                // an a11y image still snaps), but ReadWhiteboardTool's
+                // text path silently skips them — keeping them in
+                // snap.Leaves would inflate the "N leaves" count without
+                // adding any text output.
+                var textLeaves = snap.Leaves.Where(l => l.Type != VisualElementType.Image).ToList();
+                var imageLeavesFromSnap = snap.Leaves
+                    .Where(l => l.Type == VisualElementType.Image)
+                    .ToList();
                 var (imageLeaves, imageDiag) = CollectImageLeavesWithDiag(
                     focusedRoot, ann.BoundingRect, ocrBitmap, ocrBitmapBounds,
                     ref sessionImageCount, ref sessionImageBytes);
@@ -467,7 +483,7 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
                 // Canvas-rendered video cards / icon-only links land here.
                 // Crop the gesture rect itself so the user gets *something*
                 // back instead of an empty region.
-                var allLeavesEmpty = snap.Leaves.All(l =>
+                var allLeavesEmpty = textLeaves.Count == 0 || textLeaves.All(l =>
                     string.IsNullOrWhiteSpace(l.GetText(maxLength: 1)));
                 if (ann.Kind is AnnotationKind.Circle or AnnotationKind.X
                     && imageLeaves.Count == 0 && allLeavesEmpty
@@ -482,7 +498,7 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
                     imageLeaves = new[] { fallback };
                 }
                 regions.Add(new WhiteboardRegion(
-                    ann.Kind, ann.BoundingRect, snap.Leaves, snap.Confidence,
+                    ann.Kind, ann.BoundingRect, textLeaves, snap.Confidence,
                     ocrLines, imageLeaves));
             }
 
@@ -748,14 +764,32 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
             ocrBitmapBounds.Width, ocrBitmapBounds.Height);
         var pngBytes = TryCropImage(ocrBitmap, screenRect, regionRectScreenPx);
         if (pngBytes is null) return false;
-        if (sessionImageBytes + pngBytes.Length > MaxImageBytesPerSession) return false;
-        var bbox = new PixelRect(
-            (int)regionRectScreenPx.X, (int)regionRectScreenPx.Y,
-            (int)regionRectScreenPx.Width, (int)regionRectScreenPx.Height);
+        if (sessionImageBytes + pngBytes.Length > MaxImageBytesPerSession)
+        {
+            _logger.LogInformation(
+                "Whiteboard: fallback region image would exceed MaxImageBytesPerSession ({Bytes}); skipping",
+                MaxImageBytesPerSession);
+            return false;
+        }
+        // Use floor/ceiling so the stored bbox is a tight integer
+        // superset of the cropped pixels (negative origins on multi-
+        // monitor setups + sub-pixel gesture rects mean plain (int)
+        // would silently shift by 1 px).
+        var x0 = (int)Math.Floor(regionRectScreenPx.X);
+        var y0 = (int)Math.Floor(regionRectScreenPx.Y);
+        var x1 = (int)Math.Ceiling(regionRectScreenPx.Right);
+        var y1 = (int)Math.Ceiling(regionRectScreenPx.Bottom);
+        var bbox = new PixelRect(x0, y0, x1 - x0, y1 - y0);
+        // Include pngBytes' length + first 8 hex of its content hash
+        // in the id seed so re-circling the same bbox produces a
+        // distinct id — otherwise WhiteboardStash's first-wins dedup
+        // silently keeps the older crop.
+        var pngHash = Convert.ToHexString(
+            System.Security.Cryptography.SHA256.HashData(pngBytes)).Substring(0, 8);
         var imageId = "wb-img-" + Convert.ToHexString(
             System.Security.Cryptography.SHA256.HashData(
                 System.Text.Encoding.UTF8.GetBytes(
-                    $"fallback|{bbox.X}|{bbox.Y}|{bbox.Width}|{bbox.Height}")))
+                    $"fallback|{bbox.X}|{bbox.Y}|{bbox.Width}|{bbox.Height}|{pngBytes.Length}|{pngHash}")))
             .Substring(0, 16).ToLowerInvariant();
         image = new WhiteboardImageLeaf(imageId, "(region crop — no a11y leaf)", bbox, pngBytes);
         sessionImageCount++;
