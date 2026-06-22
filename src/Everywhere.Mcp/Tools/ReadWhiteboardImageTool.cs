@@ -41,13 +41,12 @@ public static class ReadWhiteboardImageTool
             }
             return new CallToolResult
             {
-                Content = [new ImageContentBlock
-                {
-                    // ImageContentBlock.Data type is ReadOnlyMemory<byte>.
-                    // The SDK's JSON converter base64-encodes on the wire.
-                    Data = bytes,
-                    MimeType = "image/png",
-                }],
+                // ImageContentBlock.Data must contain base64-encoded UTF-8
+                // bytes, NOT raw image bytes. Passing raw bytes makes the
+                // wire output a JSON string of escaped binary that no
+                // client can decode. FromBytes(raw, mime) does the right
+                // thing — base64s into Data, caches raw in DecodedData.
+                Content = [ImageContentBlock.FromBytes(bytes, "image/png")],
             };
         }
         catch (Exception ex)
