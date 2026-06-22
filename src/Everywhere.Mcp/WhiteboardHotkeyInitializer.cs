@@ -505,9 +505,19 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
             ocrBitmapBounds.Width, ocrBitmapBounds.Height);
         foreach (var e in DescendantsOf(root))
         {
-            if (e.Type != VisualElementType.Image) continue;
+            // Accept either an explicit Image leaf, or a Hyperlink whose
+            // text is empty and bbox is sized like an image. Browsers
+            // expose <a href><img></a> patterns as Hyperlink leaves on
+            // macOS AX; without this branch, gestures over thumbnail/
+            // logo links would be classified as "empty text" and the
+            // image-leaf collector would never see them.
             var bb = e.BoundingRectangle;
             if (bb.Width < ImageLeafMinDip || bb.Height < ImageLeafMinDip) continue;
+            var isImage = e.Type == VisualElementType.Image;
+            var isImageLikeHyperlink =
+                e.Type == VisualElementType.Hyperlink
+                && string.IsNullOrWhiteSpace(e.GetText(maxLength: 1));
+            if (!isImage && !isImageLikeHyperlink) continue;
             var bbRect = new Avalonia.Rect(bb.X, bb.Y, bb.Width, bb.Height);
             // Only collect images that intersect the gesture rect — the
             // user's intent. Avoids dumping every image on screen.
