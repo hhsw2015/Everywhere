@@ -386,8 +386,16 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
                 // visual highlight tied to the leaf, but the slicer needs
                 // the user's GESTURE rect to extract just the lines they
                 // drew over within a multi-line leaf.
+                var imageLeaves = CollectImageLeaves(
+                    focusedRoot, ann.BoundingRect, ocrBitmap, ocrBitmapBounds);
+                if (imageLeaves.Count > 0)
+                    _logger.LogInformation(
+                        "Whiteboard region images: {Count} (ids=[{Ids}])",
+                        imageLeaves.Count,
+                        string.Join(",", imageLeaves.Select(i => i.ImageId)));
                 regions.Add(new WhiteboardRegion(
-                    ann.Kind, ann.BoundingRect, snap.Leaves, snap.Confidence, ocrLines));
+                    ann.Kind, ann.BoundingRect, snap.Leaves, snap.Confidence,
+                    ocrLines, imageLeaves));
             }
 
             if (regions.Count == 0)
@@ -425,6 +433,91 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
     /// a single bundle without re-running the app. Best-effort: failure
     /// here never affects the user-visible flow.
     /// </summary>
+    /// <summary>
+    /// Walk the focused tree for Image leaves overlapping the region rect.
+    /// Crops each to PNG bytes using the OCR screenshot so the agent can
+    /// retrieve them later via read_whiteboard_image. Tiny icons (h<30)
+    /// are skipped to keep noise out.
+    /// </summary>
+    private IReadOnlyList<WhiteboardImageLeaf> CollectImageLeaves(
+        IVisualElement root,
+        Avalonia.Rect regionRectScreenPx,
+        Avalonia.Media.Imaging.Bitmap? ocrBitmap,
+        PixelRect ocrBitmapBounds)
+    {
+        var result = new List<WhiteboardImageLeaf>();
+        var screenRect = new Avalonia.Rect(
+            ocrBitmapBounds.X, ocrBitmapBounds.Y,
+            ocrBitmapBounds.Width, ocrBitmapBounds.Height);
+        foreach (var e in DescendantsOf(root))
+        {
+            if (e.Type != VisualElementType.Image) continue;
+            var bb = e.BoundingRectangle;
+            if (bb.Width <= 0 || bb.Height < 30) continue;
+            var bbRect = new Avalonia.Rect(bb.X, bb.Y, bb.Width, bb.Height);
+            // Only collect images that intersect the gesture rect — the
+            // user's intent. Avoids dumping every image on screen.
+            var inter = bbRect.Intersect(regionRectScreenPx);
+            if (inter.Width <= 0 || inter.Height <= 0) continue;
+
+            var alt = (e.GetText(maxLength: 200) ?? "").Trim();
+            var pngBytes = TryCropImage(ocrBitmap, screenRect, bbRect);
+            // Stable id from process + native handle (matches Id format
+            // already used elsewhere in the codebase) so repeated reads
+            // see consistent ids — useful if we ever cache across sessions.
+            var imageId = "wb-img-" + Convert.ToHexString(
+                System.Security.Cryptography.SHA256.HashData(
+                    System.Text.Encoding.UTF8.GetBytes(
+                        $"{e.Id}|{bb.X}|{bb.Y}|{bb.Width}|{bb.Height}|{Guid.NewGuid()}")))
+                .Substring(0, 8).ToLowerInvariant();
+            result.Add(new WhiteboardImageLeaf(imageId, alt, bb, pngBytes));
+        }
+        return result;
+    }
+
+    private byte[]? TryCropImage(
+        Avalonia.Media.Imaging.Bitmap? fullBitmap,
+        Avalonia.Rect screenBoundsDip,
+        Avalonia.Rect imgBboxDip)
+    {
+        if (fullBitmap is null) return null;
+        try
+        {
+            var overlap = imgBboxDip.Intersect(screenBoundsDip);
+            if (overlap.Width <= 0 || overlap.Height <= 0) return null;
+            var pxW = (int)fullBitmap.PixelSize.Width;
+            var pxH = (int)fullBitmap.PixelSize.Height;
+            var scaleX = screenBoundsDip.Width > 0 ? pxW / screenBoundsDip.Width : 1.0;
+            var scaleY = screenBoundsDip.Height > 0 ? pxH / screenBoundsDip.Height : 1.0;
+            var imgX = (int)Math.Round((overlap.X - screenBoundsDip.X) * scaleX);
+            var imgY = (int)Math.Round((overlap.Y - screenBoundsDip.Y) * scaleY);
+            var imgW = (int)Math.Round(overlap.Width * scaleX);
+            var imgH = (int)Math.Round(overlap.Height * scaleY);
+            imgX = Math.Max(0, Math.Min(pxW - 1, imgX));
+            imgY = Math.Max(0, Math.Min(pxH - 1, imgY));
+            imgW = Math.Max(1, Math.Min(pxW - imgX, imgW));
+            imgH = Math.Max(1, Math.Min(pxH - imgY, imgH));
+            var cropRect = new PixelRect(imgX, imgY, imgW, imgH);
+            using var target = new Avalonia.Media.Imaging.RenderTargetBitmap(
+                cropRect.Size, fullBitmap.Dpi);
+            using (var ctx = target.CreateDrawingContext())
+            {
+                ctx.DrawImage(
+                    fullBitmap,
+                    new Avalonia.Rect(cropRect.X, cropRect.Y, cropRect.Width, cropRect.Height),
+                    new Avalonia.Rect(0, 0, cropRect.Width, cropRect.Height));
+            }
+            using var ms = new System.IO.MemoryStream();
+            target.Save(ms);
+            return ms.ToArray();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Whiteboard: image crop failed for {Rect}", imgBboxDip);
+            return null;
+        }
+    }
+
     private const int DebugBundleRetention = 20;
     /// <summary>
     /// Opt-in env var to enable on-disk whiteboard debug bundles. The

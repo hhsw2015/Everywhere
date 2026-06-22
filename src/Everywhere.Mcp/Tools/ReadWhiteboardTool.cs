@@ -43,10 +43,13 @@ public static class ReadWhiteboardTool
             for (var i = 0; i < regions.Count; i++)
             {
                 var r = regions[i];
+                var imgCount = r.ImageLeaves.Count;
                 sb.Append("## Region ").Append(i + 1).Append(" (")
                   .Append(KindLabel(r.Kind)).Append(", ")
-                  .Append(r.Leaves.Count).Append(' ').Append(r.Leaves.Count == 1 ? "leaf" : "leaves")
-                  .Append(", confidence ").Append(r.Confidence.ToString("F2"))
+                  .Append(r.Leaves.Count).Append(' ').Append(r.Leaves.Count == 1 ? "leaf" : "leaves");
+                if (imgCount > 0)
+                    sb.Append(", ").Append(imgCount).Append(imgCount == 1 ? " image" : " images");
+                sb.Append(", confidence ").Append(r.Confidence.ToString("F2"))
                   .Append(")\n\n");
                 // De-duplicate leaves whose text is fully contained in
                 // another selected leaf's text — happens when a Hyperlink
@@ -80,6 +83,19 @@ public static class ReadWhiteboardTool
                     if (!emitted.Add(text)) continue;
                     sb.Append(leaf.Type == VisualElementType.Hyperlink ? "- " : "")
                       .Append(text).Append('\n');
+                }
+                // Image markers: surface metadata only. The agent decides
+                // whether the image is worth pulling in — call
+                // read_whiteboard_image(image_id) when it is, otherwise
+                // skip and save the multimodal tokens.
+                foreach (var img in r.ImageLeaves)
+                {
+                    sb.Append("![image: ");
+                    sb.Append(string.IsNullOrEmpty(img.Alt) ? "(no alt)" : img.Alt);
+                    sb.Append(' ').Append(img.Bbox.Width).Append('x').Append(img.Bbox.Height);
+                    sb.Append(", image_id=").Append(img.ImageId).Append("]\n");
+                    sb.Append("(call read_whiteboard_image(\"")
+                      .Append(img.ImageId).Append("\") to view)\n");
                 }
                 sb.Append('\n');
             }

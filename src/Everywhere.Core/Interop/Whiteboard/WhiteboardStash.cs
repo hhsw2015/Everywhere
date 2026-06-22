@@ -16,6 +16,12 @@ public sealed class WhiteboardStash
     private readonly Lock _gate = new();
     private readonly TimeProvider _clock;
     private Entry? _current;
+    // Image bytes outlive the consumed regions: agent calls read_whiteboard
+    // first (consumes regions, learns image_ids), then optionally calls
+    // read_whiteboard_image(id) — at which point we need the bytes. Same
+    // TTL as the regions, but doesn't go through Take().
+    private Dictionary<string, byte[]>? _imageBytesById;
+    private DateTimeOffset _imageBytesExpiresAtUtc;
 
     public WhiteboardStash() : this(TimeProvider.System) { }
 
@@ -36,11 +42,46 @@ public sealed class WhiteboardStash
         if (regions.Count == 0)
             throw new ArgumentException("At least one region required", nameof(regions));
         var expiry = _clock.GetUtcNow() + (ttl ?? DefaultTtl);
+        // Snapshot the image bytes side-table from the regions so they
+        // survive a Take() call. The agent typically does:
+        //   read_whiteboard()        -> consumes regions, sees image ids
+        //   read_whiteboard_image(id) -> needs the bytes
+        var images = new Dictionary<string, byte[]>();
+        foreach (var r in regions)
+        {
+            foreach (var img in r.ImageLeaves)
+            {
+                if (img.PngBytes is { } b && !images.ContainsKey(img.ImageId))
+                    images[img.ImageId] = b;
+            }
+        }
         lock (_gate)
         {
             _current = new Entry(regions, expiry);
+            _imageBytesById = images;
+            _imageBytesExpiresAtUtc = expiry;
         }
         Drawn?.Invoke(regions);
+    }
+
+    /// <summary>
+    /// Look up cropped image PNG bytes by the image_id surfaced in a
+    /// previously consumed region's markdown. Returns null when expired
+    /// or unknown.
+    /// </summary>
+    public byte[]? TakeImageBytes(string imageId)
+    {
+        if (string.IsNullOrEmpty(imageId)) return null;
+        lock (_gate)
+        {
+            if (_imageBytesById is null) return null;
+            if (_imageBytesExpiresAtUtc <= _clock.GetUtcNow())
+            {
+                _imageBytesById = null;
+                return null;
+            }
+            return _imageBytesById.TryGetValue(imageId, out var b) ? b : null;
+        }
     }
 
     /// <summary>
