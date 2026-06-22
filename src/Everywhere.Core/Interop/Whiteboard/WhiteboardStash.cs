@@ -67,9 +67,10 @@ public sealed class WhiteboardStash
     /// <summary>
     /// Look up cropped image PNG bytes by the image_id surfaced in a
     /// previously consumed region's markdown. Returns null when expired
-    /// or unknown.
+    /// or unknown. Does NOT consume the entry — agents may re-request
+    /// the same image during a conversation; the TTL is the only bound.
     /// </summary>
-    public byte[]? TakeImageBytes(string imageId)
+    public byte[]? PeekImageBytes(string imageId)
     {
         if (string.IsNullOrEmpty(imageId)) return null;
         lock (_gate)
@@ -126,6 +127,7 @@ public sealed class WhiteboardStash
         lock (_gate)
         {
             _current = null;
+            _imageBytesById = null;
         }
     }
 

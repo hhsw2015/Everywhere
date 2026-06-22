@@ -327,6 +327,11 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
             System.Diagnostics.Debug.Assert(annotations.Count == strokeGroups.Count,
                 "WhiteboardParser.ParseGrouped contract: annotations and strokeGroups are 1:1");
             var regions = new List<WhiteboardRegion>(annotations.Count);
+            // Session-wide caps shared across regions: enforced inside
+            // CollectImageLeaves so a gesture over many images can't pin
+            // unbounded memory in the stash.
+            int sessionImageCount = 0;
+            long sessionImageBytes = 0;
             var snapTrace = new List<(Annotation Ann, SnapResult Snap)>();
             _logger.LogInformation(
                 "Whiteboard snap context: focusedRoot bbox={FrootBbox}, ocrBitmap bbox={OcrBbox}",
@@ -387,7 +392,8 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
                 // the user's GESTURE rect to extract just the lines they
                 // drew over within a multi-line leaf.
                 var imageLeaves = CollectImageLeaves(
-                    focusedRoot, ann.BoundingRect, ocrBitmap, ocrBitmapBounds);
+                    focusedRoot, ann.BoundingRect, ocrBitmap, ocrBitmapBounds,
+                    ref sessionImageCount, ref sessionImageBytes);
                 if (imageLeaves.Count > 0)
                     _logger.LogInformation(
                         "Whiteboard region images: {Count} (ids=[{Ids}])",
@@ -434,16 +440,37 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
     /// here never affects the user-visible flow.
     /// </summary>
     /// <summary>
+    /// Tiny images (icons, status indicators, small bullets) carry no
+    /// meaningful content for the agent. Threshold is in DIP — a 24 DIP
+    /// favicon is the canonical 'too small to matter' size. We allow
+    /// 32 DIP minimum on either axis. Empirical, not derived from DPI
+    /// because the source bbox is already in DIP space.
+    /// </summary>
+    private const int ImageLeafMinDip = 32;
+
+    /// <summary>
+    /// Cap memory pinned by the stash. A 1080p PNG can easily reach 1-2 MB;
+    /// 10 images = up to 20 MB held for 5 minutes per session. That's our
+    /// upper bound. We reject additional images once the running byte
+    /// count exceeds this, and log the truncation.
+    /// </summary>
+    private const int MaxImagesPerSession = 10;
+    private const int MaxImageBytesPerSession = 20 * 1024 * 1024;
+
+    /// <summary>
     /// Walk the focused tree for Image leaves overlapping the region rect.
     /// Crops each to PNG bytes using the OCR screenshot so the agent can
-    /// retrieve them later via read_whiteboard_image. Tiny icons (h<30)
-    /// are skipped to keep noise out.
+    /// retrieve them later via read_whiteboard_image. Tiny icons are
+    /// skipped to keep noise out. Total memory bounded by
+    /// MaxImagesPerSession and MaxImageBytesPerSession.
     /// </summary>
     private IReadOnlyList<WhiteboardImageLeaf> CollectImageLeaves(
         IVisualElement root,
         Avalonia.Rect regionRectScreenPx,
         Avalonia.Media.Imaging.Bitmap? ocrBitmap,
-        PixelRect ocrBitmapBounds)
+        PixelRect ocrBitmapBounds,
+        ref int sessionImageCount,
+        ref long sessionImageBytes)
     {
         var result = new List<WhiteboardImageLeaf>();
         var screenRect = new Avalonia.Rect(
@@ -453,44 +480,72 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
         {
             if (e.Type != VisualElementType.Image) continue;
             var bb = e.BoundingRectangle;
-            if (bb.Width <= 0 || bb.Height < 30) continue;
+            if (bb.Width < ImageLeafMinDip || bb.Height < ImageLeafMinDip) continue;
             var bbRect = new Avalonia.Rect(bb.X, bb.Y, bb.Width, bb.Height);
             // Only collect images that intersect the gesture rect — the
             // user's intent. Avoids dumping every image on screen.
             var inter = bbRect.Intersect(regionRectScreenPx);
             if (inter.Width <= 0 || inter.Height <= 0) continue;
+            if (sessionImageCount >= MaxImagesPerSession)
+            {
+                _logger.LogInformation(
+                    "Whiteboard: hit MaxImagesPerSession ({Max}), skipping remaining images",
+                    MaxImagesPerSession);
+                break;
+            }
 
             var alt = (e.GetText(maxLength: 200) ?? "").Trim();
             var pngBytes = TryCropImage(ocrBitmap, screenRect, bbRect);
-            // Stable id from process + native handle (matches Id format
-            // already used elsewhere in the codebase) so repeated reads
-            // see consistent ids — useful if we ever cache across sessions.
+            if (pngBytes is not null
+                && sessionImageBytes + pngBytes.Length > MaxImageBytesPerSession)
+            {
+                _logger.LogInformation(
+                    "Whiteboard: hit MaxImageBytesPerSession ({Bytes}), dropping pixels for this image (metadata still emitted)",
+                    MaxImageBytesPerSession);
+                pngBytes = null;
+            }
+            // Stable id: deterministic hash of (e.Id, bbox). Repeated
+            // captures of the same on-screen image produce the same id,
+            // so future cross-session caching is possible. 16 hex chars
+            // (64-bit prefix) keeps collision probability negligible
+            // even for many regions sharing the stash. Prior 8-char
+            // version risked silent shadowing in _imageBytesById.
             var imageId = "wb-img-" + Convert.ToHexString(
                 System.Security.Cryptography.SHA256.HashData(
                     System.Text.Encoding.UTF8.GetBytes(
-                        $"{e.Id}|{bb.X}|{bb.Y}|{bb.Width}|{bb.Height}|{Guid.NewGuid()}")))
-                .Substring(0, 8).ToLowerInvariant();
+                        $"{e.Id}|{bb.X}|{bb.Y}|{bb.Width}|{bb.Height}")))
+                .Substring(0, 16).ToLowerInvariant();
             result.Add(new WhiteboardImageLeaf(imageId, alt, bb, pngBytes));
+            sessionImageCount++;
+            if (pngBytes is not null) sessionImageBytes += pngBytes.Length;
         }
         return result;
     }
 
     private byte[]? TryCropImage(
         Avalonia.Media.Imaging.Bitmap? fullBitmap,
-        Avalonia.Rect screenBoundsDip,
-        Avalonia.Rect imgBboxDip)
+        Avalonia.Rect screenBoundsPx,
+        Avalonia.Rect imgBboxPx)
     {
         if (fullBitmap is null) return null;
+        // RenderTargetBitmap.Save and DrawingContext.DrawImage are UI-
+        // thread APIs on Avalonia macOS. Caller must already be on the
+        // UI thread (we are, since this runs inside the post-overlay
+        // continuation). Assert to fail loud if the call ever moves off
+        // the UI thread.
+        System.Diagnostics.Debug.Assert(
+            Avalonia.Threading.Dispatcher.UIThread.CheckAccess(),
+            "TryCropImage must run on the UI thread (RenderTargetBitmap requires it)");
         try
         {
-            var overlap = imgBboxDip.Intersect(screenBoundsDip);
+            var overlap = imgBboxPx.Intersect(screenBoundsPx);
             if (overlap.Width <= 0 || overlap.Height <= 0) return null;
             var pxW = (int)fullBitmap.PixelSize.Width;
             var pxH = (int)fullBitmap.PixelSize.Height;
-            var scaleX = screenBoundsDip.Width > 0 ? pxW / screenBoundsDip.Width : 1.0;
-            var scaleY = screenBoundsDip.Height > 0 ? pxH / screenBoundsDip.Height : 1.0;
-            var imgX = (int)Math.Round((overlap.X - screenBoundsDip.X) * scaleX);
-            var imgY = (int)Math.Round((overlap.Y - screenBoundsDip.Y) * scaleY);
+            var scaleX = screenBoundsPx.Width > 0 ? pxW / screenBoundsPx.Width : 1.0;
+            var scaleY = screenBoundsPx.Height > 0 ? pxH / screenBoundsPx.Height : 1.0;
+            var imgX = (int)Math.Round((overlap.X - screenBoundsPx.X) * scaleX);
+            var imgY = (int)Math.Round((overlap.Y - screenBoundsPx.Y) * scaleY);
             var imgW = (int)Math.Round(overlap.Width * scaleX);
             var imgH = (int)Math.Round(overlap.Height * scaleY);
             imgX = Math.Max(0, Math.Min(pxW - 1, imgX));
@@ -513,7 +568,7 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Whiteboard: image crop failed for {Rect}", imgBboxDip);
+            _logger.LogWarning(ex, "Whiteboard: image crop failed for {Rect}", imgBboxPx);
             return null;
         }
     }

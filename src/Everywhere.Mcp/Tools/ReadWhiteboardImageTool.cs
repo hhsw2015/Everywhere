@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Text.Json;
 using Everywhere.Interop.Whiteboard;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
@@ -24,15 +25,18 @@ public static class ReadWhiteboardImageTool
     {
         try
         {
-            var bytes = stash.TakeImageBytes(image_id);
+            var bytes = stash.PeekImageBytes(image_id);
             if (bytes is null)
             {
+                var json = JsonSerializer.Serialize(new
+                {
+                    found = false,
+                    image_id,
+                    reason = "image expired or not found — whiteboard images live 5 minutes",
+                });
                 return new CallToolResult
                 {
-                    Content = [new TextContentBlock
-                    {
-                        Text = $"{{\"found\":false,\"image_id\":\"{image_id}\",\"reason\":\"image expired or not found — whiteboard images live 5 minutes\"}}",
-                    }],
+                    Content = [new TextContentBlock { Text = json }],
                 };
             }
             return new CallToolResult

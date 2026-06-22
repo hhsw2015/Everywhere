@@ -91,7 +91,7 @@ public static class ReadWhiteboardTool
                 foreach (var img in r.ImageLeaves)
                 {
                     sb.Append("![image: ");
-                    sb.Append(string.IsNullOrEmpty(img.Alt) ? "(no alt)" : img.Alt);
+                    sb.Append(SanitizeAlt(img.Alt));
                     sb.Append(' ').Append(img.Bbox.Width).Append('x').Append(img.Bbox.Height);
                     sb.Append(", image_id=").Append(img.ImageId).Append("]\n");
                     sb.Append("(call read_whiteboard_image(\"")
@@ -158,6 +158,24 @@ public static class ReadWhiteboardTool
         var end = idx;
         while (end < fullLines.Length - 1 && !string.IsNullOrWhiteSpace(fullLines[end + 1])) end++;
         return string.Join('\n', fullLines.Skip(start).Take(end - start + 1));
+    }
+
+    /// <summary>
+    /// Strip characters that would break the single-line marker format
+    /// (![image: ALT WxH, image_id=...]) and cap length so a multi-line
+    /// alt doesn't flood the markdown.
+    /// </summary>
+    private static string SanitizeAlt(string? alt)
+    {
+        if (string.IsNullOrEmpty(alt)) return "(no alt)";
+        var cleaned = alt
+            .Replace('\r', ' ')
+            .Replace('\n', ' ')
+            .Replace(']', ')')
+            .Trim();
+        const int Cap = 120;
+        if (cleaned.Length > Cap) cleaned = cleaned.Substring(0, Cap) + "…";
+        return cleaned;
     }
 
     private static string KindLabel(AnnotationKind k) => k switch
