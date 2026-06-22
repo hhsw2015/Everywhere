@@ -424,27 +424,23 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
                 return;
             }
 
-            // Shift+Enter (ContinueSession) keeps the session open for
-            // cross-screen capture: Append to any existing stash and
-            // skip the chat-window switch. The user will press the
-            // Whiteboard hotkey again after scrolling.
-            // Plain Enter performs the original behaviour: Set + switch.
+            // Single branch on ContinueSession so the "append + no
+            // capture + no chat switch" contract is enforced in one
+            // place and a future change can't update one half but miss
+            // the other. Debug bundle dump happens in both branches.
             if (result.ContinueSession)
             {
                 _whiteboardStash.Append(regions);
                 _logger.LogInformation(
                     "Whiteboard appended {Count} region(s); session stays open across screens",
                     regions.Count);
+                TryDumpDebugBundle(strokes, ocrBitmap, ocrBitmapBounds, focusedRoot, snapTrace);
             }
             else
             {
                 _whiteboardStash.Set(regions);
                 _logger.LogInformation("Whiteboard stash filled with {Count} region(s)", regions.Count);
-            }
-            TryDumpDebugBundle(strokes, ocrBitmap, ocrBitmapBounds, focusedRoot, snapTrace);
-
-            if (!result.ContinueSession)
-            {
+                TryDumpDebugBundle(strokes, ocrBitmap, ocrBitmapBounds, focusedRoot, snapTrace);
                 try
                 {
                     await _contextWriter.CaptureAsync();
@@ -833,11 +829,20 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
         var firstText = r.Leaves
             .Select(l => (l.GetText(maxLength: 80) ?? "").Replace('\n', ' ').Trim())
             .FirstOrDefault(t => !string.IsNullOrEmpty(t)) ?? "";
-        if (r.Leaves.Count == 0 && r.ImageLeaves.Count > 0)
+        // Image-count fallback fires when there is NO usable text, even
+        // if Leaves is non-empty (a Label whose GetText returned "").
+        if (string.IsNullOrEmpty(firstText) && r.ImageLeaves.Count > 0)
             firstText = $"({r.ImageLeaves.Count} image" + (r.ImageLeaves.Count > 1 ? "s" : "") + ")";
         if (string.IsNullOrEmpty(firstText)) firstText = "(no text)";
         const int Cap = 60;
-        if (firstText.Length > Cap) firstText = firstText.Substring(0, Cap) + "…";
+        if (firstText.Length > Cap)
+        {
+            var cut = Cap;
+            // Don't split a UTF-16 surrogate pair — would emit an invalid
+            // half-character. OCR occasionally emits emoji.
+            if (cut > 0 && char.IsHighSurrogate(firstText[cut - 1])) cut--;
+            firstText = firstText.Substring(0, cut) + "…";
+        }
         return $"{glyph} {firstText}";
     }
 

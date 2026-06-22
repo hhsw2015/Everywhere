@@ -66,7 +66,8 @@ public sealed class WhiteboardOverlay : ScreenSelectionTransparentWindow
                 FontWeight = Avalonia.Media.FontWeight.Bold,
                 Text = $"Continuing session — {stashedSummaries.Count} stashed:",
             });
-            for (var i = 0; i < stashedSummaries.Count && i < 8; i++)
+            const int MaxStashedSummariesShown = 8;
+            for (var i = 0; i < stashedSummaries.Count && i < MaxStashedSummariesShown; i++)
             {
                 hintLines.Children.Add(new TextBlock
                 {
@@ -76,13 +77,15 @@ public sealed class WhiteboardOverlay : ScreenSelectionTransparentWindow
                     Text = $"  {i + 1}. {stashedSummaries[i]}",
                 });
             }
-            if (stashedSummaries.Count > 8)
+            if (stashedSummaries.Count > MaxStashedSummariesShown)
+            {
                 hintLines.Children.Add(new TextBlock
                 {
                     Foreground = new SolidColorBrush(Color.Parse("#FFAAAAAA")),
                     FontSize = 11,
-                    Text = $"  + {stashedSummaries.Count - 8} more",
+                    Text = $"  + {stashedSummaries.Count - MaxStashedSummariesShown} more",
                 });
+            }
             hintLines.Children.Add(new TextBlock
             {
                 Foreground = Brushes.White,

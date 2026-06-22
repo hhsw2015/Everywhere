@@ -47,14 +47,7 @@ public sealed class WhiteboardStash
         //   read_whiteboard()        -> consumes regions, sees image ids
         //   read_whiteboard_image(id) -> needs the bytes
         var images = new Dictionary<string, byte[]>();
-        foreach (var r in regions)
-        {
-            foreach (var img in r.ImageLeaves)
-            {
-                if (img.PngBytes is { } b && !images.ContainsKey(img.ImageId))
-                    images[img.ImageId] = b;
-            }
-        }
+        MergeImageBytes(images, regions);
         lock (_gate)
         {
             _current = new Entry(regions, expiry);
@@ -62,6 +55,24 @@ public sealed class WhiteboardStash
             _imageBytesExpiresAtUtc = expiry;
         }
         Drawn?.Invoke(regions);
+    }
+
+    /// <summary>
+    /// First-wins dedup of image_id → png bytes across N regions.
+    /// Single source of truth used by both Set and Append paths so the
+    /// dedup policy can never drift between them.
+    /// </summary>
+    private static void MergeImageBytes(Dictionary<string, byte[]> sink,
+                                         IEnumerable<WhiteboardRegion> regions)
+    {
+        foreach (var r in regions)
+        {
+            foreach (var img in r.ImageLeaves)
+            {
+                if (img.PngBytes is { } b && !sink.ContainsKey(img.ImageId))
+                    sink[img.ImageId] = b;
+            }
+        }
     }
 
     /// <summary>
@@ -89,19 +100,12 @@ public sealed class WhiteboardStash
         {
             if (_current is null || _current.ExpiresAtUtc <= now)
             {
-                // No fresh session to append to — treat as a new Set.
-                // Reuse Set's image-snapshot logic by recursing once,
-                // out-of-lock to avoid re-entry. We just emit a fresh
-                // entry inline instead.
+                // No fresh session to append to — start a new one in-line
+                // (we can't call Set() while holding _gate without
+                // re-entry, and the rest of the work is trivial enough
+                // to keep here).
                 var imagesNew = new Dictionary<string, byte[]>();
-                foreach (var r in moreRegions)
-                {
-                    foreach (var img in r.ImageLeaves)
-                    {
-                        if (img.PngBytes is { } b && !imagesNew.ContainsKey(img.ImageId))
-                            imagesNew[img.ImageId] = b;
-                    }
-                }
+                MergeImageBytes(imagesNew, moreRegions);
                 _current = new Entry(moreRegions, expiry);
                 _imageBytesById = imagesNew;
                 _imageBytesExpiresAtUtc = expiry;
@@ -112,21 +116,23 @@ public sealed class WhiteboardStash
                 var list = new List<WhiteboardRegion>(_current.Regions.Count + moreRegions.Count);
                 list.AddRange(_current.Regions);
                 list.AddRange(moreRegions);
-                _current = new Entry(list, expiry);
+                // Wrap as IReadOnlyList so neither Peek subscribers nor a
+                // future Drawn handler can mutate what the stash thinks
+                // it's holding.
+                _current = new Entry(list.AsReadOnly(), expiry);
                 _imageBytesById ??= new Dictionary<string, byte[]>();
-                foreach (var r in moreRegions)
-                {
-                    foreach (var img in r.ImageLeaves)
-                    {
-                        if (img.PngBytes is { } b)
-                            _imageBytesById[img.ImageId] = b;
-                    }
-                }
+                // Same first-wins dedup policy as Set: an existing
+                // image_id keeps its earliest bytes, so an unchanged
+                // image on a redrawn region doesn't flip-flop.
+                MergeImageBytes(_imageBytesById, moreRegions);
                 _imageBytesExpiresAtUtc = expiry;
                 combined = list;
             }
         }
-        Drawn?.Invoke(combined);
+        // Expose only the newly-appended slice to Drawn subscribers —
+        // mirrors Set semantics (which raises just the regions handed in)
+        // and avoids re-processing previously-stashed regions.
+        Drawn?.Invoke(moreRegions);
     }
 
     /// <summary>
