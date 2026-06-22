@@ -43,6 +43,12 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
     // before the first await. Without it a second hotkey press during the
     // capture-screen await would race-create a second overlay.
     private int _opening;
+    // Remember the focused root across a Continue session. macOS can
+    // briefly fail to return focus to the underlying app between the
+    // overlay closing and the user's next hotkey press; without a cache,
+    // _visualContext.FocusedElement returns null and the second pass
+    // silently drops everything the user just drew.
+    private IVisualElement? _sessionFocusedRoot;
 
     public WhiteboardHotkeyInitializer(
         Settings settings,
@@ -180,6 +186,21 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
         {
             var focused = _visualContext.FocusedElement;
             focusedRoot = focused?.Root() ?? focused;
+            // During a Continue session, the underlying app may not have
+            // refocused yet when the user re-triggers Whiteboard. Use the
+            // cached root from the first commit instead so we keep
+            // snapping against the same window the user is working in.
+            if (focusedRoot is null && _sessionFocusedRoot is not null
+                && _whiteboardStash.HasFreshWhiteboard)
+            {
+                focusedRoot = _sessionFocusedRoot;
+                _logger.LogInformation(
+                    "Whiteboard pre-capture: using cached session focusedRoot (focus lost between continues)");
+            }
+            _logger.LogInformation(
+                "Whiteboard pre-capture: focused={Focused} root={Root}",
+                focused?.Type.ToString() ?? "null",
+                focusedRoot?.GetType().Name ?? "null");
             if (focusedRoot is not null)
             {
                 var winRect = focusedRoot.BoundingRectangle;
@@ -433,6 +454,10 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
             if (result.ContinueSession)
             {
                 _whiteboardStash.Append(regions);
+                // Remember the focused root so the next Continue press
+                // can fall back to it if macOS hasn't refocused the
+                // underlying app yet.
+                _sessionFocusedRoot = focusedRoot;
                 _logger.LogInformation(
                     "Whiteboard appended {Count} region(s); session stays open across screens",
                     regions.Count);
@@ -441,6 +466,9 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
             else
             {
                 _whiteboardStash.Set(regions);
+                // Final commit — drop the cached root so a brand-new
+                // session next time starts fresh.
+                _sessionFocusedRoot = null;
                 _logger.LogInformation("Whiteboard stash filled with {Count} region(s)", regions.Count);
                 TryDumpDebugBundle(strokes, ocrBitmap, ocrBitmapBounds, focusedRoot, snapTrace);
                 try
