@@ -87,6 +87,14 @@ public sealed class ContextStashWriter
     public Task CaptureAsync(IVisualElement seed, CancellationToken cancellationToken = default) => CaptureCoreAsync(seed, cancellationToken);
 
     /// <summary>
+    /// Bring the configured agent app to the front. Public so the LinkRect
+    /// hotkey can give the user visible feedback even when the rect picked
+    /// zero navigable links (otherwise it looks like the hotkey did
+    /// nothing).
+    /// </summary>
+    public void ActivateAgent() => ActivateAgentApp();
+
+    /// <summary>
     /// LinkRect harvest entry: write a batch of (title, url) pairs into the
     /// agent-state snapshot. Same delivery channel as everything else; the
     /// agent is the one that decides what to do with them.

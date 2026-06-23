@@ -129,6 +129,11 @@ public sealed class LinkRectHotkeyInitializer : IAsyncInitializer
                 if (harvested is null || harvested.Count == 0)
                 {
                     _logger.LogInformation("LinkRect: no hyperlinks harvested (rect empty / canceled / AX tree had no in-rect links)");
+                    // Still bring the agent app to front so users get visible
+                    // feedback when their rect only covered javascript: anchors
+                    // (most row-click sites). Without this the hotkey looks
+                    // broken when in fact AX just had nothing navigable to give.
+                    _contextWriter.ActivateAgent();
                     return;
                 }
                 // Dump titles+urls for debugging — Mac/Win sometimes report
