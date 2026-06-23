@@ -442,23 +442,41 @@ partial class VisualElementContext
             yield return v;
         }
 
+        // GitHub-style @owner/repo or @owner shorthand used by xlinkBook
+        // popup as javascript:void anchor labels. Expanded into a real
+        // github.com URL so the agent can deep-perceive them just like
+        // any other link.
+        private static readonly System.Text.RegularExpressions.Regex _githubAtRegex =
+            new(@"^@([A-Za-z0-9](?:[A-Za-z0-9\-_.]{0,38}))(/[A-Za-z0-9_.\-]+)?$",
+                System.Text.RegularExpressions.RegexOptions.Compiled);
+
         private static bool TryExtractHttpUrl(string text, out string url)
         {
             var m = _httpUrlRegex.Match(text);
-            if (!m.Success) { url = string.Empty; return false; }
-            var v = m.Value;
-            // Strip trailing punctuation that's almost never part of a URL
-            // (sentence-end period, comma, semicolon). Be careful with
-            // closing brackets — Wikipedia URLs like .../Foo_(bar) end in
-            // ')' that IS part of the path. Only trim ')'/']' when the
-            // matching opener is missing in the URL itself.
-            v = v.TrimEnd('.', ',', ';');
-            while (v.EndsWith(')') && v.Count(c => c == '(') < v.Count(c => c == ')'))
-                v = v[..^1];
-            while (v.EndsWith(']') && v.Count(c => c == '[') < v.Count(c => c == ']'))
-                v = v[..^1];
-            url = v;
-            return true;
+            if (m.Success)
+            {
+                var v = m.Value;
+                v = v.TrimEnd('.', ',', ';');
+                while (v.EndsWith(')') && v.Count(c => c == '(') < v.Count(c => c == ')'))
+                    v = v[..^1];
+                while (v.EndsWith(']') && v.Count(c => c == '[') < v.Count(c => c == ']'))
+                    v = v[..^1];
+                url = v;
+                return true;
+            }
+            // Site-specific shorthand: xlinkBook popup writes GitHub repos
+            // as `@owner` or `@owner/repo`. Expand to a real github.com URL.
+            var trimmed = text.Trim();
+            var gh = _githubAtRegex.Match(trimmed);
+            if (gh.Success)
+            {
+                var owner = gh.Groups[1].Value;
+                var repo  = gh.Groups[2].Success ? gh.Groups[2].Value : string.Empty;
+                url = "https://github.com/" + owner + repo;
+                return true;
+            }
+            url = string.Empty;
+            return false;
         }
 
         private static void CollectAllOnScreenPids(HashSet<int> pids, PixelRect dragRect)
