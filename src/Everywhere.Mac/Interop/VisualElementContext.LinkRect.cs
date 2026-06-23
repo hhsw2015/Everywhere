@@ -106,6 +106,18 @@ partial class VisualElementContext
             UpdateToolTipInfo(_dragRect);
         }
 
+        // EVERYWHERE_LINKRECT_DUMP=1 -> writes a per-app diagnostic file to
+        // ~/.everywhere-linkrect-dump.txt with every Hyperlink AX node we
+        // saw + whether bounds intersected the drag rect. Lets the user
+        // compare "what I framed visually" vs "what AX actually exposed".
+        private static readonly bool DumpEnabled =
+            Environment.GetEnvironmentVariable("EVERYWHERE_LINKRECT_DUMP") == "1";
+
+        // Thread-local so the inner walk can write without threading a
+        // StreamWriter param through every recursion frame.
+        [ThreadStatic]
+        private static System.IO.StreamWriter? _walkDump;
+
         private static List<HarvestedLink> HarvestLinks(PixelRect dragRect)
         {
             // Walk every visible window's AX tree, keep Hyperlink elements
@@ -113,18 +125,43 @@ partial class VisualElementContext
             // anchor that surfaces multiple times (icon + label) lands once.
             var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var result = new List<HarvestedLink>(64);
+            System.IO.StreamWriter? dump = null;
+            if (DumpEnabled)
+            {
+                try
+                {
+                    var path = System.IO.Path.Combine(
+                        Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                        ".everywhere-linkrect-dump.txt");
+                    dump = new System.IO.StreamWriter(path, append: false);
+                    dump.WriteLine($"# LinkRect dump @ {DateTimeOffset.Now:O}");
+                    dump.WriteLine($"# dragRect=({dragRect.X},{dragRect.Y},{dragRect.Width}x{dragRect.Height})");
+                }
+                catch { dump = null; }
+            }
 
             // Enumerate processes that own on-screen windows whose bounds
             // intersect the drag rect — walks each candidate AX tree once.
             var pids = new HashSet<int>();
             CollectAllOnScreenPids(pids, dragRect);
 
-            var budget = new WalkBudget { Remaining = 50_000 };
-            foreach (var pid in pids)
+            _walkDump = dump;
+            try
             {
-                if (budget.Remaining <= 0) break;
-                if (AXUIElement.ElementFromPid(pid) is not { } app) continue;
-                WalkAndHarvest(app, dragRect, seen, result, depth: 0, budget);
+                var budget = new WalkBudget { Remaining = 50_000 };
+                foreach (var pid in pids)
+                {
+                    if (budget.Remaining <= 0) break;
+                    if (AXUIElement.ElementFromPid(pid) is not { } app) continue;
+                    dump?.WriteLine($"--- pid={pid} ---");
+                    WalkAndHarvest(app, dragRect, seen, result, depth: 0, budget);
+                }
+                dump?.WriteLine($"# kept={result.Count}");
+            }
+            finally
+            {
+                _walkDump = null;
+                dump?.Dispose();
             }
             return result;
         }
@@ -155,6 +192,13 @@ partial class VisualElementContext
                 // 0-bound link should never count as "inside the rect".
                 var inside = bounds.Width > 0 && bounds.Height > 0
                              && IntersectsLoose(bounds, dragRect);
+                if (_walkDump != null)
+                {
+                    string? dumpUrl = null, dumpName = null;
+                    try { dumpUrl = node.Url; } catch { }
+                    try { dumpName = node.Name; } catch { }
+                    _walkDump.WriteLine($"  link bbox=({bounds.X},{bounds.Y},{bounds.Width}x{bounds.Height}) inside={inside} url={dumpUrl ?? "(null)"} name=\"{dumpName ?? string.Empty}\"");
+                }
                 if (inside)
                 {
                     var url = node.Url;
