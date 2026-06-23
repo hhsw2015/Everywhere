@@ -281,6 +281,13 @@ partial class VisualElementContext
                         $"desc=\"{dumpDesc ?? string.Empty}\" " +
                         $"value=\"{dumpVal ?? string.Empty}\"");
                 }
+                // Promote loose intersect → majority-overlap before
+                // accepting the anchor. Linkclump-plus uses the same rule:
+                // "more than half the anchor's area lies inside the
+                // selection". Avoids harvesting anchors that just barely
+                // graze the drag rect's edges.
+                if (inside && !MajorityOverlap(bounds, dragRect))
+                    inside = false;
                 if (inside)
                 {
                     var url = node.Url;
@@ -393,6 +400,25 @@ partial class VisualElementContext
         private static bool IntersectsLoose(PixelRect a, PixelRect b)
         {
             return !(a.Right < b.X || a.X > b.Right || a.Bottom < b.Y || a.Y > b.Bottom);
+        }
+
+        // True when the anchor is "selected" by the drag rect.
+        // Mirrors linkclump-plus default: the anchor's vertical center
+        // (mid-Y) must fall inside the drag rect's vertical range AND
+        // there must be ANY horizontal overlap. This handles wide rows
+        // where the user only spans part of the row's width — the user
+        // clearly meant to grab the row they swept through.
+        private static bool MajorityOverlap(PixelRect anchor, PixelRect dragRect)
+        {
+            if (anchor.Width <= 0 || anchor.Height <= 0) return false;
+            // Horizontal: any overlap.
+            if (anchor.Right < dragRect.X || anchor.X > dragRect.Right)
+                return false;
+            // Vertical: anchor's mid-Y must lie inside the rect's Y span —
+            // ensures we don't grab rows whose top/bottom edge merely
+            // grazes the drag boundary.
+            var midY = anchor.Y + anchor.Height / 2;
+            return midY >= dragRect.Y && midY <= dragRect.Bottom;
         }
 
         /// <summary>
