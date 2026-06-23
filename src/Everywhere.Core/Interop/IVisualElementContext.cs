@@ -115,12 +115,18 @@ public interface IVisualElementContext : IObservable<TextSelectionData>
 
     /// <summary>
     /// Drag a rectangle and harvest every Hyperlink element inside it.
-    /// Returns the batch of (Title, Url) pairs. Same delivery channel as
-    /// the rest of the picker — caller writes the result into the
-    /// agent-state snapshot via ContextStashWriter.
+    /// Returns (Canceled, Links). Canceled=true when the user pressed
+    /// Esc / right-clicked; callers should NOT activate the agent app
+    /// in that case. Empty Links with Canceled=false means a successful
+    /// drag that produced no navigable URLs (e.g. only javascript:
+    /// anchors) — usually still worth surfacing to the agent.
     /// </summary>
-    Task<IReadOnlyList<HarvestedLink>> HarvestLinksAsync(CancellationToken cancellationToken = default);
+    Task<HarvestResult> HarvestLinksAsync(CancellationToken cancellationToken = default);
 }
+
+public readonly record struct HarvestResult(
+    bool Canceled,
+    IReadOnlyList<HarvestedLink> Links);
 
 /// <summary>
 /// One link harvested by <see cref="IVisualElementContext.HarvestLinksAsync"/>.

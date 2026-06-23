@@ -120,12 +120,19 @@ public sealed class ScreenSelectionMaskWindow : ScreenSelectionTransparentWindow
         _elementBoundsBorder.Height = maskRect.Height;
     }
 
+    // Reuse aqua brushes across all captured-link borders to avoid a
+    // per-link allocation when the harvest returns dozens of anchors.
+    private static readonly SolidColorBrush CapturedBorderBrush =
+        new(Color.FromArgb(0xFF, 0x00, 0xC8, 0xFF));
+    private static readonly SolidColorBrush CapturedFillBrush =
+        new(Color.FromArgb(0x40, 0x00, 0xC8, 0xFF));
+
     /// <summary>
-    /// LinkRect end-of-drag visual: paint an aqua border around every
-    /// anchor we kept so the user sees exactly which links were captured.
-    /// Pass an empty / null list to clear.
+    /// Paint an aqua border around each captured anchor so the user sees
+    /// exactly which links were collected. Pass an empty / null list to
+    /// clear. Caller controls how long the highlight stays on screen.
     /// </summary>
-    public void SetCapturedLinkRects(System.Collections.Generic.IReadOnlyList<Everywhere.Interop.HarvestedLink> links)
+    public void SetCapturedLinkRects(IReadOnlyList<HarvestedLink> links)
     {
         _capturedLinksCanvas.Children.Clear();
         if (links is null || links.Count == 0) return;
@@ -136,8 +143,8 @@ public sealed class ScreenSelectionMaskWindow : ScreenSelectionTransparentWindow
             var box = new Border
             {
                 BorderThickness = new Thickness(2),
-                BorderBrush = new SolidColorBrush(Color.FromArgb(0xFF, 0x00, 0xC8, 0xFF)),
-                Background = new SolidColorBrush(Color.FromArgb(0x40, 0x00, 0xC8, 0xFF)),
+                BorderBrush = CapturedBorderBrush,
+                Background = CapturedFillBrush,
                 Width = r.Width,
                 Height = r.Height
             };

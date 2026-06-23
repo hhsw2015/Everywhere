@@ -17,7 +17,7 @@ public partial class VisualElementContext
     /// </summary>
     private sealed class LinkRectSession : ScreenSelectionSession
     {
-        public static async Task<IReadOnlyList<HarvestedLink>> HarvestAsync(
+        public static async Task<HarvestResult> HarvestAsync(
             IWindowHelper windowHelper, CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -36,8 +36,9 @@ public partial class VisualElementContext
             using var _ = cancellationToken.Register(() =>
                 Dispatcher.UIThread.Post(() => window!.Close()));
             var rect = await window._rectPromise.Task;
-            if (rect is null) return [];
-            return await Task.Run(() => HarvestLinks(rect.Value), cancellationToken);
+            if (rect is null) return new HarvestResult(window._wasCanceled, []);
+            var harvested = await Task.Run(() => HarvestLinks(rect.Value), cancellationToken);
+            return new HarvestResult(false, harvested);
         }
 
         private readonly TaskCompletionSource<PixelRect?> _rectPromise = new();

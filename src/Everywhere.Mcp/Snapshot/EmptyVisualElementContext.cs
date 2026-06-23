@@ -27,8 +27,8 @@ public sealed class EmptyVisualElementContext : IVisualElementContext
     public Task<Bitmap?> TakeScreenshotAsync(ScreenSelectionMode? initialMode) =>
         Task.FromResult<Bitmap?>(null);
 
-    public Task<IReadOnlyList<HarvestedLink>> HarvestLinksAsync(CancellationToken cancellationToken = default) =>
-        Task.FromResult<IReadOnlyList<HarvestedLink>>([]);
+    public Task<HarvestResult> HarvestLinksAsync(CancellationToken cancellationToken = default) =>
+        Task.FromResult(new HarvestResult(false, Array.Empty<HarvestedLink>()));
 
     public IDisposable Subscribe(IObserver<TextSelectionData> observer) =>
         new EmptySubscription();

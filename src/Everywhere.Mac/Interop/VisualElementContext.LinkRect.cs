@@ -4,6 +4,7 @@ using CoreFoundation;
 using Everywhere.Interop;
 using ObjCRuntime;
 using HarvestedLink = Everywhere.Interop.HarvestedLink;
+using HarvestResult = Everywhere.Interop.HarvestResult;
 
 namespace Everywhere.Mac.Interop;
 
@@ -17,7 +18,14 @@ partial class VisualElementContext
     /// </summary>
     private sealed class LinkRectSession : ScreenSelectionSession
     {
-        public static async Task<IReadOnlyList<HarvestedLink>> HarvestAsync(
+        /// <summary>
+        /// HarvestResult: distinguishes (a) user pressed Esc/right-click vs
+        /// (b) drag completed but produced zero navigable links. Caller
+        /// uses this to decide whether to activate the agent app — Esc
+        /// should be silent, "no links" should still flash the agent so
+        /// the hotkey doesn't feel broken.
+        /// </summary>
+        public static async Task<HarvestResult> HarvestAsync(
             IWindowHelper windowHelper, CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -36,23 +44,33 @@ partial class VisualElementContext
             using var _ = cancellationToken.Register(() =>
                 Dispatcher.UIThread.Post(() => window!.Close()));
             var rect = await window._rectPromise.Task;
-            if (rect is null) { await Dispatcher.UIThread.InvokeAsync(window!.Close); return []; }
+            if (rect is null)
+            {
+                await Dispatcher.UIThread.InvokeAsync(window!.Close);
+                return new HarvestResult(window._wasCanceled, []);
+            }
             // Run the harvest while the overlay is still on screen so we
             // can flash the captured link bboxes before closing — visual
-            // confirmation of "linkclump caught these N anchors".
+            // confirmation of "linkclump caught these N anchors". Skip the
+            // flash entirely on zero results so the user doesn't sit on a
+            // dim overlay for nothing.
             var harvested = await Task.Run(() => HarvestLinks(rect.Value), cancellationToken);
             try
             {
-                await Dispatcher.UIThread.InvokeAsync(() => window!.HighlightCapturedLinks(harvested));
-                await Task.Delay(700, cancellationToken);
+                if (harvested.Count > 0)
+                {
+                    await Dispatcher.UIThread.InvokeAsync(() => window!.HighlightCapturedLinks(harvested));
+                    await Task.Delay(700, cancellationToken);
+                }
             }
-            catch (TaskCanceledException) { /* cancellation is fine */ }
+            catch (OperationCanceledException) { /* cancel during flash is fine */ }
             finally
             {
                 await Dispatcher.UIThread.InvokeAsync(window!.Close);
             }
-            return harvested;
+            return new HarvestResult(false, harvested);
         }
+
 
         public void HighlightCapturedLinks(IReadOnlyList<HarvestedLink> links)
         {
@@ -60,19 +78,17 @@ partial class VisualElementContext
             // mask window. ScreenSelectionMaskWindow already has the
             // tooling for one rect (selection); we (ab)use the same
             // primitive by drawing each link as a thin border child.
+            // Visual is best-effort — a closed window or detached canvas
+            // shouldn't break the harvest path that owns the data.
             try
             {
                 foreach (var mask in MaskWindows)
                     mask.SetCapturedLinkRects(links);
-            }
-            catch { /* visual is best-effort */ }
-            // Also update the tooltip count for instant numeric feedback.
-            try
-            {
                 if (ToolTipWindow?.ToolTip is { } tt)
                     tt.SizeInfo = $"{links.Count} link{(links.Count == 1 ? "" : "s")}";
             }
-            catch { /* ignore */ }
+            catch (InvalidOperationException) { /* window already closed */ }
+            catch (NullReferenceException) { /* mask/canvas torn down */ }
         }
 
         private readonly TaskCompletionSource<PixelRect?> _rectPromise = new();
@@ -95,11 +111,12 @@ partial class VisualElementContext
 
         protected override void OnClosed(EventArgs e)
         {
-            // OnLeftButtonUp / OnCanceled already set the promise. This is
-            // a TrySetResult so any racy close path (Esc during highlight
-            // flash) still resolves the awaiter rather than hanging.
-            if (_wasCanceled) _rectPromise.TrySetResult(null);
-            else _rectPromise.TrySetResult(null); // already-set TrySet is no-op
+            // OnLeftButtonUp / OnCanceled normally complete the promise
+            // first. Resolve to null here as a safety net for any close
+            // path that bypasses both (window manager kill, exception in
+            // OnLeftButtonUp). TrySet is a no-op once already set, so a
+            // valid drag rect already in the promise survives intact.
+            _rectPromise.TrySetResult(null);
             base.OnClosed(e);
         }
 
@@ -173,14 +190,27 @@ partial class VisualElementContext
             {
                 try
                 {
+                    // Per-pid + per-millisecond filename so concurrent
+                    // harvests in different processes don't race on the
+                    // same path. Owner-only permission (0600) — dump may
+                    // contain page URLs and rendered text the user has
+                    // open at the moment.
                     var path = System.IO.Path.Combine(
                         Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-                        ".everywhere-linkrect-dump.txt");
+                        $".everywhere-linkrect-dump-{Environment.ProcessId}-{DateTimeOffset.Now:yyyyMMddHHmmssfff}.txt");
                     dump = new System.IO.StreamWriter(path, append: false);
                     dump.WriteLine($"# LinkRect dump @ {DateTimeOffset.Now:O}");
                     dump.WriteLine($"# dragRect=({dragRect.X},{dragRect.Y},{dragRect.Width}x{dragRect.Height})");
+                    try
+                    {
+                        // chmod 600 — System.IO doesn't expose this on macOS
+                        // directly, fall back to syscall via File.SetUnixFileMode.
+                        File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+                    }
+                    catch { /* best-effort */ }
                 }
-                catch { dump = null; }
+                catch (System.IO.IOException) { dump = null; }
+                catch (UnauthorizedAccessException) { dump = null; }
             }
 
             // Enumerate processes that own on-screen windows whose bounds
@@ -300,14 +330,13 @@ partial class VisualElementContext
                         // with titles (GitHub release asset svg+label combos
                         // get titles via the AXDescription / row-text
                         // fallback chain).
-                        // Treat anchor as an icon-only nav element when:
-                        //   - no title from any of: AXTitle/AXDescription/
-                        //     AXValue/ancestor row text, AND
-                        //   - bbox is small (any side <=32px) — typical for
-                        //     16x16, 24x24, 28x28 svg-only buttons that
-                        //     trigger copy / open-in-new-tab / share etc.
+                        // Treat anchor as an icon-only nav element when
+                        // both axes are small AND no title surfaces from
+                        // any AX channel. Using OR here would false-drop
+                        // wide-but-short text anchors (e.g. text-only
+                        // breadcrumb at 220x18 on a list page).
                         var isUntitledIcon = string.IsNullOrEmpty(title)
-                            && (bounds.Width <= 32 || bounds.Height <= 32);
+                            && bounds.Width <= 32 && bounds.Height <= 32;
                         if (!isUntitledIcon)
                         {
                             var newLink = new HarvestedLink(title ?? string.Empty, url, bounds);
@@ -394,9 +423,20 @@ partial class VisualElementContext
         private static bool TryExtractHttpUrl(string text, out string url)
         {
             var m = _httpUrlRegex.Match(text);
-            if (m.Success) { url = m.Value.TrimEnd('.', ',', ')', ']', ';'); return true; }
-            url = string.Empty;
-            return false;
+            if (!m.Success) { url = string.Empty; return false; }
+            var v = m.Value;
+            // Strip trailing punctuation that's almost never part of a URL
+            // (sentence-end period, comma, semicolon). Be careful with
+            // closing brackets — Wikipedia URLs like .../Foo_(bar) end in
+            // ')' that IS part of the path. Only trim ')'/']' when the
+            // matching opener is missing in the URL itself.
+            v = v.TrimEnd('.', ',', ';');
+            while (v.EndsWith(')') && v.Count(c => c == '(') < v.Count(c => c == ')'))
+                v = v[..^1];
+            while (v.EndsWith(']') && v.Count(c => c == '[') < v.Count(c => c == ']'))
+                v = v[..^1];
+            url = v;
+            return true;
         }
 
         private static void CollectAllOnScreenPids(HashSet<int> pids, PixelRect dragRect)

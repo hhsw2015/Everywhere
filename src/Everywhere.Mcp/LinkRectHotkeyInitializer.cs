@@ -121,34 +121,49 @@ public sealed class LinkRectHotkeyInitializer : IAsyncInitializer
             try
             {
                 var sw = System.Diagnostics.Stopwatch.StartNew();
-                var harvested = await _visualContext.HarvestLinksAsync(CancellationToken.None);
+                var result = await _visualContext.HarvestLinksAsync(CancellationToken.None);
                 sw.Stop();
+                var links = result.Links ?? Array.Empty<HarvestedLink>();
                 _logger.LogInformation(
-                    "LinkRect: harvest took {Ms}ms, returned {Count} link(s)",
-                    sw.ElapsedMilliseconds, harvested?.Count ?? 0);
-                if (harvested is null || harvested.Count == 0)
+                    "LinkRect: harvest took {Ms}ms, returned {Count} link(s) canceled={Canceled}",
+                    sw.ElapsedMilliseconds, links.Count, result.Canceled);
+                if (result.Canceled)
                 {
-                    _logger.LogInformation("LinkRect: no hyperlinks harvested (rect empty / canceled / AX tree had no in-rect links)");
-                    // Still bring the agent app to front so users get visible
-                    // feedback when their rect only covered javascript: anchors
-                    // (most row-click sites). Without this the hotkey looks
-                    // broken when in fact AX just had nothing navigable to give.
+                    // User pressed Esc / right-click — keep the user in
+                    // their current app, no agent activation.
+                    return;
+                }
+                if (links.Count == 0)
+                {
+                    _logger.LogInformation("LinkRect: rect produced no navigable hyperlinks");
+                    // Bring the agent app to front anyway so users get
+                    // visible feedback when their rect only covered
+                    // javascript: anchors (most row-click sites). Without
+                    // this the hotkey looks broken when AX simply had
+                    // nothing navigable to give.
                     _contextWriter.ActivateAgent();
                     return;
                 }
-                // Dump titles+urls for debugging — Mac/Win sometimes report
-                // 1 link from a multi-link rect when AX tree is partial.
-                for (var i = 0; i < harvested.Count; i++)
+                // Per-link Debug rows are gated on logger level — building
+                // the strings for hundreds of anchors is wasted work when
+                // logger is at Info and the message will be discarded.
+                if (_logger.IsEnabled(LogLevel.Debug))
                 {
-                    var h = harvested[i];
-                    _logger.LogDebug("LinkRect[{I}] bbox=({X},{Y},{W}x{H}) title=\"{T}\" url={U}",
-                        i, h.Bounds.X, h.Bounds.Y, h.Bounds.Width, h.Bounds.Height,
-                        h.Title, h.Url);
+                    var cap = Math.Min(links.Count, 50);
+                    for (var i = 0; i < cap; i++)
+                    {
+                        var h = links[i];
+                        _logger.LogDebug("LinkRect[{I}] bbox=({X},{Y},{W}x{H}) title=\"{T}\" url={U}",
+                            i, h.Bounds.X, h.Bounds.Y, h.Bounds.Width, h.Bounds.Height,
+                            h.Title, h.Url);
+                    }
+                    if (links.Count > cap)
+                        _logger.LogDebug("LinkRect: {Extra} additional links omitted from debug log", links.Count - cap);
                 }
-                var pairs = new List<(string Title, string Url)>(harvested.Count);
-                foreach (var h in harvested) pairs.Add((h.Title, h.Url));
+                var pairs = new List<(string Title, string Url)>(links.Count);
+                foreach (var h in links) pairs.Add((h.Title, h.Url));
                 await _contextWriter.CaptureLinksAsync(pairs);
-                _logger.LogInformation("LinkRect stash filled with {Count} links", harvested.Count);
+                _logger.LogInformation("LinkRect stash filled with {Count} links", links.Count);
             }
             catch (Exception ex)
             {

@@ -73,7 +73,7 @@ public partial class VisualElementContext(IWindowHelper windowHelper) : IVisualE
 
     public Task<Bitmap?> TakeScreenshotAsync(ScreenSelectionMode? initialMode) => ScreenshotSession.TakeAsync(windowHelper, initialMode);
 
-    public Task<IReadOnlyList<HarvestedLink>> HarvestLinksAsync(CancellationToken cancellationToken = default) =>
+    public Task<HarvestResult> HarvestLinksAsync(CancellationToken cancellationToken = default) =>
         LinkRectSession.HarvestAsync(windowHelper, cancellationToken);
 
     private static AutomationVisualElementImpl? TryCreateVisualElement(Func<IUIAutomationElement?> factory)
