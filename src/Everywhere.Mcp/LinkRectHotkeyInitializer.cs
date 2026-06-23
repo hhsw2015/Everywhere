@@ -120,11 +120,25 @@ public sealed class LinkRectHotkeyInitializer : IAsyncInitializer
             }
             try
             {
+                var sw = System.Diagnostics.Stopwatch.StartNew();
                 var harvested = await _visualContext.HarvestLinksAsync(CancellationToken.None);
+                sw.Stop();
+                _logger.LogInformation(
+                    "LinkRect: harvest took {Ms}ms, returned {Count} link(s)",
+                    sw.ElapsedMilliseconds, harvested?.Count ?? 0);
                 if (harvested is null || harvested.Count == 0)
                 {
-                    _logger.LogInformation("LinkRect: no hyperlinks harvested (rect empty or no AX links)");
+                    _logger.LogInformation("LinkRect: no hyperlinks harvested (rect empty / canceled / AX tree had no in-rect links)");
                     return;
+                }
+                // Dump titles+urls for debugging — Mac/Win sometimes report
+                // 1 link from a multi-link rect when AX tree is partial.
+                for (var i = 0; i < harvested.Count; i++)
+                {
+                    var h = harvested[i];
+                    _logger.LogDebug("LinkRect[{I}] bbox=({X},{Y},{W}x{H}) title=\"{T}\" url={U}",
+                        i, h.Bounds.X, h.Bounds.Y, h.Bounds.Width, h.Bounds.Height,
+                        h.Title, h.Url);
                 }
                 var pairs = new List<(string Title, string Url)>(harvested.Count);
                 foreach (var h in harvested) pairs.Add((h.Title, h.Url));
