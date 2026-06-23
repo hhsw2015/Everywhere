@@ -293,22 +293,25 @@ partial class VisualElementContext
                     // turn, then ancestor row text as a last resort.
                     // Only fires when AXURL is a non-navigable scheme so
                     // well-behaved sites are untouched.
+                    var rescuedExtras = (List<string>?)null;
                     if (!string.IsNullOrEmpty(url) && !IsAllowedScheme(url))
                     {
-                        string? rescue = null;
-                        var found = string.Empty;
-                        // Build the rescue candidate list lazily — first hit
-                        // that contains an http(s) URL wins.
+                        // First non-empty candidate that yields any http URL
+                        // wins — note xlinkBook may pack multiple URLs into
+                        // one aria-label as "url1*url2*url3", so harvest ALL
+                        // matches from that string and add the extras to
+                        // byUrl directly (the primary takes the anchor's
+                        // bbox/title slot).
                         foreach (var probe in EnumerateRescueCandidates(node))
                         {
                             if (string.IsNullOrWhiteSpace(probe)) continue;
-                            if (TryExtractHttpUrl(probe!, out found))
-                            {
-                                rescue = probe;
-                                break;
-                            }
+                            var all = ExtractAllHttpUrls(probe!);
+                            if (all.Count == 0) continue;
+                            url = all[0];
+                            if (all.Count > 1)
+                                rescuedExtras = all.GetRange(1, all.Count - 1);
+                            break;
                         }
-                        if (rescue is not null) url = found;
                     }
                     if (!string.IsNullOrEmpty(url)
                         && url!.Length <= 2048
@@ -347,22 +350,19 @@ partial class VisualElementContext
                             && bounds.Width <= 32 && bounds.Height <= 32;
                         if (!isUntitledIcon)
                         {
-                            var newLink = new HarvestedLink(title ?? string.Empty, url, bounds);
-                            if (byUrl.TryGetValue(url, out var existing))
+                            AddOrUpgrade(byUrl, new HarvestedLink(title ?? string.Empty, url, bounds));
+                        }
+                        // Additional URLs packed into the same aria-label
+                        // (xlinkBook "url1*url2*url3" pattern) get their own
+                        // entries — we share the anchor bbox since they all
+                        // sit on the same row in the source markup.
+                        if (rescuedExtras is not null)
+                        {
+                            foreach (var extra in rescuedExtras)
                             {
-                                // Same URL seen again — keep the variant with
-                                // the better title, fall back to the larger
-                                // bbox (usually the label rather than icon).
-                                var existingScore = (string.IsNullOrEmpty(existing.Title) ? 0 : 100)
-                                                    + existing.Bounds.Width * existing.Bounds.Height;
-                                var newScore = (string.IsNullOrEmpty(newLink.Title) ? 0 : 100)
-                                               + newLink.Bounds.Width * newLink.Bounds.Height;
-                                if (newScore > existingScore)
-                                    byUrl[url] = newLink;
-                            }
-                            else
-                            {
-                                byUrl[url] = newLink;
+                                if (string.IsNullOrEmpty(extra) || extra.Length > 2048) continue;
+                                if (!IsAllowedScheme(extra)) continue;
+                                AddOrUpgrade(byUrl, new HarvestedLink(extra, extra, bounds));
                             }
                         }
                     }
@@ -425,8 +425,50 @@ partial class VisualElementContext
         // Pull the first http(s) URL out of a string. Used to rescue real
         // URLs from anchors whose href is javascript: but whose visible
         // text is the actual destination (xlinkBook popup pattern).
+        // Stops at whitespace, brackets/quotes, AND '*' — xlinkBook joins
+        // multiple URLs in a single aria-label as "url1*url2*url3" so a
+        // permissive regex would swallow all three as one giant URL.
         private static readonly System.Text.RegularExpressions.Regex _httpUrlRegex =
-            new(@"https?://[^\s<>""']+", System.Text.RegularExpressions.RegexOptions.Compiled);
+            new(@"https?://[^\s<>""'*]+", System.Text.RegularExpressions.RegexOptions.Compiled);
+
+        private static void AddOrUpgrade(Dictionary<string, HarvestedLink> byUrl, HarvestedLink link)
+        {
+            if (byUrl.TryGetValue(link.Url, out var existing))
+            {
+                var existingScore = (string.IsNullOrEmpty(existing.Title) ? 0 : 100)
+                                    + existing.Bounds.Width * existing.Bounds.Height;
+                var newScore = (string.IsNullOrEmpty(link.Title) ? 0 : 100)
+                               + link.Bounds.Width * link.Bounds.Height;
+                if (newScore > existingScore) byUrl[link.Url] = link;
+            }
+            else
+            {
+                byUrl[link.Url] = link;
+            }
+        }
+
+        // Pulls every http(s) URL out of a string. Used for the xlinkBook
+        // multi-link aria-label pattern "url1*url2*url3"; falls back to a
+        // single match for normal anchors. @owner/repo shorthand is checked
+        // separately when the regex finds nothing.
+        private static List<string> ExtractAllHttpUrls(string text)
+        {
+            var list = new List<string>(2);
+            foreach (System.Text.RegularExpressions.Match m in _httpUrlRegex.Matches(text))
+            {
+                var v = m.Value.TrimEnd('.', ',', ';');
+                while (v.EndsWith(')') && v.Count(c => c == '(') < v.Count(c => c == ')'))
+                    v = v[..^1];
+                while (v.EndsWith(']') && v.Count(c => c == '[') < v.Count(c => c == ']'))
+                    v = v[..^1];
+                if (!string.IsNullOrEmpty(v)) list.Add(v);
+            }
+            if (list.Count > 0) return list;
+            // Fall through to @owner/repo expansion only when no http URL
+            // was found.
+            if (TryExtractHttpUrl(text, out var single)) list.Add(single);
+            return list;
+        }
 
         private static IEnumerable<string?> EnumerateRescueCandidates(IVisualElement node)
         {
