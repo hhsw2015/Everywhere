@@ -294,6 +294,7 @@ partial class VisualElementContext
                     // Only fires when AXURL is a non-navigable scheme so
                     // well-behaved sites are untouched.
                     var rescuedExtras = (List<string>?)null;
+                    var originalUrlWasRescued = false;
                     if (!string.IsNullOrEmpty(url) && !IsAllowedScheme(url))
                     {
                         // First non-empty candidate that yields any http URL
@@ -308,6 +309,7 @@ partial class VisualElementContext
                             var all = ExtractAllHttpUrls(probe!);
                             if (all.Count == 0) continue;
                             url = all[0];
+                            originalUrlWasRescued = true;
                             if (all.Count > 1)
                                 rescuedExtras = all.GetRange(1, all.Count - 1);
                             break;
@@ -326,15 +328,27 @@ partial class VisualElementContext
                         //      on a sibling/parent <li> (xlinkBook popup, GitHub
                         //      repo row). Walk up ≤3 parents looking for visible
                         //      text bigger than the anchor itself.
-                        var title = node.Name;
-                        if (string.IsNullOrWhiteSpace(title)
-                            && node is AXUIElement axNode)
-                            title = axNode.Description;
-                        if (string.IsNullOrWhiteSpace(title))
-                            title = node.GetText(maxLength: 200);
-                        if (string.IsNullOrWhiteSpace(title))
-                            title = AncestorRowText(node, depth: 3);
-                        if (title is not null && title.Length > 200) title = title[..200];
+                        string? title;
+                        if (rescuedExtras is not null || (originalUrlWasRescued))
+                        {
+                            // The anchor's accessible label held one or more
+                            // packed URLs. Use the rescued URL as the title
+                            // so it isn't polluted by the full url1*url2*url3
+                            // raw string.
+                            title = url;
+                        }
+                        else
+                        {
+                            title = node.Name;
+                            if (string.IsNullOrWhiteSpace(title)
+                                && node is AXUIElement axNode)
+                                title = axNode.Description;
+                            if (string.IsNullOrWhiteSpace(title))
+                                title = node.GetText(maxLength: 200);
+                            if (string.IsNullOrWhiteSpace(title))
+                                title = AncestorRowText(node, depth: 3);
+                            if (title is not null && title.Length > 200) title = title[..200];
+                        }
                         // Drop tiny icon-only anchors with no title — these
                         // are usually utility icons (copy / open-in-new-tab
                         // / share) on row-click sites. We keep tiny anchors
