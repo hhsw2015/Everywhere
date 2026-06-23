@@ -155,6 +155,9 @@ public sealed class ContextStashWriter
                 ProcessId: pid > 0 ? pid : null,
                 WindowTitle: topLevel?.Name,
                 Url: url,
+                SelectedText: null,
+                SelectedApp: null,
+                PinPending: null,
                 PickedLinks: picked);
             await WriteAtomicAsync(FormatForHook(payload), cancellationToken);
             _logger.LogInformation("Context stash captured {Count} links from {App}.", picked.Count, appKey);
