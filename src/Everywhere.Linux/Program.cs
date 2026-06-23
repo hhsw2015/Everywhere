@@ -112,6 +112,9 @@ public static class Program
                 .AddTransient<IAsyncInitializer, SnapshotContextHotkeyInitializer>()
                 .AddTransient<IAsyncInitializer, ClearContextStashHotkeyInitializer>()
                 .AddTransient<IAsyncInitializer, WhiteboardHotkeyInitializer>()
+                // LinkRect not wired on Linux — IVisualElementContext.HarvestLinksAsync
+                // is a stub there. Re-add once an AT-SPI / GTK / KDE implementation lands
+                // so users don't bind a hotkey that silently does nothing.
                 .AddTransient<IAsyncInitializer>(sp => sp.GetRequiredService<Everywhere.Mcp.Snapshot.AutoCaptureService>())
 
             #endregion

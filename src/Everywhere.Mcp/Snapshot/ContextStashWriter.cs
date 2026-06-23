@@ -86,6 +86,86 @@ public sealed class ContextStashWriter
     /// </summary>
     public Task CaptureAsync(IVisualElement seed, CancellationToken cancellationToken = default) => CaptureCoreAsync(seed, cancellationToken);
 
+    /// <summary>
+    /// LinkRect harvest entry: write a batch of (title, url) pairs into the
+    /// agent-state snapshot. Same delivery channel as everything else; the
+    /// agent is the one that decides what to do with them.
+    /// </summary>
+    public async Task CaptureLinksAsync(
+        IReadOnlyList<(string Title, string Url)> links,
+        CancellationToken cancellationToken = default)
+    {
+        if (links is null || links.Count == 0) return;
+        if (!await _writeLock.WaitAsync(0, cancellationToken))
+        {
+            _logger.LogDebug("Context capture already in progress; dropping LinkRect batch.");
+            return;
+        }
+        try
+        {
+            var focused = _context.FocusedElement;
+            var topLevel = WalkToTopLevel(focused) ?? focused;
+            var pid = topLevel?.ProcessId ?? 0;
+            var appKey = pid > 0 ? AppKey.FromProcessId(pid) : null;
+            string? url = null;
+            if (pid > 0)
+            {
+                try { url = _browserUrl.GetUrl(pid); }
+                catch (OperationCanceledException) { throw; }
+                catch (Exception ex) { _logger.LogDebug(ex, "browser url for pid {Pid}", pid); }
+            }
+            // Bound the batch — drag selection on a long page can return
+            // thousands of anchors, which would blow up agent-state size
+            // and downstream get_bulk fan-out. Defense-in-depth scheme
+            // filter mirrors the platform-side check: even if the picker
+            // somehow slipped a javascript:/data: through, we don't write
+            // it to the stash.
+            const int MaxLinks   = 200;
+            const int MaxUrlLen  = 2048;
+            const int MaxTitleLen = 200;
+            var picked = new List<PickedLink>(Math.Min(links.Count, MaxLinks));
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            int dropped = 0, capped = 0;
+            foreach (var (title, linkUrl) in links)
+            {
+                if (string.IsNullOrWhiteSpace(linkUrl)) { dropped++; continue; }
+                if (linkUrl.Length > MaxUrlLen)         { dropped++; continue; }
+                if (!IsAllowedScheme(linkUrl))          { dropped++; continue; }
+                var dedupKey = linkUrl + "\0" + (title ?? string.Empty);
+                if (!seen.Add(dedupKey)) { dropped++; continue; }
+                var trimmedTitle = string.IsNullOrWhiteSpace(title)
+                    ? null
+                    : (title.Length > MaxTitleLen ? title[..MaxTitleLen] : title);
+                picked.Add(new PickedLink(linkUrl, trimmedTitle));
+                if (picked.Count >= MaxLinks)
+                {
+                    capped = links.Count - (picked.Count + dropped);
+                    break;
+                }
+            }
+            if (capped > 0 || dropped > 0)
+                _logger.LogInformation(
+                    "LinkRect batch: kept={Kept} dropped={Dropped} capped_remaining={Capped} total_in={Total}",
+                    picked.Count, dropped, capped, links.Count);
+            if (picked.Count == 0) return;
+            var payload = new ContextSnapshotPayload(
+                SchemaVersion: CurrentSchemaVersion,
+                CapturedAtUtc: DateTimeOffset.UtcNow,
+                App: appKey,
+                ProcessId: pid > 0 ? pid : null,
+                WindowTitle: topLevel?.Name,
+                Url: url,
+                PickedLinks: picked);
+            await WriteAtomicAsync(FormatForHook(payload), cancellationToken);
+            _logger.LogInformation("Context stash captured {Count} links from {App}.", picked.Count, appKey);
+            ActivateAgentApp();
+        }
+        finally
+        {
+            _writeLock.Release();
+        }
+    }
+
     private async Task CaptureCoreAsync(IVisualElement? seed, CancellationToken cancellationToken)
     {
         // Single-flight: rapid hotkey double-presses must serialise on the file
@@ -248,7 +328,24 @@ public sealed class ContextStashWriter
         if (p.PinPending == true) sb.Append("pin_pending=true ");
         if (p.WhiteboardPending == true)
             sb.Append("whiteboard_pending=true regions=").Append(p.WhiteboardRegionCount ?? 0);
+        if (p.PickedLinks is { Count: > 0 } pickedLinks)
+            sb.Append("picked_links=").Append(pickedLinks.Count).Append(' ');
         sb.Append('\n');
+
+        if (p.PickedLinks is { Count: > 0 } linkRows)
+        {
+            // One line per link so the agent can read them without parsing
+            // the JSON envelope. Title trimmed; URL kept full.
+            for (var i = 0; i < linkRows.Count; i++)
+            {
+                var l = linkRows[i];
+                sb.Append("[everywhere-ctx-link] #").Append(i).Append(' ');
+                sb.Append("url=").Append(SanitiseTokenValue(l.Url, 512)).Append(' ');
+                if (l.Title is { Length: > 0 })
+                    sb.Append("title=\"").Append(SanitiseUserText(l.Title, 120)).Append('"');
+                sb.Append('\n');
+            }
+        }
 
         sb.Append("[everywhere-ctx-json] ");
         sb.Append(JsonSerializer.Serialize(p, ContextSnapshotPayload.SerializerOptions));
@@ -393,6 +490,18 @@ public sealed class ContextStashWriter
     }
 
     /// <summary>
+    /// Trust-boundary scheme allow-list. Must mirror the platform-side
+    /// allow-list — a javascript:/data: URL slipping through to agent-state
+    /// could be acted on by a downstream tool.
+    /// </summary>
+    private static bool IsAllowedScheme(string url)
+    {
+        if (Uri.TryCreate(url, UriKind.Absolute, out var u))
+            return u.Scheme is "http" or "https" or "mailto";
+        return false;
+    }
+
+    /// <summary>
     /// For values that should look "tokeny" (no spaces, no brackets) — app key,
     /// URL. URLs we keep as-is for utility but still strip control chars and
     /// the bracket pair.
@@ -500,10 +609,18 @@ internal sealed record ContextSnapshotPayload(
     [property: JsonPropertyName("selected_app")] string? SelectedApp,
     [property: JsonPropertyName("pin_pending")] bool? PinPending,
     [property: JsonPropertyName("whiteboard_pending")] bool? WhiteboardPending = null,
-    [property: JsonPropertyName("whiteboard_region_count")] int? WhiteboardRegionCount = null)
+    [property: JsonPropertyName("whiteboard_region_count")] int? WhiteboardRegionCount = null,
+    // linkclump-plus style harvest: rect-selected hyperlinks. Same delivery
+    // channel as everything else — agent reads agent-state, decides what to
+    // do with them. Everywhere does not POST anywhere on the user's behalf.
+    [property: JsonPropertyName("picked_links")] IReadOnlyList<PickedLink>? PickedLinks = null)
 {
     public static readonly JsonSerializerOptions SerializerOptions = new()
     {
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
     };
 }
+
+internal sealed record PickedLink(
+    [property: JsonPropertyName("url")]    string Url,
+    [property: JsonPropertyName("title")]  string? Title);

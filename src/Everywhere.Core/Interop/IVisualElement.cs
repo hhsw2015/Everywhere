@@ -204,6 +204,14 @@ public interface IVisualElement
     string? Name { get; }
 
     /// <summary>
+    /// For elements of <see cref="VisualElementType.Hyperlink"/>: the
+    /// underlying href / URL exposed via accessibility (AXURL on macOS,
+    /// ValuePattern on Windows). Null for non-link elements or when the
+    /// platform doesn't expose it.
+    /// </summary>
+    string? Url => null;
+
+    /// <summary>
     /// Relative to the screen pixels, regardless of the parent element.
     /// </summary>
     PixelRect BoundingRectangle { get; }

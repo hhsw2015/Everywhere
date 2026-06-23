@@ -117,4 +117,12 @@ public partial class VisualElementContext(
     {
         return backend.Subscribe(observer);
     }
+
+    public Task<IReadOnlyList<HarvestedLink>> HarvestLinksAsync(CancellationToken cancellationToken = default)
+    {
+        // AT-SPI link enumeration varies wildly across desktop environments
+        // and toolkit versions — Wayland adds another layer. Stub for now;
+        // implement per-backend (X11 / GTK / KDE) when there's demand.
+        return Task.FromResult<IReadOnlyList<HarvestedLink>>([]);
+    }
 }

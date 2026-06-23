@@ -1901,6 +1901,9 @@ Rotellina o tasti numerici per cambiare modalità di selezione</value>
     <data name="ScreenSelectionMode_Free" xml:space="preserve">
         <value>Libero</value>
     </data>
+    <data name="ScreenSelectionMode_LinkRect" xml:space="preserve">
+        <value>Rettangolo collegamenti</value>
+    </data>
     <data name="ScreenSelectionToolTip_TipText_Free" xml:space="preserve">
         <value>Tieni premuto il tasto sinistro per selezionare, tasto destro o Esc per uscire
 Rotella o tasti numerici per cambiare modalità di selezione</value>

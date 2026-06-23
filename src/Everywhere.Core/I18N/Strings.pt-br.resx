@@ -1902,6 +1902,9 @@ Roda do mouse ou teclas numéricas para alternar o modo de seleção</value>
     <data name="ScreenSelectionMode_Free" xml:space="preserve">
         <value>Livre</value>
     </data>
+    <data name="ScreenSelectionMode_LinkRect" xml:space="preserve">
+        <value>Retângulo de links</value>
+    </data>
     <data name="ScreenSelectionToolTip_TipText_Free" xml:space="preserve">
         <value>Pressione o botão esquerdo do mouse para selecionar, botão direito ou Esc para sair
 Use a roda do mouse ou teclas numéricas para alternar o modo de seleção</value>

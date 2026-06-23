@@ -154,6 +154,47 @@ public partial class AXUIElement : NSObject, IVisualElement
 
     public string? Name => GetAttribute<NSString>(AXAttributeConstants.Title);
 
+    public string? Url
+    {
+        get
+        {
+            // AXURL on Hyperlink elements is *usually* a CFURLRef, but some
+            // apps (Electron, older WebKit, non-browser hosts) return a
+            // CFString or even AXTextMarker. Type-check before unwrapping
+            // so a non-URL handle never reaches CFURLGetString. Wrap the
+            // whole thing — AX can throw on apps that have torn down their
+            // accessibility tree mid-call.
+            try
+            {
+                if (CopyAttributeValue(Handle, AXAttributeConstants.URL.Handle, out var raw) != AXError.Success
+                    || raw == 0)
+                    return null;
+                try
+                {
+                    var typeId = CFGetTypeID(raw);
+                    if (typeId == CFURLGetTypeID())
+                    {
+                        var cfStr = CFURLGetString(raw);
+                        if (cfStr == 0) return null;
+                        using var nsStr = Runtime.GetNSObject<NSString>(cfStr);
+                        return nsStr?.ToString();
+                    }
+                    if (typeId == CFStringGetTypeID())
+                    {
+                        using var nsStr = Runtime.GetNSObject<NSString>(raw);
+                        return nsStr?.ToString();
+                    }
+                    return null;
+                }
+                finally { CFInterop.CFRelease(raw); }
+            }
+            catch
+            {
+                return null;
+            }
+        }
+    }
+
     public PixelRect BoundingRectangle
     {
         get
@@ -460,6 +501,22 @@ public partial class AXUIElement : NSObject, IVisualElement
 
     [LibraryImport(AppServices, EntryPoint = "AXUIElementCopyAttributeValue")]
     private static partial AXError CopyAttributeValue(nint element, nint attribute, out nint value);
+
+    // CoreFoundation path is identical to the one used in MacBrowserUrlReader.
+    private const string CoreFoundationLib =
+        "/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation";
+
+    [LibraryImport(CoreFoundationLib, EntryPoint = "CFURLGetString")]
+    private static partial nint CFURLGetString(nint anUrl);
+
+    [LibraryImport(CoreFoundationLib, EntryPoint = "CFGetTypeID")]
+    private static partial nint CFGetTypeID(nint cf);
+
+    [LibraryImport(CoreFoundationLib, EntryPoint = "CFURLGetTypeID")]
+    private static partial nint CFURLGetTypeID();
+
+    [LibraryImport(CoreFoundationLib, EntryPoint = "CFStringGetTypeID")]
+    private static partial nint CFStringGetTypeID();
 
     [LibraryImport(AppServices, EntryPoint = "AXUIElementPerformAction")]
     private static partial AXError PerformAction(nint element, nint action);

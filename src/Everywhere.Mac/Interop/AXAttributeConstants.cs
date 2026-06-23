@@ -30,6 +30,10 @@ public static class AXAttributeConstants
     public static readonly NSString EnhancedUserInterface = new("AXEnhancedUserInterface");
     public static readonly NSString ManualAccessibility = new("AXManualAccessibility");
 
+    // Hyperlink href — Safari / Chrome / Firefox expose this as a CFURLRef
+    // on AXLink nodes.
+    public static readonly NSString URL = new("AXURL");
+
     // Actions
     public static readonly NSString Press = new("AXPress");
 }

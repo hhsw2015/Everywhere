@@ -1902,6 +1902,9 @@
     <data name="ScreenSelectionMode_Free" xml:space="preserve">
         <value>自由</value>
     </data>
+    <data name="ScreenSelectionMode_LinkRect" xml:space="preserve">
+        <value>框选超链接</value>
+    </data>
     <data name="ScreenSelectionToolTip_TipText_Free" xml:space="preserve">
         <value>按住左键框选，右键或 Esc 退出
 滚轮或数字键切换选择模式</value>
@@ -2236,6 +2239,12 @@
     </data>
     <data name="ShortcutSettings_Whiteboard_Desription" xml:space="preserve">
         <value>按下后在屏幕上涂鸦（圆圈/下划线/箭头/X），按 Enter 把圈中的内容发给 AI，按 Esc 取消，Cmd+Z 撤销上一笔。像给 AI 用的激光笔。</value>
+    </data>
+    <data name="ShortcutSettings_LinkRect_Header" xml:space="preserve">
+        <value>框选超链接</value>
+    </data>
+    <data name="ShortcutSettings_LinkRect_Description" xml:space="preserve">
+        <value>拖拽矩形框选页面中的超链接，将命中的标题与 URL 批量写入智能体上下文。</value>
     </data>
     <data name="SettingsCategory_Settings_McpServer_Header" xml:space="preserve">
         <value>MCP 服务器</value>

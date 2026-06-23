@@ -1900,6 +1900,9 @@ Seçim modlarını değiştirmek için kaydırma tekerleğini veya sayı tuşlar
     <data name="ScreenSelectionMode_Free" xml:space="preserve">
         <value>Serbest</value>
     </data>
+    <data name="ScreenSelectionMode_LinkRect" xml:space="preserve">
+        <value>Bağlantı Dikdörtgeni</value>
+    </data>
     <data name="ScreenSelectionToolTip_TipText_Free" xml:space="preserve">
         <value>Sol tuşa basılı tutarak seçim yapın, sağ tuş veya Esc ile çıkın
 Seçim modunu değiştirmek için kaydırıcı veya rakam tuşlarını kullanın</value>

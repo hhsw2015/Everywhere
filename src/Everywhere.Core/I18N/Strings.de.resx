@@ -1900,6 +1900,9 @@ Scrollrad oder Zifferntasten zum Wechseln der Auswahlmodi</value>
     <data name="ScreenSelectionMode_Free" xml:space="preserve">
         <value>Frei</value>
     </data>
+    <data name="ScreenSelectionMode_LinkRect" xml:space="preserve">
+        <value>Link-Rechteck</value>
+    </data>
     <data name="ScreenSelectionToolTip_TipText_Free" xml:space="preserve">
         <value>Halten Sie die linke Maustaste gedrückt, um auszuwählen, rechte Maustaste oder Esc zum Beenden
 Scrollrad oder Zifferntasten zum Wechseln des Auswahlmodus</value>

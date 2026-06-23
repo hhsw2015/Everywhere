@@ -1901,6 +1901,9 @@ Scroll wheel or number keys to switch pick modes</value>
     <data name="ScreenSelectionMode_Free" xml:space="preserve">
         <value>Free</value>
     </data>
+    <data name="ScreenSelectionMode_LinkRect" xml:space="preserve">
+        <value>LinkRect</value>
+    </data>
     <data name="ScreenSelectionToolTip_TipText_Free" xml:space="preserve">
         <value>Hold left mouse button to select, right-click or Esc to exit
 Use scroll wheel or number keys to switch selection mode</value>
@@ -2235,6 +2238,12 @@ Use scroll wheel or number keys to switch selection mode</value>
     </data>
     <data name="ShortcutSettings_Whiteboard_Desription" xml:space="preserve">
         <value>Press and hold to draw gestures (circle / underline / arrow / X) over the screen. Release to send the annotated regions to the agent. Like a laser pointer for AI.</value>
+    </data>
+    <data name="ShortcutSettings_LinkRect_Header" xml:space="preserve">
+        <value>Link Rect</value>
+    </data>
+    <data name="ShortcutSettings_LinkRect_Description" xml:space="preserve">
+        <value>Drag a rectangle over a page to harvest every hyperlink it intersects (title + URL) into the agent context. Like linkclump for the AI.</value>
     </data>
     <data name="SettingsCategory_Settings_McpServer_Header" xml:space="preserve">
         <value>MCP Server</value>

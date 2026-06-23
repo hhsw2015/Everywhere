@@ -80,4 +80,9 @@ public partial class VisualElementContext(IWindowHelper windowHelper) : IVisualE
     {
         return ScreenshotSession.TakeAsync(windowHelper, initialMode);
     }
+
+    public Task<IReadOnlyList<HarvestedLink>> HarvestLinksAsync(CancellationToken cancellationToken = default)
+    {
+        return LinkRectSession.HarvestAsync(windowHelper, cancellationToken);
+    }
 }

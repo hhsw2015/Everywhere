@@ -191,6 +191,31 @@ public partial class VisualElementContext
             }
         }
 
+        public string? Url
+        {
+            get
+            {
+                if (Type != VisualElementType.Hyperlink) return null;
+                try
+                {
+                    // Modern UIA browsers (Edge, Chrome, Firefox) put the
+                    // href on ValuePattern; older / IE-derived shells put
+                    // it on LegacyIAccessiblePattern.Value.
+                    if (_element.TryGetValuePattern() is { } vp
+                        && !string.IsNullOrEmpty(vp.CurrentValue))
+                        return vp.CurrentValue;
+                    if (_element.TryGetLegacyIAccessiblePattern() is { } lp
+                        && !string.IsNullOrEmpty(lp.CurrentValue))
+                        return lp.CurrentValue;
+                    return null;
+                }
+                catch
+                {
+                    return null;
+                }
+            }
+        }
+
         public PixelRect BoundingRectangle => GetBoundingRectangle(_element);
 
         public int ProcessId { get; } = element.GetCurrentProcessIdOrDefault();

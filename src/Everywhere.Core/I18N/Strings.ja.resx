@@ -1901,6 +1901,9 @@
     <data name="ScreenSelectionMode_Free" xml:space="preserve">
         <value>自由</value>
     </data>
+    <data name="ScreenSelectionMode_LinkRect" xml:space="preserve">
+        <value>リンク矩形選択</value>
+    </data>
     <data name="ScreenSelectionToolTip_TipText_Free" xml:space="preserve">
         <value>左クリックを押しながら選択し、右クリックまたは Esc で終了
 ホイールまたは数字キーで選択モードを切り替え</value>

@@ -1,4 +1,5 @@
-﻿using Avalonia.Media.Imaging;
+﻿using Avalonia;
+using Avalonia.Media.Imaging;
 
 namespace Everywhere.Interop;
 
@@ -30,7 +31,15 @@ public enum ScreenSelectionMode
     /// Free selection mode.
     /// </summary>
     [DynamicResourceKey(LocaleKey.ScreenSelectionMode_Free)]
-    Free
+    Free,
+
+    /// <summary>
+    /// Drag a rectangle and harvest every hyperlink element whose bounds
+    /// intersect the rect. The (title, URL) batch is written into the
+    /// agent-state snapshot via the same channel as a single-element pick.
+    /// </summary>
+    [DynamicResourceKey(LocaleKey.ScreenSelectionMode_LinkRect)]
+    LinkRect
 }
 
 /// <summary>
@@ -103,4 +112,22 @@ public interface IVisualElementContext : IObservable<TextSelectionData>
     /// </param>
     /// <returns></returns>
     Task<Bitmap?> TakeScreenshotAsync(ScreenSelectionMode? initialMode);
+
+    /// <summary>
+    /// Drag a rectangle and harvest every Hyperlink element inside it.
+    /// Returns the batch of (Title, Url) pairs. Same delivery channel as
+    /// the rest of the picker — caller writes the result into the
+    /// agent-state snapshot via ContextStashWriter.
+    /// </summary>
+    Task<IReadOnlyList<HarvestedLink>> HarvestLinksAsync(CancellationToken cancellationToken = default);
 }
+
+/// <summary>
+/// One link harvested by <see cref="IVisualElementContext.HarvestLinksAsync"/>.
+/// Bounds are in screen pixels — the caller may want to attribute the link
+/// to a specific app/window for downstream tracking.
+/// </summary>
+public readonly record struct HarvestedLink(
+    string Title,
+    string Url,
+    PixelRect Bounds);

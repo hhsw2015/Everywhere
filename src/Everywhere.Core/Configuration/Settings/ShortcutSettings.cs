@@ -81,4 +81,15 @@ public sealed partial class ShortcutSettings : SettingsBase, ISettingsCategory
         LocaleKey.ShortcutSettings_Whiteboard_Desription)]
     [SettingsTemplatedItem]
     public CompositeKeyboardShortcut Whiteboard { get; } = new();
+
+    /// <summary>
+    /// Hold the hotkey, drag a rectangle over a page; every hyperlink the
+    /// rect intersects is captured (title + URL) into the agent-state
+    /// snapshot. Same delivery channel as a single-element pick.
+    /// </summary>
+    [DynamicResourceKey(
+        LocaleKey.ShortcutSettings_LinkRect_Header,
+        LocaleKey.ShortcutSettings_LinkRect_Description)]
+    [SettingsTemplatedItem]
+    public CompositeKeyboardShortcut LinkRect { get; } = new();
 }
