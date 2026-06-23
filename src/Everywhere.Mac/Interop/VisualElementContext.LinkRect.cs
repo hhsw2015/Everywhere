@@ -1,6 +1,8 @@
 using Avalonia;
 using Avalonia.Threading;
+using CoreFoundation;
 using Everywhere.Interop;
+using ObjCRuntime;
 using HarvestedLink = Everywhere.Interop.HarvestedLink;
 
 namespace Everywhere.Mac.Interop;
