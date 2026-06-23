@@ -57,7 +57,7 @@ public sealed record FunctionCallContext(
             return RequestConsentResult.Accepted;
         }
 
-        var consentDecision = await ChatContext.HandleConsentRequestAsync(
+        var consentDecision = await ChatContext.UserInterfaceBroker.HandleConsentRequestAsync(
             headerKey,
             content,
             rememberMasks,
@@ -91,9 +91,8 @@ public sealed record FunctionCallContext(
         IReadOnlyList<ChatPluginQuestion> questions,
         CancellationToken cancellationToken = default)
     {
-        return ChatContext.AskQuestionAsync(questions, cancellationToken);
+        return ChatContext.UserInterfaceBroker.HandleAskQuestionAsync(questions, cancellationToken);
     }
 
     #endregion
-
 }

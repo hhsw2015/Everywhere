@@ -110,6 +110,7 @@ public sealed partial class ChatMessageNode : ObservableObject, IDisposable
     public void Dispose()
     {
         Message.PropertyChanged -= HandleMessagePropertyChanged;
+        if (Message is IDisposable disposable) disposable.Dispose();
         _childrenCountChangedSubscription.Dispose();
         _children.Dispose();
     }

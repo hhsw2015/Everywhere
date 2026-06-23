@@ -289,11 +289,23 @@ public sealed partial class ChatPluginCodeBlockDisplayBlock(string code, string?
     public string? Language { get; } = language;
 }
 
+/// <summary>
+/// Represents a display block that contains a chat context, allowing the user to view and interact with a specific chat session.
+/// </summary>
+/// <remarks>
+/// Owns the ChatContext and will dispose it when this block is disposed. This is important to prevent memory leaks and ensure that resources are released properly.
+/// </remarks>
+/// <param name="chatContext"></param>
 [MessagePackObject(AllowPrivate = true, OnlyIncludeKeyedMembers = true)]
-public sealed partial class ChatPluginChatContextDisplayBlock(ChatContext chatContext) : ChatPluginDisplayBlock
+public sealed partial class ChatPluginChatContextDisplayBlock(ChatContext chatContext) : ChatPluginDisplayBlock, IDisposable
 {
     [Key(0)]
     public ChatContext ChatContext { get; } = chatContext;
+
+    public void Dispose()
+    {
+        ChatContext.Dispose();
+    }
 }
 
 [MessagePackObject(AllowPrivate = true, OnlyIncludeKeyedMembers = true)]

@@ -11,10 +11,7 @@ using ZLinq;
 namespace Everywhere.Chat;
 
 [MessagePackObject(OnlyIncludeKeyedMembers = true, AllowPrivate = true)]
-public sealed partial class AssistantChatMessage :
-    ChatMessage,
-    IHaveChatAttachments,
-    ISourceList<AssistantChatMessageSpan>
+public sealed partial class AssistantChatMessage : ChatMessage, IHaveChatAttachments, ISourceList<AssistantChatMessageSpan>
 {
     public override AuthorRole Role => AuthorRole.Assistant;
 
@@ -160,7 +157,10 @@ public sealed partial class AssistantChatMessage :
     public override string ToString()
     {
         var builder = new StringBuilder();
-        foreach (var span in _spansSource.Items.AsValueEnumerable().OfType<AssistantChatMessageTextSpan>().Where(s => s.ContentMarkdownBuilder.Length > 0))
+        foreach (var span in _spansSource.Items
+                     .AsValueEnumerable()
+                     .OfType<AssistantChatMessageTextSpan>()
+                     .Where(s => s.ContentMarkdownBuilder.Length > 0))
         {
             builder.AppendLine(span.ContentMarkdownBuilder.ToString());
         }
@@ -170,6 +170,14 @@ public sealed partial class AssistantChatMessage :
 
     public void Dispose()
     {
+        _spansSource.Edit(list =>
+        {
+            foreach (var disposable in list.AsValueEnumerable().OfType<IDisposable>())
+            {
+                disposable.Dispose();
+            }
+        });
+
         _spansSource.Dispose();
         _spansConnection.Dispose();
     }
@@ -201,4 +209,5 @@ public sealed partial class AssistantChatMessage :
     }
 
     #endregion
+
 }

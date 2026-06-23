@@ -770,7 +770,7 @@
           <v:ChatPluginUserInterfaceHost
             Margin="8"
             IsVisible="{Binding !!$self.ItemsSource?.Count, TargetNullValue={x:False}}"
-            ItemsSource="{Binding ChatContextManager.Current.ChatPluginUserInterfaceItems}"/>
+            ItemsSource="{Binding ChatContextManager.Current.UserInterfaceBroker.ChatPluginUserInterfaceItems}"/>
 
           <Expander
             Classes="ReverseIcon" Padding="8,4"
@@ -788,9 +788,9 @@
                     <I18N Key="{x:Static LocaleKey.ChatWindow_TodoList_Header}">
                       <Binding
                         Converter="{x:Static vc:ChatPluginTodoItemsValueConverters.ToCompletedCount}"
-                        Path="ChatContextManager.Current.TodoItems" TargetNullValue="0"/>
+                        Path="ChatContextManager.Current.UserInterfaceBroker.TodoItems" TargetNullValue="0"/>
                       <Binding
-                        Path="ChatContextManager.Current.TodoItems?.Count" TargetNullValue="0"/>
+                        Path="ChatContextManager.Current.UserInterfaceBroker.TodoItems?.Count" TargetNullValue="0"/>
                     </I18N>
                   </TextBlock.Text>
                 </TextBlock>
@@ -799,7 +799,7 @@
 
             <ItemsControl
               x:Name="TodoItemsControl"
-              ItemsSource="{Binding ChatContextManager.Current.TodoItems}">
+              ItemsSource="{Binding ChatContextManager.Current.UserInterfaceBroker.TodoItems}">
               <ItemsControl.ItemTemplate>
                 <DataTemplate x:DataType="p:ChatPluginTodoItem">
                   <Grid

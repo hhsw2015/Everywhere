@@ -154,14 +154,14 @@ public sealed class EssentialPlugin : BuiltInChatPlugin
             }
             case TodoAction.Reset:
             {
-                chatContext.TodoItems = items;
+                chatContext.UserInterfaceBroker.SetTodoItems(items);
                 displaySink.AppendDynamicResourceKey(
                     new FormattedDynamicResourceKey(
                         LocaleKey.BuiltInChatPlugin_Essential_ManageTodoList_Reset,
                         new DirectResourceKey(items.Count)));
                 return "Todo list reset successfully";
             }
-            case TodoAction.Read when chatContext.TodoItems?.Count is not > 0:
+            case TodoAction.Read when chatContext.UserInterfaceBroker.TodoItems.Count is not > 0:
             {
                 displaySink.AppendDynamicResourceKey(
                     new FormattedDynamicResourceKey(
@@ -175,10 +175,10 @@ public sealed class EssentialPlugin : BuiltInChatPlugin
                 displaySink.AppendDynamicResourceKey(
                     new FormattedDynamicResourceKey(
                         LocaleKey.BuiltInChatPlugin_Essential_ManageTodoList_Read,
-                        new DirectResourceKey(chatContext.TodoItems.Count)));
+                        new DirectResourceKey(chatContext.UserInterfaceBroker.TodoItems.Count)));
 
                 var sb = new StringBuilder();
-                foreach (var item in chatContext.TodoItems)
+                foreach (var item in chatContext.UserInterfaceBroker.TodoItems)
                 {
                     sb.AppendLine($"- ID: {item.Id}, Status: {item.Status}, Title: {item.Title}");
                     if (!string.IsNullOrWhiteSpace(item.Description))

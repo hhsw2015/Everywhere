@@ -2,6 +2,7 @@
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Reactive.Disposables;
+using System.Reactive.Disposables.Fluent;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Messaging;
@@ -16,6 +17,7 @@ using Everywhere.Interop;
 using Everywhere.Messages;
 using Everywhere.Utilities;
 using MessagePack;
+using Serilog;
 using ZLinq;
 
 namespace Everywhere.Chat;
@@ -61,7 +63,7 @@ public sealed partial class ChatContext : ObservableObject, IObservableList<Chat
     /// This is also not serialized.
     /// </summary>
     [IgnoreMember]
-    public ResilientCache<int, IVisualElement> VisualElements { get; private init; } = new();
+    public ResilientCache<int, IVisualElement> VisualElements { get; }
 
     /// <summary>
     /// A map of granted permissions for plugin functions in this chat context (session).
@@ -69,16 +71,19 @@ public sealed partial class ChatContext : ObservableObject, IObservableList<Chat
     /// Value: is granted or not.
     /// </summary>
     [IgnoreMember]
-    public ConcurrentDictionary<string, bool> IsPermissionGrantedRecords { get; private init; } = new();
+    public ConcurrentDictionary<string, bool> IsPermissionGrantedRecords { get; }
 
     /// <summary>
     /// Tool and plugin rulesets for this chat context. This is used to determine which plugins and functions are enabled or disabled in this context.
     /// </summary>
     [IgnoreMember]
-    public ToolRulesets? ToolRulesets { get; set; }
+    public ToolRulesets? ToolRulesets { get; }
 
     [IgnoreMember]
     public AsyncLocal<FunctionCallContext?> FunctionCallContext { get; } = new();
+
+    [IgnoreMember]
+    public IChatPluginUserInterfaceBroker UserInterfaceBroker { get; }
 
     /// <summary>
     /// Indicates whether the chat context is currently busy waiting for a response. This can be used to disable user input and show a loading indicator in the UI.
@@ -96,17 +101,6 @@ public sealed partial class ChatContext : ObservableObject, IObservableList<Chat
     [ObservableProperty]
     public partial IDynamicResourceKey? BusyMessageKey { get; private set; }
 
-    #region UserInterface
-
-    [IgnoreMember]
-    public IReadOnlyBindableList<ChatPluginUserInterfaceItem> ChatPluginUserInterfaceItems { get; }
-
-    [IgnoreMember]
-    [ObservableProperty]
-    public partial IReadOnlyList<ChatPluginTodoItem>? TodoItems { get; set; }
-
-    #endregion
-
     /// <summary>
     /// Backing store for MessagePack (de)serialization: nodes are persisted as a collection, and linked by Ids.
     /// </summary>
@@ -116,7 +110,7 @@ public sealed partial class ChatContext : ObservableObject, IObservableList<Chat
         get
         {
             using var _ = _graphMutationLock.EnterScope();
-            
+
             return _messageNodeMap.Values.AsValueEnumerable().ToList();
         }
     }
@@ -138,10 +132,9 @@ public sealed partial class ChatContext : ObservableObject, IObservableList<Chat
     /// Nodes on the currently selected branch. [0] is always the root node.
     /// </summary>
     [IgnoreMember] private readonly SourceList<ChatMessageNode> _branchNodesSourceList = new();
-    [IgnoreMember] private readonly SourceList<ChatPluginUserInterfaceItem> _chatPluginUserInterfaceItemsSourceList = new();
-    [IgnoreMember] private readonly IDisposable _displayItemsSubscription;
-    [IgnoreMember] private readonly IDisposable _chatPluginUserInterfaceItemsSubscription;
-    [IgnoreMember] private readonly IDisposable _metadataSyncSubscription;
+    [IgnoreMember] private readonly CompositeDisposable _disposables = new(2);
+
+    [IgnoreMember] private bool _isDisposed;
 
     /// <summary>
     /// Constructor for MessagePack deserialization and for creating a new chat context with existing nodes.
@@ -173,46 +166,48 @@ public sealed partial class ChatContext : ObservableObject, IObservableList<Chat
             .Connect()
             .Filter(node => node != rootNode)
             .ObserveOnAvaloniaDispatcher()
-            .BindEx(out _displayItemsSubscription);
-        ChatPluginUserInterfaceItems = _chatPluginUserInterfaceItemsSourceList
-            .Connect()
-            .ObserveOnAvaloniaDispatcher()
-            .BindEx(out _chatPluginUserInterfaceItemsSubscription);
-        _metadataSyncSubscription = _chatPluginUserInterfaceItemsSourceList.CountChanged
-            .ObserveOnAvaloniaDispatcher()
-            .Subscribe(count =>
-            {
-                if (count > 0) Metadata.States |= ChatContextMetadataStates.HasNotification;
-                else Metadata.States &= ~ChatContextMetadataStates.HasNotification;
-            });
+            .BindEx(_disposables);
+
+        VisualElements = new ResilientCache<int, IVisualElement>();
+        IsPermissionGrantedRecords = new ConcurrentDictionary<string, bool>();
+        UserInterfaceBroker = new ChatPluginUserInterfaceBroker(this).DisposeWith(_disposables);
     }
 
     /// <summary>
     /// Creates a new chat context. A new Guid v7 ID is assigned.
     /// </summary>
-    public ChatContext()
+    public ChatContext() : this(null) { }
+
+    private ChatContext(
+        ResilientCache<int, IVisualElement>? visualElements = null,
+        ConcurrentDictionary<string, bool>? isPermissionGrantedRecords = null,
+        ToolRulesets? toolRulesets = null,
+        IChatPluginUserInterfaceBroker? userInterfaceBroker = null)
     {
         Metadata = new ChatContextMetadata(Guid.CreateVersion7(), DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, null);
-        _rootNode = new ChatMessageNode(Guid.CreateVersion7().SetVersion(0), new RootChatMessage());
+        VisualElements = visualElements ?? new ResilientCache<int, IVisualElement>();
+        IsPermissionGrantedRecords = isPermissionGrantedRecords ?? new ConcurrentDictionary<string, bool>();
+        ToolRulesets = toolRulesets;
+
+        _rootNode = new ChatMessageNode(Guid.CreateVersion7().SetVersion(0), new RootChatMessage())
+        {
+            Context = this
+        };
         _rootNode.PropertyChanged += HandleNodePropertyChanged;
         _branchNodesSourceList.Add(_rootNode);
+
+        if (_messageNodeMap.ContainsKey(Guid.Empty))
+            throw new InvalidOperationException("Message nodes cannot contain a node with an empty ID.");
+
+        UpdateBranchAfter(0, _rootNode);
 
         DisplayItems = _branchNodesSourceList
             .Connect()
             .Filter(node => node != _rootNode)
             .ObserveOnAvaloniaDispatcher()
-            .BindEx(out _displayItemsSubscription);
-        ChatPluginUserInterfaceItems = _chatPluginUserInterfaceItemsSourceList
-            .Connect()
-            .ObserveOnAvaloniaDispatcher()
-            .BindEx(out _chatPluginUserInterfaceItemsSubscription);
-        _metadataSyncSubscription = _chatPluginUserInterfaceItemsSourceList.CountChanged
-            .ObserveOnAvaloniaDispatcher()
-            .Subscribe(count =>
-            {
-                if (count > 0) Metadata.States |= ChatContextMetadataStates.HasNotification;
-                else Metadata.States &= ~ChatContextMetadataStates.HasNotification;
-            });
+            .BindEx(_disposables);
+
+        UserInterfaceBroker = userInterfaceBroker ?? new ChatPluginUserInterfaceBroker(this).DisposeWith(_disposables);
     }
 
     #region Busy implementation
@@ -269,19 +264,23 @@ public sealed partial class ChatContext : ObservableObject, IObservableList<Chat
     /// <returns></returns>
     public ChatContext ForkSubagent()
     {
-        return new ChatContext
+        return new ChatContext(
+            VisualElements,
+            IsPermissionGrantedRecords,
+            ToolRulesets.Copy(
+                new ToolRulesets(2)
+                {
+                    { "builtin.essential.run_subagent", false }, // Disallow run_subagent in sub-agents to prevent infinite recursion
+                    {
+                        "builtin.essential.ask_user_question", false
+                    } // Disallow ask_user_question in sub-agents to prevent user interaction in sub-agents
+                }),
+            UserInterfaceBroker)
         {
             Metadata =
             {
                 IsTemporary = true
-            },
-            VisualElements = VisualElements,
-            IsPermissionGrantedRecords = IsPermissionGrantedRecords,
-            ToolRulesets = ToolRulesets.Copy(new ToolRulesets(2)
-            {
-                { "builtin.essential.run_subagent", false }, // Disallow run_subagent in sub-agents to prevent infinite recursion
-                { "builtin.essential.ask_user_question", false } // Disallow ask_user_question in sub-agents to prevent user interaction in sub-agents
-            })
+            }
         };
     }
 
@@ -500,6 +499,15 @@ public sealed partial class ChatContext : ObservableObject, IObservableList<Chat
 
     public void Dispose()
     {
+        Debug.Assert(!_isDisposed);
+        if (_isDisposed)
+        {
+            Log.ForContext<ChatContext>().Error("ChatContext is already disposed.");
+            return;
+        }
+
+        _isDisposed = true;
+
         using (_graphMutationLock.EnterScope())
         {
             foreach (var node in _messageNodeMap.Values)
@@ -510,9 +518,8 @@ public sealed partial class ChatContext : ObservableObject, IObservableList<Chat
 
             _rootNode.PropertyChanged -= HandleNodePropertyChanged;
             _rootNode.Dispose();
-            _chatPluginUserInterfaceItemsSubscription.Dispose();
-            _displayItemsSubscription.Dispose();
-            _metadataSyncSubscription.Dispose();
+
+            _disposables.Dispose();
             _branchNodesSourceList.Dispose();
         }
 
@@ -533,44 +540,6 @@ public sealed partial class ChatContext : ObservableObject, IObservableList<Chat
             if (value) Metadata.States |= ChatContextMetadataStates.Busy;
             else Metadata.States &= ~ChatContextMetadataStates.Busy;
         });
-    }
-
-    public async Task<ConsentDecisionResult> HandleConsentRequestAsync(
-        IDynamicResourceKey headerKey,
-        ChatPluginDisplayBlock? content,
-        RequestConsentRememberMasks rememberMasks,
-        CancellationToken cancellationToken)
-    {
-        var item = new ChatPluginUserInterfaceConsentRequestItem(headerKey, content, rememberMasks, cancellationToken);
-        _chatPluginUserInterfaceItemsSourceList.Add(item);
-        WeakReferenceMessenger.Default.Send(new FlashChatWindowMessage(item.HeaderKey.ToString()));
-
-        try
-        {
-            return await item.Task;
-        }
-        finally
-        {
-            _chatPluginUserInterfaceItemsSourceList.Remove(item);
-        }
-    }
-
-    public async Task<IReadOnlyList<ChatPluginQuestionAnswer>> AskQuestionAsync(
-        IReadOnlyList<ChatPluginQuestion> questions,
-        CancellationToken cancellationToken = default)
-    {
-        var item = new ChatPluginUserInterfaceAskQuestionItem(questions, cancellationToken);
-        _chatPluginUserInterfaceItemsSourceList.Add(item);
-        WeakReferenceMessenger.Default.Send(new FlashChatWindowMessage(item.Questions.FirstOrDefault()?.Question));
-
-        try
-        {
-            return await item.Task;
-        }
-        finally
-        {
-            _chatPluginUserInterfaceItemsSourceList.Remove(item);
-        }
     }
 
     /// <summary>
@@ -600,5 +569,87 @@ public sealed partial class ChatContext : ObservableObject, IObservableList<Chat
         Guid? ParentId,
         Guid? ChoiceChildId,
         ChatMessage Message,
-        DateTimeOffset DateModified);
+        DateTimeOffset DateModified
+    );
+
+    private sealed class ChatPluginUserInterfaceBroker : IChatPluginUserInterfaceBroker, IDisposable
+    {
+        public IReadOnlyBindableList<ChatPluginUserInterfaceItem> ChatPluginUserInterfaceItems { get; }
+
+        public IReadOnlyBindableList<ChatPluginTodoItem> TodoItems { get; }
+
+        private readonly SourceList<ChatPluginUserInterfaceItem> _chatPluginUserInterfaceItemsSourceList = new();
+        private readonly SourceList<ChatPluginTodoItem> _todoItemsSourceList = new();
+        private readonly CompositeDisposable _disposables = new(3);
+
+        public ChatPluginUserInterfaceBroker(ChatContext owner)
+        {
+            ChatPluginUserInterfaceItems = _chatPluginUserInterfaceItemsSourceList
+                .Connect()
+                .ObserveOnAvaloniaDispatcher()
+                .BindEx(_disposables);
+            TodoItems = _todoItemsSourceList
+                .Connect()
+                .ObserveOnAvaloniaDispatcher()
+                .BindEx(_disposables);
+            _chatPluginUserInterfaceItemsSourceList.CountChanged
+                .ObserveOnAvaloniaDispatcher()
+                .Subscribe(count =>
+                {
+                    // On Avalonia UI thread, safe
+                    if (count > 0) owner.Metadata.States |= ChatContextMetadataStates.HasNotification;
+                    else owner.Metadata.States &= ~ChatContextMetadataStates.HasNotification;
+                }).DisposeWith(_disposables);
+        }
+
+        public void SetTodoItems(IReadOnlyList<ChatPluginTodoItem> items)
+        {
+            _todoItemsSourceList.Edit(list => list.Reset(items));
+        }
+
+        public async Task<ConsentDecisionResult> HandleConsentRequestAsync(
+            IDynamicResourceKey headerKey,
+            ChatPluginDisplayBlock? content,
+            RequestConsentRememberMasks rememberMasks,
+            CancellationToken cancellationToken)
+        {
+            var item = new ChatPluginUserInterfaceConsentRequestItem(headerKey, content, rememberMasks, cancellationToken);
+            _chatPluginUserInterfaceItemsSourceList.Add(item);
+            WeakReferenceMessenger.Default.Send(new FlashChatWindowMessage(item.HeaderKey.ToString()));
+
+            try
+            {
+                return await item.Task;
+            }
+            finally
+            {
+                _chatPluginUserInterfaceItemsSourceList.Remove(item);
+            }
+        }
+
+        public async Task<IReadOnlyList<ChatPluginQuestionAnswer>> HandleAskQuestionAsync(
+            IReadOnlyList<ChatPluginQuestion> questions,
+            CancellationToken cancellationToken = default)
+        {
+            var item = new ChatPluginUserInterfaceAskQuestionItem(questions, cancellationToken);
+            _chatPluginUserInterfaceItemsSourceList.Add(item);
+            WeakReferenceMessenger.Default.Send(new FlashChatWindowMessage(item.Questions.FirstOrDefault()?.Question));
+
+            try
+            {
+                return await item.Task;
+            }
+            finally
+            {
+                _chatPluginUserInterfaceItemsSourceList.Remove(item);
+            }
+        }
+
+        public void Dispose()
+        {
+            _chatPluginUserInterfaceItemsSourceList.Dispose();
+            _todoItemsSourceList.Dispose();
+            _disposables.Dispose();
+        }
+    }
 }

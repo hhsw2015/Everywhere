@@ -2,6 +2,7 @@
 using Everywhere.Common;
 using MessagePack;
 using MessagePack.Formatters;
+using ZLinq;
 
 namespace Everywhere.Chat.Plugins;
 
@@ -116,6 +117,14 @@ public sealed class ChatPluginDisplaySink : IReadOnlyList<ChatPluginDisplayBlock
 
     public void Dispose()
     {
+        _itemsSource.Edit(list =>
+        {
+            foreach (var disposable in list.AsValueEnumerable().OfType<IDisposable>())
+            {
+                disposable.Dispose();
+            }
+        });
+
         _itemsSource.Dispose();
     }
 }

@@ -332,11 +332,11 @@
               </StackPanel>
               <TextBlock
                 Classes="h2"
-                Text="{Binding Overview?.TokenSummary.TotalTokenCount, TargetNullValue=0, Converter={x:Static vc:Int64Converters.Humanize}}">
+                Text="{Binding Overview?.TokenSummary?.TotalTokenCount, TargetNullValue=0, Converter={x:Static vc:Int64Converters.Humanize}}">
                 <ToolTip.Tip>
                   <I18N Key="{x:Static LocaleKey.HomePage_TotalTokensToolTip}">
                     <Binding
-                      Path="Overview?.TokenSummary.TotalTokenCount" StringFormat="{}{0:N0}"
+                      Path="Overview?.TokenSummary?.TotalTokenCount" StringFormat="{}{0:N0}"
                       TargetNullValue="0"/>
                   </I18N>
                 </ToolTip.Tip>
@@ -355,7 +355,7 @@
                     <ToolTip.Tip>
                       <I18N Key="{x:Static LocaleKey.HomePage_InputTokensToolTip}">
                         <Binding
-                          Path="Overview?.TokenSummary.InputTokenCount" StringFormat="{}{0:N0}"
+                          Path="Overview?.TokenSummary?.InputTokenCount" StringFormat="{}{0:N0}"
                           TargetNullValue="0"/>
                       </I18N>
                     </ToolTip.Tip>
@@ -364,7 +364,7 @@
                       Kind="ArrowDownToLine" Size="14"/>
                     <TextBlock
                       FontWeight="SemiBold"
-                      Text="{Binding Overview?.TokenSummary.InputTokenCount, TargetNullValue=0, Converter={x:Static vc:Int64Converters.Humanize}}"/>
+                      Text="{Binding Overview?.TokenSummary?.InputTokenCount, TargetNullValue=0, Converter={x:Static vc:Int64Converters.Humanize}}"/>
                   </StackPanel>
 
                   <StackPanel
@@ -373,7 +373,7 @@
                     <ToolTip.Tip>
                       <I18N Key="{x:Static LocaleKey.HomePage_OutputTokensToolTip}">
                         <Binding
-                          Path="Overview?.TokenSummary.OutputTokenCount" StringFormat="{}{0:N0}"
+                          Path="Overview?.TokenSummary?.OutputTokenCount" StringFormat="{}{0:N0}"
                           TargetNullValue="0"/>
                       </I18N>
                     </ToolTip.Tip>
@@ -382,7 +382,7 @@
                       Kind="ArrowUpFromLine" Size="14"/>
                     <TextBlock
                       FontWeight="SemiBold"
-                      Text="{Binding Overview?.TokenSummary.OutputTokenCount, TargetNullValue=0, Converter={x:Static vc:Int64Converters.Humanize}}"/>
+                      Text="{Binding Overview?.TokenSummary?.OutputTokenCount, TargetNullValue=0, Converter={x:Static vc:Int64Converters.Humanize}}"/>
                   </StackPanel>
 
                   <StackPanel
@@ -391,10 +391,10 @@
                     <ToolTip.Tip>
                       <I18N Key="{x:Static LocaleKey.HomePage_CachedHitRateToolTip}">
                         <Binding
-                          Path="Overview?.TokenSummary.CachedInputTokenCount" StringFormat="{}{0:N0}"
+                          Path="Overview?.TokenSummary?.CachedInputTokenCount" StringFormat="{}{0:N0}"
                           TargetNullValue="0"/>
                         <Binding
-                          Path="Overview?.TokenSummary.InputTokenCount" StringFormat="{}{0:N0}"
+                          Path="Overview?.TokenSummary?.InputTokenCount" StringFormat="{}{0:N0}"
                           TargetNullValue="0"/>
                       </I18N>
                     </ToolTip.Tip>
@@ -403,7 +403,7 @@
                       Kind="DatabaseZap" Size="14"/>
                     <TextBlock
                       FontWeight="SemiBold"
-                      Text="{Binding Overview?.TokenSummary.CachedInputHitRate, TargetNullValue=0, StringFormat='{}{0:P0}'}"/>
+                      Text="{Binding Overview?.TokenSummary?.CachedInputHitRate, TargetNullValue=0, StringFormat='{}{0:P0}'}"/>
                   </StackPanel>
                 </Grid>
               </Grid>

@@ -6,6 +6,7 @@ using Everywhere.Collections;
 using Everywhere.Common;
 using LiveMarkdown.Avalonia;
 using MessagePack;
+using ZLinq;
 
 namespace Everywhere.Chat;
 
@@ -88,10 +89,7 @@ public sealed partial class AssistantChatMessageTextSpan : AssistantChatMessageS
 }
 
 [MessagePackObject(AllowPrivate = true, OnlyIncludeKeyedMembers = true)]
-public sealed partial class AssistantChatMessageFunctionCallSpan :
-    AssistantChatMessageSpan,
-    IHaveChatAttachments,
-    ISourceList<FunctionCallChatMessage>
+public sealed partial class AssistantChatMessageFunctionCallSpan : AssistantChatMessageSpan, IHaveChatAttachments, ISourceList<FunctionCallChatMessage>
 {
     [IgnoreMember]
     [JsonIgnore]
@@ -144,6 +142,14 @@ public sealed partial class AssistantChatMessageFunctionCallSpan :
 
     public void Dispose()
     {
+        _functionCallsSource.Edit(list =>
+        {
+            foreach (var disposable in list.AsValueEnumerable())
+            {
+                disposable.Dispose();
+            }
+        });
+
         _functionCallsSource.Dispose();
         _functionCallsConnection.Dispose();
     }

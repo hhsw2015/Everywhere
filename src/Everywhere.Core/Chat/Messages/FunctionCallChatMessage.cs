@@ -1,4 +1,5 @@
-﻿using System.Reactive.Disposables;
+﻿using System.Diagnostics;
+using System.Reactive.Disposables;
 using System.Text.Json.Serialization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using DynamicData;
@@ -129,7 +130,6 @@ public sealed partial class FunctionCallChatMessage : ChatMessage, IHaveChatAtta
         DisplayBlocks = _displaySink
             .Connect()
             .ObserveOnAvaloniaDispatcher()
-            .DisposeMany()
             .BindEx(_disposables);
 
         // Monitor IsWaitingForUserInput changes

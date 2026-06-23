@@ -1,6 +1,9 @@
 ﻿using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
+using System.Diagnostics.CodeAnalysis;
 using System.Text.Json.Serialization;
+using Everywhere.Chat.Permissions;
+using Everywhere.Collections;
 
 namespace Everywhere.Chat.Plugins;
 
@@ -13,6 +16,7 @@ public enum ChatPluginTodoStatus
 }
 
 [Serializable]
+[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
 public sealed class ChatPluginTodoItem
 {
     [Description("1-based unique identifier for the todo item.")]
@@ -30,6 +34,7 @@ public sealed class ChatPluginTodoItem
 }
 
 [Serializable]
+[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
 public sealed class ChatPluginQuestion
 {
     [MaxLength(75)]
@@ -48,19 +53,21 @@ public sealed class ChatPluginQuestion
 }
 
 [Serializable]
+[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
 public sealed class ChatPluginQuestionOption
 {
     [Description("Main content for the option")]
     public required string Content { get; set; }
 
     [Description("Optional additional description for the option, such as implications of selecting it")]
-    public string? Description { get; set; } = null;
+    public string? Description { get; set; }
 
     [Description("Optional flag to indicate the option is recommended.")]
-    public bool Recommended { get; set; } = false;
+    public bool Recommended { get; set; }
 }
 
 [Serializable]
+[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
 public sealed record ChatPluginQuestionAnswer(
     IReadOnlyList<string> Selected,
     string? FreeText
@@ -128,6 +135,52 @@ public interface IChatPluginUserInterface
     /// <param name="cancellationToken"></param>
     /// <returns></returns>
     Task<IReadOnlyList<ChatPluginQuestionAnswer>> AskQuestionAsync(
+        IReadOnlyList<ChatPluginQuestion> questions,
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>
+/// A broker interface to provide chat plugin user interface related services, such as displaying content and requesting user input.
+/// </summary>
+public interface IChatPluginUserInterfaceBroker
+{
+    /// <summary>
+    /// Gets a list of user interface items to be displayed in the UI. The plugin can update this list to add/remove/modify items, and the UI will reactively update accordingly.
+    /// </summary>
+    IReadOnlyBindableList<ChatPluginUserInterfaceItem> ChatPluginUserInterfaceItems { get; }
+
+    /// <summary>
+    /// Gets a list of todo items to be displayed in the UI. The plugin can update this list to add/remove/modify todo items, and the UI will reactively update accordingly.
+    /// </summary>
+    IReadOnlyBindableList<ChatPluginTodoItem> TodoItems { get; }
+
+    /// <summary>
+    /// Replaces the todo list displayed in the UI.
+    /// </summary>
+    /// <param name="items"></param>
+    void SetTodoItems(IReadOnlyList<ChatPluginTodoItem> items);
+
+    /// <summary>
+    /// Shows a consent request dialog to the user and returns their decision.
+    /// </summary>
+    /// <param name="headerKey"></param>
+    /// <param name="content"></param>
+    /// <param name="rememberMasks"></param>
+    /// <param name="cancellationToken"></param>
+    /// <returns></returns>
+    Task<ConsentDecisionResult> HandleConsentRequestAsync(
+        IDynamicResourceKey headerKey,
+        ChatPluginDisplayBlock? content,
+        RequestConsentRememberMasks rememberMasks,
+        CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Shows a question dialog to the user and returns their answer.
+    /// </summary>
+    /// <param name="questions"></param>
+    /// <param name="cancellationToken"></param>
+    /// <returns></returns>
+    Task<IReadOnlyList<ChatPluginQuestionAnswer>> HandleAskQuestionAsync(
         IReadOnlyList<ChatPluginQuestion> questions,
         CancellationToken cancellationToken = default);
 }

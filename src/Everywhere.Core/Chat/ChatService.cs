@@ -389,7 +389,7 @@ public sealed partial class ChatService : IChatService
         builder.Services.AddSingleton(chatContext);
         builder.Services.AddSingleton(assistant);
         builder.Services.AddTransient<IChatPluginDisplaySink>(static x =>
-            x.GetRequiredService<ChatContext>().FunctionCallContext.Value?.DisplaySink ??
+            x.GetRequiredService<ChatContext>().FunctionCallContext.Value?.FunctionCallChatMessage.DisplaySink ??
             throw new InvalidOperationException($"No {nameof(IChatPluginDisplaySink)} is available in current function call context."));
         builder.Services.AddTransient<IChatPluginUserInterface>(static x =>
             x.GetRequiredService<ChatContext>().FunctionCallContext.Value ??
@@ -901,11 +901,9 @@ public sealed partial class ChatService : IChatService
 
                 var functionCallChatMessage = new FunctionCallChatMessage(
                     chatFunction.Icon ?? chatPlugin.Icon ?? LucideIconKind.Hammer,
-                    chatFunction.HeaderKey)
-                {
-                    IsBusy = true,
-                };
-                functionCallSpan.Add(functionCallChatMessage);
+                    chatFunction.HeaderKey);
+                functionCallChatMessage.IsBusy = true;
+                functionCallSpan.Add(functionCallChatMessage); // functionCallSpan will dispose FunctionCallChatMessage
 
                 var functionCallContext = new FunctionCallContext(
                     kernel,
@@ -1041,9 +1039,9 @@ public sealed partial class ChatService : IChatService
         }
         catch (Exception ex)
         {
-            toolStatus = ex is OperationCanceledException || cancellationToken.IsCancellationRequested
-                ? StatisticsToolInvocationStatus.Canceled
-                : StatisticsToolInvocationStatus.Error;
+            toolStatus = ex is OperationCanceledException || cancellationToken.IsCancellationRequested ?
+                StatisticsToolInvocationStatus.Canceled :
+                StatisticsToolInvocationStatus.Error;
             ex = HandledFunctionInvokingException.Handle(ex);
             activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
             _logger.LogError(ex, "Error invoking tool '{FunctionName}'", content.FunctionName);
@@ -1109,7 +1107,11 @@ public sealed partial class ChatService : IChatService
             }
 
             // The function requires permissions that are not granted.
-            return context.ChatContext.HandleConsentRequestAsync(headerKey, displayBlock, RequestConsentRememberMasks.All, cancellationToken);
+            return context.ChatContext.UserInterfaceBroker.HandleConsentRequestAsync(
+                headerKey,
+                displayBlock,
+                RequestConsentRememberMasks.All,
+                cancellationToken);
         }
     }
 
