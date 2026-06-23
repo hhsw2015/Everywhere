@@ -204,10 +204,29 @@ public partial class VisualElementContext
                     && url.Length <= 2048
                     && IsAllowedScheme(url))
                 {
+                    // UIA hyperlink label fallback: Name -> HelpText -> first
+                    // child's Name. Some browsers expose icon-anchor labels
+                    // as the help text or as a child Text element only.
                     string? title = null;
                     try { title = child.CurrentName; }
                     catch (System.Runtime.InteropServices.COMException) { }
                     catch (InvalidCastException) { }
+                    if (string.IsNullOrWhiteSpace(title))
+                    {
+                        try { title = child.CurrentHelpText; }
+                        catch (System.Runtime.InteropServices.COMException) { }
+                        catch (InvalidCastException) { }
+                    }
+                    if (string.IsNullOrWhiteSpace(title))
+                    {
+                        try
+                        {
+                            var firstText = TreeWalker.GetFirstChildElement(child);
+                            if (firstText is not null) title = firstText.CurrentName;
+                        }
+                        catch (System.Runtime.InteropServices.COMException) { }
+                        catch (InvalidCastException) { }
+                    }
                     if (title is not null && title.Length > 200) title = title[..200];
                     var key = url + "\0" + (title ?? string.Empty);
                     if (seen.Add(key))

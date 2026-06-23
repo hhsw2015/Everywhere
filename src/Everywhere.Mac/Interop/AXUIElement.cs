@@ -154,6 +154,12 @@ public partial class AXUIElement : NSObject, IVisualElement
 
     public string? Name => GetAttribute<NSString>(AXAttributeConstants.Title);
 
+    /// <summary>
+    /// AX accessible description — Safari / Chrome put hyperlink anchor
+    /// text here when AXTitle is empty (icon-only / svg+span anchors).
+    /// </summary>
+    public string? Description => GetAttribute<NSString>(AXAttributeConstants.Description);
+
     public string? Url
     {
         get

@@ -162,7 +162,18 @@ partial class VisualElementContext
                         && url!.Length <= 2048
                         && IsAllowedScheme(url))
                     {
+                        // AX hyperlink label fallback chain:
+                        //   AXTitle  (Name) — usually filled for plain <a>text</a>
+                        //   AXDescription   — Safari/Chrome put svg/icon-only
+                        //                     anchor text here (e.g. github
+                        //                     release asset rows)
+                        //   AXValue   (GetText) — last resort
+                        // Without the Description rung, GitHub release pages
+                        // and other svg-anchor sites harvest with empty titles.
                         var title = node.Name;
+                        if (string.IsNullOrWhiteSpace(title)
+                            && node is AXUIElement axNode)
+                            title = axNode.Description;
                         if (string.IsNullOrWhiteSpace(title))
                             title = node.GetText(maxLength: 200);
                         if (title is not null && title.Length > 200) title = title[..200];
