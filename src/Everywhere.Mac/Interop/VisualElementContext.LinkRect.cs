@@ -286,21 +286,29 @@ partial class VisualElementContext
                     var url = node.Url;
                     // javascript: rescue — sites like xlinkBook popup wire
                     // links as <a href="javascript:void(0)">https://real/url</a>
-                    // with the real URL as the anchor text. AXURL gives us
-                    // the void(0) value but the visible text is the actual
-                    // navigable URL. Try the anchor's own text/Name first,
-                    // then ancestor row text. Only fires when AXURL is a
-                    // non-navigable scheme so well-behaved sites are
-                    // untouched.
+                    // with the destination as the anchor's accessible label.
+                    // Different browsers/sites surface that label on
+                    // different AX channels: Name (innerText), Description
+                    // (aria-label), Value (input-shaped). Try them all in
+                    // turn, then ancestor row text as a last resort.
+                    // Only fires when AXURL is a non-navigable scheme so
+                    // well-behaved sites are untouched.
                     if (!string.IsNullOrEmpty(url) && !IsAllowedScheme(url))
                     {
                         string? rescue = null;
-                        try { rescue = node.Name; } catch { }
-                        if (string.IsNullOrWhiteSpace(rescue)
-                            || !TryExtractHttpUrl(rescue!, out _))
-                            try { rescue = node.GetText(maxLength: 2048); } catch { rescue = null; }
-                        if (rescue is not null && TryExtractHttpUrl(rescue, out var found))
-                            url = found;
+                        var found = string.Empty;
+                        // Build the rescue candidate list lazily — first hit
+                        // that contains an http(s) URL wins.
+                        foreach (var probe in EnumerateRescueCandidates(node))
+                        {
+                            if (string.IsNullOrWhiteSpace(probe)) continue;
+                            if (TryExtractHttpUrl(probe!, out found))
+                            {
+                                rescue = probe;
+                                break;
+                            }
+                        }
+                        if (rescue is not null) url = found;
                     }
                     if (!string.IsNullOrEmpty(url)
                         && url!.Length <= 2048
@@ -419,6 +427,20 @@ partial class VisualElementContext
         // text is the actual destination (xlinkBook popup pattern).
         private static readonly System.Text.RegularExpressions.Regex _httpUrlRegex =
             new(@"https?://[^\s<>""']+", System.Text.RegularExpressions.RegexOptions.Compiled);
+
+        private static IEnumerable<string?> EnumerateRescueCandidates(IVisualElement node)
+        {
+            string? v;
+            try { v = node.Name; } catch { v = null; }
+            yield return v;
+            if (node is AXUIElement ax)
+            {
+                try { v = ax.Description; } catch { v = null; }
+                yield return v;
+            }
+            try { v = node.GetText(maxLength: 2048); } catch { v = null; }
+            yield return v;
+        }
 
         private static bool TryExtractHttpUrl(string text, out string url)
         {
