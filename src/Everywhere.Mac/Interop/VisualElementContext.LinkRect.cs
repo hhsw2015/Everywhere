@@ -194,10 +194,20 @@ partial class VisualElementContext
                              && IntersectsLoose(bounds, dragRect);
                 if (_walkDump != null)
                 {
-                    string? dumpUrl = null, dumpName = null;
+                    string? dumpUrl = null, dumpName = null, dumpDesc = null, dumpVal = null;
                     try { dumpUrl = node.Url; } catch { }
                     try { dumpName = node.Name; } catch { }
-                    _walkDump.WriteLine($"  link bbox=({bounds.X},{bounds.Y},{bounds.Width}x{bounds.Height}) inside={inside} url={dumpUrl ?? "(null)"} name=\"{dumpName ?? string.Empty}\"");
+                    if (node is AXUIElement axDump)
+                    {
+                        try { dumpDesc = axDump.Description; } catch { }
+                    }
+                    try { dumpVal = node.GetText(maxLength: 60); } catch { }
+                    _walkDump.WriteLine(
+                        $"  link bbox=({bounds.X},{bounds.Y},{bounds.Width}x{bounds.Height}) " +
+                        $"inside={inside} url={dumpUrl ?? "(null)"} " +
+                        $"name=\"{dumpName ?? string.Empty}\" " +
+                        $"desc=\"{dumpDesc ?? string.Empty}\" " +
+                        $"value=\"{dumpVal ?? string.Empty}\"");
                 }
                 if (inside)
                 {
@@ -207,19 +217,22 @@ partial class VisualElementContext
                         && IsAllowedScheme(url))
                     {
                         // AX hyperlink label fallback chain:
-                        //   AXTitle  (Name) — usually filled for plain <a>text</a>
-                        //   AXDescription   — Safari/Chrome put svg/icon-only
-                        //                     anchor text here (e.g. github
-                        //                     release asset rows)
-                        //   AXValue   (GetText) — last resort
-                        // Without the Description rung, GitHub release pages
-                        // and other svg-anchor sites harvest with empty titles.
+                        //   1. AXTitle  (Name)        — plain <a>text</a>
+                        //   2. AXDescription          — svg-icon anchors with aria-label
+                        //   3. AXValue  (GetText)     — input-style anchors
+                        //   4. Ancestor row text      — sites where the anchor is
+                        //      a 16x28 svg icon and the human-readable label sits
+                        //      on a sibling/parent <li> (xlinkBook popup, GitHub
+                        //      repo row). Walk up ≤3 parents looking for visible
+                        //      text bigger than the anchor itself.
                         var title = node.Name;
                         if (string.IsNullOrWhiteSpace(title)
                             && node is AXUIElement axNode)
                             title = axNode.Description;
                         if (string.IsNullOrWhiteSpace(title))
                             title = node.GetText(maxLength: 200);
+                        if (string.IsNullOrWhiteSpace(title))
+                            title = AncestorRowText(node, depth: 3);
                         if (title is not null && title.Length > 200) title = title[..200];
                         var key = url + "\0" + (title ?? string.Empty);
                         if (seen.Add(key))
@@ -238,6 +251,38 @@ partial class VisualElementContext
         private static bool IntersectsLoose(PixelRect a, PixelRect b)
         {
             return !(a.Right < b.X || a.X > b.Right || a.Bottom < b.Y || a.Y > b.Bottom);
+        }
+
+        /// <summary>
+        /// For svg-icon anchors with no AX label, climb up to <paramref name="depth"/>
+        /// ancestors and return the first non-empty visible text. Helps xlinkBook
+        /// popup rows / GitHub repo rows where the link text lives on a parent.
+        /// </summary>
+        private static string? AncestorRowText(IVisualElement node, int depth)
+        {
+            try
+            {
+                var cur = node;
+                for (var i = 0; i < depth; i++)
+                {
+                    cur = cur.Parent;
+                    if (cur is null) return null;
+                    string? name = null;
+                    try { name = cur.Name; } catch { }
+                    if (!string.IsNullOrWhiteSpace(name)) return name;
+                    if (cur is AXUIElement axCur)
+                    {
+                        string? desc = null;
+                        try { desc = axCur.Description; } catch { }
+                        if (!string.IsNullOrWhiteSpace(desc)) return desc;
+                    }
+                    string? text = null;
+                    try { text = cur.GetText(maxLength: 200); } catch { }
+                    if (!string.IsNullOrWhiteSpace(text)) return text;
+                }
+            }
+            catch { /* ignore */ }
+            return null;
         }
 
         // Reject javascript:/data:/file:/vbscript: etc that the agent might
