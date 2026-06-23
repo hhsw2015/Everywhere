@@ -33,13 +33,46 @@ partial class VisualElementContext
                 window?._rectPromise.TrySetException(ex);
                 throw;
             }
-            // Cancellation closes the overlay so OnClosed -> _rectPromise
-            // resolves with null instead of leaving the await hanging.
             using var _ = cancellationToken.Register(() =>
                 Dispatcher.UIThread.Post(() => window!.Close()));
             var rect = await window._rectPromise.Task;
-            if (rect is null) return [];
-            return await Task.Run(() => HarvestLinks(rect.Value), cancellationToken);
+            if (rect is null) { await Dispatcher.UIThread.InvokeAsync(window!.Close); return []; }
+            // Run the harvest while the overlay is still on screen so we
+            // can flash the captured link bboxes before closing — visual
+            // confirmation of "linkclump caught these N anchors".
+            var harvested = await Task.Run(() => HarvestLinks(rect.Value), cancellationToken);
+            try
+            {
+                await Dispatcher.UIThread.InvokeAsync(() => window!.HighlightCapturedLinks(harvested));
+                await Task.Delay(700, cancellationToken);
+            }
+            catch (TaskCanceledException) { /* cancellation is fine */ }
+            finally
+            {
+                await Dispatcher.UIThread.InvokeAsync(window!.Close);
+            }
+            return harvested;
+        }
+
+        public void HighlightCapturedLinks(IReadOnlyList<HarvestedLink> links)
+        {
+            // Paint an aqua outline around every captured anchor on the
+            // mask window. ScreenSelectionMaskWindow already has the
+            // tooling for one rect (selection); we (ab)use the same
+            // primitive by drawing each link as a thin border child.
+            try
+            {
+                foreach (var mask in MaskWindows)
+                    mask.SetCapturedLinkRects(links);
+            }
+            catch { /* visual is best-effort */ }
+            // Also update the tooltip count for instant numeric feedback.
+            try
+            {
+                if (ToolTipWindow?.ToolTip is { } tt)
+                    tt.SizeInfo = $"{links.Count} link{(links.Count == 1 ? "" : "s")}";
+            }
+            catch { /* ignore */ }
         }
 
         private readonly TaskCompletionSource<PixelRect?> _rectPromise = new();
@@ -62,12 +95,11 @@ partial class VisualElementContext
 
         protected override void OnClosed(EventArgs e)
         {
-            // Distinguish cancel (Esc/right-click) from "dragged but no
-            // rect / no links" — caller gets null vs empty list.
-            if (_wasCanceled || _dragRect.Width <= 0 || _dragRect.Height <= 0)
-                _rectPromise.TrySetResult(null);
-            else
-                _rectPromise.TrySetResult(_dragRect);
+            // OnLeftButtonUp / OnCanceled already set the promise. This is
+            // a TrySetResult so any racy close path (Esc during highlight
+            // flash) still resolves the awaiter rather than hanging.
+            if (_wasCanceled) _rectPromise.TrySetResult(null);
+            else _rectPromise.TrySetResult(null); // already-set TrySet is no-op
             base.OnClosed(e);
         }
 
@@ -85,9 +117,18 @@ partial class VisualElementContext
         {
             if (!_isDragging) return false;
             _isDragging = false;
-            // Don't harvest here — closes the overlay first, harvest runs
-            // off-thread in HarvestAsync after _rectPromise resolves.
-            return _dragRect.Width > 0 && _dragRect.Height > 0;
+            if (_dragRect.Width > 0 && _dragRect.Height > 0)
+            {
+                // Resolve the promise WITHOUT closing — HarvestAsync will
+                // close after it has had a chance to paint the highlight
+                // for ~700ms. Returning false keeps the overlay alive.
+                _rectPromise.TrySetResult(_dragRect);
+            }
+            else
+            {
+                _rectPromise.TrySetResult(null);
+            }
+            return false; // don't let base session auto-close
         }
 
         protected override void OnMove(CGPoint point)
@@ -123,8 +164,10 @@ partial class VisualElementContext
             // Walk every visible window's AX tree, keep Hyperlink elements
             // whose bounds intersect the drag rect. De-dup by URL so one
             // anchor that surfaces multiple times (icon + label) lands once.
-            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            var result = new List<HarvestedLink>(64);
+            // Use a dict so the second sighting of the same URL can upgrade
+            // an empty title with the better one (and pick the larger
+            // bbox — usually the label vs the icon).
+            var byUrl = new Dictionary<string, HarvestedLink>(StringComparer.OrdinalIgnoreCase);
             System.IO.StreamWriter? dump = null;
             if (DumpEnabled)
             {
@@ -154,16 +197,16 @@ partial class VisualElementContext
                     if (budget.Remaining <= 0) break;
                     if (AXUIElement.ElementFromPid(pid) is not { } app) continue;
                     dump?.WriteLine($"--- pid={pid} ---");
-                    WalkAndHarvest(app, dragRect, seen, result, depth: 0, budget);
+                    WalkAndHarvest(app, dragRect, byUrl, depth: 0, budget);
                 }
-                dump?.WriteLine($"# kept={result.Count}");
+                dump?.WriteLine($"# kept={byUrl.Count}");
             }
             finally
             {
                 _walkDump = null;
                 dump?.Dispose();
             }
-            return result;
+            return byUrl.Values.ToList();
         }
 
         private const int MaxDepth = 60;
@@ -172,8 +215,7 @@ partial class VisualElementContext
         private static void WalkAndHarvest(
             IVisualElement node,
             PixelRect dragRect,
-            HashSet<string> seen,
-            List<HarvestedLink> result,
+            Dictionary<string, HarvestedLink> byUrl,
             int depth,
             WalkBudget budget)
         {
@@ -252,9 +294,40 @@ partial class VisualElementContext
                         if (string.IsNullOrWhiteSpace(title))
                             title = AncestorRowText(node, depth: 3);
                         if (title is not null && title.Length > 200) title = title[..200];
-                        var key = url + "\0" + (title ?? string.Empty);
-                        if (seen.Add(key))
-                            result.Add(new HarvestedLink(title ?? string.Empty, url, bounds));
+                        // Drop tiny icon-only anchors with no title — these
+                        // are usually utility icons (copy / open-in-new-tab
+                        // / share) on row-click sites. We keep tiny anchors
+                        // with titles (GitHub release asset svg+label combos
+                        // get titles via the AXDescription / row-text
+                        // fallback chain).
+                        // Treat anchor as an icon-only nav element when:
+                        //   - no title from any of: AXTitle/AXDescription/
+                        //     AXValue/ancestor row text, AND
+                        //   - bbox is small (any side <=32px) — typical for
+                        //     16x16, 24x24, 28x28 svg-only buttons that
+                        //     trigger copy / open-in-new-tab / share etc.
+                        var isUntitledIcon = string.IsNullOrEmpty(title)
+                            && (bounds.Width <= 32 || bounds.Height <= 32);
+                        if (!isUntitledIcon)
+                        {
+                            var newLink = new HarvestedLink(title ?? string.Empty, url, bounds);
+                            if (byUrl.TryGetValue(url, out var existing))
+                            {
+                                // Same URL seen again — keep the variant with
+                                // the better title, fall back to the larger
+                                // bbox (usually the label rather than icon).
+                                var existingScore = (string.IsNullOrEmpty(existing.Title) ? 0 : 100)
+                                                    + existing.Bounds.Width * existing.Bounds.Height;
+                                var newScore = (string.IsNullOrEmpty(newLink.Title) ? 0 : 100)
+                                               + newLink.Bounds.Width * newLink.Bounds.Height;
+                                if (newScore > existingScore)
+                                    byUrl[url] = newLink;
+                            }
+                            else
+                            {
+                                byUrl[url] = newLink;
+                            }
+                        }
                     }
                 }
             }
@@ -263,7 +336,7 @@ partial class VisualElementContext
             try { children = node.Children; }
             catch { return; }
             foreach (var c in children)
-                WalkAndHarvest(c, dragRect, seen, result, depth + 1, budget);
+                WalkAndHarvest(c, dragRect, byUrl, depth + 1, budget);
         }
 
         private static bool IntersectsLoose(PixelRect a, PixelRect b)

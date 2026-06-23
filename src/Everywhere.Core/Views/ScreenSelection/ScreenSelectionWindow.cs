@@ -61,6 +61,7 @@ public sealed class ScreenSelectionMaskWindow : ScreenSelectionTransparentWindow
 {
     private readonly Border _maskBorder;
     private readonly Border _elementBoundsBorder;
+    private readonly Canvas _capturedLinksCanvas;
     private readonly PixelRect _screenBounds;
     private readonly double _scale;
 
@@ -82,6 +83,13 @@ public sealed class ScreenSelectionMaskWindow : ScreenSelectionTransparentWindow
                     BorderBrush = Brushes.White,
                     HorizontalAlignment = HorizontalAlignment.Left,
                     VerticalAlignment = VerticalAlignment.Top
+                }),
+                // Per-link highlight overlay used by LinkRect mode after a
+                // capture; draws an aqua border around every harvested
+                // anchor for ~700ms before the overlay closes.
+                (_capturedLinksCanvas = new Canvas
+                {
+                    IsHitTestVisible = false,
                 })
             }
         };
@@ -110,6 +118,33 @@ public sealed class ScreenSelectionMaskWindow : ScreenSelectionTransparentWindow
         _elementBoundsBorder.Margin = new Thickness(maskRect.X, maskRect.Y, 0, 0);
         _elementBoundsBorder.Width = maskRect.Width;
         _elementBoundsBorder.Height = maskRect.Height;
+    }
+
+    /// <summary>
+    /// LinkRect end-of-drag visual: paint an aqua border around every
+    /// anchor we kept so the user sees exactly which links were captured.
+    /// Pass an empty / null list to clear.
+    /// </summary>
+    public void SetCapturedLinkRects(System.Collections.Generic.IReadOnlyList<Everywhere.Interop.HarvestedLink> links)
+    {
+        _capturedLinksCanvas.Children.Clear();
+        if (links is null || links.Count == 0) return;
+        foreach (var l in links)
+        {
+            var r = l.Bounds.Translate(-(PixelVector)_screenBounds.Position).ToRect(_scale);
+            if (r.Width <= 0 || r.Height <= 0) continue;
+            var box = new Border
+            {
+                BorderThickness = new Thickness(2),
+                BorderBrush = new SolidColorBrush(Color.FromArgb(0xFF, 0x00, 0xC8, 0xFF)),
+                Background = new SolidColorBrush(Color.FromArgb(0x40, 0x00, 0xC8, 0xFF)),
+                Width = r.Width,
+                Height = r.Height
+            };
+            Canvas.SetLeft(box, r.X);
+            Canvas.SetTop(box, r.Y);
+            _capturedLinksCanvas.Children.Add(box);
+        }
     }
 }
 
