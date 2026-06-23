@@ -442,12 +442,15 @@ partial class VisualElementContext
             yield return v;
         }
 
-        // GitHub-style @owner/repo or @owner shorthand used by xlinkBook
-        // popup as javascript:void anchor labels. Expanded into a real
-        // github.com URL so the agent can deep-perceive them just like
-        // any other link.
+        // GitHub-style @owner/repo shorthand used by xlinkBook popup as
+        // javascript:void anchor labels. Only expand when both owner and
+        // repo are present — bare `@name` is ambiguous (could be user,
+        // org, or repo) and would synthesize a wrong URL more often than
+        // not. Bare-handle anchors are simply dropped (handled by the
+        // scheme filter) so the agent can rely on stash entries pointing
+        // at real navigable targets.
         private static readonly System.Text.RegularExpressions.Regex _githubAtRegex =
-            new(@"^@([A-Za-z0-9](?:[A-Za-z0-9\-_.]{0,38}))(/[A-Za-z0-9_.\-]+)?$",
+            new(@"^@([A-Za-z0-9](?:[A-Za-z0-9\-_.]{0,38}))/([A-Za-z0-9_.\-]+)$",
                 System.Text.RegularExpressions.RegexOptions.Compiled);
 
         private static bool TryExtractHttpUrl(string text, out string url)
@@ -465,14 +468,13 @@ partial class VisualElementContext
                 return true;
             }
             // Site-specific shorthand: xlinkBook popup writes GitHub repos
-            // as `@owner` or `@owner/repo`. Expand to a real github.com URL.
+            // as `@owner/repo`. Expand to a real github.com URL. Bare
+            // `@name` is intentionally rejected — see _githubAtRegex doc.
             var trimmed = text.Trim();
             var gh = _githubAtRegex.Match(trimmed);
             if (gh.Success)
             {
-                var owner = gh.Groups[1].Value;
-                var repo  = gh.Groups[2].Success ? gh.Groups[2].Value : string.Empty;
-                url = "https://github.com/" + owner + repo;
+                url = "https://github.com/" + gh.Groups[1].Value + "/" + gh.Groups[2].Value;
                 return true;
             }
             url = string.Empty;
