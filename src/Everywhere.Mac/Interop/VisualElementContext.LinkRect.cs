@@ -212,6 +212,24 @@ partial class VisualElementContext
                 if (inside)
                 {
                     var url = node.Url;
+                    // javascript: rescue — sites like xlinkBook popup wire
+                    // links as <a href="javascript:void(0)">https://real/url</a>
+                    // with the real URL as the anchor text. AXURL gives us
+                    // the void(0) value but the visible text is the actual
+                    // navigable URL. Try the anchor's own text/Name first,
+                    // then ancestor row text. Only fires when AXURL is a
+                    // non-navigable scheme so well-behaved sites are
+                    // untouched.
+                    if (!string.IsNullOrEmpty(url) && !IsAllowedScheme(url))
+                    {
+                        string? rescue = null;
+                        try { rescue = node.Name; } catch { }
+                        if (string.IsNullOrWhiteSpace(rescue)
+                            || !TryExtractHttpUrl(rescue!, out _))
+                            try { rescue = node.GetText(maxLength: 2048); } catch { rescue = null; }
+                        if (rescue is not null && TryExtractHttpUrl(rescue, out var found))
+                            url = found;
+                    }
                     if (!string.IsNullOrEmpty(url)
                         && url!.Length <= 2048
                         && IsAllowedScheme(url))
@@ -291,6 +309,20 @@ partial class VisualElementContext
         {
             if (Uri.TryCreate(url, UriKind.Absolute, out var u))
                 return u.Scheme is "http" or "https" or "mailto";
+            return false;
+        }
+
+        // Pull the first http(s) URL out of a string. Used to rescue real
+        // URLs from anchors whose href is javascript: but whose visible
+        // text is the actual destination (xlinkBook popup pattern).
+        private static readonly System.Text.RegularExpressions.Regex _httpUrlRegex =
+            new(@"https?://[^\s<>""']+", System.Text.RegularExpressions.RegexOptions.Compiled);
+
+        private static bool TryExtractHttpUrl(string text, out string url)
+        {
+            var m = _httpUrlRegex.Match(text);
+            if (m.Success) { url = m.Value.TrimEnd('.', ',', ')', ']', ';'); return true; }
+            url = string.Empty;
             return false;
         }
 
