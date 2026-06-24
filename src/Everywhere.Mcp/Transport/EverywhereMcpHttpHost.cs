@@ -261,9 +261,15 @@ public sealed class EverywhereMcpHttpHost : IHostedService, IAsyncDisposable
                             obj[k] = System.Text.Json.Nodes.JsonNode.Parse(v.GetRawText());
                         args = obj;
                     }
+                    _logger.LogInformation(
+                        "OpenDia: invoking browser tool {Name} (orig={Orig}) args={Args}",
+                        name, origName, args?.ToJsonString() ?? "(none)");
                     try
                     {
                         var raw = await bridgeForHandler.CallToolAsync(origName, args, ct: ct);
+                        _logger.LogInformation(
+                            "OpenDia: {Name} returned ok ({Bytes} bytes)",
+                            name, raw?.ToJsonString().Length ?? 0);
                         return new ModelContextProtocol.Protocol.CallToolResult
                         {
                             Content = [new ModelContextProtocol.Protocol.TextContentBlock
@@ -274,6 +280,8 @@ public sealed class EverywhereMcpHttpHost : IHostedService, IAsyncDisposable
                     }
                     catch (Exception ex)
                     {
+                        _logger.LogWarning(ex,
+                            "OpenDia: {Name} failed: {Msg}", name, ex.Message);
                         return new ModelContextProtocol.Protocol.CallToolResult
                         {
                             IsError = true,
