@@ -158,11 +158,17 @@ public sealed class MacInputSimulator : IInputSimulator
         Thread.Sleep(100);
     }
 
-    /// <summary>Single dispatch: targeted (CGEventPostToPid) or global.</summary>
+    /// <summary>Single dispatch: targeted (CGEventPostToPid) or global.
+    /// OCCU posts global events to <c>.cghidEventTap</c> (HID-level)
+    /// because that's the layer SwiftUI's NSGestureRecognizer hooks
+    /// onto. Posting to SessionEventTap goes through the application
+    /// session layer where gestures may be filtered out, making it
+    /// look like the click never happened (Calculator '7' was a real
+    /// regression of this).</summary>
     private static void PostEvent(nint ev, int? targetPid)
     {
         if (targetPid is { } pid) CGEventPostToPid(pid, ev);
-        else CGEventPost(CGEventTapLocation.SessionEventTap, ev);
+        else CGEventPost(CGEventTapLocation.HidEventTap, ev);
     }
 
     private static (CGMouseButton, CGEventType, CGEventType) Map(MouseButton b) => b switch
