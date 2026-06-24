@@ -52,11 +52,6 @@ internal static class ClickHeuristics
     }
 
     /// <summary>
-    /// Mirrors OCCU isElectronScopedWebRowClickOptimizationTarget. Electron
-    /// shells route every row through a synthetic-text DOM that AX
-    /// surfaces as a flat child list — Press lives on the ancestor.
-    /// </summary>
-    /// <summary>
     /// macOS 26+ rebuilt several first-party apps (Calculator, parts of
     /// System Settings, the new System Information panes) on SwiftUI.
     /// Their AXPress action returns success but the underlying SwiftUI
@@ -82,6 +77,11 @@ internal static class ClickHeuristics
         return false;
     }
 
+    /// <summary>
+    /// Mirrors OCCU isElectronScopedWebRowClickOptimizationTarget. Electron
+    /// shells route every row through a synthetic-text DOM that AX
+    /// surfaces as a flat child list — Press lives on the ancestor.
+    /// </summary>
     private static bool IsElectronScopedWebApp(string? processName, string? bundleIdentifier)
     {
         var bid = bundleIdentifier?.Trim().ToLowerInvariant();

@@ -189,10 +189,7 @@ public partial class AXUIElement : NSObject, IVisualElement
             // consult it for roles where it's known to be a label-like
             // state string (radio "On"/"Off", popup button caption,
             // checkbox state).
-            if (Role == AXRoleAttribute.AXCheckBox
-                || Role == AXRoleAttribute.AXRadioButton
-                || Role == AXRoleAttribute.AXPopUpButton
-                || Role == AXRoleAttribute.AXMenuButton)
+            if (IsLabelBearingRole(Role))
             {
                 var v = GetAttribute<NSObject>(AXAttributeConstants.Value)?.ToString();
                 if (!string.IsNullOrWhiteSpace(v)) return v;
@@ -203,17 +200,7 @@ public partial class AXUIElement : NSObject, IVisualElement
             // sliders, scroll bars etc. don't have separate label
             // controls so paying for those reads on every node would be
             // pure overhead.
-            var allowExpensive = Role
-                is AXRoleAttribute.AXButton
-                or AXRoleAttribute.AXMenuButton
-                or AXRoleAttribute.AXPopUpButton
-                or AXRoleAttribute.AXCheckBox
-                or AXRoleAttribute.AXRadioButton
-                or AXRoleAttribute.AXMenuItem
-                or AXRoleAttribute.AXLink
-                or AXRoleAttribute.AXImage
-                or AXRoleAttribute.AXDisclosureTriangle;
-            if (allowExpensive)
+            if (IsLabelBearingRole(Role))
             {
                 // AXTitleUIElement is a sibling/child label control.
                 var titleElement = GetAttribute<AXUIElement>(AXAttributeConstants.TitleUIElement);
@@ -235,6 +222,27 @@ public partial class AXUIElement : NSObject, IVisualElement
             return null;
         }
     }
+
+    /// <summary>
+    /// Roles where AXValue is a label-like state string and where
+    /// AXTitleUIElement / first-child-static-text fallbacks are
+    /// worth the extra cross-process AX RPC cost. Covers the OCCU
+    /// common set: button-shaped controls, menu items, links, images,
+    /// tabs, table/outline cells/rows, switches/toggles, menubar items.
+    /// Roles that don't appear here treat AXValue as content (text
+    /// fields / sliders) and never have a sibling label control.
+    /// </summary>
+    internal static bool IsLabelBearingRole(AXRoleAttribute role) => role switch
+    {
+        AXRoleAttribute.AXButton or AXRoleAttribute.AXMenuButton or AXRoleAttribute.AXPopUpButton
+            or AXRoleAttribute.AXCheckBox or AXRoleAttribute.AXRadioButton
+            or AXRoleAttribute.AXMenuItem or AXRoleAttribute.AXMenuBarItem
+            or AXRoleAttribute.AXLink or AXRoleAttribute.AXImage
+            or AXRoleAttribute.AXDisclosureTriangle
+            or AXRoleAttribute.AXCell or AXRoleAttribute.AXRow
+            => true,
+        _ => false,
+    };
 
     private string? TryFirstChildStaticTextValue()
     {
@@ -382,11 +390,11 @@ public partial class AXUIElement : NSObject, IVisualElement
                 var meaningful = new List<string>(capacity: 4);
                 for (nuint i = 0; i < arr.Count; i++)
                 {
-                    // Items returned by GetItem<NSString> are non-owning
-                    // references back into the array — wrapping them in
-                    // 'using' would over-release and crash. Just read
-                    // the string value and let the wrapper go.
-                    var s = arr.GetItem<NSString>(i);
+                    // GetItem<T> on NSArray returns a +1 retained wrapper
+                    // (consistent with windowInfoArray.GetItem<NSDictionary>(0)
+                    // below and other GetItem call sites). Dispose it
+                    // to avoid leaking one NSString per supported action.
+                    using var s = arr.GetItem<NSString>(i);
                     var v = s?.ToString();
                     if (string.IsNullOrEmpty(v)) continue;
                     if (IsMeaningful(v)) meaningful.Add(v);

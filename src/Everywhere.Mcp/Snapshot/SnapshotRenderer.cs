@@ -67,26 +67,23 @@ public static class SnapshotRenderer
 
             // OCCU meaningfulActions display: when an element advertises
             // verbs the agent doesn't get from the type alone (slider
-            // Increment, popover ShowMenu), surface them inline.
-            IReadOnlyList<string>? actions = null;
-            try { actions = node.Element.SupportedActions; }
+            // Increment, popover ShowMenu), surface them inline. Same
+            // whitelist/dedup as TreeJsonBuilder via SnapshotActionFilter.
+            IReadOnlyList<string>? rawActions = null;
+            try { rawActions = node.Element.SupportedActions; }
             catch (System.Runtime.InteropServices.COMException) { }
             catch (ObjectDisposedException) { }
             catch (InvalidOperationException) { }
-            if (actions is { Count: > 0 })
+            var filtered = SnapshotActionFilter.Filter(rawActions);
+            if (filtered.Count > 0)
             {
-                var first = true;
-                for (var i = 0; i < actions.Count; i++)
+                sb.Append(" actions=[");
+                for (var i = 0; i < filtered.Count; i++)
                 {
-                    var a = actions[i];
-                    if (string.IsNullOrWhiteSpace(a)) continue;
-                    if (a.StartsWith("AX", StringComparison.Ordinal)) a = a[2..];
-                    if (string.IsNullOrEmpty(a)) continue;
-                    if (first) { sb.Append(" actions=["); first = false; }
-                    else sb.Append(',');
-                    sb.Append(a);
+                    if (i > 0) sb.Append(',');
+                    sb.Append(filtered[i]);
                 }
-                if (!first) sb.Append(']');
+                sb.Append(']');
             }
 
             sb.AppendLine();

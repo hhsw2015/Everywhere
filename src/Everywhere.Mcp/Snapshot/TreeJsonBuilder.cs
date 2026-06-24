@@ -49,17 +49,11 @@ public static class TreeJsonBuilder
         return rootNode;
     }
 
-    private static readonly HashSet<string> _meaningfulVerbs = new(StringComparer.Ordinal)
-    {
-        "Press", "Confirm", "Open", "ShowMenu",
-        "Increment", "Decrement", "Pick", "Cancel", "Delete", "Raise",
-    };
-
     /// <summary>
     /// OCCU meaningfulActions: only emit the actions list when there are
     /// actual UI-state-changing verbs to expose; null otherwise so JSON
-    /// stays compact. Filters defensively (caller may not be the Mac AX
-    /// path that already pre-filters) and skips null/empty entries.
+    /// stays compact. Whitelist + dedup live in
+    /// <see cref="SnapshotActionFilter"/> so JSON and tree_text agree.
     /// </summary>
     private static List<string>? ResolveActions(IVisualElement element)
     {
@@ -68,16 +62,7 @@ public static class TreeJsonBuilder
         catch (System.Runtime.InteropServices.COMException) { return null; }
         catch (ObjectDisposedException) { return null; }
         catch (InvalidOperationException) { return null; }
-        if (src is null || src.Count == 0) return null;
-        var stripped = new List<string>(src.Count);
-        foreach (var raw in src)
-        {
-            if (string.IsNullOrWhiteSpace(raw)) continue;
-            var a = raw.StartsWith("AX", StringComparison.Ordinal) ? raw[2..] : raw;
-            if (string.IsNullOrEmpty(a)) continue;
-            if (!_meaningfulVerbs.Contains(a)) continue;
-            stripped.Add(a);
-        }
-        return stripped.Count == 0 ? null : stripped;
+        var filtered = SnapshotActionFilter.Filter(src);
+        return filtered.Count == 0 ? null : filtered;
     }
 }
