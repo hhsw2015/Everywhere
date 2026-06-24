@@ -4,11 +4,11 @@ using Everywhere.Interop;
 using Everywhere.Interop.Whiteboard;
 using Everywhere.Mcp.Input;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Everywhere.Mcp.Snapshot;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Server;
@@ -180,7 +180,17 @@ public sealed class EverywhereMcpHttpHost : IHostedService, IAsyncDisposable
         var builder = WebApplication.CreateEmptyBuilder(new WebApplicationOptions());
         builder.WebHost.UseKestrelCore();
         builder.WebHost.ConfigureKestrel(opts => opts.ListenLocalhost(port));
+        // Logging: clear inner providers, then re-share the parent
+        // ILoggerFactory so anything resolved from the inner DI
+        // (OpenDiaToolSync, etc.) writes to Everywhere's normal sinks.
+        // Without the share, every inner log line is silently dropped.
         builder.Logging.ClearProviders();
+        var parentLoggerFactory = _parentServices.GetService<ILoggerFactory>();
+        if (parentLoggerFactory is not null)
+        {
+            builder.Services.RemoveAll<ILoggerFactory>();
+            builder.Services.AddSingleton(parentLoggerFactory);
+        }
         builder.Services.AddRoutingCore();
 
         // Share parent singletons; lifecycle stays with the parent provider.
