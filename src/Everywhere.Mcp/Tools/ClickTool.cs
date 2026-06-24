@@ -45,18 +45,41 @@ public static class ClickTool
                 var button = ParseButton(mouse_button);
                 var clickCount = click_count is { } c && c > 0 ? c : 1;
 
-                // OCCU parity: targeted CGEventPostToPid keeps the user's
-                // real cursor + global keyboard state untouched. We still
-                // acquire focus (some apps still gate on AXMain/foreground)
-                // but the click itself is delivered straight to the target
-                // process so the user can keep using other apps in parallel.
                 using var _ = focusBorrow.Acquire(
                     resolved.Value.Window.NativeWindowHandle,
                     requireFocus: true,
                     processId: resolved.Value.ProcessId);
                 highlighter.Highlight(resolved.Value.Window.BoundingRectangle,
                     $"Everywhere · {app}");
-                input.Click(x.Value, y.Value, clickCount, button, targetPid: resolved.Value.ProcessId);
+
+                // OCCU x/y path (CUS L430-470): first try AX click on
+                // candidates at the point — bestElement (smallest
+                // containing) and hitTestElement (raw AXHitTest). Each
+                // candidate runs through performAXClickSequence with
+                // includeNearbyHitTesting=false (the point IS the hit).
+                // Falls back to coordinate CGEvent only when every AX
+                // candidate fails.
+                var ix = (int)Math.Round(x.Value);
+                var iy = (int)Math.Round(y.Value);
+                var hit = context.ElementFromPoint(new Avalonia.PixelPoint(ix, iy));
+                if (hit is not null)
+                {
+                    try
+                    {
+                        if (button == MouseButton.Right && hit.TryInvokeAction("showmenu"))
+                            return new CallToolResult { Content = [new TextContentBlock { Text = "ok (x/y → AX hit + ShowMenu)" }] };
+                        if (button == MouseButton.Left)
+                        {
+                            try { hit.Invoke(clickCount); return new CallToolResult { Content = [new TextContentBlock { Text = "ok (x/y → AX hit invoke)" }] }; }
+                            catch { /* fall through to coord */ }
+                        }
+                    }
+                    catch { /* AX failed → coord fallback */ }
+                }
+
+                // Coordinate fallback. Use HidEventTap (targetPid=null)
+                // so SwiftUI gestures fire — see v0.9.56 commit.
+                input.Click(x.Value, y.Value, clickCount, button, targetPid: null);
                 return new CallToolResult { Content = [new TextContentBlock { Text = "ok" }] };
             }
 

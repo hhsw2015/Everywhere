@@ -193,6 +193,29 @@ internal static class ElementClickDispatcher
                     }
                     catch (Exception coordEx)
                     {
+                        // Last-ditch: keyboard fallback. OCCU
+                        // canUseKeyboardTextFallback (CUS L285) — for
+                        // text-shaped elements (TextField/TextArea/
+                        // settable values) Space/Return acts like
+                        // click-to-activate. We use Space because it's
+                        // the AppKit convention for buttons, and
+                        // textfields ignore it as a no-op so the chain
+                        // is safe.
+                        if (input is not null && resolved is not null
+                            && (element.Type is VisualElementType.Button
+                                or VisualElementType.CheckBox
+                                or VisualElementType.RadioButton))
+                        {
+                            try
+                            {
+                                input.PressKey("space", targetPid: resolved.Value.ProcessId);
+                                return new CallToolResult { Content = [new TextContentBlock
+                                {
+                                    Text = $"ok (AX failed: {axEx.Message}; coord failed: {coordEx.Message}; keyboard space fallback succeeded)",
+                                }] };
+                            }
+                            catch { /* truly nothing worked */ }
+                        }
                         return ToolErrors.Error(
                             $"AX action chain failed ({axEx.Message}) and coordinate fallback failed ({coordEx.Message}).");
                     }
