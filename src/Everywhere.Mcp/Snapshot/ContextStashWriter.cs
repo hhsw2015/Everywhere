@@ -443,20 +443,39 @@ public sealed class ContextStashWriter
         {
             try
             {
-                var stableCount = 0;
-                for (var i = 0; i < 8; i++)
+                // True frontmost-detection (NSWorkspace.frontmostApplication
+                // on macOS) — Activate()'s return value just says "raise was
+                // dispatched", not "the app actually got focus". Some apps
+                // (Arc, browsers handling their own global hotkeys) raise,
+                // then steal focus back when their own hotkey handler
+                // finishes. Re-check after raising and require the app to
+                // STAY frontmost across two consecutive 150ms ticks before
+                // we type. Re-issue raise each tick — cheap when already
+                // frontmost. Cap ~2.4s so a misconfigured agent id doesn't
+                // hold the simulator forever.
+                var stable = 0;
+                var settled = false;
+                for (var i = 0; i < 16; i++)
                 {
-                    await Task.Delay(120);
-                    bool raised;
-                    try { raised = _appActivator.Activate(agentAppId); }
-                    catch { raised = false; }
-                    if (raised) { if (++stableCount >= 2) break; }
-                    else stableCount = 0;
+                    try { _appActivator.Activate(agentAppId); }
+                    catch { /* swallow; checked below */ }
+                    await Task.Delay(150);
+                    bool front;
+                    try { front = _appActivator.IsFrontmost(agentAppId); }
+                    catch { front = false; }
+                    if (front)
+                    {
+                        if (++stable >= 2) { settled = true; break; }
+                    }
+                    else
+                    {
+                        stable = 0;
+                    }
                 }
-                if (stableCount < 2)
+                if (!settled)
                 {
                     _logger.LogInformation(
-                        "LaunchPhrase: agent {Id} did not settle frontmost; skipping injection.",
+                        "LaunchPhrase: agent {Id} did not stay frontmost (likely focus-stealing app); skipping injection.",
                         agentAppId);
                     return;
                 }

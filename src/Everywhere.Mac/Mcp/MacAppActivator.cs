@@ -111,6 +111,32 @@ public sealed class MacAppActivator : IAppActivator
         return false;
     }
 
+    public bool IsFrontmost(string appIdentifier)
+    {
+        if (string.IsNullOrWhiteSpace(appIdentifier)) return false;
+        try
+        {
+            var ws = objc_msgSend_get(objc_getClass("NSWorkspace"),
+                                       sel_registerName("sharedWorkspace"));
+            if (ws == 0) return false;
+            var frontmost = objc_msgSend_get(ws, sel_registerName("frontmostApplication"));
+            if (frontmost == 0) return false;
+            var bundleSel = sel_registerName("bundleIdentifier");
+            var nameSel = sel_registerName("localizedName");
+            var execSel = sel_registerName("executableURL");
+            var lastPathSel = sel_registerName("lastPathComponent");
+            var pathSel = sel_registerName("path");
+            var utf8Sel = sel_registerName("UTF8String");
+            return Matches(frontmost, bundleSel, utf8Sel, appIdentifier)
+                || Matches(frontmost, nameSel, utf8Sel, appIdentifier)
+                || MatchesExecutable(frontmost, execSel, lastPathSel, pathSel, utf8Sel, appIdentifier);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     private static bool Matches(nint app, nint propSel, nint utf8Sel, string needle)
     {
         var ns = objc_msgSend_get(app, propSel);
