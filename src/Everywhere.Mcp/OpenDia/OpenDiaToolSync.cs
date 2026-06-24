@@ -2,7 +2,6 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 
 namespace Everywhere.Mcp.OpenDia;
@@ -119,12 +118,8 @@ public sealed class OpenDiaToolSync
             schemaElement = JsonDocument.Parse("""{"type":"object"}""").RootElement.Clone();
         }
 
-        var protocolTool = new Tool
-        {
-            Name = Prefix + origName,
-            Description = description,
-            InputSchema = schemaElement,
-        };
-        return new OpenDiaTool(_bridge, origName!, protocolTool);
+        var mcpName = Prefix + origName;
+        var fn = new OpenDiaAIFunction(_bridge, mcpName, origName!, description, schemaElement);
+        return McpServerTool.Create(fn);
     }
 }

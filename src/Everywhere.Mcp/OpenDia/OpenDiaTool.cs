@@ -1,67 +1,65 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using ModelContextProtocol.Protocol;
+using Microsoft.Extensions.AI;
 using ModelContextProtocol.Server;
 
 namespace Everywhere.Mcp.OpenDia;
 
 /// <summary>
-/// Concrete <see cref="McpServerTool"/> backed by the opendia browser
-/// extension over the websocket bridge. Each tool the extension registers
-/// in its `register` payload becomes one of these. Adding to
-/// <see cref="ModelContextProtocol.Server.McpServerOptions.ToolCollection"/>
-/// makes it visible to MCP clients (cmux, claude-code, ...) alongside
-/// Everywhere's static tools.
+/// Concrete <see cref="AIFunction"/> backed by an opendia browser-extension
+/// tool. Wrapped via <see cref="McpServerTool.Create(AIFunction, McpServerToolCreateOptions)"/>
+/// so we get the full MCP server plumbing (JSON-schema-driven argument
+/// validation, ListTools/CallTool dispatch, error envelope) without
+/// re-implementing every abstract member of <see cref="McpServerTool"/>.
 /// </summary>
-internal sealed class OpenDiaTool : McpServerTool
+internal sealed class OpenDiaAIFunction : AIFunction
 {
     private readonly OpenDiaBridge _bridge;
     private readonly string _extToolName;
-    public override Tool ProtocolTool { get; }
+    public override string Name { get; }
+    public override string Description { get; }
+    public override JsonElement JsonSchema { get; }
 
-    public OpenDiaTool(OpenDiaBridge bridge, string extToolName, Tool protocolTool)
+    public OpenDiaAIFunction(
+        OpenDiaBridge bridge,
+        string mcpName,
+        string extToolName,
+        string description,
+        JsonElement schema)
     {
         _bridge = bridge;
+        Name = mcpName;
         _extToolName = extToolName;
-        ProtocolTool = protocolTool;
+        Description = description;
+        JsonSchema = schema;
     }
 
-    public override async ValueTask<CallToolResult> InvokeAsync(
-        RequestContext<CallToolRequestParams> request,
-        CancellationToken cancellationToken = default)
+    protected override async ValueTask<object?> InvokeCoreAsync(
+        AIFunctionArguments arguments,
+        CancellationToken cancellationToken)
     {
-        // Repack the strongly-typed Arguments dict back into a JsonObject —
-        // that's the shape the opendia extension expects on the wire.
+        // Repack the AIFunctionArguments dict into a JsonObject — that's
+        // the shape the opendia extension expects on the wire.
         JsonNode? args = null;
-        var argsDict = request.Params?.Arguments;
-        if (argsDict is { Count: > 0 })
+        if (arguments is { Count: > 0 })
         {
             var obj = new JsonObject();
-            foreach (var (k, v) in argsDict)
+            foreach (var (k, v) in arguments)
             {
-                obj[k] = JsonNode.Parse(v.GetRawText());
+                obj[k] = v switch
+                {
+                    null => null,
+                    JsonElement el => JsonNode.Parse(el.GetRawText()),
+                    JsonNode jn => jn.DeepClone(),
+                    _ => JsonValue.Create(v),
+                };
             }
             args = obj;
         }
-
-        try
-        {
-            var result = await _bridge.CallToolAsync(_extToolName, args, ct: cancellationToken);
-            return new CallToolResult
-            {
-                Content = [new TextContentBlock
-                {
-                    Text = result is null ? "{}" : result.ToJsonString(),
-                }],
-            };
-        }
-        catch (Exception ex)
-        {
-            return new CallToolResult
-            {
-                IsError = true,
-                Content = [new TextContentBlock { Text = ex.Message }],
-            };
-        }
+        var result = await _bridge.CallToolAsync(_extToolName, args, ct: cancellationToken);
+        // Returning the raw JsonNode lets the SDK serialize it as-is into
+        // the CallToolResult content block. AIFunctionMcpServerTool wraps
+        // the return value automatically.
+        return result is null ? "{}" : result.ToJsonString();
     }
 }
