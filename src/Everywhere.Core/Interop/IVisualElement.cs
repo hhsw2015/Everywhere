@@ -58,6 +58,7 @@ public enum VisualElementType
 }
 
 [Flags]
+[Flags]
 public enum VisualElementStates
 {
     None = 0,
@@ -67,6 +68,18 @@ public enum VisualElementStates
     Selected = 1 << 3,
     ReadOnly = 1 << 4,
     Password = 1 << 5,
+    // OCCU summarizeTraits parity (AccessibilitySnapshot.swift): the
+    // aggregator picks any of these AX flags up so the snapshot can
+    // expose 'expanded', 'required', 'edited', main-window, minimized,
+    // grabbed (drag-source), pressed (button held), checked (toggle).
+    Expanded  = 1 << 6,
+    Required  = 1 << 7,
+    Edited    = 1 << 8,
+    Main      = 1 << 9,
+    Minimized = 1 << 10,
+    Grabbed   = 1 << 11,
+    Pressed   = 1 << 12,
+    Checked   = 1 << 13,
 }
 
 /// <summary>

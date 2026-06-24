@@ -145,8 +145,23 @@ public partial class AXUIElement : NSObject, IVisualElement
             if (GetAttribute<NSNumber>(AXAttributeConstants.Focused)?.BoolValue == true) states |= VisualElementStates.Focused;
             if (GetAttribute<NSNumber>(AXAttributeConstants.Hidden)?.BoolValue == true) states |= VisualElementStates.Offscreen;
             if (GetAttribute<NSNumber>(AXAttributeConstants.Selected)?.BoolValue == true) states |= VisualElementStates.Selected;
-
             if (Subrole == AXSubroleAttribute.AXSecureTextField) states |= VisualElementStates.Password;
+
+            // OCCU summarizeTraits parity. Each is best-effort —
+            // unsupported attribute returns null, leaving the flag clear.
+            if (GetAttribute<NSNumber>(AXAttributeConstants.Expanded)?.BoolValue == true)  states |= VisualElementStates.Expanded;
+            if (GetAttribute<NSNumber>(AXAttributeConstants.Required)?.BoolValue == true)  states |= VisualElementStates.Required;
+            if (GetAttribute<NSNumber>(AXAttributeConstants.Edited)?.BoolValue == true)    states |= VisualElementStates.Edited;
+            if (GetAttribute<NSNumber>(AXAttributeConstants.MainTrait)?.BoolValue == true) states |= VisualElementStates.Main;
+            if (GetAttribute<NSNumber>(AXAttributeConstants.MinimizedAttr)?.BoolValue == true) states |= VisualElementStates.Minimized;
+            if (GetAttribute<NSNumber>(AXAttributeConstants.GrabbedAttr)?.BoolValue == true)   states |= VisualElementStates.Grabbed;
+
+            // AXValue on toggles / checkboxes: 1 = checked, 0 = unchecked.
+            if (Role == AXRoleAttribute.AXCheckBox || Role == AXRoleAttribute.AXRadioButton)
+            {
+                var v = GetAttribute<NSNumber>(AXAttributeConstants.Value);
+                if (v is not null && v.Int32Value > 0) states |= VisualElementStates.Checked;
+            }
 
             return states;
         }
