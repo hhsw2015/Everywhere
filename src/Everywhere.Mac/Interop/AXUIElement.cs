@@ -184,23 +184,50 @@ public partial class AXUIElement : NSObject, IVisualElement
             if (!string.IsNullOrWhiteSpace(d)) return d;
             var h = GetAttribute<NSString>(AXAttributeConstants.Help);
             if (!string.IsNullOrWhiteSpace(h)) return h;
-            // Some controls expose their human-readable label as AXValue
-            // (e.g. radio button "On", checkbox state strings).
-            var v = GetAttribute<NSObject>(AXAttributeConstants.Value)?.ToString();
-            if (!string.IsNullOrWhiteSpace(v)) return v;
-            // AXTitleUIElement is a sibling/child label control.
-            var titleElement = GetAttribute<AXUIElement>(AXAttributeConstants.TitleUIElement);
-            if (titleElement is not null)
+            // AXValue is *content* for text fields / sliders / progress —
+            // using it as the label would make Name == GetText(). Only
+            // consult it for roles where it's known to be a label-like
+            // state string (radio "On"/"Off", popup button caption,
+            // checkbox state).
+            if (Role == AXRoleAttribute.AXCheckBox
+                || Role == AXRoleAttribute.AXRadioButton
+                || Role == AXRoleAttribute.AXPopUpButton
+                || Role == AXRoleAttribute.AXMenuButton)
             {
-                var tv = titleElement.GetAttribute<NSObject>(AXAttributeConstants.Value)?.ToString();
-                if (!string.IsNullOrWhiteSpace(tv)) return tv;
-                var tt = titleElement.GetAttribute<NSString>(AXAttributeConstants.Title);
-                if (!string.IsNullOrWhiteSpace(tt)) return tt;
+                var v = GetAttribute<NSObject>(AXAttributeConstants.Value)?.ToString();
+                if (!string.IsNullOrWhiteSpace(v)) return v;
             }
-            // Look one level into children for an AXStaticText with value
-            // — this is where SwiftUI parks button labels.
-            var childText = TryFirstChildStaticTextValue();
-            if (!string.IsNullOrWhiteSpace(childText)) return childText;
+            // The next two fallbacks (TitleUIElement, first-child static
+            // text) require additional cross-process AX RPCs. They only
+            // make sense for label-bearing roles — text fields,
+            // sliders, scroll bars etc. don't have separate label
+            // controls so paying for those reads on every node would be
+            // pure overhead.
+            var allowExpensive = Role
+                is AXRoleAttribute.AXButton
+                or AXRoleAttribute.AXMenuButton
+                or AXRoleAttribute.AXPopUpButton
+                or AXRoleAttribute.AXCheckBox
+                or AXRoleAttribute.AXRadioButton
+                or AXRoleAttribute.AXMenuItem
+                or AXRoleAttribute.AXLink
+                or AXRoleAttribute.AXImage
+                or AXRoleAttribute.AXDisclosureTriangle;
+            if (allowExpensive)
+            {
+                // AXTitleUIElement is a sibling/child label control.
+                var titleElement = GetAttribute<AXUIElement>(AXAttributeConstants.TitleUIElement);
+                if (titleElement is not null)
+                {
+                    var tv = titleElement.GetAttribute<NSObject>(AXAttributeConstants.Value)?.ToString();
+                    if (!string.IsNullOrWhiteSpace(tv)) return tv;
+                    var tt = titleElement.GetAttribute<NSString>(AXAttributeConstants.Title);
+                    if (!string.IsNullOrWhiteSpace(tt)) return tt;
+                }
+                // SwiftUI parks button labels in a child AXStaticText.
+                var childText = TryFirstChildStaticTextValue();
+                if (!string.IsNullOrWhiteSpace(childText)) return childText;
+            }
             // AXIdentifier is the automation hook. UI test ids like "btn7"
             // are common on SwiftUI; better than empty.
             var id = GetAttribute<NSString>(AXAttributeConstants.Identifier);
@@ -346,19 +373,29 @@ public partial class AXUIElement : NSObject, IVisualElement
             if (err != AXError.Success || arrPtr == 0) return Array.Empty<string>();
             try
             {
-                using var arr = ObjCRuntime.Runtime.GetNSObject<NSArray>(arrPtr);
+                // owns:true — CFArray returned by AXUIElementCopyActionNames
+                // is +1 retained per CF "Copy" rule, so the NSArray
+                // wrapper must release it on Dispose. Without owns:true
+                // we leak the array on every call.
+                using var arr = ObjCRuntime.Runtime.GetNSObject<NSArray>(arrPtr, owns: true);
                 if (arr is null) return Array.Empty<string>();
                 var meaningful = new List<string>(capacity: 4);
                 for (nuint i = 0; i < arr.Count; i++)
                 {
-                    using var s = arr.GetItem<NSString>(i);
+                    // Items returned by GetItem<NSString> are non-owning
+                    // references back into the array — wrapping them in
+                    // 'using' would over-release and crash. Just read
+                    // the string value and let the wrapper go.
+                    var s = arr.GetItem<NSString>(i);
                     var v = s?.ToString();
                     if (string.IsNullOrEmpty(v)) continue;
                     if (IsMeaningful(v)) meaningful.Add(v);
                 }
                 return meaningful;
             }
-            catch { return Array.Empty<string>(); }
+            catch (System.Runtime.InteropServices.COMException) { return Array.Empty<string>(); }
+            catch (ObjectDisposedException) { return Array.Empty<string>(); }
+            catch (InvalidOperationException) { return Array.Empty<string>(); }
         }
     }
 

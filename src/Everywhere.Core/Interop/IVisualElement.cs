@@ -77,7 +77,9 @@ public enum VisualElementStates
     Main      = 1 << 9,
     Minimized = 1 << 10,
     Grabbed   = 1 << 11,
-    Pressed   = 1 << 12,
+    // Pressed bit removed — no platform impl populated it (would have
+    // required reading AXSelected/AXPressed which AppKit / SwiftUI
+    // expose inconsistently). Re-add when there's a real source.
     Checked   = 1 << 13,
 }
 
@@ -258,6 +260,11 @@ public interface IVisualElement
     /// internal AX bookkeeping actions. Default implementation returns
     /// empty so non-Mac platforms compile without changes; Mac path
     /// queries AXUIElementCopyActionNames.
+    ///
+    /// EXPENSIVE — the Mac implementation performs a cross-process AX
+    /// RPC and allocates an NSArray on every read. Callers that touch
+    /// many elements per snapshot (renderers, JSON builders) should
+    /// read once per element and cache locally.
     /// </summary>
     IReadOnlyList<string> SupportedActions => Array.Empty<string>();
 

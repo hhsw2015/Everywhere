@@ -68,23 +68,26 @@ public static class SnapshotRenderer
             // OCCU meaningfulActions display: when an element advertises
             // verbs the agent doesn't get from the type alone (slider
             // Increment, popover ShowMenu), surface them inline.
-            try
+            IReadOnlyList<string>? actions = null;
+            try { actions = node.Element.SupportedActions; }
+            catch (System.Runtime.InteropServices.COMException) { }
+            catch (ObjectDisposedException) { }
+            catch (InvalidOperationException) { }
+            if (actions is { Count: > 0 })
             {
-                var actions = node.Element.SupportedActions;
-                if (actions is { Count: > 0 })
+                var first = true;
+                for (var i = 0; i < actions.Count; i++)
                 {
-                    sb.Append(" actions=[");
-                    for (var i = 0; i < actions.Count; i++)
-                    {
-                        if (i > 0) sb.Append(',');
-                        var a = actions[i];
-                        if (a.StartsWith("AX", StringComparison.Ordinal)) a = a[2..];
-                        sb.Append(a);
-                    }
-                    sb.Append(']');
+                    var a = actions[i];
+                    if (string.IsNullOrWhiteSpace(a)) continue;
+                    if (a.StartsWith("AX", StringComparison.Ordinal)) a = a[2..];
+                    if (string.IsNullOrEmpty(a)) continue;
+                    if (first) { sb.Append(" actions=["); first = false; }
+                    else sb.Append(',');
+                    sb.Append(a);
                 }
+                if (!first) sb.Append(']');
             }
-            catch { /* best-effort */ }
 
             sb.AppendLine();
         }

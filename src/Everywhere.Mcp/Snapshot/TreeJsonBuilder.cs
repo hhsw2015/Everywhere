@@ -26,7 +26,7 @@ public static class TreeJsonBuilder
                 ElementIndex = indexed.Index,
                 Type = indexed.Element.Type.ToString(),
                 Name = SnapshotTextUtil.Sanitize(indexed.Element.Name) is var n && string.IsNullOrEmpty(n) ? null : n,
-                Text = indexed.Element.GetText(maxLength: UpstreamConstants.SnapshotTextDefaultCharacterLimit),
+                Text = SnapshotTextUtil.Sanitize(indexed.Element.GetText(maxLength: UpstreamConstants.SnapshotTextDefaultCharacterLimit)) is var t && string.IsNullOrEmpty(t) ? null : t,
                 Bounds = new WindowBounds(bounds.X, bounds.Y, bounds.Width, bounds.Height),
                 States = indexed.Element.States == VisualElementStates.None ? null : indexed.Element.States.ToString(),
                 Actions = ResolveActions(indexed.Element),
@@ -49,25 +49,35 @@ public static class TreeJsonBuilder
         return rootNode;
     }
 
+    private static readonly HashSet<string> _meaningfulVerbs = new(StringComparer.Ordinal)
+    {
+        "Press", "Confirm", "Open", "ShowMenu",
+        "Increment", "Decrement", "Pick", "Cancel", "Delete", "Raise",
+    };
+
     /// <summary>
     /// OCCU meaningfulActions: only emit the actions list when there are
-    /// actual verbs to expose; null otherwise so JSON stays compact.
+    /// actual UI-state-changing verbs to expose; null otherwise so JSON
+    /// stays compact. Filters defensively (caller may not be the Mac AX
+    /// path that already pre-filters) and skips null/empty entries.
     /// </summary>
     private static List<string>? ResolveActions(IVisualElement element)
     {
-        try
+        IReadOnlyList<string> src;
+        try { src = element.SupportedActions; }
+        catch (System.Runtime.InteropServices.COMException) { return null; }
+        catch (ObjectDisposedException) { return null; }
+        catch (InvalidOperationException) { return null; }
+        if (src is null || src.Count == 0) return null;
+        var stripped = new List<string>(src.Count);
+        foreach (var raw in src)
         {
-            var src = element.SupportedActions;
-            if (src is null || src.Count == 0) return null;
-            var stripped = new List<string>(src.Count);
-            foreach (var a in src)
-            {
-                // Strip the "AX" prefix for human-friendly output: agents
-                // see [Press, Open, ShowMenu] instead of [AXPress, ...].
-                stripped.Add(a.StartsWith("AX", StringComparison.Ordinal) ? a[2..] : a);
-            }
-            return stripped.Count == 0 ? null : stripped;
+            if (string.IsNullOrWhiteSpace(raw)) continue;
+            var a = raw.StartsWith("AX", StringComparison.Ordinal) ? raw[2..] : raw;
+            if (string.IsNullOrEmpty(a)) continue;
+            if (!_meaningfulVerbs.Contains(a)) continue;
+            stripped.Add(a);
         }
-        catch { return null; }
+        return stripped.Count == 0 ? null : stripped;
     }
 }
