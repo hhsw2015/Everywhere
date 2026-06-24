@@ -333,12 +333,63 @@ public partial class AXUIElement : NSObject, IVisualElement
 
     public string? GetText(int maxLength = -1)
     {
+        // Direct value — works for text fields / labels / sliders.
         var text = GetAttribute<NSObject>(AXAttributeConstants.Value)?.ToString();
-        if (string.IsNullOrEmpty(text)) return null;
+        if (!string.IsNullOrEmpty(text))
+        {
+            if (Role == AXRoleAttribute.AXCheckBox) return text == "0" ? "false" : "true";
+            return maxLength > 0 && text.Length > maxLength ? text[..maxLength] : text;
+        }
 
-        if (Role == AXRoleAttribute.AXCheckBox) return text == "0" ? "false" : "true"; // don't apply trim
+        // Row text flattening (OCCU flattenedRowTexts): for AXRow/AXTableRow/
+        // AXOutlineRow nodes the cell texts are exposed only on descendant
+        // AXStaticText/AXTextField; concatenate them as the row's text so
+        // the agent can match a row by visible content.
+        if (Role == AXRoleAttribute.AXRow
+            || Role == AXRoleAttribute.AXTableRow
+            || Role == AXRoleAttribute.AXOutlineRow)
+        {
+            var collected = CollectDescendantText(maxDepth: 4, max: maxLength > 0 ? maxLength : 600);
+            if (!string.IsNullOrEmpty(collected)) return collected;
+        }
+        return null;
+    }
 
-        return maxLength > 0 && text.Length > maxLength ? text[..maxLength] : text;
+    /// <summary>
+    /// OCCU descendantTexts: walk up to 4 hops, collect AXValue/AXTitle from
+    /// AXStaticText / AXTextField nodes, dedup + concat with " | ".
+    /// </summary>
+    private string? CollectDescendantText(int maxDepth, int max)
+    {
+        var sb = new System.Text.StringBuilder();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        Walk(this, 0);
+        return sb.Length == 0 ? null : sb.ToString();
+
+        void Walk(AXUIElement el, int depth)
+        {
+            if (depth >= maxDepth || sb.Length >= max) return;
+            try
+            {
+                if (el.Role == AXRoleAttribute.AXStaticText || el.Role == AXRoleAttribute.AXTextField)
+                {
+                    var v = el.GetAttribute<NSObject>(AXAttributeConstants.Value)?.ToString();
+                    if (string.IsNullOrEmpty(v))
+                        v = el.GetAttribute<NSString>(AXAttributeConstants.Title);
+                    if (!string.IsNullOrEmpty(v) && seen.Add(v))
+                    {
+                        if (sb.Length > 0) sb.Append(" | ");
+                        sb.Append(v);
+                    }
+                }
+                foreach (var c in el.Children)
+                {
+                    if (sb.Length >= max) break;
+                    if (c is AXUIElement axc) Walk(axc, depth + 1);
+                }
+            }
+            catch { }
+        }
     }
 
     // OCCU-inspired action chain. AXPress alone misses a lot:
