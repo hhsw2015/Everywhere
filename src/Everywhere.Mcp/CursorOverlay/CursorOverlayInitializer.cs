@@ -27,7 +27,9 @@ public sealed class CursorOverlayInitializer : IAsyncInitializer, IAsyncDisposab
         _logger = logger;
     }
 
-    public Task InitializeAsync(CancellationToken cancellationToken = default)
+    public AsyncInitializerIndex Index => AsyncInitializerIndex.Startup;
+
+    public Task InitializeAsync()
     {
         _settings.McpServer.PropertyChanged += (_, e) =>
         {
