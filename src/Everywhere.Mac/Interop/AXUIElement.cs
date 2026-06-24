@@ -488,6 +488,19 @@ public partial class AXUIElement : NSObject, IVisualElement
     // The chain mirrors OCCU ComputerUseService.performLeftClick().
     public void Invoke()
     {
+        // OCCU performPreferredClick (ComputerUseService.swift L699-733)
+        // and performAction (L891) require the action to actually be in
+        // AXUIElementCopyActionNames before posting it. macOS AX returns
+        // .success for unsupported actions on some controls (notably
+        // SwiftUI buttons, which advertise no actions but accept AXPress
+        // syntactically and treat it as a no-op). The earlier blind chain
+        // would 'succeed' on the first call and never trigger the
+        // coordinate fallback — Calculator '7' was the canonical
+        // regression. Gate every verb on the supported-actions list and
+        // throw when nothing in the chain is actually available so the
+        // caller can run a real coordinate click.
+        var available = SupportedActions;
+
         // 1. List-item selection — only when not inside a web area, since
         //    web rows often have a Press the parent doesn't expose.
         if (!HasAncestorRole(AXRoleAttribute.AXWebArea))
@@ -496,18 +509,36 @@ public partial class AXUIElement : NSObject, IVisualElement
         }
 
         // 2. Standard verbs in OCCU order: Press → Confirm → Open.
-        if (TryPerformAction(AXAttributeConstants.Press)) return;
-        if (TryPerformAction(AXAttributeConstants.Confirm)) return;
-        if (TryPerformAction(AXAttributeConstants.Open)) return;
+        if (TryPerformActionGated(AXAttributeConstants.Press, available)) return;
+        if (TryPerformActionGated(AXAttributeConstants.Confirm, available)) return;
+        if (TryPerformActionGated(AXAttributeConstants.Open, available)) return;
 
         // 3. Last-ditch: surface ShowMenu (right-click semantics) for
         //    targets that only react to context menus.
-        if (TryPerformAction(AXAttributeConstants.ShowMenu)) return;
+        if (TryPerformActionGated(AXAttributeConstants.ShowMenu, available)) return;
 
-        // None worked — preserve the original throw so the caller can
-        // fall back to coordinate clicks if it wants.
         throw new InvalidOperationException(
-            $"No supported AX action (Press/Confirm/Open/ShowMenu/select) on element role={Role}");
+            $"No supported AX action available (role={Role}, actions=[{string.Join(",", available)}])");
+    }
+
+    private bool TryPerformActionGated(NSString actionName, IReadOnlyList<string> available)
+    {
+        // Only post when the element actually advertises this action.
+        // The .success short-circuit on unsupported verbs in macOS AX
+        // makes blind posting unreliable.
+        var n = actionName.ToString();
+        var found = false;
+        for (var i = 0; i < available.Count; i++)
+        {
+            if (string.Equals(available[i], n, StringComparison.OrdinalIgnoreCase))
+            {
+                found = true;
+                break;
+            }
+        }
+        if (!found) return false;
+        var error = PerformAction(Handle, actionName.Handle);
+        return error == AXError.Success;
     }
 
     /// <summary>
