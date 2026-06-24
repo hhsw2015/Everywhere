@@ -591,14 +591,17 @@ public partial class AXUIElement : NSObject, IVisualElement
         }
 
         // 2. Standard verbs in OCCU order: Press → Confirm → Open. Each
-        //    repeats clickCount times with a 50ms gap (OCCU L897).
-        if (TryPerformActionGated(AXAttributeConstants.Press, available, clickCount)) return;
-        if (TryPerformActionGated(AXAttributeConstants.Confirm, available, clickCount)) return;
-        if (TryPerformActionGated(AXAttributeConstants.Open, available, clickCount)) return;
+        //    repeats clickCount times with a 50ms gap (OCCU L897), and
+        //    the chain itself sleeps 150ms after a successful action so
+        //    state changes (panel open, menu mount) can settle before
+        //    the next snapshot — matches OCCU CUS L820.
+        if (TryPerformActionGated(AXAttributeConstants.Press, available, clickCount)) { Thread.Sleep(150); return; }
+        if (TryPerformActionGated(AXAttributeConstants.Confirm, available, clickCount)) { Thread.Sleep(150); return; }
+        if (TryPerformActionGated(AXAttributeConstants.Open, available, clickCount)) { Thread.Sleep(150); return; }
 
         // 3. Last-ditch: surface ShowMenu (right-click semantics) for
         //    targets that only react to context menus.
-        if (TryPerformActionGated(AXAttributeConstants.ShowMenu, available, clickCount)) return;
+        if (TryPerformActionGated(AXAttributeConstants.ShowMenu, available, clickCount)) { Thread.Sleep(150); return; }
 
         throw new InvalidOperationException(
             $"No supported AX action available (role={Role}, actions=[{string.Join(",", available)}])");
@@ -675,24 +678,37 @@ public partial class AXUIElement : NSObject, IVisualElement
     /// </summary>
     private bool TrySelectAsListItem()
     {
+        // OCCU selectContainingListItem (CUS L761): walk up to the
+        // nearest AXList ancestor (NOT AXTable/AXOutline/AXBrowser —
+        // those have their own row-selection semantics that
+        // setSelectedChildren on the list-shape parent doesn't fire),
+        // remember the *direct child* of the list (so we select the
+        // list-row itself, not whatever deeply-nested control we
+        // started from), then verify AXSelectedChildren is settable
+        // before posting. Without the settable gate setSelectedChildren
+        // silently returns success but the list never updates its
+        // selection, leaving us with a fake-OK on apps that don't
+        // support the attribute.
         AXUIElement? cursor = this;
+        AXUIElement? directChildOfList = null;
         AXUIElement? list = null;
         for (var hop = 0; cursor is not null && hop < 16; hop++)
         {
             var parent = cursor.Parent as AXUIElement;
             if (parent is null) break;
-            var role = parent.Role;
-            if (role == AXRoleAttribute.AXList
-                || role == AXRoleAttribute.AXOutline
-                || role == AXRoleAttribute.AXTable
-                || role == AXRoleAttribute.AXBrowser)
+            if (parent.Role == AXRoleAttribute.AXList)
             {
                 list = parent;
+                directChildOfList = cursor; // OCCU keeps the direct child as the row to select
                 break;
             }
             cursor = parent;
         }
-        if (list is null || cursor is null) return false;
+        if (list is null || directChildOfList is null) return false;
+
+        if (!IsSettable(list.Handle, AXAttributeConstants.SelectedChildren.Handle))
+            return false;
+        cursor = directChildOfList;
 
         // Build a CFArrayRef containing one CFTypeRef = element (`cursor`).
         // We only need the parent list; cursor is the row that should be selected.
@@ -986,6 +1002,22 @@ public partial class AXUIElement : NSObject, IVisualElement
 
     [LibraryImport(AppServices, EntryPoint = "AXUIElementCopyActionNames")]
     private static partial AXError CopyActionNames(nint element, out nint actions);
+
+    /// <summary>
+    /// AXUIElementIsAttributeSettable — OCCU L626 uses this to gate
+    /// SetValue/SelectedChildren writes. Reading 'is settable' before
+    /// posting prevents fake-success on attributes the element exposes
+    /// but doesn't actually accept writes for.
+    /// </summary>
+    [LibraryImport(AppServices, EntryPoint = "AXUIElementIsAttributeSettable")]
+    private static partial AXError IsAttributeSettable(nint element, nint attribute,
+        [System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.U1)] out bool settable);
+
+    private static bool IsSettable(nint element, nint attribute)
+    {
+        var err = IsAttributeSettable(element, attribute, out var s);
+        return err == AXError.Success && s;
+    }
 
     [LibraryImport(AppServices, EntryPoint = "AXUIElementSetAttributeValue")]
     private static partial AXError SetAttributeValue(nint element, nint attribute, nint value);
