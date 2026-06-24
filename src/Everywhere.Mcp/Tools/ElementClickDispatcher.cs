@@ -106,7 +106,16 @@ internal static class ElementClickDispatcher
                         : null;
                     try
                     {
-                        input!.Click(cx, cy, 1, MouseButton.Left, targetPid: resolved?.ProcessId);
+                        // SwiftUI gesture handlers in macOS 26+ Calculator
+                        // hook NSGestureRecognizer on the systemwide
+                        // event tap; CGEventPostToPid bypasses that tap
+                        // and the gesture never fires. Use the GLOBAL
+                        // SessionEventTap (targetPid=null) here so the
+                        // event reaches the OS hit-test pipeline.
+                        // This DOES move the user's real cursor for the
+                        // duration of the click — the cost of accuracy
+                        // on these specific apps.
+                        input!.Click(cx, cy, 1, MouseButton.Left, targetPid: null);
                     }
                     finally { focusHandle?.Dispose(); }
                     return new CallToolResult { Content = [new TextContentBlock { Text = "ok (SwiftUI bypass, coordinate click)" }] };
