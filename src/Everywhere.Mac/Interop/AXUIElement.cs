@@ -331,6 +331,45 @@ public partial class AXUIElement : NSObject, IVisualElement
         Subrole = Enum.TryParse<AXSubroleAttribute>(axSubrole, true, out var subrole) ? subrole : AXSubroleAttribute.AXUnknown;
     }
 
+    /// <summary>
+    /// OCCU meaningfulActions parity (ComputerUseService.swift L996-1010).
+    /// AXUIElementCopyActionNames returns every supported verb; we keep
+    /// only the ones that change observable UI state, so the agent's
+    /// tool surface isn't polluted with AX-internal verbs like
+    /// AXScrollToVisible.
+    /// </summary>
+    public IReadOnlyList<string> SupportedActions
+    {
+        get
+        {
+            var err = CopyActionNames(Handle, out var arrPtr);
+            if (err != AXError.Success || arrPtr == 0) return Array.Empty<string>();
+            try
+            {
+                using var arr = ObjCRuntime.Runtime.GetNSObject<NSArray>(arrPtr);
+                if (arr is null) return Array.Empty<string>();
+                var meaningful = new List<string>(capacity: 4);
+                for (nuint i = 0; i < arr.Count; i++)
+                {
+                    using var s = arr.GetItem<NSString>(i);
+                    var v = s?.ToString();
+                    if (string.IsNullOrEmpty(v)) continue;
+                    if (IsMeaningful(v)) meaningful.Add(v);
+                }
+                return meaningful;
+            }
+            catch { return Array.Empty<string>(); }
+        }
+    }
+
+    private static bool IsMeaningful(string action) => action switch
+    {
+        "AXPress" or "AXConfirm" or "AXOpen" or "AXShowMenu"
+            or "AXIncrement" or "AXDecrement" or "AXPick" or "AXCancel"
+            or "AXDelete" or "AXRaise" => true,
+        _ => false,
+    };
+
     public string? GetText(int maxLength = -1)
     {
         // Direct value — works for text fields / labels / sliders.
@@ -776,6 +815,9 @@ public partial class AXUIElement : NSObject, IVisualElement
 
     [LibraryImport(AppServices, EntryPoint = "AXUIElementPerformAction")]
     private static partial AXError PerformAction(nint element, nint action);
+
+    [LibraryImport(AppServices, EntryPoint = "AXUIElementCopyActionNames")]
+    private static partial AXError CopyActionNames(nint element, out nint actions);
 
     [LibraryImport(AppServices, EntryPoint = "AXUIElementSetAttributeValue")]
     private static partial AXError SetAttributeValue(nint element, nint attribute, nint value);

@@ -29,6 +29,7 @@ public static class TreeJsonBuilder
                 Text = indexed.Element.GetText(maxLength: UpstreamConstants.SnapshotTextDefaultCharacterLimit),
                 Bounds = new WindowBounds(bounds.X, bounds.Y, bounds.Width, bounds.Height),
                 States = indexed.Element.States == VisualElementStates.None ? null : indexed.Element.States.ToString(),
+                Actions = ResolveActions(indexed.Element),
             };
             byIndex[indexed.Index] = node;
 
@@ -46,5 +47,27 @@ public static class TreeJsonBuilder
         }
 
         return rootNode;
+    }
+
+    /// <summary>
+    /// OCCU meaningfulActions: only emit the actions list when there are
+    /// actual verbs to expose; null otherwise so JSON stays compact.
+    /// </summary>
+    private static List<string>? ResolveActions(IVisualElement element)
+    {
+        try
+        {
+            var src = element.SupportedActions;
+            if (src is null || src.Count == 0) return null;
+            var stripped = new List<string>(src.Count);
+            foreach (var a in src)
+            {
+                // Strip the "AX" prefix for human-friendly output: agents
+                // see [Press, Open, ShowMenu] instead of [AXPress, ...].
+                stripped.Add(a.StartsWith("AX", StringComparison.Ordinal) ? a[2..] : a);
+            }
+            return stripped.Count == 0 ? null : stripped;
+        }
+        catch { return null; }
     }
 }

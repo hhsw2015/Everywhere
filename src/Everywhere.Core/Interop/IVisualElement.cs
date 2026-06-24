@@ -251,6 +251,17 @@ public interface IVisualElement
     string? GetText(int maxLength = -1);
 
     /// <summary>
+    /// OCCU meaningfulActions parity. Names of AX actions the element
+    /// supports, filtered to verbs that change UI state (Press / Confirm
+    /// / Open / ShowMenu / Increment / Decrement / Cancel / Pick /
+    /// Delete / Raise). Empty when the element has no actions or only
+    /// internal AX bookkeeping actions. Default implementation returns
+    /// empty so non-Mac platforms compile without changes; Mac path
+    /// queries AXUIElementCopyActionNames.
+    /// </summary>
+    IReadOnlyList<string> SupportedActions => Array.Empty<string>();
+
+    /// <summary>
     /// Get the selected text of the visual element.
     /// </summary>
     /// <returns></returns>

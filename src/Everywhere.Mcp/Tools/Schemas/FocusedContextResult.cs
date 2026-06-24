@@ -82,6 +82,16 @@ public sealed class TreeNode
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? States { get; set; }
 
+    /// <summary>
+    /// OCCU meaningfulActions parity. Names of AX verbs the element
+    /// supports (Press / Confirm / Open / ShowMenu / Increment /
+    /// Decrement / Cancel / ...). Lets the agent decide whether to
+    /// use click vs perform_secondary_action vs scroll.
+    /// </summary>
+    [JsonPropertyName("actions")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<string>? Actions { get; set; }
+
     [JsonPropertyName("children")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public List<TreeNode>? Children { get; set; }
