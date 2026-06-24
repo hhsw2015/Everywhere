@@ -38,6 +38,22 @@ internal static class ElementClickDispatcher
                     $"Cannot click element of type '{element.Type}'. Use set_value with a numeric value.");
         }
 
+        // Run OCCU-style click-target redirection: a small trailing "Done"
+        // button next to a row is almost never what the agent meant; an
+        // Electron-web app row's synthetic-text child can't be Pressed
+        // but the row above it can. ClickHeuristics returns the same
+        // element when nothing matches.
+        string? processName = null;
+        try
+        {
+            if (element.ProcessId > 0)
+            {
+                processName = System.Diagnostics.Process.GetProcessById(element.ProcessId).ProcessName;
+            }
+        }
+        catch { /* dead process / restricted — skip heuristics */ }
+        element = ClickHeuristics.RedirectIfNeeded(element, processName);
+
         try
         {
             element.Invoke();
