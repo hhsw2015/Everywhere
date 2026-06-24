@@ -58,7 +58,6 @@ public enum VisualElementType
 }
 
 [Flags]
-[Flags]
 public enum VisualElementStates
 {
     None = 0,
