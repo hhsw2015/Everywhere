@@ -25,11 +25,11 @@ public static class GetAppStateTool
         "currently behind another window.")]
     public static async Task<CallToolResult> GetAppState(
         string app,
-        bool show_full_text,
         IVisualElementContext context,
         SessionStore sessions,
         FocusBorrow focusBorrow,
         CancellationToken cancellationToken,
+        bool show_full_text = false,
         bool raise_if_needed = false)
     {
         try

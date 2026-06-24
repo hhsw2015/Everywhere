@@ -26,11 +26,11 @@ public static class GetAppContextTool
         "a11y in background and raising disrupts the user.")]
     public static async Task<CallToolResult> GetAppContext(
         [Description("Fuzzy app name. Matched against process name AND window title (case-insensitive substring).")] string app_hint,
-        bool show_full_text,
         IVisualElementContext context,
         SessionStore sessions,
         FocusBorrow focusBorrow,
         CancellationToken cancellationToken,
+        bool show_full_text = false,
         bool raise_if_needed = false)
     {
         try
