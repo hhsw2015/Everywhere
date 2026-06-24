@@ -1,6 +1,6 @@
 using Avalonia.Threading;
+using Everywhere.Common;
 using Everywhere.Configuration;
-using Everywhere.Initialization;
 using Everywhere.Mcp.Input;
 using Microsoft.Extensions.Logging;
 

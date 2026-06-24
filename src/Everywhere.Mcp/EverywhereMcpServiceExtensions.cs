@@ -1,4 +1,4 @@
-using Everywhere.Initialization;
+using Everywhere.Common;
 using Everywhere.Interop;
 using Everywhere.Interop.Whiteboard;
 using Everywhere.Mcp.Input;
