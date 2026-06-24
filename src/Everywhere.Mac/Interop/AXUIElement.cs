@@ -156,17 +156,62 @@ public partial class AXUIElement : NSObject, IVisualElement
     {
         get
         {
-            // OCCU: macOS Calculator (SwiftUI rewrite), VoiceOver-friendly
-            // SwiftUI controls, and many icon-only AppKit buttons leave
-            // AXTitle empty and only expose the human label on
-            // AXDescription. Fall back to it so callers don't see a tree
-            // of nameless Buttons.
+            // OCCU AccessibilitySnapshot.swift L631-650 cascade:
+            //   AXTitle -> AXDescription -> AXHelp -> AXValue (for buttons w/ value)
+            //   -> AXTitleUIElement.AXValue -> AXIdentifier
+            //   -> first AXStaticText child's AXValue.
+            // The SwiftUI rewrite of Calculator parks the digit on a
+            // child AXStaticText, so we need the child-text fallback or
+            // every digit button reads as nameless.
             var t = GetAttribute<NSString>(AXAttributeConstants.Title);
             if (!string.IsNullOrWhiteSpace(t)) return t;
             var d = GetAttribute<NSString>(AXAttributeConstants.Description);
             if (!string.IsNullOrWhiteSpace(d)) return d;
+            var h = GetAttribute<NSString>(AXAttributeConstants.Help);
+            if (!string.IsNullOrWhiteSpace(h)) return h;
+            // Some controls expose their human-readable label as AXValue
+            // (e.g. radio button "On", checkbox state strings).
+            var v = GetAttribute<NSObject>(AXAttributeConstants.Value)?.ToString();
+            if (!string.IsNullOrWhiteSpace(v)) return v;
+            // AXTitleUIElement is a sibling/child label control.
+            var titleElement = GetAttribute<AXUIElement>(AXAttributeConstants.TitleUIElement);
+            if (titleElement is not null)
+            {
+                var tv = titleElement.GetAttribute<NSObject>(AXAttributeConstants.Value)?.ToString();
+                if (!string.IsNullOrWhiteSpace(tv)) return tv;
+                var tt = titleElement.GetAttribute<NSString>(AXAttributeConstants.Title);
+                if (!string.IsNullOrWhiteSpace(tt)) return tt;
+            }
+            // Look one level into children for an AXStaticText with value
+            // — this is where SwiftUI parks button labels.
+            var childText = TryFirstChildStaticTextValue();
+            if (!string.IsNullOrWhiteSpace(childText)) return childText;
+            // AXIdentifier is the automation hook. UI test ids like "btn7"
+            // are common on SwiftUI; better than empty.
+            var id = GetAttribute<NSString>(AXAttributeConstants.Identifier);
+            if (!string.IsNullOrWhiteSpace(id)) return id;
             return null;
         }
+    }
+
+    private string? TryFirstChildStaticTextValue()
+    {
+        try
+        {
+            int seen = 0;
+            foreach (var c in Children)
+            {
+                if (++seen > 12) break;
+                if (c is not AXUIElement child) continue;
+                if (child.Role != AXRoleAttribute.AXStaticText) continue;
+                var v = child.GetAttribute<NSObject>(AXAttributeConstants.Value)?.ToString();
+                if (!string.IsNullOrWhiteSpace(v)) return v;
+                var t = child.GetAttribute<NSString>(AXAttributeConstants.Title);
+                if (!string.IsNullOrWhiteSpace(t)) return t;
+            }
+        }
+        catch { }
+        return null;
     }
 
     /// <summary>

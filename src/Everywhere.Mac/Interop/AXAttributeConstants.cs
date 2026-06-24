@@ -50,4 +50,32 @@ public static class AXAttributeConstants
     // parent list to [item] activates the row even when the row itself
     // has no Press action (Electron/web Lark/Feishu rows do this).
     public static readonly NSString SelectedChildren = new("AXSelectedChildren");
+
+    // Extended label / state vocabulary mirrored from OCCU
+    // AccessibilitySnapshot.swift. SwiftUI controls / AppKit icon
+    // buttons / VoiceOver-friendly views park their human label on
+    // AXDescription or AXHelp; many controls expose their state via
+    // AXValue (toggles, sliders), AXPlaceholder (text fields),
+    // AXIdentifier (test/automation hook), or AXSubrole. We need all
+    // of them to produce a tree the agent can match against.
+    public static readonly NSString Help = new("AXHelp");
+    public static readonly NSString Placeholder = new("AXPlaceholderValue");
+    public static readonly NSString Identifier = new("AXIdentifier");
+    public static readonly NSString TitleUIElement = new("AXTitleUIElement");
+    public static readonly NSString RoleDescription = new("AXRoleDescription");
+
+    // State traits — read as NSNumber/Bool. Used by summarizeTraits.
+    public static readonly NSString Expanded = new("AXExpanded");
+    public static readonly NSString Required = new("AXRequired");
+    public static readonly NSString Edited = new("AXEdited");
+    public static readonly NSString MainTrait = new("AXMain");
+    public static readonly NSString MinimizedAttr = new("AXMinimized");
+    public static readonly NSString GrabbedAttr = new("AXGrabbed");
+
+    // Actions — for meaningful-actions filter in snapshot output.
+    public static readonly NSString PickAction = new("AXPick");
+    public static readonly NSString CancelAction = new("AXCancel");
+    public static readonly NSString DeleteAction = new("AXDelete");
+    public static readonly NSString RaiseAction = new("AXRaise");
+    public static readonly NSString PressAlt = new("AXScrollToVisible");
 }
