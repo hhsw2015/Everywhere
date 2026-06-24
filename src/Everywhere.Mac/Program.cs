@@ -30,7 +30,10 @@ public static class Program
                 args,
                 services => services
                     .AddSingleton<IVisualElementContext, VisualElementContext>()
-                    .AddSingleton<IInputSimulator, MacInputSimulator>()
+                    .AddSingleton<MacInputSimulator>()
+                    .AddSingleton<IInputSimulator>(sp => new Everywhere.Mcp.Input.TracedInputSimulator(
+                        sp.GetRequiredService<MacInputSimulator>(),
+                        sp.GetRequiredService<Everywhere.Mcp.Input.CursorTrace>()))
                     .AddSingleton<IFocusBackend, MacFocusBackend>()
                     .AddSingleton<IClipboardReader, MacClipboardReader>()
                     .AddSingleton<IIdleTimeReader, MacIdleTimeReader>()
@@ -68,7 +71,10 @@ public static class Program
                 .AddDatabaseAndStorage()
                 .AddCloudClient()
                 .AddChatEssentials()
-                .AddSingleton<IInputSimulator, MacInputSimulator>()
+                .AddSingleton<MacInputSimulator>()
+                .AddSingleton<IInputSimulator>(sp => new Everywhere.Mcp.Input.TracedInputSimulator(
+                    sp.GetRequiredService<MacInputSimulator>(),
+                    sp.GetRequiredService<Everywhere.Mcp.Input.CursorTrace>()))
                 .AddSingleton<IFocusBackend, MacFocusBackend>()
                 .AddSingleton<IClipboardReader, MacClipboardReader>()
                 .AddSingleton<IIdleTimeReader, MacIdleTimeReader>()

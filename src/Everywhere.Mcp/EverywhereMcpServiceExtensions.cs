@@ -1,3 +1,4 @@
+using Everywhere.Initialization;
 using Everywhere.Interop;
 using Everywhere.Interop.Whiteboard;
 using Everywhere.Mcp.Input;
@@ -60,6 +61,14 @@ public static class EverywhereMcpServiceExtensions
         services.TryAddSingleton<PickStash>();
         services.TryAddSingleton<WhiteboardStash>();
         services.TryAddSingleton<IVisualElementContext, EmptyVisualElementContext>();
+        // Cursor overlay infra: always-on shared trace channel that
+        // anything wanting to observe input can subscribe to. The
+        // overlay itself is opt-in (CursorOverlayEnabled). Pre-OCCU
+        // line-by-line port lives under Everywhere.Mcp.CursorOverlay.
+        services.TryAddSingleton<Everywhere.Mcp.Input.CursorTrace>();
+        services.AddSingleton<Everywhere.Mcp.CursorOverlay.CursorOverlayInitializer>();
+        services.AddTransient<IAsyncInitializer>(sp =>
+            sp.GetRequiredService<Everywhere.Mcp.CursorOverlay.CursorOverlayInitializer>());
         services.TryAddSingleton<IInputSimulator, NotSupportedInputSimulator>();
         services.TryAddSingleton<IFocusBackend, NotSupportedFocusBackend>();
         services.TryAddSingleton<FocusBorrow>();

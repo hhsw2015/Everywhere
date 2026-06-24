@@ -1,0 +1,408 @@
+// Behavioral port of:
+//   packages/OpenComputerUseKit/Sources/OpenComputerUseKit/SoftwareCursorOverlay.swift
+// from iFurySt/open-codex-computer-use.
+//
+// The Swift original is an NSPanel + NSView pair with Core Animation
+// timers, configureOrdering against arbitrary NSWindow target windows,
+// and CGWindowListCopyWindowInfo hit-testing for stacking — APIs that
+// only exist on AppKit. We keep the public surface identical
+// (MoveCursor / PulseClick / Settle / Reset) and replace the windowing
+// layer with a full-screen, transparent, click-through Avalonia Window
+// driven by Skia. The motion brain (CursorMotionModel.cs) and glyph
+// drawing (CursorGlyphRenderer.cs) are line-by-line ports and are
+// reused unchanged.
+//
+// We render the cursor at TipPosition in screen coordinates (Avalonia
+// PixelPoint) using DispatcherTimer at ~60 Hz. The single-glyph canvas
+// is a fixed 126×126 region centered on the current tip — same window
+// size as the upstream CursorPanel.
+
+using System;
+using System.Threading.Tasks;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Media;
+using Avalonia.Platform;
+using Avalonia.Rendering.SceneGraph;
+using Avalonia.Skia;
+using Avalonia.Threading;
+using SkiaSharp;
+
+namespace Everywhere.Mcp.CursorOverlay;
+
+public sealed class SoftwareCursorOverlay : IAsyncDisposable
+{
+    private const double WindowWidth = CursorGlyphMetrics.WindowWidth;
+    private const double WindowHeight = CursorGlyphMetrics.WindowHeight;
+    private static readonly Point TipAnchor = CursorGlyphMetrics.TipAnchor;
+    private static readonly double RenderBaseHeading = CursorGlyphMetrics.TargetNeutralHeading;
+    // Upstream: -1 because AppKit windows are y-up but the motion brain
+    // is y-down. Avalonia is already y-down so 1 here.
+    private const double RenderYAxisMultiplier = 1;
+    private const double PostInteractionIdleTimeoutSeconds = 30;
+    private const double IdleRotationAmplitude = 0.09;
+
+    private CursorWindow? _window;
+    private CursorVisualDynamicsState? _visualDynamicsState;
+    private Point? _restingTipPosition;
+    private Point? _displayedTipPosition;
+    private DispatcherTimer? _idleTimer;
+    private DispatcherTimer? _hideTimer;
+    private double _idlePhase;
+    private double _currentClickProgress;
+    private double _currentRotation;
+    private bool _disposed;
+    private readonly object _gate = new();
+
+    public bool IsEnabled { get; private set; } = true;
+
+    public void Disable() { lock (_gate) { IsEnabled = false; Reset(); } }
+    public void Enable()  { lock (_gate) IsEnabled = true; }
+
+    public Task MoveCursorAsync(Point target)
+        => Dispatcher.UIThread.InvokeAsync(() => MoveCursor(target));
+
+    public void MoveCursor(Point target)
+    {
+        if (!IsEnabled || _disposed) return;
+        EnsureWindow();
+        StopIdleAnimation();
+        CancelPendingHide();
+        var constrained = ClampTipPosition(target);
+        var isFreshStart = _displayedTipPosition is null;
+        var startPoint = _displayedTipPosition ?? DefaultInitialTipPosition();
+        var now = NowSeconds();
+
+        _window!.Show();
+        if (isFreshStart)
+        {
+            _visualDynamicsState = CursorVisualDynamicsState.At(startPoint, now);
+            PlaceCursor(InitialRenderState(startPoint), clickProgress: 0);
+        }
+        else
+        {
+            SeedVisualDynamicsIfNeeded(startPoint, now);
+            var (state, render) = AdvanceVisualDynamics(startPoint, now);
+            _visualDynamicsState = state;
+            PlaceCursor(render, clickProgress: 0);
+        }
+
+        if (Distance(startPoint, constrained) > 2)
+            AnimateMove(startPoint, constrained);
+    }
+
+    public Task PulseClickAsync(Point target, int clickCount = 1, bool rightButton = false)
+        => Dispatcher.UIThread.InvokeAsync(() => PulseClick(target, clickCount, rightButton));
+
+    public void PulseClick(Point target, int clickCount = 1, bool rightButton = false)
+    {
+        if (!IsEnabled || _disposed) return;
+        EnsureWindow();
+        var constrained = ClampTipPosition(target);
+        var now = NowSeconds();
+        SeedVisualDynamicsIfNeeded(constrained, now);
+        _restingTipPosition = constrained;
+        AnimateClickPulse(constrained, Math.Max(clickCount, 1), rightButton);
+        StartIdleAnimation();
+        ScheduleHide(PostInteractionIdleTimeoutSeconds);
+    }
+
+    public Task SettleAsync(Point target) => Dispatcher.UIThread.InvokeAsync(() => Settle(target));
+
+    public void Settle(Point target)
+    {
+        if (!IsEnabled || _disposed) return;
+        EnsureWindow();
+        var constrained = ClampTipPosition(target);
+        _restingTipPosition = constrained;
+        var (state, render) = AdvanceVisualDynamics(constrained, NowSeconds());
+        _visualDynamicsState = state;
+        PlaceCursor(render, clickProgress: 0);
+        StartIdleAnimation();
+        ScheduleHide(PostInteractionIdleTimeoutSeconds);
+    }
+
+    public void Reset()
+    {
+        StopIdleAnimation();
+        CancelPendingHide();
+        _displayedTipPosition = null;
+        _restingTipPosition = null;
+        _visualDynamicsState = null;
+        _currentClickProgress = 0;
+        if (Dispatcher.UIThread.CheckAccess())
+            _window?.Hide();
+        else
+            Dispatcher.UIThread.Post(() => _window?.Hide());
+    }
+
+    private void EnsureWindow()
+    {
+        if (_window is not null) return;
+        var w = new CursorWindow();
+        w.SetCanvasSize(WindowWidth, WindowHeight);
+        _window = w;
+    }
+
+    private void PlaceCursor(CursorVisualRenderState render, double clickProgress)
+    {
+        _displayedTipPosition = render.TipPosition;
+        _currentRotation = render.Rotation;
+        _currentClickProgress = clickProgress;
+        _window?.UpdateRender(render, clickProgress);
+        // Origin = tip - tipAnchor (rotated by neutral heading already baked in).
+        var origin = new PixelPoint(
+            (int)Math.Round(render.TipPosition.X - TipAnchor.X),
+            (int)Math.Round(render.TipPosition.Y - TipAnchor.Y));
+        _window?.SetOrigin(origin);
+    }
+
+    private void AnimateMove(Point start, Point end)
+    {
+        // Upstream uses calibrated travel duration + spring progress
+        // animator. We do the same — same parameters, same math.
+        var candidates = HeadingDrivenCursorMotionModel.MakeCandidates(
+            start, end, bounds: null, startForward: CurrentForwardVector(), endForward: RestingForwardVector());
+        var bestN = HeadingDrivenCursorMotionModel.ChooseBestCandidate(candidates);
+        if (bestN is null) return;
+        var best = bestN.Value;
+        var path = best.Path;
+        var duration = OfficialCursorMotionModel.CalibratedTravelDuration(Distance(start, end), best.Measurement);
+        var springTargetDuration = OfficialCursorMotionModel.CloseEnoughTimeValue;
+        var startTime = NowSeconds();
+        double progress = 0;
+        var springState = default(CursorMotionSpringState);
+
+        var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1.0 / 60) };
+        timer.Tick += (_, _) =>
+        {
+            var elapsed = NowSeconds() - startTime;
+            var normalizedElapsed = Math.Clamp(elapsed / Math.Max(duration, 0.001), 0, 1);
+            var springTime = normalizedElapsed * springTargetDuration;
+            (progress, springState) = CursorMotionProgressAnimator.AdvanceTo(
+                progress, 1, springState, CursorMotionSpringConfiguration.Official, springTime);
+            var sample = path.Sample(progress);
+            var (vstate, vrender) = AdvanceVisualDynamics(sample.Point, NowSeconds());
+            _visualDynamicsState = vstate;
+            PlaceCursor(vrender, clickProgress: 0);
+            if (normalizedElapsed >= 1 || CursorMotionProgressAnimator.IsCloseEnough(progress))
+            {
+                timer.Stop();
+                var (s2, r2) = AdvanceVisualDynamics(end, NowSeconds());
+                _visualDynamicsState = s2;
+                PlaceCursor(r2, clickProgress: 0);
+            }
+        };
+        timer.Start();
+    }
+
+    private void AnimateClickPulse(Point point, int clickCount, bool rightButton)
+    {
+        var pulseBias = rightButton ? 0.82 : 1.0;
+        var pulseIndex = 0;
+        const double duration = 0.16;
+        var pulseStart = NowSeconds();
+        var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1.0 / 60) };
+        timer.Tick += (_, _) =>
+        {
+            var elapsed = NowSeconds() - pulseStart;
+            var rawProgress = Math.Min(Math.Max(elapsed / duration, 0), 1);
+            var clickProgress = Math.Sin(rawProgress * Math.PI) * pulseBias;
+            var (vs, vr) = AdvanceVisualDynamics(point, NowSeconds());
+            _visualDynamicsState = vs;
+            PlaceCursor(vr, clickProgress);
+            if (rawProgress >= 1)
+            {
+                pulseIndex++;
+                if (pulseIndex >= clickCount) { timer.Stop(); return; }
+                pulseStart = NowSeconds();
+            }
+        };
+        timer.Start();
+    }
+
+    private void StartIdleAnimation()
+    {
+        StopIdleAnimation();
+        _idleTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1.0 / 60) };
+        var phaseStart = NowSeconds();
+        _idleTimer.Tick += (_, _) =>
+        {
+            if (_restingTipPosition is not { } resting) { StopIdleAnimation(); return; }
+            _idlePhase = NowSeconds() - phaseStart;
+            var idleAngleOffset = Math.Sin(_idlePhase * 0.8) * IdleRotationAmplitude;
+            var (vs, vr) = AdvanceVisualDynamics(resting, NowSeconds(), idleAngleOffset: idleAngleOffset);
+            _visualDynamicsState = vs;
+            PlaceCursor(vr, clickProgress: 0);
+        };
+        _idleTimer.Start();
+    }
+
+    private void StopIdleAnimation()
+    {
+        _idleTimer?.Stop();
+        _idleTimer = null;
+        _idlePhase = 0;
+    }
+
+    private void ScheduleHide(double seconds)
+    {
+        CancelPendingHide();
+        _hideTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(seconds) };
+        _hideTimer.Tick += (_, _) => { CancelPendingHide(); Reset(); };
+        _hideTimer.Start();
+    }
+
+    private void CancelPendingHide()
+    {
+        _hideTimer?.Stop();
+        _hideTimer = null;
+    }
+
+    private (CursorVisualDynamicsState, CursorVisualRenderState) AdvanceVisualDynamics(
+        Point target, double now, double idleAngleOffset = 0)
+    {
+        SeedVisualDynamicsIfNeeded(target, now);
+        var state = _visualDynamicsState!.Value;
+        return CursorVisualDynamicsAnimator.Advance(
+            state, target, targetTime: now,
+            idleAngleOffset: idleAngleOffset, baseHeading: RenderBaseHeading,
+            renderYAxisMultiplier: RenderYAxisMultiplier);
+    }
+
+    private void SeedVisualDynamicsIfNeeded(Point at, double now)
+    {
+        if (_visualDynamicsState is null)
+            _visualDynamicsState = CursorVisualDynamicsState.At(at, now);
+    }
+
+    private static CursorVisualRenderState InitialRenderState(Point at)
+        => new(TipPosition: at, Rotation: 0,
+            CursorBodyOffset: new Vector(0, 0),
+            FogOffset: new Vector(0, 0),
+            FogOpacity: 0.12, FogScale: 1);
+
+    private Vector CurrentForwardVector()
+    {
+        var renderRotation = _currentRotation;
+        var angle = -RenderBaseHeading - renderRotation;
+        return new Vector(Math.Cos(angle), Math.Sin(angle));
+    }
+    private static Vector RestingForwardVector()
+    {
+        var angle = -RenderBaseHeading;
+        return new Vector(Math.Cos(angle), Math.Sin(angle));
+    }
+
+    private static Point ClampTipPosition(Point target) => target; // No multi-screen clamp on this platform path.
+    private static Point DefaultInitialTipPosition() => new(TipAnchor.X, TipAnchor.Y);
+    private static double Distance(Point a, Point b)
+    {
+        var dx = a.X - b.X;
+        var dy = a.Y - b.Y;
+        return Math.Sqrt(dx * dx + dy * dy);
+    }
+
+    private static double NowSeconds() => Environment.TickCount64 / 1000.0;
+
+    public ValueTask DisposeAsync()
+    {
+        _disposed = true;
+        StopIdleAnimation();
+        CancelPendingHide();
+        if (Dispatcher.UIThread.CheckAccess()) _window?.Close();
+        else Dispatcher.UIThread.Post(() => _window?.Close());
+        _window = null;
+        return ValueTask.CompletedTask;
+    }
+}
+
+// ---------------------------------------------------------------------
+// Avalonia Window — equivalent of Swift CursorPanel + SoftwareCursorView.
+// Borderless + transparent + click-through + topmost + no taskbar.
+// Custom-rendered via OnRender into a Skia drawing context that calls
+// CursorGlyphRenderer.
+// ---------------------------------------------------------------------
+internal sealed class CursorWindow : Window
+{
+    private readonly CursorRenderControl _control;
+
+    public CursorWindow()
+    {
+        SystemDecorations = SystemDecorations.None;
+        Background = Brushes.Transparent;
+        TransparencyLevelHint = new[] { WindowTransparencyLevel.Transparent };
+        ShowInTaskbar = false;
+        Topmost = true;
+        CanResize = false;
+        ShowActivated = false;
+        WindowStartupLocation = WindowStartupLocation.Manual;
+        // Click-through — pointer events fall through to whatever is
+        // behind. Avalonia exposes this per-platform; the safe portable
+        // form is to mark every input as not hit-testable.
+        IsHitTestVisible = false;
+        _control = new CursorRenderControl { IsHitTestVisible = false };
+        Content = _control;
+    }
+
+    public void SetCanvasSize(double w, double h)
+    {
+        Width = w;
+        Height = h;
+        _control.Width = w;
+        _control.Height = h;
+    }
+
+    public void SetOrigin(PixelPoint origin) => Position = origin;
+
+    public void UpdateRender(CursorVisualRenderState render, double clickProgress)
+    {
+        _control.State = new CursorGlyphRenderState(
+            Rotation: render.Rotation,
+            CursorBodyOffset: render.CursorBodyOffset,
+            FogOffset: render.FogOffset,
+            FogOpacity: render.FogOpacity,
+            FogScale: render.FogScale,
+            ClickProgress: clickProgress);
+        _control.InvalidateVisual();
+    }
+}
+
+internal sealed class CursorRenderControl : Control
+{
+    public CursorGlyphRenderState State { get; set; }
+
+    public override void Render(DrawingContext context)
+    {
+        base.Render(context);
+        context.Custom(new GlyphDrawOperation(new Rect(0, 0, Bounds.Width, Bounds.Height), State));
+    }
+}
+
+internal sealed class GlyphDrawOperation : ICustomDrawOperation
+{
+    private readonly Rect _bounds;
+    private readonly CursorGlyphRenderState _state;
+
+    public GlyphDrawOperation(Rect bounds, CursorGlyphRenderState state)
+    {
+        _bounds = bounds;
+        _state = state;
+    }
+
+    public Rect Bounds => _bounds;
+    public bool HitTest(Point p) => false;
+    public bool Equals(ICustomDrawOperation? other) => false;
+    public void Dispose() { }
+
+    public void Render(ImmediateDrawingContext context)
+    {
+        var leaseFeature = context.TryGetFeature<ISkiaSharpApiLeaseFeature>();
+        if (leaseFeature is null) return;
+        using var lease = leaseFeature.Lease();
+        var canvas = lease.SkCanvas;
+        canvas.Save();
+        CursorGlyphRenderer.Draw(canvas, _bounds, _state);
+        canvas.Restore();
+    }
+}

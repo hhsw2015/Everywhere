@@ -107,4 +107,15 @@ public sealed partial class McpServerSettings : SettingsBase, ISettingsCategory
     [ObservableProperty]
     [SettingsItemIgnore]
     public partial ObservableCollection<KnownApp> KnownApps { get; set; } = [];
+
+    /// <summary>
+    /// Software cursor overlay: a translucent cursor + motion trail
+    /// rendered on top of the desktop so the user can see where
+    /// Everywhere's MCP-driven Computer Use is moving / clicking.
+    /// Port of OCCU SoftwareCursorOverlay (CursorMotionModel +
+    /// SoftwareCursorGlyphRenderer). Default off — visible but harmless.
+    /// </summary>
+    [ObservableProperty]
+    [SettingsItemIgnore]
+    public partial bool CursorOverlayEnabled { get; set; } = false;
 }
