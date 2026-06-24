@@ -363,7 +363,9 @@ public partial class AXUIElement : NSObject, IVisualElement
 
         // Build a CFArrayRef containing one CFTypeRef = element (`cursor`).
         // We only need the parent list; cursor is the row that should be selected.
-        var listElement = new[] { cursor.Handle };
+        // ObjCRuntime.NativeHandle implicitly casts to nint via .Handle, but
+        // an array of NativeHandle does not, so we project to nint explicitly.
+        var listElement = new nint[] { (nint)cursor.Handle };
         var arr = NSArrayFromHandles(listElement);
         if (arr == 0) return false;
         try
