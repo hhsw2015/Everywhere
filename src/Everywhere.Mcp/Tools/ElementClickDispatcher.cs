@@ -90,6 +90,17 @@ internal static class ElementClickDispatcher
                     var cx = rectS.X + rectS.Width / 2.0;
                     var cy = rectS.Y + rectS.Height / 2.0;
                     AppResolver.ResolvedApp? resolved = AppResolver.Resolve(context!, appHint!);
+                    // Show the indicator first so the user sees which
+                    // window the agent is acting on, even on the
+                    // SwiftUI bypass path. Use the resolved window
+                    // bounds so the border wraps the full app, not the
+                    // single button being clicked.
+                    if (highlighter is not null && resolved is not null)
+                    {
+                        try { highlighter.Highlight(resolved.Value.Window.BoundingRectangle,
+                            $"Everywhere · {appHint}"); }
+                        catch { }
+                    }
                     IDisposable? focusHandle = resolved is not null
                         ? focusBorrow!.Acquire(resolved.Value.Window.NativeWindowHandle, requireFocus: true, processId: resolved.Value.ProcessId)
                         : null;

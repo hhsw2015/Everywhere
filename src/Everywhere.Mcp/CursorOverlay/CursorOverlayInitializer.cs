@@ -91,7 +91,10 @@ public sealed class CursorOverlayInitializer : IAsyncInitializer, ITargetWindowH
     public void Highlight(Avalonia.PixelRect rect, string? label = null)
     {
         var ind = _indicator;
-        if (ind is null) return;
+        if (ind is null) { _logger.LogDebug("CursorOverlay: Highlight skipped (no indicator)"); return; }
+        _logger.LogInformation(
+            "CursorOverlay: Highlight rect={X},{Y} {W}x{H} label={Label}",
+            rect.X, rect.Y, rect.Width, rect.Height, label);
         // Always marshal to UI thread. Tools call us from MCP worker
         // threads; touching an Avalonia Window from a non-UI thread
         // throws (which previously bubbled all the way out of the tool
