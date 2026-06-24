@@ -92,6 +92,25 @@ public sealed class TreeNode
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public List<string>? Actions { get; set; }
 
+    /// <summary>
+    /// OCCU formattedPlaceholderSegment (AX L1243). Inputs' placeholder
+    /// text — used by agents to identify a field by its hint when the
+    /// title is generic ('Search' / 'Email').
+    /// </summary>
+    [JsonPropertyName("placeholder")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Placeholder { get; set; }
+
+    /// <summary>
+    /// OCCU formattedLabelSegment (AX L1212). The accessible description
+    /// distinct from the title — agents read this when Name alone
+    /// is ambiguous ('toolbar button' could be many things; description
+    /// might say 'Show formatting palette').
+    /// </summary>
+    [JsonPropertyName("description")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Description { get; set; }
+
     [JsonPropertyName("children")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public List<TreeNode>? Children { get; set; }

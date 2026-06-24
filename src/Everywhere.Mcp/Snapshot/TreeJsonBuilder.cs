@@ -30,6 +30,12 @@ public static class TreeJsonBuilder
                 Bounds = new WindowBounds(bounds.X, bounds.Y, bounds.Width, bounds.Height),
                 States = indexed.Element.States == VisualElementStates.None ? null : indexed.Element.States.ToString(),
                 Actions = ResolveActions(indexed.Element),
+                // OCCU formattedLabelSegment + formattedPlaceholderSegment.
+                // Both null-coalesce to the empty-string-becomes-null
+                // pattern used elsewhere in this builder so JSON stays
+                // compact when the value is missing.
+                Placeholder = SnapshotTextUtil.Sanitize(indexed.Element.Placeholder) is var ph && string.IsNullOrEmpty(ph) ? null : ph,
+                Description = SnapshotTextUtil.Sanitize(indexed.Element.AccessibleDescription) is var de && string.IsNullOrEmpty(de) ? null : de,
             };
             byIndex[indexed.Index] = node;
 

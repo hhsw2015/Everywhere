@@ -66,6 +66,21 @@ public static class SnapshotRenderer
                 sb.Append(" text=\"").Append(EscapeQuotes(text)).Append('"');
             }
 
+            // OCCU formattedLabelSegment (AX L1212): "Description: ..."
+            // when AXDescription differs from title. Skipped when label
+            // duplicates Name (already shown above).
+            var desc = SnapshotTextUtil.Sanitize(node.Element.AccessibleDescription, limit);
+            if (!string.IsNullOrEmpty(desc) && desc != name && desc != text)
+            {
+                sb.Append(" desc=\"").Append(EscapeQuotes(desc)).Append('"');
+            }
+            // OCCU formattedPlaceholderSegment (AX L1243).
+            var ph = SnapshotTextUtil.Sanitize(node.Element.Placeholder, limit);
+            if (!string.IsNullOrEmpty(ph) && ph != name && ph != text && ph != desc)
+            {
+                sb.Append(" placeholder=\"").Append(EscapeQuotes(ph)).Append('"');
+            }
+
             var bounds = node.Element.BoundingRectangle;
             sb.Append(" (bounds=").Append(bounds.X).Append(',').Append(bounds.Y)
               .Append(',').Append(bounds.Width).Append(',').Append(bounds.Height).Append(')');
@@ -143,7 +158,7 @@ public static class SnapshotRenderer
             states: node.Element.States,
             actions: SnapshotActionFilter.Filter(actions),
             childCount: childCount,
-            webAreaDepth: null /* TODO: track during indexer walk */);
+            webAreaDepth: node.WebAreaDepth);
     }
 
     private static string EscapeQuotes(string s) =>

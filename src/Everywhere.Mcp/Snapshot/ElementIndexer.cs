@@ -26,7 +26,15 @@ namespace Everywhere.Mcp.Snapshot;
 /// </summary>
 public static class ElementIndexer
 {
-    public readonly record struct IndexedNode(int Index, int ParentIndex, int Depth, IVisualElement Element);
+    /// <summary>
+    /// One BFS-visited node. <paramref name="WebAreaDepth"/> mirrors
+    /// OCCU AccessibilitySnapshot.swift L641/698/814 — null outside any
+    /// AXWebArea, otherwise the count of AXWebArea ancestors (1 for
+    /// nodes directly under one). Lets the renderer apply
+    /// shouldPreserveWebAreaGenericContainer rules without re-walking.
+    /// </summary>
+    public readonly record struct IndexedNode(
+        int Index, int ParentIndex, int Depth, IVisualElement Element, int? WebAreaDepth = null);
 
     public static IReadOnlyList<IndexedNode> Walk(
         IVisualElement root,
@@ -41,14 +49,14 @@ public static class ElementIndexer
         // relative to where we are now" check compares like-with-like.
         // Using the root made the heuristic dead code for full-window
         // walks and over-aggressive for picked-element walks.
-        var queue = new Queue<(IVisualElement element, int depth, int parentIndex, Avalonia.PixelRect? parentFrame)>();
+        var queue = new Queue<(IVisualElement element, int depth, int parentIndex, Avalonia.PixelRect? parentFrame, int? webAreaDepth)>();
         var seen = new HashSet<string>(StringComparer.Ordinal);
-        queue.Enqueue((root, 0, -1, null));
+        queue.Enqueue((root, 0, -1, null, null));
 
         var nextIndex = 0;
         while (queue.Count > 0 && ordered.Count < maxNodeCount)
         {
-            var (element, depth, parentIndex, parentFrame) = queue.Dequeue();
+            var (element, depth, parentIndex, parentFrame, parentWebAreaDepth) = queue.Dequeue();
 
             // Cycle guard. Some platform AX wrappers (Mac AX with detached
             // popovers, Win UIA with virtualized rows) hand out Parent
@@ -65,7 +73,19 @@ public static class ElementIndexer
             if (!string.IsNullOrEmpty(id) && !seen.Add(id)) continue;
 
             var idx = nextIndex++;
-            ordered.Add(new IndexedNode(idx, parentIndex, depth, element));
+            // OCCU webAreaDepth (L641/698/814): null until we cross an
+            // AXWebArea, then increments per generation. The element's
+            // OWN role being WebArea seeds depth=0; any descendant of
+            // a WebArea bumps from parent's value.
+            int? webAreaDepth = null;
+            try
+            {
+                var isWebArea = element.Type == VisualElementType.Document; // VisualElementType.Document == AXWebArea
+                if (isWebArea) webAreaDepth = 0;
+                else if (parentWebAreaDepth is int pwd) webAreaDepth = pwd + 1;
+            }
+            catch { /* element.Type may throw on stale ref */ }
+            ordered.Add(new IndexedNode(idx, parentIndex, depth, element, webAreaDepth));
 
             if (depth + 1 > maxDepth) continue;
 
@@ -104,7 +124,7 @@ public static class ElementIndexer
                     }
                     if (child is null) continue;
                     if (ordered.Count + queue.Count >= maxNodeCount) break;
-                    queue.Enqueue((child, depth + 1, idx, ownFrame));
+                    queue.Enqueue((child, depth + 1, idx, ownFrame, webAreaDepth));
                 }
             }
             finally

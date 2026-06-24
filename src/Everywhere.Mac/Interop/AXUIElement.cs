@@ -345,6 +345,17 @@ public partial class AXUIElement : NSObject, IVisualElement
     /// </summary>
     public string? Description => GetAttribute<NSString>(AXAttributeConstants.Description);
 
+    /// <summary>OCCU AXPlaceholderValue (AccessibilitySnapshot.swift L645).
+    /// Returns the placeholder text on AXTextField / AXTextArea / AXSearchField
+    /// inputs; null otherwise.</summary>
+    public string? Placeholder => GetAttribute<NSString>(AXAttributeConstants.Placeholder);
+
+    /// <summary>OCCU formattedLabelSegment uses AXDescription as the
+    /// "label" channel separate from AXTitle. We expose it under the
+    /// platform-portable name so renderers can emit a 'Description: ...'
+    /// segment without taking a Mac-specific dependency.</summary>
+    public string? AccessibleDescription => GetAttribute<NSString>(AXAttributeConstants.Description);
+
     public string? Url
     {
         get

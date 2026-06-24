@@ -289,6 +289,21 @@ public interface IVisualElement
     bool TryInvokeAction(string verb) => false;
 
     /// <summary>
+    /// OCCU formattedPlaceholderSegment (AX L1243). The placeholder
+    /// text on text fields / search boxes / combo boxes (e.g. "搜索"
+    /// or "Email"). Mac AX exposes this on AXPlaceholderValue;
+    /// non-text controls return null. Default impl returns null.
+    /// </summary>
+    string? Placeholder => null;
+
+    /// <summary>
+    /// OCCU formattedLabelSegment (AX L1212). The element's accessible
+    /// description distinct from its title — 'Description: ...' segment
+    /// in the rendered tree. Mac AX = AXDescription; default null.
+    /// </summary>
+    string? AccessibleDescription => null;
+
+    /// <summary>
     /// OCCU-parity overload: repeats the AX action chain
     /// <paramref name="clickCount"/> times (single/double/triple click).
     /// Default-implemented as a fall-through to <see cref="Invoke"/>
