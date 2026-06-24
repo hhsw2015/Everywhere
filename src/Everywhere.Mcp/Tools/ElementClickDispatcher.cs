@@ -131,8 +131,7 @@ internal static class ElementClickDispatcher
             // TryInvokeAction("ShowMenu") for that case.
             if (mouseButton == MouseButton.Right)
             {
-                if (element is Everywhere.Mac.Interop.AXUIElement axMac
-                    && axMac.TryInvokeAction("showmenu"))
+                if (element.TryInvokeAction("showmenu"))
                 {
                     return new CallToolResult { Content = [new TextContentBlock { Text = "ok (right-click → ShowMenu)" }] };
                 }

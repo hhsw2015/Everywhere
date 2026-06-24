@@ -280,6 +280,15 @@ public interface IVisualElement
     void Invoke();
 
     /// <summary>
+    /// OCCU performPreferredClick switches on mouse button: right-click
+    /// invokes only AXShowMenu, never Press/Confirm/Open. Callers that
+    /// know they want a specific verb (right-click → show_menu, slider
+    /// → increment) can call this instead of Invoke. Default impl
+    /// returns false (non-Mac platforms don't expose AX actions).
+    /// </summary>
+    bool TryInvokeAction(string verb) => false;
+
+    /// <summary>
     /// OCCU-parity overload: repeats the AX action chain
     /// <paramref name="clickCount"/> times (single/double/triple click).
     /// Default-implemented as a fall-through to <see cref="Invoke"/>

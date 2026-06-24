@@ -21,14 +21,89 @@ public partial class AXUIElement : NSObject, IVisualElement
     {
         get
         {
-            using var children = GetAttribute<NSArray>(AXAttributeConstants.Children);
-            if (children is null) yield break;
+            // OCCU childTraversalAttributes (AccessibilitySnapshot.swift L866):
+            // table-like roles surface their actual rows on AXRows, not
+            // AXChildren. AXList additionally uses AXVisibleChildren.
+            // AXContents catches some SwiftUI/web container cases. Visit
+            // AXChildren too unless the role 'primary-uses' Rows/Visible.
+            var role = Role;
+            var usesRowsPrimary = role == AXRoleAttribute.AXOutline
+                || role == AXRoleAttribute.AXList
+                || role == AXRoleAttribute.AXTable
+                || role == AXRoleAttribute.AXBrowser;
+            var usesVisiblePrimary = role == AXRoleAttribute.AXList;
 
-            for (nuint i = 0; i < children.Count; i++)
+            // Probe per-attribute and yield in OCCU's order. We dedup on
+            // CFEqual via a hash of the underlying handle to avoid
+            // re-emitting the same child when AXRows / AXVisibleChildren
+            // overlap (common on AXList).
+            var seen = new HashSet<nint>();
+
+            // AXChildren — skipped only when a row-bearing primary
+            // attribute is already producing the children.
+            using var rowsProbe = usesRowsPrimary || usesVisiblePrimary
+                ? GetAttribute<NSArray>(AXAttributeConstants.Rows)
+                : null;
+            using var visProbe = usesVisiblePrimary
+                ? GetAttribute<NSArray>(AXAttributeConstants.VisibleChildren)
+                : null;
+            var hasRows = rowsProbe is { Count: > 0 };
+            var hasVisible = visProbe is { Count: > 0 };
+            if (!(hasRows && usesRowsPrimary) && !(hasVisible && usesVisiblePrimary))
             {
-                if (FromCopyArray(children, i) is { } child)
+                using var children = GetAttribute<NSArray>(AXAttributeConstants.Children);
+                if (children is not null)
                 {
-                    yield return child;
+                    for (nuint i = 0; i < children.Count; i++)
+                    {
+                        if (FromCopyArray(children, i) is { } child)
+                        {
+                            if (seen.Add((nint)child.Handle)) yield return child;
+                            else child.Dispose();
+                        }
+                    }
+                }
+            }
+
+            // AXRows — for AXTable / AXOutline / AXList / AXBrowser.
+            using var rows = GetAttribute<NSArray>(AXAttributeConstants.Rows);
+            if (rows is not null)
+            {
+                for (nuint i = 0; i < rows.Count; i++)
+                {
+                    if (FromCopyArray(rows, i) is { } child)
+                    {
+                        if (seen.Add((nint)child.Handle)) yield return child;
+                        else child.Dispose();
+                    }
+                }
+            }
+
+            // AXContents — SwiftUI / web area containers.
+            using var contents = GetAttribute<NSArray>(AXAttributeConstants.Contents);
+            if (contents is not null)
+            {
+                for (nuint i = 0; i < contents.Count; i++)
+                {
+                    if (FromCopyArray(contents, i) is { } child)
+                    {
+                        if (seen.Add((nint)child.Handle)) yield return child;
+                        else child.Dispose();
+                    }
+                }
+            }
+
+            // AXVisibleChildren — AXList shows only on-screen items here.
+            using var visible = GetAttribute<NSArray>(AXAttributeConstants.VisibleChildren);
+            if (visible is not null)
+            {
+                for (nuint i = 0; i < visible.Count; i++)
+                {
+                    if (FromCopyArray(visible, i) is { } child)
+                    {
+                        if (seen.Add((nint)child.Handle)) yield return child;
+                        else child.Dispose();
+                    }
                 }
             }
         }
