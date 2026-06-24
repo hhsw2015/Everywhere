@@ -153,6 +153,17 @@ internal static class ElementClickDispatcher
                 var rect = element.BoundingRectangle;
                 if (rect.Width > 0 && rect.Height > 0)
                 {
+                    // Resolve up-front so the keyboard fallback in the
+                    // catch block can read the same ProcessId for
+                    // PressKey targeting. Hoisting outside the try also
+                    // sidesteps the previous CS0103 'resolved not in
+                    // scope' error.
+                    AppResolver.ResolvedApp? resolved = null;
+                    if (focusBorrow is not null && context is not null && !string.IsNullOrEmpty(appHint))
+                    {
+                        try { resolved = AppResolver.Resolve(context, appHint); }
+                        catch { /* AppResolver may throw on dead pid */ }
+                    }
                     try
                     {
                         var cx = rect.X + rect.Width / 2.0;
@@ -161,19 +172,12 @@ internal static class ElementClickDispatcher
                         // target foreground, but a real CGEvent click
                         // does — otherwise it lands on whichever app
                         // currently has focus.
-                        IDisposable? focusHandle = null;
-                        AppResolver.ResolvedApp? resolved = null;
-                        if (focusBorrow is not null && context is not null && !string.IsNullOrEmpty(appHint))
-                        {
-                            resolved = AppResolver.Resolve(context, appHint);
-                            if (resolved is not null)
-                            {
-                                focusHandle = focusBorrow.Acquire(
-                                    resolved.Value.Window.NativeWindowHandle,
-                                    requireFocus: true,
-                                    processId: resolved.Value.ProcessId);
-                            }
-                        }
+                        IDisposable? focusHandle = resolved is not null
+                            ? focusBorrow!.Acquire(
+                                resolved.Value.Window.NativeWindowHandle,
+                                requireFocus: true,
+                                processId: resolved.Value.ProcessId)
+                            : null;
                         try
                         {
                             input.Click(cx, cy, clickCount, mouseButton,
