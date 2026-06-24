@@ -98,6 +98,14 @@ public sealed class SnapshotContextHotkeyInitializer : IAsyncInitializer
         }
     }
 
+    // macOS routes the key-up of a global hotkey to the app that was
+    // frontmost when the combo was matched. If we raise the agent app
+    // while the OS is still routing that key-up to (e.g.) Arc, the
+    // source app re-asserts frontmost. Yield long enough for the
+    // modifiers to release before raising. Windows/Linux don't show
+    // this race in practice — the cost is paid only where it matters.
+    private const int MacosModifierReleaseDelayMs = 180;
+
     private void OnSnapshotPressed()
     {
         // Capture must happen on the UI thread because IVisualElement.CaptureAsync
@@ -107,12 +115,8 @@ public sealed class SnapshotContextHotkeyInitializer : IAsyncInitializer
         {
             try
             {
-                // Yield long enough for the user's hotkey modifiers (Cmd/
-                // Shift/Alt/Ctrl) to be released. The previously-focused
-                // app (e.g. Arc) processes the key combo on key-up; if we
-                // raise the agent app while the system is still routing
-                // those keys, the source app re-asserts focus.
-                await Task.Delay(180);
+                if (OperatingSystem.IsMacOS())
+                    await Task.Delay(MacosModifierReleaseDelayMs);
                 await _writer.CaptureAsync();
             }
             catch (Exception ex)

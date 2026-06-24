@@ -418,6 +418,18 @@ public sealed class ContextStashWriter
         }
     }
 
+    private bool IsFrontmostSafe(string agentAppId)
+    {
+        try { return _appActivator.IsFrontmost(agentAppId); }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex,
+                "LaunchPhrase: IsFrontmost threw for {Id}; treating as not-frontmost.",
+                agentAppId);
+            return false;
+        }
+    }
+
     /// <summary>
     /// After raising the agent app, optionally type a user-configured phrase
     /// + Enter so the agent immediately acts on whatever Everywhere just
@@ -480,11 +492,13 @@ public sealed class ContextStashWriter
                 // have flipped during the final 150ms tick between the
                 // settle confirmation and now. A focus-stealing app (e.g.
                 // browser handling a global hotkey on key-up) can pull
-                // the frontmost slot back here.
-                if (!_appActivator.IsFrontmost(agentAppId))
+                // the frontmost slot back here. Treat any IsFrontmost
+                // exception as "not frontmost" — typing into an unknown
+                // window is the failure mode we cannot allow.
+                if (!IsFrontmostSafe(agentAppId))
                 {
-                    _logger.LogInformation(
-                        "LaunchPhrase: focus stolen from {Id} just before injection; skipping.",
+                    _logger.LogWarning(
+                        "LaunchPhrase: focus stolen from {Id} just before injection; phrase NOT typed (would have leaked into another app).",
                         agentAppId);
                     return;
                 }
@@ -492,10 +506,15 @@ public sealed class ContextStashWriter
                 // Confirm again before pressing Return so we don't submit
                 // partial typing into the wrong app if focus flipped mid-
                 // injection (e.g. Arc grabbing focus on the first keystroke).
-                if (!_appActivator.IsFrontmost(agentAppId))
+                // Detection here is best-effort — TypeText is synchronous so
+                // by the time we re-check most strokes have already landed.
+                // The Return is the dangerous part (it submits whatever's
+                // there); withholding it on focus-loss avoids triggering
+                // arbitrary actions in the stolen-focus app.
+                if (!IsFrontmostSafe(agentAppId))
                 {
-                    _logger.LogInformation(
-                        "LaunchPhrase: focus stolen from {Id} during typing; not pressing Return.",
+                    _logger.LogWarning(
+                        "LaunchPhrase: focus stolen from {Id} during typing; some keystrokes may have leaked, NOT pressing Return.",
                         agentAppId);
                     return;
                 }
