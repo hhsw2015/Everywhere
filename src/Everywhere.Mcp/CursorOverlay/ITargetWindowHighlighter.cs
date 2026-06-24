@@ -15,7 +15,7 @@ public interface ITargetWindowHighlighter
     void Highlight(PixelRect rect, string? label = null);
 }
 
-internal sealed class NoopTargetWindowHighlighter : ITargetWindowHighlighter
+public sealed class NoopTargetWindowHighlighter : ITargetWindowHighlighter
 {
     public void Highlight(PixelRect rect, string? label = null) { }
 }

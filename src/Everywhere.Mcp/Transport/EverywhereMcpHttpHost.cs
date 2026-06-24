@@ -46,6 +46,7 @@ public sealed class EverywhereMcpHttpHost : IHostedService, IAsyncDisposable
     private readonly IBrowserUrlReader _browserUrl;
     private readonly IFinderReader _finder;
     private readonly IBrowserTabsReader _browserTabs;
+    private readonly Everywhere.Mcp.CursorOverlay.ITargetWindowHighlighter _highlighter;
 
     public EverywhereMcpHttpHost(
         EverywhereMcpHttpOptions options,
@@ -68,6 +69,8 @@ public sealed class EverywhereMcpHttpHost : IHostedService, IAsyncDisposable
         _browserUrl = parentServices.GetRequiredService<IBrowserUrlReader>();
         _finder = parentServices.GetRequiredService<IFinderReader>();
         _browserTabs = parentServices.GetRequiredService<IBrowserTabsReader>();
+        _highlighter = parentServices.GetService<Everywhere.Mcp.CursorOverlay.ITargetWindowHighlighter>()
+            ?? new Everywhere.Mcp.CursorOverlay.NoopTargetWindowHighlighter();
     }
 
     public int BoundPort => Volatile.Read(ref _boundPort);
@@ -200,6 +203,7 @@ public sealed class EverywhereMcpHttpHost : IHostedService, IAsyncDisposable
         builder.Services.AddSingleton(_visualContext);
         builder.Services.AddSingleton(_input);
         builder.Services.AddSingleton(_focusBorrow);
+        builder.Services.AddSingleton(_highlighter);
         builder.Services.AddSingleton(_selectionCache);
         builder.Services.AddSingleton(_clipboard);
         builder.Services.AddSingleton(_idle);
