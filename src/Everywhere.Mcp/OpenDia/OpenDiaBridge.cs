@@ -159,6 +159,36 @@ public sealed class OpenDiaBridge : IAsyncDisposable
             try { oldSessionCts?.Cancel(); } catch { }
             try { oldSessionCts?.Dispose(); } catch { }
             try { oldSocket.Dispose(); } catch { }
+
+            // Replay pending tool calls onto the new socket. The opendia
+            // ext (Chrome MV3) calls ensureConnection() on every inbound
+            // tool message — that ALWAYS opens a fresh socket, so any
+            // call we sent on the old socket got dropped when the old
+            // socket closed. The ext now sits idle on the new socket
+            // waiting for us to repeat the request.
+            List<(string id, JsonObject msg)> toReplay = new();
+            lock (_gate)
+            {
+                foreach (var kv in _pending)
+                {
+                    if (kv.Value.LastSent is not null)
+                        toReplay.Add((kv.Key, (JsonObject)kv.Value.LastSent.DeepClone()));
+                }
+            }
+            foreach (var (id, m) in toReplay)
+            {
+                try
+                {
+                    await SendAsync(socket, m, sessionCts.Token).ConfigureAwait(false);
+                    _logger.LogInformation(
+                        "OpenDiaBridge: replayed pending call id={Id} on fresh socket", id);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex,
+                        "OpenDiaBridge: failed to replay pending call id={Id}", id);
+                }
+            }
         }
 
         _logger.LogInformation("OpenDiaBridge: extension connected");
@@ -345,14 +375,17 @@ public sealed class OpenDiaBridge : IAsyncDisposable
         // Same id format as node: `${Date.now()}-${++callIdCounter}`.
         var id = $"{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}-{Interlocked.Increment(ref _callCounter)}";
         var tcs = new TaskCompletionSource<JsonNode?>(TaskCreationOptions.RunContinuationsAsynchronously);
-        lock (_gate) { _pending[id] = new PendingCall(tcs); }
-
         var msg = new JsonObject
         {
             ["id"] = id,
             ["method"] = toolName,
             ["params"] = args is null ? new JsonObject() : args.DeepClone(),
         };
+        lock (_gate)
+        {
+            _pending[id] = new PendingCall(tcs) { LastSent = msg };
+        }
+
         try { await SendAsync(socket, msg, ct).ConfigureAwait(false); }
         catch
         {
@@ -402,7 +435,15 @@ public sealed class OpenDiaBridge : IAsyncDisposable
         _sendLock.Dispose();
     }
 
-    private sealed record PendingCall(TaskCompletionSource<JsonNode?> Tcs);
+    private sealed class PendingCall
+    {
+        public PendingCall(TaskCompletionSource<JsonNode?> tcs) { Tcs = tcs; }
+        public TaskCompletionSource<JsonNode?> Tcs { get; }
+        // We remember the original outbound JSON so a reconnecting
+        // extension (Chrome MV3 forces a fresh socket on every tool
+        // call) can be re-sent the same request on the new socket.
+        public JsonObject? LastSent { get; set; }
+    }
 }
 
 public sealed class OpenDiaToolException : Exception
