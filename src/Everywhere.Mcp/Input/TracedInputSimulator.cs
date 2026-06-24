@@ -53,4 +53,12 @@ public sealed class TracedInputSimulator : IInputSimulator
         _trace.Publish(new CursorTraceEvent(CursorTraceKind.KeyPress, 0, 0, Label: xdotoolKeyName));
         _inner.PressKey(xdotoolKeyName, targetPid);
     }
+
+    public void Scroll(double x, double y, string direction, double pages = 1, int? targetPid = null)
+    {
+        // Surface as a Move so the overlay shows the scroll target;
+        // a dedicated trace kind would be nice but Move covers UX.
+        _trace.Publish(new CursorTraceEvent(CursorTraceKind.Move, x, y, Label: $"scroll-{direction}"));
+        _inner.Scroll(x, y, direction, pages, targetPid);
+    }
 }

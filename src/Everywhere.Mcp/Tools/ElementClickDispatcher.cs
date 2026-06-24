@@ -23,7 +23,9 @@ internal static class ElementClickDispatcher
         FocusBorrow? focusBorrow = null,
         IVisualElementContext? context = null,
         string? appHint = null,
-        Everywhere.Mcp.CursorOverlay.ITargetWindowHighlighter? highlighter = null)
+        Everywhere.Mcp.CursorOverlay.ITargetWindowHighlighter? highlighter = null,
+        int clickCount = 1,
+        MouseButton mouseButton = MouseButton.Left)
     {
         switch (element.Type)
         {
@@ -108,7 +110,7 @@ internal static class ElementClickDispatcher
                         // This DOES move the user's real cursor for the
                         // duration of the click — the cost of accuracy
                         // on these specific apps.
-                        input!.Click(cx, cy, 1, MouseButton.Left, targetPid: null);
+                        input!.Click(cx, cy, clickCount, mouseButton, targetPid: null);
                     }
                     finally { focusHandle?.Dispose(); }
                     return new CallToolResult { Content = [new TextContentBlock { Text = "ok (SwiftUI bypass, coordinate click)" }] };
@@ -123,7 +125,20 @@ internal static class ElementClickDispatcher
 
         try
         {
-            element.Invoke();
+            // OCCU performAction repeats the verb clickCount times.
+            // Right-click is handled differently — only AXShowMenu is
+            // tried, never Press/Confirm/Open. We delegate to
+            // TryInvokeAction("ShowMenu") for that case.
+            if (mouseButton == MouseButton.Right)
+            {
+                if (element is Everywhere.Mac.Interop.AXUIElement axMac
+                    && axMac.TryInvokeAction("showmenu"))
+                {
+                    return new CallToolResult { Content = [new TextContentBlock { Text = "ok (right-click → ShowMenu)" }] };
+                }
+                throw new InvalidOperationException("right-click requires AXShowMenu, which the element does not advertise");
+            }
+            element.Invoke(clickCount);
             return new CallToolResult { Content = [new TextContentBlock { Text = "ok" }] };
         }
         catch (Exception axEx)
@@ -162,7 +177,7 @@ internal static class ElementClickDispatcher
                         }
                         try
                         {
-                            input.Click(cx, cy, 1, MouseButton.Left,
+                            input.Click(cx, cy, clickCount, mouseButton,
                                 targetPid: resolved?.ProcessId);
                         }
                         finally

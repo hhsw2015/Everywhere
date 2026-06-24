@@ -486,7 +486,14 @@ public partial class AXUIElement : NSObject, IVisualElement
     //   - Some menu items respond only to AXConfirm (ringing the
     //     activation), and some popovers only to AXShowMenu.
     // The chain mirrors OCCU ComputerUseService.performLeftClick().
-    public void Invoke()
+    public void Invoke() => Invoke(clickCount: 1);
+
+    /// <summary>
+    /// OCCU performAction L897 honors the requested clickCount by
+    /// repeating AXUIElementPerformAction with a 50ms gap between
+    /// attempts. Used for double-click-to-edit / triple-click-to-select.
+    /// </summary>
+    public void Invoke(int clickCount)
     {
         // OCCU performPreferredClick (ComputerUseService.swift L699-733)
         // and performAction (L891) require the action to actually be in
@@ -508,20 +515,21 @@ public partial class AXUIElement : NSObject, IVisualElement
             if (TrySelectAsListItem()) return;
         }
 
-        // 2. Standard verbs in OCCU order: Press → Confirm → Open.
-        if (TryPerformActionGated(AXAttributeConstants.Press, available)) return;
-        if (TryPerformActionGated(AXAttributeConstants.Confirm, available)) return;
-        if (TryPerformActionGated(AXAttributeConstants.Open, available)) return;
+        // 2. Standard verbs in OCCU order: Press → Confirm → Open. Each
+        //    repeats clickCount times with a 50ms gap (OCCU L897).
+        if (TryPerformActionGated(AXAttributeConstants.Press, available, clickCount)) return;
+        if (TryPerformActionGated(AXAttributeConstants.Confirm, available, clickCount)) return;
+        if (TryPerformActionGated(AXAttributeConstants.Open, available, clickCount)) return;
 
         // 3. Last-ditch: surface ShowMenu (right-click semantics) for
         //    targets that only react to context menus.
-        if (TryPerformActionGated(AXAttributeConstants.ShowMenu, available)) return;
+        if (TryPerformActionGated(AXAttributeConstants.ShowMenu, available, clickCount)) return;
 
         throw new InvalidOperationException(
             $"No supported AX action available (role={Role}, actions=[{string.Join(",", available)}])");
     }
 
-    private bool TryPerformActionGated(NSString actionName, IReadOnlyList<string> available)
+    private bool TryPerformActionGated(NSString actionName, IReadOnlyList<string> available, int clickCount = 1)
     {
         // Only post when the element actually advertises this action.
         // The .success short-circuit on unsupported verbs in macOS AX
@@ -537,8 +545,14 @@ public partial class AXUIElement : NSObject, IVisualElement
             }
         }
         if (!found) return false;
-        var error = PerformAction(Handle, actionName.Handle);
-        return error == AXError.Success;
+        var attempts = Math.Max(clickCount, 1);
+        for (var i = 0; i < attempts; i++)
+        {
+            var error = PerformAction(Handle, actionName.Handle);
+            if (error != AXError.Success) return false;
+            if (i < attempts - 1) Thread.Sleep(50);
+        }
+        return true;
     }
 
     /// <summary>

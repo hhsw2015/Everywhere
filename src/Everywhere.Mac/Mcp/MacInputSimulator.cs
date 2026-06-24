@@ -158,6 +158,43 @@ public sealed class MacInputSimulator : IInputSimulator
         Thread.Sleep(100);
     }
 
+    public void Scroll(double x, double y, string direction, double pages = 1, int? targetPid = null)
+    {
+        // OCCU InputSimulation.scrollTargeted/Globally L82-100. Two-axis
+        // scroll wheel event: wheel1 = vertical (up=+, down=-), wheel2 =
+        // horizontal (left=+, right=-). Delta = round(12 * pages),
+        // clamped to int32 with floor 1.
+        var delta = ComputeScrollDelta(pages);
+        var (w1, w2) = direction.ToLowerInvariant() switch
+        {
+            "up"    => (delta, 0),
+            "down"  => (-delta, 0),
+            "left"  => (0, delta),
+            "right" => (0, -delta),
+            _       => (0, 0),
+        };
+        if (w1 == 0 && w2 == 0) return;
+
+        var ev = CGEventCreateScrollWheelEvent2(
+            nint.Zero, CGScrollEventUnit.Line, wheelCount: 2,
+            wheel1: w1, wheel2: w2, wheel3: 0);
+        if (ev == nint.Zero) throw new InvalidOperationException("Failed to create scroll wheel event.");
+        try
+        {
+            CGEventSetLocation(ev, new CGPoint(x, y));
+            PostEvent(ev, targetPid);
+        }
+        finally { CFRelease(ev); }
+        Thread.Sleep(100);
+    }
+
+    private static int ComputeScrollDelta(double pages)
+    {
+        var raw = Math.Round(12.0 * pages, MidpointRounding.AwayFromZero);
+        var clamped = Math.Min((double)int.MaxValue, Math.Max(1.0, raw));
+        return (int)clamped;
+    }
+
     /// <summary>Single dispatch: targeted (CGEventPostToPid) or global.
     /// OCCU posts global events to <c>.cghidEventTap</c> (HID-level)
     /// because that's the layer SwiftUI's NSGestureRecognizer hooks
@@ -298,6 +335,22 @@ public sealed class MacInputSimulator : IInputSimulator
     /// </summary>
     [DllImport(CoreGraphics)]
     private static extern void CGEventPostToPid(int pid, nint @event);
+
+    [DllImport(CoreGraphics)]
+    private static extern nint CGEventCreateScrollWheelEvent2(
+        nint source,
+        CGScrollEventUnit units,
+        uint wheelCount,
+        int wheel1, int wheel2, int wheel3);
+
+    [DllImport(CoreGraphics)]
+    private static extern void CGEventSetLocation(nint @event, CGPoint location);
+
+    private enum CGScrollEventUnit : uint
+    {
+        Pixel = 0,
+        Line = 1,
+    }
 
     [DllImport(CoreGraphics)]
     private static extern void CGEventSetIntegerValueField(nint @event, CGEventField field, long value);

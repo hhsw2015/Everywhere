@@ -16,6 +16,7 @@ internal sealed class NotSupportedInputSimulator : IInputSimulator
     public void DragTo(double fromX, double fromY, double toX, double toY, int? targetPid = null) => throw Reason;
     public void TypeText(string text, int? targetPid = null) => throw Reason;
     public void PressKey(string xdotoolKeyName, int? targetPid = null) => throw Reason;
+    public void Scroll(double x, double y, string direction, double pages = 1, int? targetPid = null) => throw Reason;
 }
 
 internal sealed class NotSupportedFocusBackend : IFocusBackend

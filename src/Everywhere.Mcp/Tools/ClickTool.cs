@@ -32,7 +32,9 @@ public static class ClickTool
                 var (error, element) = ElementResolver.Resolve(sessions, element_index, appHint: app);
                 if (error is not null) return error;
 
-                return ElementClickDispatcher.Click(element!, input, focusBorrow, context, app, highlighter);
+                var btn = ParseButton(mouse_button);
+                var cc = click_count is { } cnt && cnt > 0 ? cnt : 1;
+                return ElementClickDispatcher.Click(element!, input, focusBorrow, context, app, highlighter, cc, btn);
             }
 
             if (x.HasValue && y.HasValue)

@@ -28,6 +28,17 @@ public interface IInputSimulator
     void TypeText(string text, int? targetPid = null);
 
     void PressKey(string xdotoolKeyName, int? targetPid = null);
+
+    /// <summary>
+    /// Scroll wheel event at a screen-pixel coordinate. Mirrors OCCU
+    /// InputSimulation.scrollTargeted/scrollGlobally:
+    /// CGEventCreateScrollWheelEvent2 with units=line, wheelCount=2,
+    /// wheel1=vertical (up=+, down=-), wheel2=horizontal (left=+,
+    /// right=-), each delta = round(12 * pages) clamped to int32.
+    /// direction is one of "up", "down", "left", "right".
+    /// 100ms post-event sleep applied internally.
+    /// </summary>
+    void Scroll(double x, double y, string direction, double pages = 1, int? targetPid = null) { /* default no-op for unsupported platforms */ }
 }
 
 public enum MouseButton

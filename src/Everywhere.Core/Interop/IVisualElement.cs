@@ -280,6 +280,22 @@ public interface IVisualElement
     void Invoke();
 
     /// <summary>
+    /// OCCU-parity overload: repeats the AX action chain
+    /// <paramref name="clickCount"/> times (single/double/triple click).
+    /// Default-implemented as a fall-through to <see cref="Invoke"/>
+    /// looped manually so non-Mac implementations don't have to know
+    /// about the AX action retry timing.
+    /// </summary>
+    void Invoke(int clickCount)
+    {
+        for (var i = 0; i < Math.Max(clickCount, 1); i++)
+        {
+            Invoke();
+            if (i < clickCount - 1) System.Threading.Thread.Sleep(50);
+        }
+    }
+
+    /// <summary>
     /// Sets the textual content of the visual element using UI Automation patterns.
     /// </summary>
     void SetText(string text);
