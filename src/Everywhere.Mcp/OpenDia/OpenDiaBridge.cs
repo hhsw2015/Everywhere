@@ -206,42 +206,6 @@ public sealed class OpenDiaBridge : IAsyncDisposable
         _logger.LogInformation("OpenDiaBridge: extension connected");
         StateChanged?.Invoke();
 
-        // Keep the extension's Manifest V3 service worker alive: Chrome
-        // kills idle workers after ~30s, taking the WS with it. Sending
-        // a tiny JSON heartbeat every 20s gives the worker a 'message'
-        // event so it stays awake. Upstream opendia ext only heartbeats
-        // when it's NOT a service worker, so the server has to do the
-        // work for V3 ext targets.
-        var heartbeatCts = CancellationTokenSource.CreateLinkedTokenSource(sessionCts.Token);
-        var heartbeatTask = Task.Run(async () =>
-        {
-            try
-            {
-                while (!heartbeatCts.IsCancellationRequested
-                       && socket.State == WebSocketState.Open)
-                {
-                    await Task.Delay(TimeSpan.FromSeconds(20), heartbeatCts.Token).ConfigureAwait(false);
-                    if (socket.State != WebSocketState.Open) break;
-                    try
-                    {
-                        await SendAsync(socket, new JsonObject
-                        {
-                            ["type"] = "ping",
-                            ["timestamp"] = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
-                        }, heartbeatCts.Token).ConfigureAwait(false);
-                    }
-                    catch (Exception ex) when (ex is WebSocketException or InvalidOperationException)
-                    {
-                        // Socket has gone — receive loop will surface the
-                        // disconnect. Don't spam the log with one-off
-                        // ping failures.
-                        return;
-                    }
-                }
-            }
-            catch (OperationCanceledException) { /* expected on session end */ }
-        });
-
         // Fixed receive frame buffer; payload accumulator grows up to
         // MaxIncomingBytes. UTF-8 decoder handles multi-byte codepoints
         // straddling frame boundaries — naive Encoding.UTF8.GetString on
@@ -292,9 +256,6 @@ public sealed class OpenDiaBridge : IAsyncDisposable
         }
         finally
         {
-            try { heartbeatCts.Cancel(); } catch { /* ignore */ }
-            try { await heartbeatTask.ConfigureAwait(false); } catch { /* ignore */ }
-            heartbeatCts.Dispose();
             ArrayPool<byte>.Shared.Return(rentBuffer);
             ArrayPool<char>.Shared.Return(rentChars);
             CancellationTokenSource? toDispose = null;
@@ -393,11 +354,23 @@ public sealed class OpenDiaBridge : IAsyncDisposable
     /// </summary>
     public async Task<JsonNode?> CallToolAsync(string toolName, JsonNode? args, TimeSpan? timeout = null, CancellationToken ct = default)
     {
-        WebSocket? socket;
-        lock (_gate) { socket = _extSocket; }
+        // Chrome Manifest V3 service workers can die mid-call (~30s idle
+        // limit) and reconnect within 1-2s. Briefly wait for an active
+        // socket so a tool call that arrived during the reconnection
+        // window doesn't fail outright.
+        WebSocket? socket = null;
+        var waitDeadline = DateTimeOffset.UtcNow.AddSeconds(3);
+        while (DateTimeOffset.UtcNow < waitDeadline)
+        {
+            lock (_gate) { socket = _extSocket; }
+            if (socket?.State == WebSocketState.Open) break;
+            try { await Task.Delay(150, ct).ConfigureAwait(false); }
+            catch (OperationCanceledException) { throw; }
+        }
         if (socket is null || socket.State != WebSocketState.Open)
             throw new OpenDiaToolException(
-                "OpenDia extension not connected. Install/reload the OpenDia browser extension.");
+                "OpenDia extension not connected (timed out waiting). " +
+                "Install/reload the OpenDia browser extension, or open a normal browser tab so the service worker stays alive.");
 
         // Date.now() alone collides under burst load — opendia upstream hit
         // this and added a counter; do the same.
