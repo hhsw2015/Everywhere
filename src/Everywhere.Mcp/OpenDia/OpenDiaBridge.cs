@@ -354,64 +354,84 @@ public sealed class OpenDiaBridge : IAsyncDisposable
     /// </summary>
     public async Task<JsonNode?> CallToolAsync(string toolName, JsonNode? args, TimeSpan? timeout = null, CancellationToken ct = default)
     {
-        // Chrome Manifest V3 service workers can die mid-call (~30s idle
-        // limit) and reconnect within 1-2s. Briefly wait for an active
-        // socket so a tool call that arrived during the reconnection
-        // window doesn't fail outright.
-        WebSocket? socket = null;
-        var waitDeadline = DateTimeOffset.UtcNow.AddSeconds(3);
-        while (DateTimeOffset.UtcNow < waitDeadline)
-        {
-            lock (_gate) { socket = _extSocket; }
-            if (socket?.State == WebSocketState.Open) break;
-            try { await Task.Delay(150, ct).ConfigureAwait(false); }
-            catch (OperationCanceledException) { throw; }
-        }
-        if (socket is null || socket.State != WebSocketState.Open)
-            throw new OpenDiaToolException(
-                "OpenDia extension not connected (timed out waiting). " +
-                "Install/reload the OpenDia browser extension, or open a normal browser tab so the service worker stays alive.");
-
-        // Date.now() alone collides under burst load — opendia upstream hit
-        // this and added a counter; do the same.
-        var id = $"{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}-{Interlocked.Increment(ref _callCounter)}";
-        var tcs = new TaskCompletionSource<JsonNode?>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var pending = new PendingCall(tcs);
-
-        lock (_gate) { _pending[id] = pending; }
-
-        var msg = new JsonObject
-        {
-            ["id"] = id,
-            ["method"] = toolName,
-            ["params"] = args is null ? new JsonObject() : args.DeepClone(),
-        };
-        try { await SendAsync(socket, msg, ct).ConfigureAwait(false); }
-        catch
-        {
-            lock (_gate) { _pending.Remove(id); }
-            throw;
-        }
-
         var effective = timeout ?? TimeSpan.FromSeconds(30);
-        using var timeoutCts = new CancellationTokenSource(effective);
-        using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, timeoutCts.Token);
-        try
+        var deadline = DateTimeOffset.UtcNow + effective;
+        Exception? lastError = null;
+        // Chrome Manifest V3 service workers die from idle (~30s) and the
+        // ext immediately re-opens — sometimes mid-call. Retry on a fresh
+        // socket each time the bridge reports "extension reconnected" or
+        // "extension disconnected mid-call" until the overall tool-call
+        // deadline runs out.
+        for (var attempt = 0; attempt < 8; attempt++)
         {
-            return await tcs.Task.WaitAsync(linked.Token).ConfigureAwait(false);
+            ct.ThrowIfCancellationRequested();
+            var remaining = deadline - DateTimeOffset.UtcNow;
+            if (remaining <= TimeSpan.Zero) break;
+
+            WebSocket? socket = null;
+            var waitDeadline = DateTimeOffset.UtcNow + TimeSpan.FromSeconds(3);
+            if (waitDeadline > deadline) waitDeadline = deadline;
+            while (DateTimeOffset.UtcNow < waitDeadline)
+            {
+                lock (_gate) { socket = _extSocket; }
+                if (socket?.State == WebSocketState.Open) break;
+                try { await Task.Delay(150, ct).ConfigureAwait(false); }
+                catch (OperationCanceledException) { throw; }
+            }
+            if (socket is null || socket.State != WebSocketState.Open)
+            {
+                lastError = new OpenDiaToolException(
+                    "OpenDia extension not connected. Install/reload the OpenDia browser extension.");
+                break;
+            }
+
+            var id = $"{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}-{Interlocked.Increment(ref _callCounter)}";
+            var tcs = new TaskCompletionSource<JsonNode?>(TaskCreationOptions.RunContinuationsAsynchronously);
+            lock (_gate) { _pending[id] = new PendingCall(tcs); }
+
+            var msg = new JsonObject
+            {
+                ["id"] = id,
+                ["method"] = toolName,
+                ["params"] = args is null ? new JsonObject() : args.DeepClone(),
+            };
+            try { await SendAsync(socket, msg, ct).ConfigureAwait(false); }
+            catch (Exception ex)
+            {
+                lock (_gate) { _pending.Remove(id); }
+                lastError = ex;
+                continue; // retry on fresh socket
+            }
+
+            var perAttemptCap = remaining < TimeSpan.FromSeconds(8) ? remaining : TimeSpan.FromSeconds(8);
+            using var attemptCts = new CancellationTokenSource(perAttemptCap);
+            using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, attemptCts.Token);
+            try
+            {
+                return await tcs.Task.WaitAsync(linked.Token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (attemptCts.IsCancellationRequested)
+            {
+                lock (_gate) { _pending.Remove(id); }
+                lastError = new TimeoutException(
+                    $"OpenDia tool '{toolName}' attempt {attempt + 1} timed out after {perAttemptCap.TotalSeconds:0}s");
+                continue;
+            }
+            catch (OperationCanceledException)
+            {
+                lock (_gate) { _pending.Remove(id); }
+                throw;
+            }
+            catch (InvalidOperationException ex)
+                when (ex.Message.Contains("reconnected") || ex.Message.Contains("disconnected"))
+            {
+                // Extension flapped — try again on the next live socket.
+                lastError = ex;
+                continue;
+            }
         }
-        catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested)
-        {
-            lock (_gate) { _pending.Remove(id); }
-            throw new TimeoutException($"OpenDia tool '{toolName}' timed out after {effective.TotalSeconds:0}s");
-        }
-        catch (OperationCanceledException)
-        {
-            // Caller cancelled their own ct — drop the pending entry so
-            // a late response from the extension doesn't leak forever.
-            lock (_gate) { _pending.Remove(id); }
-            throw;
-        }
+        throw lastError ?? new TimeoutException(
+            $"OpenDia tool '{toolName}' timed out after {effective.TotalSeconds:0}s without a stable connection");
     }
 
     private static readonly JsonSerializerOptions _jsonOpts = new() { WriteIndented = false };
