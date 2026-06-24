@@ -152,7 +152,22 @@ public partial class AXUIElement : NSObject, IVisualElement
         }
     }
 
-    public string? Name => GetAttribute<NSString>(AXAttributeConstants.Title);
+    public string? Name
+    {
+        get
+        {
+            // OCCU: macOS Calculator (SwiftUI rewrite), VoiceOver-friendly
+            // SwiftUI controls, and many icon-only AppKit buttons leave
+            // AXTitle empty and only expose the human label on
+            // AXDescription. Fall back to it so callers don't see a tree
+            // of nameless Buttons.
+            var t = GetAttribute<NSString>(AXAttributeConstants.Title);
+            if (!string.IsNullOrWhiteSpace(t)) return t;
+            var d = GetAttribute<NSString>(AXAttributeConstants.Description);
+            if (!string.IsNullOrWhiteSpace(d)) return d;
+            return null;
+        }
+    }
 
     /// <summary>
     /// AX accessible description — Safari / Chrome put hyperlink anchor
