@@ -71,7 +71,14 @@ public sealed class OpenDiaBridge : IAsyncDisposable
         await StopAsync().ConfigureAwait(false);
         _serverCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         _listener = new HttpListener();
+        // opendia extension hardcodes ws://localhost:5555 (not 127.0.0.1)
+        // and will not auto-discover unless an HTTP server is also up on
+        // port+1. Bind both names — HttpListener matches request Host
+        // headers literally, so a "localhost" Host on a 127.0.0.1-only
+        // prefix returns 404. Skip "+:port" / "*:port" deliberately —
+        // this is a desktop bridge, not a network service.
         _listener.Prefixes.Add($"http://127.0.0.1:{port}/");
+        _listener.Prefixes.Add($"http://localhost:{port}/");
         try
         {
             _listener.Start();
