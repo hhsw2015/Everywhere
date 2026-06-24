@@ -207,7 +207,7 @@ public sealed class EverywhereMcpHttpHost : IHostedService, IAsyncDisposable
         builder.Services.AddSingleton(_finder);
         builder.Services.AddSingleton(_browserTabs);
 
-        builder.Services
+        var mcpBuilder = builder.Services
             .AddMcpServer(opts =>
             {
                 opts.ServerInfo = new()
@@ -219,42 +219,71 @@ public sealed class EverywhereMcpHttpHost : IHostedService, IAsyncDisposable
             .WithHttpTransport(o => o.Stateless = true)
             .WithToolsFromAssembly(typeof(EverywhereMcpHttpHost).Assembly);
 
-        // Bind the bridge from the parent provider as a regular singleton
-        // *into the inner builder*. Without this the inner provider builds
-        // its own OpenDiaBridge instance separate from the one the parent
-        // initializer started — sync would observe an empty/never-populated
-        // bridge.
-        var parentBridge = _parentServices.GetService<OpenDia.OpenDiaBridge>();
-        _logger.LogInformation(
-            "OpenDia: parentBridge resolution {State}",
-            parentBridge is null ? "FAILED (null)" : "OK");
-        if (parentBridge is not null)
-            builder.Services.AddSingleton(parentBridge);
+        // Augment static tools with the live opendia browser tool list.
+        // ListToolsHandler / CallToolHandler are called AFTER the static
+        // ToolCollection per SDK semantics, so we can append our dynamic
+        // browser_* tools without touching the static set.
+        var bridgeForHandler = _parentServices.GetService<OpenDia.OpenDiaBridge>();
+        if (bridgeForHandler is not null)
+        {
+            mcpBuilder
+                .WithListToolsHandler((ctx, ct) =>
+                {
+                    var result = new ModelContextProtocol.Protocol.ListToolsResult();
+                    foreach (var spec in bridgeForHandler.AvailableTools)
+                    {
+                        var t = OpenDia.OpenDiaToolListBuilder.BuildTool(spec);
+                        if (t is not null) result.Tools.Add(t);
+                    }
+                    return ValueTask.FromResult(result);
+                })
+                .WithCallToolHandler(async (ctx, ct) =>
+                {
+                    var name = ctx.Params?.Name ?? string.Empty;
+                    if (!name.StartsWith("browser_", StringComparison.Ordinal))
+                    {
+                        return new ModelContextProtocol.Protocol.CallToolResult
+                        {
+                            IsError = true,
+                            Content = [new ModelContextProtocol.Protocol.TextContentBlock
+                            {
+                                Text = $"Unknown tool: {name}",
+                            }],
+                        };
+                    }
+                    var origName = name.Substring("browser_".Length);
+                    System.Text.Json.Nodes.JsonNode? args = null;
+                    var argsDict = ctx.Params?.Arguments;
+                    if (argsDict is { Count: > 0 })
+                    {
+                        var obj = new System.Text.Json.Nodes.JsonObject();
+                        foreach (var (k, v) in argsDict)
+                            obj[k] = System.Text.Json.Nodes.JsonNode.Parse(v.GetRawText());
+                        args = obj;
+                    }
+                    try
+                    {
+                        var raw = await bridgeForHandler.CallToolAsync(origName, args, ct: ct);
+                        return new ModelContextProtocol.Protocol.CallToolResult
+                        {
+                            Content = [new ModelContextProtocol.Protocol.TextContentBlock
+                            {
+                                Text = raw is null ? "{}" : raw.ToJsonString(),
+                            }],
+                        };
+                    }
+                    catch (Exception ex)
+                    {
+                        return new ModelContextProtocol.Protocol.CallToolResult
+                        {
+                            IsError = true,
+                            Content = [new ModelContextProtocol.Protocol.TextContentBlock { Text = ex.Message }],
+                        };
+                    }
+                });
+        }
 
         var app = builder.Build();
-
-        // OpenDia tool sync needs the live McpServerOptions.ToolCollection,
-        // which only exists on the inner provider — so it must be resolved
-        // from app.Services. Build it manually here (the parent provider
-        // doesn't have it registered as that would defeat the purpose).
-        try
-        {
-            if (parentBridge is not null)
-            {
-                var sync = ActivatorUtilities.CreateInstance<OpenDia.OpenDiaToolSync>(app.Services);
-                _logger.LogInformation("OpenDia: invoking ToolSync.Wire() (initial sync + StateChanged subscribe)");
-                sync.Wire();
-                _logger.LogInformation("OpenDia: ToolSync wired successfully");
-            }
-            else
-            {
-                _logger.LogWarning("OpenDia: bridge singleton missing; tool sync skipped.");
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "OpenDia: tool sync wiring failed; browser tools will not appear in MCP.");
-        }
 
         // Defense-in-depth: trust the actual TCP peer, not the user-controlled Host header.
         // Also gate the Origin header so a browser can't drive us via DNS rebinding (MCP §8.2).
