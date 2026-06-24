@@ -34,6 +34,20 @@ public static class AXAttributeConstants
     // on AXLink nodes.
     public static readonly NSString URL = new("AXURL");
 
-    // Actions
+    // Actions — Mac AX exposes element-specific verbs. Different element
+    // types respond to different ones (button responds to Press, menu
+    // toggles respond to Confirm, files respond to Open, context menus
+    // are surfaced via ShowMenu). Calling the wrong verb returns
+    // AXError.ActionUnsupported, so we walk a fallback chain.
     public static readonly NSString Press = new("AXPress");
+    public static readonly NSString Confirm = new("AXConfirm");
+    public static readonly NSString Open = new("AXOpen");
+    public static readonly NSString ShowMenu = new("AXShowMenu");
+    public static readonly NSString Increment = new("AXIncrement");
+    public static readonly NSString Decrement = new("AXDecrement");
+
+    // Selection / list-item activation. Setting AXSelectedChildren on the
+    // parent list to [item] activates the row even when the row itself
+    // has no Press action (Electron/web Lark/Feishu rows do this).
+    public static readonly NSString SelectedChildren = new("AXSelectedChildren");
 }

@@ -266,8 +266,130 @@ public partial class AXUIElement : NSObject, IVisualElement
         return maxLength > 0 && text.Length > maxLength ? text[..maxLength] : text;
     }
 
-    // TODO: Is press enough?
-    public void Invoke() => PerformAction(AXAttributeConstants.Press);
+    // OCCU-inspired action chain. AXPress alone misses a lot:
+    //   - List rows on Lark/Feishu/Electron-web apps have no Press, only
+    //     selection (set AXSelectedChildren on parent list to [self]).
+    //   - File / disclosure rows respond to AXOpen.
+    //   - Some menu items respond only to AXConfirm (ringing the
+    //     activation), and some popovers only to AXShowMenu.
+    // The chain mirrors OCCU ComputerUseService.performLeftClick().
+    public void Invoke()
+    {
+        // 1. List-item selection — only when not inside a web area, since
+        //    web rows often have a Press the parent doesn't expose.
+        if (!HasAncestorRole(AXRoleAttribute.AXWebArea))
+        {
+            if (TrySelectAsListItem()) return;
+        }
+
+        // 2. Standard verbs in OCCU order: Press → Confirm → Open.
+        if (TryPerformAction(AXAttributeConstants.Press)) return;
+        if (TryPerformAction(AXAttributeConstants.Confirm)) return;
+        if (TryPerformAction(AXAttributeConstants.Open)) return;
+
+        // 3. Last-ditch: surface ShowMenu (right-click semantics) for
+        //    targets that only react to context menus.
+        if (TryPerformAction(AXAttributeConstants.ShowMenu)) return;
+
+        // None worked — preserve the original throw so the caller can
+        // fall back to coordinate clicks if it wants.
+        throw new InvalidOperationException(
+            $"No supported AX action (Press/Confirm/Open/ShowMenu/select) on element role={Role}");
+    }
+
+    /// <summary>
+    /// AX action with explicit verb selector — used by perform_secondary_action
+    /// and any caller that wants to distinguish left vs right click.
+    /// "press" / "confirm" / "open" / "showmenu" / "increment" / "decrement".
+    /// </summary>
+    public bool TryInvokeAction(string verb)
+    {
+        var name = verb?.ToLowerInvariant() switch
+        {
+            "press" => AXAttributeConstants.Press,
+            "confirm" => AXAttributeConstants.Confirm,
+            "open" => AXAttributeConstants.Open,
+            "showmenu" or "show_menu" => AXAttributeConstants.ShowMenu,
+            "increment" => AXAttributeConstants.Increment,
+            "decrement" => AXAttributeConstants.Decrement,
+            _ => null,
+        };
+        return name is not null && TryPerformAction(name);
+    }
+
+    private bool TryPerformAction(NSString actionName)
+    {
+        var error = PerformAction(Handle, actionName.Handle);
+        return error == AXError.Success;
+    }
+
+    private bool HasAncestorRole(AXRoleAttribute role)
+    {
+        var cursor = Parent as AXUIElement;
+        for (var hop = 0; cursor is not null && hop < 32; hop++)
+        {
+            if (cursor.Role == role) return true;
+            cursor = cursor.Parent as AXUIElement;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Walk up looking for an AXList / AXOutline / AXTable parent, then
+    /// set its AXSelectedChildren to [this]. Activates the row on
+    /// Electron-web apps (Lark / Feishu) where the row itself has no
+    /// Press but the parent list responds to selection.
+    /// </summary>
+    private bool TrySelectAsListItem()
+    {
+        AXUIElement? cursor = this;
+        AXUIElement? list = null;
+        for (var hop = 0; cursor is not null && hop < 16; hop++)
+        {
+            var parent = cursor.Parent as AXUIElement;
+            if (parent is null) break;
+            var role = parent.Role;
+            if (role == AXRoleAttribute.AXList
+                || role == AXRoleAttribute.AXOutline
+                || role == AXRoleAttribute.AXTable
+                || role == AXRoleAttribute.AXBrowser)
+            {
+                list = parent;
+                break;
+            }
+            cursor = parent;
+        }
+        if (list is null || cursor is null) return false;
+
+        // Build a CFArrayRef containing one CFTypeRef = element (`cursor`).
+        // We only need the parent list; cursor is the row that should be selected.
+        var listElement = new[] { cursor.Handle };
+        var arr = NSArrayFromHandles(listElement);
+        if (arr == 0) return false;
+        try
+        {
+            var err = SetAttributeValue(list.Handle, AXAttributeConstants.SelectedChildren.Handle, arr);
+            return err == AXError.Success;
+        }
+        finally
+        {
+            CFRelease(arr);
+        }
+    }
+
+    [System.Runtime.InteropServices.LibraryImport(AppServices, EntryPoint = "CFArrayCreate")]
+    private static partial nint CFArrayCreate(nint allocator, nint[] values, nint numValues, nint callBacks);
+
+    [System.Runtime.InteropServices.LibraryImport("/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation", EntryPoint = "CFRelease")]
+    private static partial void CFRelease(nint cf);
+
+    private static nint NSArrayFromHandles(nint[] handles)
+    {
+        // kCFTypeArrayCallBacks address is a global symbol; CFArrayCreate
+        // accepts NULL callbacks for an array of opaque pointers, which is
+        // what AX expects here. Passing 0 is documented as "no retain/release".
+        return CFArrayCreate(0, handles, handles.Length, 0);
+    }
 
     public void SetText(string text)
     {
