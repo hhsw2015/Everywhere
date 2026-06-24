@@ -3,6 +3,7 @@ using System.Net.Sockets;
 using Everywhere.Interop;
 using Everywhere.Interop.Whiteboard;
 using Everywhere.Mcp.Input;
+using Microsoft.Extensions.DependencyInjection;
 using Everywhere.Mcp.Snapshot;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -209,6 +210,20 @@ public sealed class EverywhereMcpHttpHost : IHostedService, IAsyncDisposable
             .WithToolsFromAssembly(typeof(EverywhereMcpHttpHost).Assembly);
 
         var app = builder.Build();
+
+        // OpenDia tool sync — once the host has built, hand the live
+        // McpServerOptions.ToolCollection to OpenDiaToolSync so browser
+        // tools land alongside Everywhere's static tools as the extension
+        // (re)connects. Safe to call when the bridge is disabled — the
+        // sync just sees an empty AvailableTools list.
+        try
+        {
+            app.Services.GetService<OpenDia.OpenDiaToolSync>()?.Wire();
+        }
+        catch
+        {
+            // Tool sync is best-effort; never block MCP host startup on it.
+        }
 
         // Defense-in-depth: trust the actual TCP peer, not the user-controlled Host header.
         // Also gate the Origin header so a browser can't drive us via DNS rebinding (MCP §8.2).

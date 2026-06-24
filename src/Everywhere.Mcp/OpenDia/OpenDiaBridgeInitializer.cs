@@ -49,11 +49,13 @@ public sealed class OpenDiaBridgeInitializer : IAsyncInitializer
     {
         try
         {
-            // Stop any running listener before applying the new state — port
-            // changes must close the old listener first or HttpListener will
-            // throw "prefix already exists".
+            // Synchronously stop + release the old listener BEFORE binding
+            // a new one — HttpListener.Start() throws if the port is still
+            // claimed, even by us. Also clears state-change subscribers
+            // (e.g. tool sync) so they reconcile to "disconnected".
             _runCts?.Cancel();
             _runCts = null;
+            _bridge.Stop();
 
             if (!_settings.McpServer.OpenDiaEnabled) return;
             var port = _settings.McpServer.OpenDiaPort;

@@ -56,6 +56,7 @@ public sealed class OpenDiaBridge : IAsyncDisposable
         // hosting bundle. Loopback-only by design — the extension runs on
         // the same machine and exposing this to the LAN would let any
         // co-located process drive the user's browser.
+        StopInternal();
         _serverCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         _listener = new HttpListener();
         _listener.Prefixes.Add($"http://127.0.0.1:{port}/");
@@ -63,6 +64,33 @@ public sealed class OpenDiaBridge : IAsyncDisposable
         _logger.LogInformation("OpenDiaBridge: listening on ws://127.0.0.1:{Port}/", port);
         _ = Task.Run(() => AcceptLoopAsync(_serverCts.Token));
         return Task.CompletedTask;
+    }
+
+    public void Stop() => StopInternal();
+
+    private void StopInternal()
+    {
+        try { _serverCts?.Cancel(); } catch { /* ignore */ }
+        try { _listener?.Stop(); } catch { /* ignore */ }
+        try { _listener?.Close(); } catch { /* ignore */ }
+        _serverCts = null;
+        _listener = null;
+        WebSocket? sock;
+        lock (_gate)
+        {
+            sock = _extSocket;
+            _extSocket = null;
+            AvailableTools = Array.Empty<JsonObject>();
+            foreach (var p in _pending.Values)
+                p.Tcs.TrySetException(new InvalidOperationException("OpenDia bridge stopping"));
+            _pending.Clear();
+        }
+        if (sock is not null)
+        {
+            try { sock.Abort(); } catch { /* ignore */ }
+            try { sock.Dispose(); } catch { /* ignore */ }
+        }
+        StateChanged?.Invoke();
     }
 
     private async Task AcceptLoopAsync(CancellationToken ct)
