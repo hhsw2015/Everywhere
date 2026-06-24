@@ -19,13 +19,24 @@ public static class SetValueTool
         SessionStore sessions,
         IInputSimulator input,
         FocusBorrow focusBorrow,
-        IVisualElementContext context)
+        IVisualElementContext context,
+        Everywhere.Mcp.CursorOverlay.ITargetWindowHighlighter highlighter)
     {
         if (string.IsNullOrEmpty(element_index)) return ToolErrors.ParameterRequired("element_index");
         if (value is null) return ToolErrors.ParameterRequired("value");
 
         var (error, element) = ElementResolver.Resolve(sessions, element_index, appHint: app);
         if (error is not null) return error;
+
+        // Show the indicator on the containing window before the
+        // (often-instant) AX path so the user sees what got touched.
+        try
+        {
+            var top = element!;
+            for (var hop = 0; hop < 16 && top.Parent is not null; hop++) top = top.Parent;
+            highlighter.Highlight(top.BoundingRectangle, $"Everywhere · {app}");
+        }
+        catch { }
 
         try
         {

@@ -22,7 +22,8 @@ internal static class ElementClickDispatcher
         IInputSimulator? input = null,
         FocusBorrow? focusBorrow = null,
         IVisualElementContext? context = null,
-        string? appHint = null)
+        string? appHint = null,
+        Everywhere.Mcp.CursorOverlay.ITargetWindowHighlighter? highlighter = null)
     {
         switch (element.Type)
         {
@@ -53,6 +54,22 @@ internal static class ElementClickDispatcher
         }
         catch { /* dead process / restricted — skip heuristics */ }
         element = ClickHeuristics.RedirectIfNeeded(element, processName);
+
+        // Visual indicator on the target window (no-op when overlay
+        // disabled). Walks up the AX tree to find the containing
+        // AXWindow's screen rect so the highlight wraps the whole
+        // window the agent is operating, not just the element.
+        if (highlighter is not null)
+        {
+            try
+            {
+                var top = element;
+                for (var hop = 0; hop < 16 && top.Parent is not null; hop++) top = top.Parent;
+                highlighter.Highlight(top.BoundingRectangle,
+                    string.IsNullOrEmpty(appHint) ? "Everywhere operating" : $"Everywhere · {appHint}");
+            }
+            catch { /* highlighter is best-effort */ }
+        }
 
         try
         {

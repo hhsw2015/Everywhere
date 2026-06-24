@@ -16,7 +16,8 @@ public static class PressKeyTool
         string key,
         IInputSimulator input,
         FocusBorrow focusBorrow,
-        IVisualElementContext context)
+        IVisualElementContext context,
+        Everywhere.Mcp.CursorOverlay.ITargetWindowHighlighter highlighter)
     {
         if (string.IsNullOrEmpty(key)) return ToolErrors.ParameterRequired("key");
 
@@ -29,6 +30,7 @@ public static class PressKeyTool
                 resolved.Value.Window.NativeWindowHandle,
                 requireFocus: true,
                 processId: resolved.Value.ProcessId);
+            highlighter.Highlight(resolved.Value.Window.BoundingRectangle, $"Everywhere · {app}");
             input.PressKey(key, targetPid: resolved.Value.ProcessId);
             return new CallToolResult { Content = [new TextContentBlock { Text = "ok" }] };
         }

@@ -16,7 +16,8 @@ public static class TypeTextTool
         string text,
         IInputSimulator input,
         FocusBorrow focusBorrow,
-        IVisualElementContext context)
+        IVisualElementContext context,
+        Everywhere.Mcp.CursorOverlay.ITargetWindowHighlighter highlighter)
     {
         if (text is null) return ToolErrors.ParameterRequired("text");
         if (text.Length > 100_000) return ToolErrors.Error("text exceeds 100 000 character limit.");
@@ -30,6 +31,7 @@ public static class TypeTextTool
                 resolved.Value.Window.NativeWindowHandle,
                 requireFocus: true,
                 processId: resolved.Value.ProcessId);
+            highlighter.Highlight(resolved.Value.Window.BoundingRectangle, $"Everywhere · {app}");
             input.TypeText(text, targetPid: resolved.Value.ProcessId);
             return new CallToolResult { Content = [new TextContentBlock { Text = "ok" }] };
         }

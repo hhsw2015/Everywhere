@@ -69,6 +69,8 @@ public static class EverywhereMcpServiceExtensions
         services.AddSingleton<Everywhere.Mcp.CursorOverlay.CursorOverlayInitializer>();
         services.AddTransient<IAsyncInitializer>(sp =>
             sp.GetRequiredService<Everywhere.Mcp.CursorOverlay.CursorOverlayInitializer>());
+        services.AddSingleton<Everywhere.Mcp.CursorOverlay.ITargetWindowHighlighter>(sp =>
+            sp.GetRequiredService<Everywhere.Mcp.CursorOverlay.CursorOverlayInitializer>());
         services.TryAddSingleton<IInputSimulator, NotSupportedInputSimulator>();
         services.TryAddSingleton<IFocusBackend, NotSupportedFocusBackend>();
         services.TryAddSingleton<FocusBorrow>();

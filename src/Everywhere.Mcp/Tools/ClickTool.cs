@@ -18,6 +18,7 @@ public static class ClickTool
         IInputSimulator input,
         FocusBorrow focusBorrow,
         IVisualElementContext context,
+        Everywhere.Mcp.CursorOverlay.ITargetWindowHighlighter highlighter,
         string? element_index = null,
         double? x = null,
         double? y = null,
@@ -31,7 +32,7 @@ public static class ClickTool
                 var (error, element) = ElementResolver.Resolve(sessions, element_index, appHint: app);
                 if (error is not null) return error;
 
-                return ElementClickDispatcher.Click(element!, input, focusBorrow, context, app);
+                return ElementClickDispatcher.Click(element!, input, focusBorrow, context, app, highlighter);
             }
 
             if (x.HasValue && y.HasValue)
@@ -51,6 +52,8 @@ public static class ClickTool
                     resolved.Value.Window.NativeWindowHandle,
                     requireFocus: true,
                     processId: resolved.Value.ProcessId);
+                highlighter.Highlight(resolved.Value.Window.BoundingRectangle,
+                    $"Everywhere · {app}");
                 input.Click(x.Value, y.Value, clickCount, button, targetPid: resolved.Value.ProcessId);
                 return new CallToolResult { Content = [new TextContentBlock { Text = "ok" }] };
             }

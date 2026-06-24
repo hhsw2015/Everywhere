@@ -12,13 +12,14 @@ namespace Everywhere.Mcp.CursorOverlay;
 /// down accordingly. Subscribes the bridge so input-simulator trace
 /// events flow into the overlay only while it is alive.
 /// </summary>
-public sealed class CursorOverlayInitializer : IAsyncInitializer, IAsyncDisposable
+public sealed class CursorOverlayInitializer : IAsyncInitializer, ITargetWindowHighlighter, IAsyncDisposable
 {
     private readonly Settings _settings;
     private readonly CursorTrace _trace;
     private readonly ILogger<CursorOverlayInitializer> _logger;
     private SoftwareCursorOverlay? _overlay;
     private CursorOverlayBridge? _bridge;
+    private TargetWindowIndicator? _indicator;
 
     public CursorOverlayInitializer(Settings settings, CursorTrace trace, ILogger<CursorOverlayInitializer> logger)
     {
@@ -53,14 +54,17 @@ public sealed class CursorOverlayInitializer : IAsyncInitializer, IAsyncDisposab
                     {
                         _overlay = new SoftwareCursorOverlay();
                         _bridge = new CursorOverlayBridge(_trace, _overlay);
-                        _logger.LogInformation("CursorOverlay: bridge attached to input trace channel.");
+                        _indicator = new TargetWindowIndicator();
+                        _logger.LogInformation("CursorOverlay: bridge + indicator attached.");
                     }
                 }
                 else
                 {
                     var bridge = _bridge; _bridge = null;
                     var overlay = _overlay; _overlay = null;
+                    var ind = _indicator; _indicator = null;
                     bridge?.Dispose();
+                    if (ind is not null) _ = ind.DisposeAsync();
                     if (overlay is not null) _ = overlay.DisposeAsync();
                 }
             }
@@ -71,9 +75,18 @@ public sealed class CursorOverlayInitializer : IAsyncInitializer, IAsyncDisposab
         });
     }
 
+    public void Highlight(Avalonia.PixelRect rect, string? label = null)
+    {
+        var ind = _indicator;
+        if (ind is null) return;
+        ind.ShowFor(rect, label ?? "🤖 Everywhere operating");
+    }
+
     public ValueTask DisposeAsync()
     {
         _bridge?.Dispose(); _bridge = null;
+        var ind = _indicator; _indicator = null;
+        if (ind is not null) _ = ind.DisposeAsync();
         if (_overlay is not null) { var o = _overlay; _overlay = null; return o.DisposeAsync(); }
         return ValueTask.CompletedTask;
     }

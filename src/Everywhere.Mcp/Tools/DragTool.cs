@@ -19,7 +19,8 @@ public static class DragTool
         double to_y,
         IInputSimulator input,
         FocusBorrow focusBorrow,
-        IVisualElementContext context)
+        IVisualElementContext context,
+        Everywhere.Mcp.CursorOverlay.ITargetWindowHighlighter highlighter)
     {
         var resolved = AppResolver.Resolve(context, app);
         if (resolved is null) return ToolErrors.AppNotRunning(app);
@@ -30,6 +31,7 @@ public static class DragTool
                 resolved.Value.Window.NativeWindowHandle,
                 requireFocus: true,
                 processId: resolved.Value.ProcessId);
+            highlighter.Highlight(resolved.Value.Window.BoundingRectangle, $"Everywhere · {app}");
             input.DragTo(from_x, from_y, to_x, to_y, targetPid: resolved.Value.ProcessId);
             return new CallToolResult { Content = [new TextContentBlock { Text = "ok" }] };
         }
