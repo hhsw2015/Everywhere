@@ -19,10 +19,20 @@ public interface IAppActivator
     /// so platforms without frontmost-detection simply skip injection.
     /// </summary>
     bool IsFrontmost(string appIdentifier) => false;
+
+    /// <summary>
+    /// True when this implementation can actually answer
+    /// <see cref="IsFrontmost"/>. Callers that gate keyboard injection
+    /// on frontmost-confirmation use this to skip the entire wait loop
+    /// on platforms where IsFrontmost is a stub. Avoids burning ~2.4s
+    /// per capture on Windows/Linux just to log "did not stay frontmost".
+    /// </summary>
+    bool SupportsFrontmostDetection => false;
 }
 
 internal sealed class NullAppActivator : IAppActivator
 {
     public bool Activate(string appIdentifier) => false;
     public bool IsFrontmost(string appIdentifier) => false;
+    public bool SupportsFrontmostDetection => false;
 }

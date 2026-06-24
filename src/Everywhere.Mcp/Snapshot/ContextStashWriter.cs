@@ -429,16 +429,13 @@ public sealed class ContextStashWriter
     {
         var phrase = _settings.McpServer.LaunchPhrase;
         if (string.IsNullOrWhiteSpace(phrase)) return;
-        // Fire-and-forget. Settle on the agent app before injecting:
-        // raise is async on macOS, and typing into the previously-focused
-        // app is the exact mis-fire we want to avoid. We re-issue raise
-        // a few times — Activate() is idempotent and cheap when the app
-        // is already frontmost; once two consecutive raises land within
-        // a short window we treat the focus as stable. Capped at ~1.6s
-        // total so a misconfigured agent id doesn't hold the simulator
-        // forever. If the user yanks focus away during this window the
-        // stroke lands where they landed — same trade-off every "send
-        // to frontmost" tool makes.
+        if (!_appActivator.SupportsFrontmostDetection)
+        {
+            _logger.LogDebug(
+                "LaunchPhrase: platform activator lacks frontmost detection; skipping injection to avoid mis-fire.");
+            return;
+        }
+        // Fire-and-forget so the capture path isn't blocked on activation.
         _ = Task.Run(async () =>
         {
             try
