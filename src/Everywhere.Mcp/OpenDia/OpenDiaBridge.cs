@@ -159,36 +159,13 @@ public sealed class OpenDiaBridge : IAsyncDisposable
             try { oldSessionCts?.Cancel(); } catch { }
             try { oldSessionCts?.Dispose(); } catch { }
             try { oldSocket.Dispose(); } catch { }
-
-            // Replay pending tool calls onto the new socket. The opendia
-            // ext (Chrome MV3) calls ensureConnection() on every inbound
-            // tool message — that ALWAYS opens a fresh socket, so any
-            // call we sent on the old socket got dropped when the old
-            // socket closed. The ext now sits idle on the new socket
-            // waiting for us to repeat the request.
-            List<(string id, JsonObject msg)> toReplay = new();
-            lock (_gate)
-            {
-                foreach (var kv in _pending)
-                {
-                    if (kv.Value.LastSent is not null)
-                        toReplay.Add((kv.Key, (JsonObject)kv.Value.LastSent.DeepClone()));
-                }
-            }
-            foreach (var (id, m) in toReplay)
-            {
-                try
-                {
-                    await SendAsync(socket, m, sessionCts.Token).ConfigureAwait(false);
-                    _logger.LogInformation(
-                        "OpenDiaBridge: replayed pending call id={Id} on fresh socket", id);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex,
-                        "OpenDiaBridge: failed to replay pending call id={Id}", id);
-                }
-            }
+            // NOTE: do NOT replay pending tool calls. The opendia ext
+            // (Chrome MV3) calls ensureConnection on EVERY inbound
+            // message, which itself opens a new socket. Replaying the
+            // same message produces an infinite ext-reconnect loop.
+            // Pending calls stay bound to their id; if/when the ext
+            // ever sends back a response (on whichever socket it
+            // chooses), HandleIncoming matches by id and resolves.
         }
 
         _logger.LogInformation("OpenDiaBridge: extension connected");
