@@ -325,14 +325,13 @@ public sealed class ContextStashWriter
         TryFireLaunchPhrase(id);
     }
 
-    /// <summary>
-    /// After raising the agent app, optionally type a user-configured phrase
-    /// + Enter so the agent immediately acts on whatever Everywhere just
-    /// captured. Only reached via ActivateAgentApp() which is only called
-    /// after a successful stash write — empty/no-op captures can never
-    /// trigger an injection. Skipped when phrase is blank.
-    /// </summary>
     private const string XlbMultiPickSentinel = "xlb-multi-pick://";
+
+    // Bounds shared between LinkRect's CaptureLinksAsync path and the
+    // clipboard sentinel harvest below. Keep both call sites lined up
+    // so one limit change propagates everywhere.
+    private const int MaxClipboardLinks = 200;
+    private const int MaxClipboardUrlLen = 2048;
 
     /// <summary>
     /// Look at the system clipboard for xlinkBook's shift-multi-pick batch:
@@ -351,39 +350,116 @@ public sealed class ContextStashWriter
         var trimmed = raw.TrimStart();
         if (!trimmed.StartsWith(XlbMultiPickSentinel, StringComparison.OrdinalIgnoreCase))
             return null;
-        var lines = trimmed.Split('\n', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
-        var picked = new List<PickedLink>(Math.Min(lines.Length, 200));
+        // Tolerate CRLF / BOM in clipboard text — macOS apps ship both.
+        var lines = trimmed.Replace("\r\n", "\n").Replace("﻿", string.Empty)
+            .Split('\n', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        var picked = new List<PickedLink>(Math.Min(lines.Length, MaxClipboardLinks));
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var line in lines)
         {
             if (line.StartsWith(XlbMultiPickSentinel, StringComparison.OrdinalIgnoreCase)) continue;
-            if (line.Length > 2048) continue;
+            if (line.Length > MaxClipboardUrlLen) continue;
             if (!Uri.TryCreate(line, UriKind.Absolute, out var u)) continue;
+            // mailto: produces useful agent-context too — keep it. The
+            // narrower http/https-only check is for navigable web URLs;
+            // here we just ensure no javascript:/file:/data: leaks in.
             if (u.Scheme is not ("http" or "https" or "mailto")) continue;
-            var canonical = u.ToString();
-            if (!seen.Add(canonical)) continue;
-            picked.Add(new PickedLink(canonical, canonical));
-            if (picked.Count >= 200) break;
+            var redacted = RedactCredentials(u);
+            if (string.IsNullOrEmpty(redacted)) continue;
+            // AbsoluteUri preserves percent-encoding so the round-trip is
+            // exact; ToString() decodes reserved characters and would
+            // corrupt links containing literal spaces or unicode in path.
+            if (!seen.Add(redacted)) continue;
+            picked.Add(new PickedLink(redacted, redacted));
+            if (picked.Count >= MaxClipboardLinks) break;
         }
         return picked.Count == 0 ? null : picked;
     }
 
+    /// <summary>
+    /// Strip credentials (userinfo, common token query params) before
+    /// the URL lands in agent-state on disk. We don't try to be clever —
+    /// a small denylist of well-known param names covers the cases users
+    /// actually paste from xlb (api_key, token, access_token, sig, ...).
+    /// Returns AbsoluteUri so percent-encoding is preserved exactly.
+    /// </summary>
+    private static readonly HashSet<string> _redactQueryParams =
+        new(StringComparer.OrdinalIgnoreCase)
+        {
+            "token", "access_token", "id_token", "refresh_token",
+            "api_key", "apikey", "key", "secret", "client_secret",
+            "auth", "authentication", "password", "pwd",
+            "sig", "signature", "session", "sessionid",
+        };
+
+    private static string RedactCredentials(Uri u)
+    {
+        try
+        {
+            var b = new UriBuilder(u) { UserName = string.Empty, Password = string.Empty };
+            if (!string.IsNullOrEmpty(b.Query) && b.Query.Length > 1)
+            {
+                var pairs = b.Query.TrimStart('?').Split('&');
+                var kept = new List<string>(pairs.Length);
+                foreach (var pair in pairs)
+                {
+                    var eq = pair.IndexOf('=');
+                    var name = eq < 0 ? pair : pair[..eq];
+                    if (_redactQueryParams.Contains(Uri.UnescapeDataString(name))) continue;
+                    kept.Add(pair);
+                }
+                b.Query = string.Join('&', kept);
+            }
+            return b.Uri.AbsoluteUri;
+        }
+        catch
+        {
+            return u.AbsoluteUri;
+        }
+    }
+
+    /// <summary>
+    /// After raising the agent app, optionally type a user-configured phrase
+    /// + Enter so the agent immediately acts on whatever Everywhere just
+    /// captured. Only reached via ActivateAgentApp() which is only called
+    /// after a successful stash write — empty/no-op captures can never
+    /// trigger an injection. Skipped when phrase is blank.
+    /// </summary>
     private void TryFireLaunchPhrase(string agentAppId)
     {
         var phrase = _settings.McpServer.LaunchPhrase;
         if (string.IsNullOrWhiteSpace(phrase)) return;
-        // Fire-and-forget. Wait long enough for the just-raised agent app
-        // to actually receive keyboard focus before injecting — macOS
-        // raise is async and typing into the previously-focused app is
-        // the mis-fire we want to avoid. If the user manually clicks
-        // away during this window the stroke lands wherever they
-        // landed; that's their choice and matches every other "send
-        // hotkey to frontmost" tool's behavior.
+        // Fire-and-forget. Settle on the agent app before injecting:
+        // raise is async on macOS, and typing into the previously-focused
+        // app is the exact mis-fire we want to avoid. We re-issue raise
+        // a few times — Activate() is idempotent and cheap when the app
+        // is already frontmost; once two consecutive raises land within
+        // a short window we treat the focus as stable. Capped at ~1.6s
+        // total so a misconfigured agent id doesn't hold the simulator
+        // forever. If the user yanks focus away during this window the
+        // stroke lands where they landed — same trade-off every "send
+        // to frontmost" tool makes.
         _ = Task.Run(async () =>
         {
             try
             {
-                await Task.Delay(450);
+                var stableCount = 0;
+                for (var i = 0; i < 8; i++)
+                {
+                    await Task.Delay(120);
+                    bool raised;
+                    try { raised = _appActivator.Activate(agentAppId); }
+                    catch { raised = false; }
+                    if (raised) { if (++stableCount >= 2) break; }
+                    else stableCount = 0;
+                }
+                if (stableCount < 2)
+                {
+                    _logger.LogInformation(
+                        "LaunchPhrase: agent {Id} did not settle frontmost; skipping injection.",
+                        agentAppId);
+                    return;
+                }
                 _input.TypeText(phrase);
                 _input.PressKey("Return");
                 _logger.LogInformation("LaunchPhrase fired ({Len} chars) into {Id}.", phrase.Length, agentAppId);
