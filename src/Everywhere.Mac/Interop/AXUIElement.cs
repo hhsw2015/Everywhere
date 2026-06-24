@@ -603,8 +603,64 @@ public partial class AXUIElement : NSObject, IVisualElement
         //    targets that only react to context menus.
         if (TryPerformActionGated(AXAttributeConstants.ShowMenu, available, clickCount)) { Thread.Sleep(150); return; }
 
+        // 4. OCCU descendantClickCandidates (CUS L1040): if neither this
+        //    element nor its list-item parent advertised a Press, walk
+        //    up to 3 levels of descendants and try each one. Common case
+        //    is a wrapper Group around the real Button.
+        if (TryDescendantClick(this, depth: 0, clickCount)) { Thread.Sleep(150); return; }
+
+        // 5. OCCU activateClickTarget (CUS L915): for left-click on
+        //    activation-only roles (AXWindow), AXRaise + setMain +
+        //    setFocused gives the agent a 'click that brings to front'
+        //    even when no action verb fits.
+        if (canUseActivationOnlyClickFallback(Role) && TryActivate(available)) { Thread.Sleep(150); return; }
+
         throw new InvalidOperationException(
             $"No supported AX action available (role={Role}, actions=[{string.Join(",", available)}])");
+    }
+
+    private bool TryDescendantClick(AXUIElement node, int depth, int clickCount)
+    {
+        if (depth >= 3) return false;
+        foreach (var c in node.Children)
+        {
+            if (c is not AXUIElement child) continue;
+            try
+            {
+                var avail = child.SupportedActions;
+                if (avail.Count > 0)
+                {
+                    if (child.TryPerformActionGated(AXAttributeConstants.Press, avail, clickCount)) return true;
+                    if (child.TryPerformActionGated(AXAttributeConstants.Confirm, avail, clickCount)) return true;
+                    if (child.TryPerformActionGated(AXAttributeConstants.Open, avail, clickCount)) return true;
+                }
+                if (TryDescendantClick(child, depth + 1, clickCount)) return true;
+            }
+            catch { /* continue with siblings */ }
+        }
+        return false;
+    }
+
+    private static bool canUseActivationOnlyClickFallback(AXRoleAttribute role)
+        => role == AXRoleAttribute.AXWindow;
+
+    private bool TryActivate(IReadOnlyList<string> available)
+    {
+        var activated = false;
+        if (TryPerformActionGated(AXAttributeConstants.RaiseAction, available, 1)) activated = true;
+        if (TrySetBoolAttribute(AXAttributeConstants.MainTrait)) activated = true;
+        if (TrySetBoolAttribute(AXAttributeConstants.Focused)) activated = true;
+        return activated;
+    }
+
+    private bool TrySetBoolAttribute(NSString name)
+    {
+        // Use kCFBooleanTrue indirectly via NSNumber(true). Mac AX
+        // accepts CFBoolean here; the .NET wrapper passes the NSNumber
+        // boxed handle.
+        using var v = NSNumber.FromBoolean(true);
+        var err = SetAttributeValue(Handle, name.Handle, v.Handle);
+        return err == AXError.Success;
     }
 
     private bool TryPerformActionGated(NSString actionName, IReadOnlyList<string> available, int clickCount = 1)

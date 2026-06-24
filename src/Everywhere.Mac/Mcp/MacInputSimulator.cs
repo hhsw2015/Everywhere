@@ -71,20 +71,37 @@ public sealed class MacInputSimulator : IInputSimulator
     {
         if (string.IsNullOrEmpty(text)) return;
 
-        // 64 UTF-16 unit chunks — matches upstream maxKeyboardUnicodeChunkLength.
+        // OCCU keyboardUnicodeChunks (InputSimulation.swift L165): walk
+        // by grapheme cluster (Swift `for character in text`), accumulate
+        // each cluster's UTF-16 units into the current chunk, flush
+        // before exceeding maxUTF16Units=64. We use
+        // StringInfo.GetTextElementEnumerator which yields grapheme
+        // clusters per Unicode TR29 — handles emoji ZWJ sequences,
+        // flag pairs, family stickers, combining marks, etc.
         const int Max = 64;
-        var pos = 0;
-        while (pos < text.Length)
+        var sb = new System.Text.StringBuilder(Max);
+        var enumerator = System.Globalization.StringInfo.GetTextElementEnumerator(text);
+        while (enumerator.MoveNext())
         {
-            var len = Math.Min(Max, text.Length - pos);
-            // Don't split a high surrogate.
-            if (len < text.Length - pos && char.IsHighSurrogate(text[pos + len - 1])) len--;
-            if (len <= 0) break;
-            var chunk = text.Substring(pos, len);
-            PostUnicodeChunk(chunk, targetPid);
-            Thread.Sleep(20);
-            pos += len;
+            var grapheme = (string)enumerator.Current!;
+            if (sb.Length > 0 && sb.Length + grapheme.Length > Max)
+            {
+                PostUnicodeChunk(sb.ToString(), targetPid);
+                Thread.Sleep(20);
+                sb.Clear();
+            }
+            // Single grapheme longer than Max (rare — pathological emoji
+            // family with many ZWJ joins). Send as its own oversized
+            // chunk rather than splitting mid-grapheme.
+            if (grapheme.Length > Max && sb.Length == 0)
+            {
+                PostUnicodeChunk(grapheme, targetPid);
+                Thread.Sleep(20);
+                continue;
+            }
+            sb.Append(grapheme);
         }
+        if (sb.Length > 0) PostUnicodeChunk(sb.ToString(), targetPid);
     }
 
     public void PressKey(string xdotoolKeyName, int? targetPid = null)
