@@ -60,7 +60,10 @@ public sealed class SoftwareCursorOverlay : IAsyncDisposable
     public void Enable()  { lock (_gate) IsEnabled = true; }
 
     public Task MoveCursorAsync(Point target)
-        => Dispatcher.UIThread.InvokeAsync(() => MoveCursor(target));
+    {
+        Dispatcher.UIThread.Post(() => MoveCursor(target));
+        return Task.CompletedTask;
+    }
 
     public void MoveCursor(Point target)
     {
@@ -92,7 +95,10 @@ public sealed class SoftwareCursorOverlay : IAsyncDisposable
     }
 
     public Task PulseClickAsync(Point target, int clickCount = 1, bool rightButton = false)
-        => Dispatcher.UIThread.InvokeAsync(() => PulseClick(target, clickCount, rightButton));
+    {
+        Dispatcher.UIThread.Post(() => PulseClick(target, clickCount, rightButton));
+        return Task.CompletedTask;
+    }
 
     public void PulseClick(Point target, int clickCount = 1, bool rightButton = false)
     {
@@ -107,7 +113,11 @@ public sealed class SoftwareCursorOverlay : IAsyncDisposable
         ScheduleHide(PostInteractionIdleTimeoutSeconds);
     }
 
-    public Task SettleAsync(Point target) => Dispatcher.UIThread.InvokeAsync(() => Settle(target));
+    public Task SettleAsync(Point target)
+    {
+        Dispatcher.UIThread.Post(() => Settle(target));
+        return Task.CompletedTask;
+    }
 
     public void Settle(Point target)
     {

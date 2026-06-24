@@ -55,7 +55,7 @@ internal sealed record CursorMotionPath
     /// </summary>
     public static CursorMotionPath FromEndpoints(Point start, Point end, double? curveDirection = null, double curveScale = 1)
     {
-        var delta = end - start;
+        var delta = end.Sub(start);
         var distance = Math.Max(delta.Length(), 1);
         var normal = delta.Perpendicular().Normalized();
         var resolvedCurveDirection = curveDirection ?? (delta.X >= 0 ? 1 : -1);
@@ -120,7 +120,7 @@ internal sealed record CursorMotionPath
         {
             var progress = (double)step / totalSteps;
             var point = PointAt(progress);
-            var delta = point - previousPoint;
+            var delta = point.Sub(previousPoint);
             var stepLength = delta.Length();
             if (bounds is { } b && staysInBounds) staysInBounds = b.Contains(point, padding: 20);
             if (stepLength > minStepDistance)
@@ -275,7 +275,7 @@ internal static class OfficialCursorMotionModel
 
     public static List<CursorMotionCandidate> MakeCandidates(Point start, Point end, Rect? bounds)
     {
-        var delta = end - start;
+        var delta = end.Sub(start);
         var distance = Math.Max(delta.Length(), NormalizationEpsilon);
         var direction = delta.Normalized();
         var localNormal = direction.Perpendicular();
@@ -762,7 +762,7 @@ internal static class CursorVisualDynamicsAnimator
         var halfDT = dt * 0.5;
         var tipVelocityHalf = state.TipVelocity + state.TipForce.Scaled(halfDT);
         var nextTipPosition = state.TipPosition + tipVelocityHalf.Scaled(dt);
-        var tipDisplacement = targetTipPosition - nextTipPosition;
+        var tipDisplacement = targetTipPosition.Sub(nextTipPosition);
         var tipForce = tipDisplacement.Scaled(configuration.TipSpring.Stiffness)
             + tipVelocityHalf.Scaled(-configuration.TipSpring.Drag);
         var tipVelocity = tipVelocityHalf + tipForce.Scaled(halfDT);
@@ -877,4 +877,10 @@ internal static class CursorMotionExtensions
 
     public static bool Contains(this Rect r, Point p, double padding)
         => r.Inflate(padding).Contains(p);
+
+    // Avalonia.Point arithmetic. Point-Point=Vector, Point+Vector=Point,
+    // Point-Vector=Point — but only for actual Avalonia.Vector. We
+    // provide explicit helpers so call sites read like the Swift source.
+    public static Vector ToVector(this Point p) => new(p.X, p.Y);
+    public static Vector Sub(this Point a, Point b) => new(a.X - b.X, a.Y - b.Y);
 }
