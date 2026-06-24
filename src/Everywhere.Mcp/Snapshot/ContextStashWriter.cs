@@ -437,6 +437,13 @@ public sealed class ContextStashWriter
     /// after a successful stash write — empty/no-op captures can never
     /// trigger an injection. Skipped when phrase is blank.
     /// </summary>
+    // Prevents concurrent settle-loops + TypeText calls when the user
+    // mashes the hotkey or multiple capture paths fire in quick
+    // succession. Without this, N parallel fires each ran their own
+    // loop and called TypeText simultaneously, producing
+    // "take a looktake a looktake a look" in the agent.
+    private int _phraseInFlight;
+
     private void TryFireLaunchPhrase(string agentAppId)
     {
         var phrase = _settings.McpServer.LaunchPhrase;
@@ -447,7 +454,14 @@ public sealed class ContextStashWriter
                 "LaunchPhrase: platform activator lacks frontmost detection; skipping injection to avoid mis-fire.");
             return;
         }
+        if (Interlocked.CompareExchange(ref _phraseInFlight, 1, 0) != 0)
+        {
+            _logger.LogDebug("LaunchPhrase: another injection is in flight; skipping this trigger.");
+            return;
+        }
         // Fire-and-forget so the capture path isn't blocked on activation.
+        // Release the in-flight flag in the outer finally so EVERY exit
+        // path (early returns, exceptions, settle timeout) clears it.
         _ = Task.Run(async () =>
         {
             try
@@ -524,6 +538,10 @@ public sealed class ContextStashWriter
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "LaunchPhrase injection failed");
+            }
+            finally
+            {
+                Interlocked.Exchange(ref _phraseInFlight, 0);
             }
         });
     }
