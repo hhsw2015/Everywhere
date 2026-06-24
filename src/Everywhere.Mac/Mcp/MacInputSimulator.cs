@@ -35,6 +35,18 @@ public sealed class MacInputSimulator : IInputSimulator
         try
         {
             var (cgButton, downType, upType) = Map(button);
+            // For GLOBAL clicks (targetPid=null → HidEventTap), warp the
+            // hardware cursor to the click point first. Otherwise mouseDown
+            // can land on the physical-cursor's prior position because
+            // macOS samples real-cursor location at hit-test time.
+            // Targeted (PostToPid) doesn't go through the system tap so
+            // it doesn't need this.
+            if (!targetPid.HasValue)
+            {
+                CGWarpMouseCursorPosition(new CGPoint(x, y));
+                CGAssociateMouseAndMouseCursorPosition(1);
+                Thread.Sleep(10); // settle
+            }
             for (var i = 0; i < Math.Max(clickCount, 1); i++)
             {
                 PostMouse(src, CGEventType.MouseMoved, x, y, cgButton, clickCount, targetPid);
@@ -352,6 +364,30 @@ public sealed class MacInputSimulator : IInputSimulator
     /// </summary>
     [DllImport(CoreGraphics)]
     private static extern void CGEventPostToPid(int pid, nint @event);
+
+    /// <summary>
+    /// Teleports the OS hardware-cursor position to (x,y) immediately.
+    /// CGEventPost(HidEventTap, mouseMoved) only schedules a synthetic
+    /// move event — macOS's hit-test pipeline may sample the real
+    /// cursor position before the move event drains, causing the
+    /// subsequent mouseDown to land on whatever was under the
+    /// physical cursor, not the target. Warping first guarantees the
+    /// target IS the physical cursor at click time.
+    /// Returns 0 on success.
+    /// </summary>
+    [DllImport(CoreGraphics)]
+    private static extern int CGWarpMouseCursorPosition(CGPoint newCursorPosition);
+
+    /// <summary>
+    /// Re-associates the synthetic-event location with the actual
+    /// hardware-cursor position. After CGWarpMouseCursorPosition macOS
+    /// briefly latches the cursor to the warped point and ignores
+    /// further mouseMoved events; calling this restores normal
+    /// hardware tracking. Without it the user can't move their mouse
+    /// for a few hundred ms after a synthesized click.
+    /// </summary>
+    [DllImport(CoreGraphics)]
+    private static extern int CGAssociateMouseAndMouseCursorPosition(int connected);
 
     [DllImport(CoreGraphics)]
     private static extern nint CGEventCreateScrollWheelEvent2(
