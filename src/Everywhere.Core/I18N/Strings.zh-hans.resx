@@ -2294,6 +2294,12 @@
     <data name="McpServerSettings_LaunchPhrase_Description" xml:space="preserve">
         <value>可选。Everywhere 把内容感知到智能体后，自动在该应用输入并回车的文本（如 &quot;take a look&quot;）。留空则只切换到智能体，由你自己输入。</value>
     </data>
+    <data name="McpServerSettings_CursorOverlayEnabled_Header" xml:space="preserve">
+        <value>软件光标叠加层</value>
+    </data>
+    <data name="McpServerSettings_CursorOverlayEnabled_Description" xml:space="preserve">
+        <value>当 MCP 驱动的 Computer Use 工具移动或点击鼠标时，在桌面上叠加一个半透明光标和拖尾动画。仅作可视化指示，不影响输入行为。</value>
+    </data>
     <data name="Strategy_BuiltIn_Browser_Name" xml:space="preserve">
         <value>浏览器助手</value>
     </data>

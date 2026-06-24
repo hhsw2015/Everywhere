@@ -2293,6 +2293,12 @@ Use scroll wheel or number keys to switch selection mode</value>
     <data name="McpServerSettings_LaunchPhrase_Description" xml:space="preserve">
         <value>Optional text typed and submitted in the agent app right after Everywhere captures content (link batch, pick, whiteboard). Leave empty to raise the agent and let you type.</value>
     </data>
+    <data name="McpServerSettings_CursorOverlayEnabled_Header" xml:space="preserve">
+        <value>Software cursor overlay</value>
+    </data>
+    <data name="McpServerSettings_CursorOverlayEnabled_Description" xml:space="preserve">
+        <value>Show a translucent cursor + motion trail on top of the desktop whenever an MCP-driven Computer Use tool moves or clicks. Visual indicator only — does not change input behavior.</value>
+    </data>
     <data name="Strategy_BuiltIn_Browser_Name" xml:space="preserve">
         <value>Browser Assistant</value>
     </data>

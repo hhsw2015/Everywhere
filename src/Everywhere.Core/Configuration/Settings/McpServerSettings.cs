@@ -116,6 +116,8 @@ public sealed partial class McpServerSettings : SettingsBase, ISettingsCategory
     /// SoftwareCursorGlyphRenderer). Default off — visible but harmless.
     /// </summary>
     [ObservableProperty]
-    [SettingsItemIgnore]
+    [DynamicResourceKey(
+        LocaleKey.McpServerSettings_CursorOverlayEnabled_Header,
+        LocaleKey.McpServerSettings_CursorOverlayEnabled_Description)]
     public partial bool CursorOverlayEnabled { get; set; } = false;
 }
