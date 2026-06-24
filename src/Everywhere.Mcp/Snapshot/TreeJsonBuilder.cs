@@ -25,7 +25,7 @@ public static class TreeJsonBuilder
             {
                 ElementIndex = indexed.Index,
                 Type = indexed.Element.Type.ToString(),
-                Name = indexed.Element.Name,
+                Name = SnapshotTextUtil.Sanitize(indexed.Element.Name) is var n && string.IsNullOrEmpty(n) ? null : n,
                 Text = indexed.Element.GetText(maxLength: UpstreamConstants.SnapshotTextDefaultCharacterLimit),
                 Bounds = new WindowBounds(bounds.X, bounds.Y, bounds.Width, bounds.Height),
                 States = indexed.Element.States == VisualElementStates.None ? null : indexed.Element.States.ToString(),
