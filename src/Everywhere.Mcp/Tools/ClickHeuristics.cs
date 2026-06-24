@@ -90,7 +90,7 @@ internal static class ClickHeuristics
         {
             var rect = cursor.BoundingRectangle;
             if (rect.Width > 0 && rect.Height > 0
-                && rect.Contains(new Avalonia.Platform.PixelPoint((int)targetCenter.X, (int)targetCenter.Y))
+                && rect.Contains(new PixelPoint((int)targetCenter.X, (int)targetCenter.Y))
                 && rect.Width >= targetRect.Width
                 && rect.Height >= targetRect.Height
                 && rect.Height <= Math.Max(targetRect.Height + 32, targetRect.Height * 2))
