@@ -384,9 +384,12 @@ public partial class AXUIElement : NSObject, IVisualElement
         // AXOutlineRow nodes the cell texts are exposed only on descendant
         // AXStaticText/AXTextField; concatenate them as the row's text so
         // the agent can match a row by visible content.
+        // OCCU AXRow detection: the row role itself plus the AXTableRow /
+        // AXOutlineRow subroles that map onto the same AXRow role with
+        // a more specific subrole attribute.
         if (Role == AXRoleAttribute.AXRow
-            || Role == AXRoleAttribute.AXTableRow
-            || Role == AXRoleAttribute.AXOutlineRow)
+            || Subrole == AXSubroleAttribute.AXTableRow
+            || Subrole == AXSubroleAttribute.AXOutlineRow)
         {
             var collected = CollectDescendantText(maxDepth: 4, max: maxLength > 0 ? maxLength : 600);
             if (!string.IsNullOrEmpty(collected)) return collected;
