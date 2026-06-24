@@ -10,11 +10,15 @@ namespace Everywhere.Mcp.OpenDia;
 /// restart. The bridge itself is a singleton so other Everywhere services
 /// (MCP tool factory, status panels) can read its connection state.
 /// </summary>
-public sealed class OpenDiaBridgeInitializer : IAsyncInitializer
+public sealed class OpenDiaBridgeInitializer : IAsyncInitializer, IAsyncDisposable
 {
     private readonly OpenDiaBridge _bridge;
     private readonly Settings _settings;
     private readonly ILogger<OpenDiaBridgeInitializer> _logger;
+    // Rapid toggles from the settings UI fire PropertyChanged on the UI
+    // thread; serialise the apply work so a port-change race can't leave
+    // two listeners alive on the old port.
+    private readonly SemaphoreSlim _applyLock = new(1, 1);
     private CancellationTokenSource? _runCts;
 
     public OpenDiaBridgeInitializer(
@@ -31,31 +35,36 @@ public sealed class OpenDiaBridgeInitializer : IAsyncInitializer
 
     public async Task InitializeAsync()
     {
-        ApplyCurrent();
-        _settings.McpServer.PropertyChanged += (_, args) =>
+        await ApplyCurrent().ConfigureAwait(false);
+        _settings.McpServer.PropertyChanged += async (_, args) =>
         {
             switch (args.PropertyName)
             {
                 case nameof(McpServerSettings.OpenDiaEnabled):
                 case nameof(McpServerSettings.OpenDiaPort):
-                    ApplyCurrent();
+                    try { await ApplyCurrent().ConfigureAwait(false); }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "OpenDia: settings change handler failed");
+                    }
                     break;
             }
         };
-        await Task.CompletedTask;
     }
 
-    private void ApplyCurrent()
+    private async Task ApplyCurrent()
     {
+        await _applyLock.WaitAsync().ConfigureAwait(false);
         try
         {
-            // Synchronously stop + release the old listener BEFORE binding
-            // a new one — HttpListener.Start() throws if the port is still
-            // claimed, even by us. Also clears state-change subscribers
-            // (e.g. tool sync) so they reconcile to "disconnected".
-            _runCts?.Cancel();
+            // Always cancel + dispose the previous CTS before binding new
+            // — otherwise repeated toggles leak CTS instances and old
+            // listener threads.
+            var oldCts = _runCts;
             _runCts = null;
-            _bridge.Stop();
+            try { oldCts?.Cancel(); } catch { /* ignore */ }
+            try { oldCts?.Dispose(); } catch { /* ignore */ }
+            await _bridge.StopAsync().ConfigureAwait(false);
 
             if (!_settings.McpServer.OpenDiaEnabled) return;
             var port = _settings.McpServer.OpenDiaPort;
@@ -64,12 +73,29 @@ public sealed class OpenDiaBridgeInitializer : IAsyncInitializer
                 _logger.LogWarning("OpenDia: invalid port {Port}, ignoring.", port);
                 return;
             }
-            _runCts = new CancellationTokenSource();
-            _ = _bridge.StartAsync(port, _runCts.Token);
+            var cts = new CancellationTokenSource();
+            _runCts = cts;
+            await _bridge.StartAsync(port, cts.Token).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "OpenDia: failed to apply settings");
         }
+        finally
+        {
+            _applyLock.Release();
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        try
+        {
+            await _bridge.StopAsync().ConfigureAwait(false);
+        }
+        catch { /* ignore on shutdown */ }
+        try { _runCts?.Cancel(); } catch { /* ignore */ }
+        try { _runCts?.Dispose(); } catch { /* ignore */ }
+        _applyLock.Dispose();
     }
 }

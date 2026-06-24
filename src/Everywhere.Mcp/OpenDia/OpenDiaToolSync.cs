@@ -18,6 +18,12 @@ namespace Everywhere.Mcp.OpenDia;
 public sealed class OpenDiaToolSync
 {
     private const string Prefix = "browser_";
+
+    private static string EnsurePrefix(string name) =>
+        // Guard against opendia tools that already happen to start with
+        // `browser_` (or a future opendia release renaming them) so the
+        // exposed MCP name never becomes `browser_browser_x`.
+        name.StartsWith(Prefix, StringComparison.Ordinal) ? name : Prefix + name;
     private readonly OpenDiaBridge _bridge;
     private readonly IOptions<McpServerOptions> _options;
     private readonly ILogger<OpenDiaToolSync> _logger;
@@ -74,7 +80,12 @@ public sealed class OpenDiaToolSync
             // a previous extension session.
             foreach (var t in _ownedTools)
             {
-                try { tools.Remove(t); } catch { /* best-effort */ }
+                try { tools.Remove(t); }
+                catch (Exception ex)
+                {
+                    _logger.LogDebug(ex,
+                        "OpenDia: failed to remove stale tool {Name}", t.ProtocolTool.Name);
+                }
             }
             _ownedTools.Clear();
 
@@ -108,17 +119,21 @@ public sealed class OpenDiaToolSync
         JsonElement schemaElement;
         try
         {
-            schemaElement = JsonDocument.Parse(schema.ToJsonString()).RootElement.Clone();
+            // Deserialize<JsonElement> doesn't keep the JsonDocument alive
+            // (no pooled buffer rented for the lifetime of the result),
+            // unlike RootElement.Clone() which leaves the parent doc on
+            // the GC heap until finalization.
+            schemaElement = JsonSerializer.Deserialize<JsonElement>(schema.ToJsonString());
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex,
                 "OpenDia: invalid inputSchema for tool {Name}; defaulting to empty object",
                 origName);
-            schemaElement = JsonDocument.Parse("""{"type":"object"}""").RootElement.Clone();
+            schemaElement = JsonSerializer.Deserialize<JsonElement>("""{"type":"object"}""");
         }
 
-        var mcpName = Prefix + origName;
+        var mcpName = EnsurePrefix(origName!);
         var fn = new OpenDiaAIFunction(_bridge, mcpName, origName!, description, schemaElement);
         return McpServerTool.Create(fn);
     }

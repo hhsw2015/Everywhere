@@ -1,9 +1,9 @@
+using System.Buffers;
 using System.Net;
 using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using System.Threading.Channels;
 using Microsoft.Extensions.Logging;
 
 namespace Everywhere.Mcp.OpenDia;
@@ -26,10 +26,22 @@ namespace Everywhere.Mcp.OpenDia;
 /// </summary>
 public sealed class OpenDiaBridge : IAsyncDisposable
 {
+    // 8 MiB hard cap on a single inbound message — protects against a
+    // hostile/buggy extension streaming bytes forever and OOM-ing the
+    // host process. Real opendia messages are well under 1 MiB even
+    // for full DOM extracts.
+    private const int MaxIncomingBytes = 8 * 1024 * 1024;
+
     private readonly ILogger<OpenDiaBridge> _logger;
     private readonly object _gate = new();
+    // Outbound writes from CallToolAsync, the ping/pong responder, and the
+    // close-on-replace path can race. WebSocket.SendAsync is NOT thread-safe;
+    // serialise every write through this gate or risk corrupted frames that
+    // crash the extension.
+    private readonly SemaphoreSlim _sendLock = new(1, 1);
     private WebSocket? _extSocket;
     private CancellationTokenSource? _socketCts;
+    private Task? _acceptLoop;
 
     private readonly Dictionary<string, PendingCall> _pending = new();
     private long _callCounter;
@@ -49,37 +61,53 @@ public sealed class OpenDiaBridge : IAsyncDisposable
     private HttpListener? _listener;
     private CancellationTokenSource? _serverCts;
 
-    public Task StartAsync(int port = 5555, CancellationToken cancellationToken = default)
+    public async Task StartAsync(int port = 5555, CancellationToken cancellationToken = default)
     {
         // HttpListener -> WebSocket upgrade is the simplest cross-platform
         // surface we can stand up without pulling Kestrel into yet another
         // hosting bundle. Loopback-only by design — the extension runs on
         // the same machine and exposing this to the LAN would let any
         // co-located process drive the user's browser.
-        StopInternal();
+        await StopAsync().ConfigureAwait(false);
         _serverCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         _listener = new HttpListener();
         _listener.Prefixes.Add($"http://127.0.0.1:{port}/");
-        _listener.Start();
+        try
+        {
+            _listener.Start();
+        }
+        catch (HttpListenerException ex)
+        {
+            _logger.LogError(ex, "OpenDiaBridge: failed to bind ws://127.0.0.1:{Port}/", port);
+            _serverCts.Dispose();
+            _serverCts = null;
+            _listener = null;
+            return;
+        }
         _logger.LogInformation("OpenDiaBridge: listening on ws://127.0.0.1:{Port}/", port);
-        _ = Task.Run(() => AcceptLoopAsync(_serverCts.Token));
-        return Task.CompletedTask;
+        _acceptLoop = Task.Run(() => AcceptLoopAsync(_serverCts.Token));
     }
 
-    public void Stop() => StopInternal();
-
-    private void StopInternal()
+    public Task StopAsync()
     {
-        try { _serverCts?.Cancel(); } catch { /* ignore */ }
-        try { _listener?.Stop(); } catch { /* ignore */ }
-        try { _listener?.Close(); } catch { /* ignore */ }
+        var localCts = _serverCts;
+        var localListener = _listener;
+        var localLoop = _acceptLoop;
         _serverCts = null;
         _listener = null;
+        _acceptLoop = null;
+
+        try { localCts?.Cancel(); } catch { /* ignore */ }
+        try { localListener?.Stop(); } catch { /* ignore */ }
+        try { localListener?.Close(); } catch { /* ignore */ }
+
         WebSocket? sock;
         lock (_gate)
         {
             sock = _extSocket;
             _extSocket = null;
+            _socketCts?.Cancel();
+            _socketCts = null;
             AvailableTools = Array.Empty<JsonObject>();
             foreach (var p in _pending.Values)
                 p.Tcs.TrySetException(new InvalidOperationException("OpenDia bridge stopping"));
@@ -91,7 +119,20 @@ public sealed class OpenDiaBridge : IAsyncDisposable
             try { sock.Dispose(); } catch { /* ignore */ }
         }
         StateChanged?.Invoke();
+
+        try { localCts?.Dispose(); } catch { /* ignore */ }
+        // Wait for accept loop to drain so a subsequent StartAsync on the
+        // same port doesn't race the listener teardown.
+        if (localLoop is not null)
+        {
+            try { return localLoop.WaitAsync(TimeSpan.FromSeconds(2)); }
+            catch { /* loop already gone */ }
+        }
+        return Task.CompletedTask;
     }
+
+    [Obsolete("Synchronous Stop kept for compatibility; new callers should await StopAsync.")]
+    public void Stop() => _ = StopAsync();
 
     private async Task AcceptLoopAsync(CancellationToken ct)
     {
@@ -100,10 +141,11 @@ public sealed class OpenDiaBridge : IAsyncDisposable
             HttpListenerContext ctx;
             try
             {
-                ctx = await _listener!.GetContextAsync().WaitAsync(ct);
+                ctx = await _listener!.GetContextAsync().WaitAsync(ct).ConfigureAwait(false);
             }
             catch (OperationCanceledException) { return; }
             catch (HttpListenerException) { return; }
+            catch (ObjectDisposedException) { return; }
 
             if (!ctx.Request.IsWebSocketRequest)
             {
@@ -119,8 +161,8 @@ public sealed class OpenDiaBridge : IAsyncDisposable
     private async Task HandleSocketAsync(HttpListenerContext ctx, CancellationToken parentCt)
     {
         WebSocketContext wsCtx;
-        try { wsCtx = await ctx.AcceptWebSocketAsync(subProtocol: null); }
-        catch (Exception ex)
+        try { wsCtx = await ctx.AcceptWebSocketAsync(subProtocol: null).ConfigureAwait(false); }
+        catch (Exception ex) when (ex is HttpListenerException or InvalidOperationException or WebSocketException)
         {
             _logger.LogWarning(ex, "OpenDiaBridge: websocket upgrade failed");
             return;
@@ -133,11 +175,12 @@ public sealed class OpenDiaBridge : IAsyncDisposable
         // the bridge at a time. Reject every in-flight call on the old
         // socket so callers don't hang.
         WebSocket? oldSocket;
+        CancellationTokenSource? oldSessionCts;
         lock (_gate)
         {
             oldSocket = _extSocket;
+            oldSessionCts = _socketCts;
             _extSocket = socket;
-            _socketCts?.Cancel();
             _socketCts = sessionCts;
             // Drain pending — they were tied to the old socket's id space.
             foreach (var pending in _pending.Values)
@@ -145,32 +188,55 @@ public sealed class OpenDiaBridge : IAsyncDisposable
                     "OpenDia extension reconnected; in-flight call rejected"));
             _pending.Clear();
         }
+        try { oldSessionCts?.Cancel(); } catch { /* ignore */ }
+        try { oldSessionCts?.Dispose(); } catch { /* ignore */ }
         if (oldSocket is not null)
         {
-            try { await oldSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "replaced", CancellationToken.None); }
-            catch { /* old socket may be dead already */ }
+            try { oldSocket.Abort(); } catch { /* old socket may be dead already */ }
+            try { oldSocket.Dispose(); } catch { /* ignore */ }
         }
 
         _logger.LogInformation("OpenDiaBridge: extension connected");
         StateChanged?.Invoke();
 
-        var buffer = new ArraySegment<byte>(new byte[64 * 1024]);
+        // Fixed receive frame buffer; payload accumulator grows up to
+        // MaxIncomingBytes. UTF-8 decoder handles multi-byte codepoints
+        // straddling frame boundaries — naive Encoding.UTF8.GetString on
+        // each frame would produce replacement chars and break JSON parse.
+        var rentBuffer = ArrayPool<byte>.Shared.Rent(64 * 1024);
+        var rentChars = ArrayPool<char>.Shared.Rent(64 * 1024);
+        var decoder = Encoding.UTF8.GetDecoder();
         var sb = new StringBuilder();
         try
         {
             while (socket.State == WebSocketState.Open && !sessionCts.IsCancellationRequested)
             {
                 sb.Clear();
+                decoder.Reset();
                 WebSocketReceiveResult result;
+                var totalBytes = 0;
                 do
                 {
-                    result = await socket.ReceiveAsync(buffer, sessionCts.Token);
+                    result = await socket.ReceiveAsync(
+                        new ArraySegment<byte>(rentBuffer), sessionCts.Token).ConfigureAwait(false);
                     if (result.MessageType == WebSocketMessageType.Close)
                     {
-                        await socket.CloseAsync(WebSocketCloseStatus.NormalClosure, null, CancellationToken.None);
+                        await CloseGracefulAsync(socket, "client close").ConfigureAwait(false);
                         return;
                     }
-                    sb.Append(Encoding.UTF8.GetString(buffer.AsSpan(0, result.Count)));
+                    totalBytes += result.Count;
+                    if (totalBytes > MaxIncomingBytes)
+                    {
+                        _logger.LogWarning(
+                            "OpenDiaBridge: incoming message exceeded {Cap} bytes; dropping connection.",
+                            MaxIncomingBytes);
+                        try { socket.Abort(); } catch { /* ignore */ }
+                        return;
+                    }
+                    var charsWritten = decoder.GetChars(
+                        rentBuffer, 0, result.Count, rentChars, 0,
+                        flush: result.EndOfMessage);
+                    sb.Append(rentChars, 0, charsWritten);
                 } while (!result.EndOfMessage);
 
                 HandleIncoming(socket, sb.ToString(), sessionCts.Token);
@@ -179,10 +245,13 @@ public sealed class OpenDiaBridge : IAsyncDisposable
         catch (OperationCanceledException) { /* expected on shutdown / replace */ }
         catch (WebSocketException ex)
         {
-            _logger.LogInformation(ex, "OpenDiaBridge: extension socket error (probably normal close)");
+            _logger.LogDebug(ex, "OpenDiaBridge: extension socket closed");
         }
         finally
         {
+            ArrayPool<byte>.Shared.Return(rentBuffer);
+            ArrayPool<char>.Shared.Return(rentChars);
+            CancellationTokenSource? toDispose = null;
             lock (_gate)
             {
                 if (_extSocket == socket)
@@ -193,12 +262,25 @@ public sealed class OpenDiaBridge : IAsyncDisposable
                         pending.Tcs.TrySetException(new InvalidOperationException(
                             "OpenDia extension disconnected mid-call"));
                     _pending.Clear();
+                    toDispose = _socketCts;
+                    _socketCts = null;
                 }
             }
+            try { toDispose?.Dispose(); } catch { /* ignore */ }
             try { socket.Dispose(); } catch { /* ignore */ }
             _logger.LogInformation("OpenDiaBridge: extension disconnected");
             StateChanged?.Invoke();
         }
+    }
+
+    private static async Task CloseGracefulAsync(WebSocket socket, string reason)
+    {
+        try
+        {
+            await socket.CloseAsync(WebSocketCloseStatus.NormalClosure, reason, CancellationToken.None)
+                        .ConfigureAwait(false);
+        }
+        catch { /* socket may already be torn down */ }
     }
 
     private void HandleIncoming(WebSocket socket, string raw, CancellationToken ct)
@@ -249,7 +331,7 @@ public sealed class OpenDiaBridge : IAsyncDisposable
         var error = obj["error"]?.GetValue<string>();
         if (!string.IsNullOrEmpty(error))
         {
-            pending!.Tcs.TrySetException(new InvalidOperationException(error!));
+            pending!.Tcs.TrySetException(new OpenDiaToolException(error!));
         }
         else
         {
@@ -268,7 +350,7 @@ public sealed class OpenDiaBridge : IAsyncDisposable
         WebSocket? socket;
         lock (_gate) { socket = _extSocket; }
         if (socket is null || socket.State != WebSocketState.Open)
-            throw new InvalidOperationException(
+            throw new OpenDiaToolException(
                 "OpenDia extension not connected. Install/reload the OpenDia browser extension.");
 
         // Date.now() alone collides under burst load — opendia upstream hit
@@ -285,7 +367,7 @@ public sealed class OpenDiaBridge : IAsyncDisposable
             ["method"] = toolName,
             ["params"] = args is null ? new JsonObject() : args.DeepClone(),
         };
-        try { await SendAsync(socket, msg, ct); }
+        try { await SendAsync(socket, msg, ct).ConfigureAwait(false); }
         catch
         {
             lock (_gate) { _pending.Remove(id); }
@@ -297,36 +379,58 @@ public sealed class OpenDiaBridge : IAsyncDisposable
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, timeoutCts.Token);
         try
         {
-            return await tcs.Task.WaitAsync(linked.Token);
+            return await tcs.Task.WaitAsync(linked.Token).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested)
         {
             lock (_gate) { _pending.Remove(id); }
             throw new TimeoutException($"OpenDia tool '{toolName}' timed out after {effective.TotalSeconds:0}s");
         }
+        catch (OperationCanceledException)
+        {
+            // Caller cancelled their own ct — drop the pending entry so
+            // a late response from the extension doesn't leak forever.
+            lock (_gate) { _pending.Remove(id); }
+            throw;
+        }
     }
 
     private static readonly JsonSerializerOptions _jsonOpts = new() { WriteIndented = false };
 
-    private static async Task SendAsync(WebSocket socket, JsonNode payload, CancellationToken ct)
+    private async Task SendAsync(WebSocket socket, JsonNode payload, CancellationToken ct)
     {
         var bytes = Encoding.UTF8.GetBytes(payload.ToJsonString(_jsonOpts));
-        await socket.SendAsync(bytes, WebSocketMessageType.Text, endOfMessage: true, ct);
+        // WebSocket.SendAsync is single-writer — serialise every outbound
+        // payload to keep frame ordering intact and prevent interleaved
+        // partial messages.
+        await _sendLock.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            await socket.SendAsync(bytes, WebSocketMessageType.Text, endOfMessage: true, ct)
+                        .ConfigureAwait(false);
+        }
+        finally
+        {
+            _sendLock.Release();
+        }
     }
 
     public async ValueTask DisposeAsync()
     {
-        try { _serverCts?.Cancel(); } catch { /* ignore */ }
-        try { _listener?.Stop(); } catch { /* ignore */ }
-        try { _listener?.Close(); } catch { /* ignore */ }
-        WebSocket? sock;
-        lock (_gate) { sock = _extSocket; _extSocket = null; }
-        if (sock is not null)
-        {
-            try { await sock.CloseAsync(WebSocketCloseStatus.NormalClosure, "shutdown", CancellationToken.None); }
-            catch { /* ignore */ }
-        }
+        await StopAsync().ConfigureAwait(false);
+        _sendLock.Dispose();
     }
 
     private sealed record PendingCall(TaskCompletionSource<JsonNode?> Tcs);
+}
+
+/// <summary>
+/// Exception raised when the opendia extension reports an error, is not
+/// connected, or otherwise refuses to satisfy a tool call. Callers (MCP
+/// tool wrappers) catch this to format a clean error envelope rather than
+/// propagating a raw .NET stack trace to the agent.
+/// </summary>
+public sealed class OpenDiaToolException : Exception
+{
+    public OpenDiaToolException(string message) : base(message) { }
 }

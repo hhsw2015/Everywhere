@@ -39,27 +39,44 @@ internal sealed class OpenDiaAIFunction : AIFunction
         CancellationToken cancellationToken)
     {
         // Repack the AIFunctionArguments dict into a JsonObject — that's
-        // the shape the opendia extension expects on the wire.
+        // the shape the opendia extension expects on the wire. SerializeToNode
+        // covers every primitive/complex value the SDK might pass us
+        // (number, bool, dict, array, custom record) without us having to
+        // enumerate cases by hand — JsonValue.Create only handles a fixed
+        // set and silently boxes the rest as opaque .NET objects.
         JsonNode? args = null;
         if (arguments is { Count: > 0 })
         {
             var obj = new JsonObject();
-            foreach (var (k, v) in arguments)
+            foreach (var kvp in arguments)
             {
-                obj[k] = v switch
+                obj[kvp.Key] = kvp.Value switch
                 {
                     null => null,
                     JsonElement el => JsonNode.Parse(el.GetRawText()),
                     JsonNode jn => jn.DeepClone(),
-                    _ => JsonValue.Create(v),
+                    _ => JsonSerializer.SerializeToNode(kvp.Value),
                 };
             }
             args = obj;
         }
-        var result = await _bridge.CallToolAsync(_extToolName, args, ct: cancellationToken);
-        // Returning the raw JsonNode lets the SDK serialize it as-is into
-        // the CallToolResult content block. AIFunctionMcpServerTool wraps
-        // the return value automatically.
-        return result is null ? "{}" : result.ToJsonString();
+        try
+        {
+            var result = await _bridge.CallToolAsync(_extToolName, args, ct: cancellationToken)
+                                       .ConfigureAwait(false);
+            return result;
+        }
+        catch (OpenDiaToolException)
+        {
+            // Surface a clean message instead of a wrapped exception with
+            // .NET stack-trace noise — the SDK turns thrown exceptions
+            // into IsError=true content blocks, which is exactly what we
+            // want here.
+            throw;
+        }
+        catch (TimeoutException)
+        {
+            throw;
+        }
     }
 }

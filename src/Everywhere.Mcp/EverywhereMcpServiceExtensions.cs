@@ -34,7 +34,9 @@ public static class EverywhereMcpServiceExtensions
         // McpServerSettings.OpenDiaEnabled). The bridge is a singleton so
         // status surfaces and the MCP tool sync read its state.
         services.TryAddSingleton<OpenDia.OpenDiaBridge>();
-        services.TryAddSingleton<OpenDia.OpenDiaToolSync>();
+        // OpenDiaToolSync needs IOptions<McpServerOptions> from the inner
+        // MCP container — it's instantiated from there in
+        // EverywhereMcpHttpHost.BuildApp(), not here.
         // Avalonia GUI hosts don't run a generic-host pipeline, so expose the listener as
         // an explicit Start call instead of an IHostedService. Hosts that *do* run a
         // generic host can register the host as IHostedService themselves.

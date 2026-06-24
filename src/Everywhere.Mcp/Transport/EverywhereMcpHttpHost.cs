@@ -209,20 +209,32 @@ public sealed class EverywhereMcpHttpHost : IHostedService, IAsyncDisposable
             .WithHttpTransport(o => o.Stateless = true)
             .WithToolsFromAssembly(typeof(EverywhereMcpHttpHost).Assembly);
 
+        // Bind the bridge from the parent provider as a regular singleton
+        // *into the inner builder*. Without this the inner provider builds
+        // its own OpenDiaBridge instance separate from the one the parent
+        // initializer started — sync would observe an empty/never-populated
+        // bridge.
+        var parentBridge = _parentServices.GetService<OpenDia.OpenDiaBridge>();
+        if (parentBridge is not null)
+            builder.Services.AddSingleton(parentBridge);
+
         var app = builder.Build();
 
-        // OpenDia tool sync — once the host has built, hand the live
-        // McpServerOptions.ToolCollection to OpenDiaToolSync so browser
-        // tools land alongside Everywhere's static tools as the extension
-        // (re)connects. Safe to call when the bridge is disabled — the
-        // sync just sees an empty AvailableTools list.
+        // OpenDia tool sync needs the live McpServerOptions.ToolCollection,
+        // which only exists on the inner provider — so it must be resolved
+        // from app.Services. Build it manually here (the parent provider
+        // doesn't have it registered as that would defeat the purpose).
         try
         {
-            app.Services.GetService<OpenDia.OpenDiaToolSync>()?.Wire();
+            if (parentBridge is not null)
+            {
+                var sync = ActivatorUtilities.CreateInstance<OpenDia.OpenDiaToolSync>(app.Services);
+                sync.Wire();
+            }
         }
-        catch
+        catch (Exception ex)
         {
-            // Tool sync is best-effort; never block MCP host startup on it.
+            _logger.LogWarning(ex, "OpenDia: tool sync wiring failed; browser tools will not appear in MCP.");
         }
 
         // Defense-in-depth: trust the actual TCP peer, not the user-controlled Host header.
