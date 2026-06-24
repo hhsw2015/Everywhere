@@ -215,6 +215,9 @@ public sealed class EverywhereMcpHttpHost : IHostedService, IAsyncDisposable
         // initializer started — sync would observe an empty/never-populated
         // bridge.
         var parentBridge = _parentServices.GetService<OpenDia.OpenDiaBridge>();
+        _logger.LogInformation(
+            "OpenDia: parentBridge resolution {State}",
+            parentBridge is null ? "FAILED (null)" : "OK");
         if (parentBridge is not null)
             builder.Services.AddSingleton(parentBridge);
 
@@ -229,7 +232,13 @@ public sealed class EverywhereMcpHttpHost : IHostedService, IAsyncDisposable
             if (parentBridge is not null)
             {
                 var sync = ActivatorUtilities.CreateInstance<OpenDia.OpenDiaToolSync>(app.Services);
+                _logger.LogInformation("OpenDia: invoking ToolSync.Wire() (initial sync + StateChanged subscribe)");
                 sync.Wire();
+                _logger.LogInformation("OpenDia: ToolSync wired successfully");
+            }
+            else
+            {
+                _logger.LogWarning("OpenDia: bridge singleton missing; tool sync skipped.");
             }
         }
         catch (Exception ex)

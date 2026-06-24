@@ -70,9 +70,14 @@ public sealed class OpenDiaToolSync
         var tools = _options.Value.ToolCollection;
         if (tools is null)
         {
-            _logger.LogDebug("OpenDia: McpServerOptions.ToolCollection is null; skipping sync.");
+            _logger.LogWarning(
+                "OpenDia: McpServerOptions.ToolCollection is null; browser tools cannot be exposed.");
             return;
         }
+        var available = _bridge.AvailableTools;
+        _logger.LogInformation(
+            "OpenDia: Sync invoked — bridge.AvailableTools.Count={Count}, current owned={Owned}",
+            available.Count, _ownedTools.Count);
 
         lock (_gate)
         {

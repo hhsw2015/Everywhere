@@ -206,6 +206,42 @@ public sealed class OpenDiaBridge : IAsyncDisposable
         _logger.LogInformation("OpenDiaBridge: extension connected");
         StateChanged?.Invoke();
 
+        // Keep the extension's Manifest V3 service worker alive: Chrome
+        // kills idle workers after ~30s, taking the WS with it. Sending
+        // a tiny JSON heartbeat every 20s gives the worker a 'message'
+        // event so it stays awake. Upstream opendia ext only heartbeats
+        // when it's NOT a service worker, so the server has to do the
+        // work for V3 ext targets.
+        var heartbeatCts = CancellationTokenSource.CreateLinkedTokenSource(sessionCts.Token);
+        var heartbeatTask = Task.Run(async () =>
+        {
+            try
+            {
+                while (!heartbeatCts.IsCancellationRequested
+                       && socket.State == WebSocketState.Open)
+                {
+                    await Task.Delay(TimeSpan.FromSeconds(20), heartbeatCts.Token).ConfigureAwait(false);
+                    if (socket.State != WebSocketState.Open) break;
+                    try
+                    {
+                        await SendAsync(socket, new JsonObject
+                        {
+                            ["type"] = "ping",
+                            ["timestamp"] = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+                        }, heartbeatCts.Token).ConfigureAwait(false);
+                    }
+                    catch (Exception ex) when (ex is WebSocketException or InvalidOperationException)
+                    {
+                        // Socket has gone — receive loop will surface the
+                        // disconnect. Don't spam the log with one-off
+                        // ping failures.
+                        return;
+                    }
+                }
+            }
+            catch (OperationCanceledException) { /* expected on session end */ }
+        });
+
         // Fixed receive frame buffer; payload accumulator grows up to
         // MaxIncomingBytes. UTF-8 decoder handles multi-byte codepoints
         // straddling frame boundaries — naive Encoding.UTF8.GetString on
@@ -256,6 +292,9 @@ public sealed class OpenDiaBridge : IAsyncDisposable
         }
         finally
         {
+            try { heartbeatCts.Cancel(); } catch { /* ignore */ }
+            try { await heartbeatTask.ConfigureAwait(false); } catch { /* ignore */ }
+            heartbeatCts.Dispose();
             ArrayPool<byte>.Shared.Return(rentBuffer);
             ArrayPool<char>.Shared.Return(rentChars);
             CancellationTokenSource? toDispose = null;
