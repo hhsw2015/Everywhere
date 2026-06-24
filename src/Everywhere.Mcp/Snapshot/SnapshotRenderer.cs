@@ -44,7 +44,18 @@ public static class SnapshotRenderer
             sb.Append(DisplayRole(node.Element));
 
             var name = SnapshotTextUtil.Sanitize(node.Element.Name, limit);
-            if (!string.IsNullOrEmpty(name))
+            // OCCU summaryMarkdownLinkText (AccessibilitySnapshot.swift
+            // L1770-1789): AXLink rows render as "[label](url)" so the
+            // agent can copy/follow the URL straight out of the
+            // snapshot. Brackets in label are markdown-escaped.
+            if (node.Element.Type == VisualElementType.Hyperlink
+                && !string.IsNullOrEmpty(name)
+                && !string.IsNullOrEmpty(node.Element.Url))
+            {
+                var safe = name.Replace("\\", "\\\\").Replace("[", "\\[").Replace("]", "\\]");
+                sb.Append(" \"[").Append(safe).Append("](").Append(node.Element.Url).Append(")\"");
+            }
+            else if (!string.IsNullOrEmpty(name))
             {
                 sb.Append(' ').Append('"').Append(EscapeQuotes(name)).Append('"');
             }
@@ -92,33 +103,47 @@ public static class SnapshotRenderer
         return sb.ToString();
     }
 
-    /// <summary>OCCU displayRoleText: human-friendly role label.</summary>
+    /// <summary>OCCU displayRoleText (AccessibilitySnapshot.swift L1552):
+    /// remap a few specific shapes to nicer labels — radio group with
+    /// a label collapses to "" (the label is enough), AXLink → "link",
+    /// AXWebArea → "HTML 内容", suppressed children → "container",
+    /// AXMenuBarItem returns "" (just a wrapper). Otherwise lowercased
+    /// type name.
+    /// </summary>
     private static string DisplayRole(IVisualElement el)
     {
-        // Prefer typed VisualElementType which already applies our
-        // platform-portable mapping; fall back to AXRoleDescription
-        // shape if the type maps to Unknown.
-        return el.Type.ToString();
+        var type = el.Type;
+        var name = el.Name;
+        return type switch
+        {
+            VisualElementType.Hyperlink => "link",
+            VisualElementType.Document => "HTML 内容",
+            VisualElementType.RadioButton when !string.IsNullOrEmpty(name) => "",
+            _ => type.ToString(),
+        };
     }
 
     /// <summary>
-    /// OCCU shouldElideNode: empty AXGroup / Panel containers with a
-    /// single child contribute no useful info — eliding them collapses
-    /// "Group > Group > Group > Button" chains into just "Button".
+    /// Delegates to SnapshotElideRules (line-by-line port of OCCU
+    /// shouldElideNode + shouldPreserveWebAreaGenericContainer).
     /// </summary>
     private static bool ShouldElide(
         ElementIndexer.IndexedNode node,
         Dictionary<int, List<ElementIndexer.IndexedNode>> byParent)
     {
         if (node.Depth == 0) return false; // never elide root
-        if (node.Element.Type != VisualElementType.Panel
-            && node.Element.Type != VisualElementType.Unknown) return false;
-        var name = node.Element.Name;
-        if (!string.IsNullOrEmpty(name)) return false;
-        var states = node.Element.States;
-        if (states != VisualElementStates.None) return false;
-        if (!byParent.TryGetValue(node.Index, out var children)) return false;
-        return children.Count >= 1; // empty named group with kids → noise
+        var children = byParent.TryGetValue(node.Index, out var list) ? list : null;
+        var childCount = children?.Count ?? 0;
+        IReadOnlyList<string>? actions = null;
+        try { actions = node.Element.SupportedActions; } catch { }
+        return SnapshotElideRules.ShouldElide(
+            type: node.Element.Type,
+            name: node.Element.Name,
+            text: node.Element.GetText(maxLength: 64),
+            states: node.Element.States,
+            actions: SnapshotActionFilter.Filter(actions),
+            childCount: childCount,
+            webAreaDepth: null /* TODO: track during indexer walk */);
     }
 
     private static string EscapeQuotes(string s) =>
