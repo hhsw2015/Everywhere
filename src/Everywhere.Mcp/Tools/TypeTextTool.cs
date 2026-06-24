@@ -30,7 +30,7 @@ public static class TypeTextTool
                 resolved.Value.Window.NativeWindowHandle,
                 requireFocus: true,
                 processId: resolved.Value.ProcessId);
-            input.TypeText(text);
+            input.TypeText(text, targetPid: resolved.Value.ProcessId);
             return new CallToolResult { Content = [new TextContentBlock { Text = "ok" }] };
         }
         catch (Exception ex)

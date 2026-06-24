@@ -14,56 +14,60 @@ namespace Everywhere.Mac.Mcp;
 /// </summary>
 public sealed class MacInputSimulator : IInputSimulator
 {
-    public void MoveTo(double x, double y)
+    public void MoveTo(double x, double y, int? targetPid = null)
     {
-        var src = CGEventSourceCreate(CGEventSourceStateID.HidSystemState);
-        if (src == nint.Zero) throw new InvalidOperationException("Failed to create HID event source.");
+        // OCCU mirrors: targeted path uses CombinedSessionState, global uses HidSystemState.
+        var stateId = targetPid.HasValue ? CGEventSourceStateID.CombinedSessionState : CGEventSourceStateID.HidSystemState;
+        var src = CGEventSourceCreate(stateId);
+        if (src == nint.Zero) throw new InvalidOperationException("Failed to create event source.");
         try
         {
-            PostMouse(src, CGEventType.MouseMoved, x, y, CGMouseButton.Left, clickState: 1);
+            PostMouse(src, CGEventType.MouseMoved, x, y, CGMouseButton.Left, clickState: 1, targetPid);
         }
         finally { CFRelease(src); }
     }
 
-    public void Click(double x, double y, int clickCount = 1, MouseButton button = MouseButton.Left)
+    public void Click(double x, double y, int clickCount = 1, MouseButton button = MouseButton.Left, int? targetPid = null)
     {
-        var src = CGEventSourceCreate(CGEventSourceStateID.HidSystemState);
-        if (src == nint.Zero) throw new InvalidOperationException("Failed to create HID event source.");
+        var stateId = targetPid.HasValue ? CGEventSourceStateID.CombinedSessionState : CGEventSourceStateID.HidSystemState;
+        var src = CGEventSourceCreate(stateId);
+        if (src == nint.Zero) throw new InvalidOperationException("Failed to create event source.");
         try
         {
             var (cgButton, downType, upType) = Map(button);
             for (var i = 0; i < Math.Max(clickCount, 1); i++)
             {
-                PostMouse(src, CGEventType.MouseMoved, x, y, cgButton, clickCount);
-                PostMouse(src, downType, x, y, cgButton, clickCount);
-                PostMouse(src, upType, x, y, cgButton, clickCount);
+                PostMouse(src, CGEventType.MouseMoved, x, y, cgButton, clickCount, targetPid);
+                PostMouse(src, downType, x, y, cgButton, clickCount, targetPid);
+                PostMouse(src, upType, x, y, cgButton, clickCount, targetPid);
             }
         }
         finally { CFRelease(src); }
     }
 
-    public void DragTo(double fromX, double fromY, double toX, double toY)
+    public void DragTo(double fromX, double fromY, double toX, double toY, int? targetPid = null)
     {
-        var src = CGEventSourceCreate(CGEventSourceStateID.HidSystemState);
-        if (src == nint.Zero) throw new InvalidOperationException("Failed to create HID event source.");
+        var stateId = targetPid.HasValue ? CGEventSourceStateID.CombinedSessionState : CGEventSourceStateID.HidSystemState;
+        var src = CGEventSourceCreate(stateId);
+        if (src == nint.Zero) throw new InvalidOperationException("Failed to create event source.");
         try
         {
-            PostMouse(src, CGEventType.MouseMoved, fromX, fromY, CGMouseButton.Left, 1);
-            PostMouse(src, CGEventType.LeftMouseDown, fromX, fromY, CGMouseButton.Left, 1);
+            PostMouse(src, CGEventType.MouseMoved, fromX, fromY, CGMouseButton.Left, 1, targetPid);
+            PostMouse(src, CGEventType.LeftMouseDown, fromX, fromY, CGMouseButton.Left, 1, targetPid);
             for (var step = 1; step <= 10; step++)
             {
                 var p = step / 10.0;
                 PostMouse(src, CGEventType.LeftMouseDragged,
                     fromX + (toX - fromX) * p,
                     fromY + (toY - fromY) * p,
-                    CGMouseButton.Left, 1);
+                    CGMouseButton.Left, 1, targetPid);
             }
-            PostMouse(src, CGEventType.LeftMouseUp, toX, toY, CGMouseButton.Left, 1);
+            PostMouse(src, CGEventType.LeftMouseUp, toX, toY, CGMouseButton.Left, 1, targetPid);
         }
         finally { CFRelease(src); }
     }
 
-    public void TypeText(string text)
+    public void TypeText(string text, int? targetPid = null)
     {
         if (string.IsNullOrEmpty(text)) return;
 
@@ -77,13 +81,13 @@ public sealed class MacInputSimulator : IInputSimulator
             if (len < text.Length - pos && char.IsHighSurrogate(text[pos + len - 1])) len--;
             if (len <= 0) break;
             var chunk = text.Substring(pos, len);
-            PostUnicodeChunk(chunk);
+            PostUnicodeChunk(chunk, targetPid);
             Thread.Sleep(20);
             pos += len;
         }
     }
 
-    public void PressKey(string xdotoolKeyName)
+    public void PressKey(string xdotoolKeyName, int? targetPid = null)
     {
         if (string.IsNullOrWhiteSpace(xdotoolKeyName))
             throw new ArgumentException("key specification is empty");
@@ -117,7 +121,7 @@ public sealed class MacInputSimulator : IInputSimulator
             var ev = CGEventCreateKeyboardEvent(nint.Zero, mkc, true);
             if (ev == nint.Zero) throw new InvalidOperationException("Failed to create modifier key down event.");
             CGEventSetFlags(ev, activeFlags);
-            CGEventPost(CGEventTapLocation.SessionEventTap,ev);
+            PostEvent(ev, targetPid);
             CFRelease(ev);
         }
 
@@ -134,8 +138,8 @@ public sealed class MacInputSimulator : IInputSimulator
         {
             CGEventSetFlags(down, activeFlags);
             CGEventSetFlags(up, activeFlags);
-            CGEventPost(CGEventTapLocation.SessionEventTap,down);
-            CGEventPost(CGEventTapLocation.SessionEventTap,up);
+            PostEvent(down, targetPid);
+            PostEvent(up, targetPid);
         }
         finally { CFRelease(down); CFRelease(up); }
 
@@ -146,12 +150,19 @@ public sealed class MacInputSimulator : IInputSimulator
             var ev = CGEventCreateKeyboardEvent(nint.Zero, mkc, false);
             if (ev == nint.Zero) throw new InvalidOperationException("Failed to create modifier key up event.");
             CGEventSetFlags(ev, activeFlags);
-            CGEventPost(CGEventTapLocation.SessionEventTap,ev);
+            PostEvent(ev, targetPid);
             CFRelease(ev);
             activeFlags &= ~flag;
         }
 
         Thread.Sleep(100);
+    }
+
+    /// <summary>Single dispatch: targeted (CGEventPostToPid) or global.</summary>
+    private static void PostEvent(nint ev, int? targetPid)
+    {
+        if (targetPid is { } pid) CGEventPostToPid(pid, ev);
+        else CGEventPost(CGEventTapLocation.SessionEventTap, ev);
     }
 
     private static (CGMouseButton, CGEventType, CGEventType) Map(MouseButton b) => b switch
@@ -161,20 +172,20 @@ public sealed class MacInputSimulator : IInputSimulator
         _ => (CGMouseButton.Left, CGEventType.LeftMouseDown, CGEventType.LeftMouseUp),
     };
 
-    private static void PostMouse(nint source, CGEventType type, double x, double y, CGMouseButton button, int clickState)
+    private static void PostMouse(nint source, CGEventType type, double x, double y, CGMouseButton button, int clickState, int? targetPid = null)
     {
         var ev = CGEventCreateMouseEvent(source, type, new CGPoint(x, y), button);
         if (ev == nint.Zero) throw new InvalidOperationException($"Failed to create mouse event {type}.");
         try
         {
             CGEventSetIntegerValueField(ev, CGEventField.MouseEventClickState, clickState);
-            CGEventPost(CGEventTapLocation.SessionEventTap,ev);
+            PostEvent(ev, targetPid);
         }
         finally { CFRelease(ev); }
         Thread.Sleep(30);
     }
 
-    private static void PostUnicodeChunk(string chunk)
+    private static void PostUnicodeChunk(string chunk, int? targetPid = null)
     {
         var down = CGEventCreateKeyboardEvent(nint.Zero, virtualKey: 0, keyDown: true);
         var up = CGEventCreateKeyboardEvent(nint.Zero, virtualKey: 0, keyDown: false);
@@ -196,8 +207,8 @@ public sealed class MacInputSimulator : IInputSimulator
                     CGEventKeyboardSetUnicodeString(up, units.Length, (ushort*)p);
                 }
             }
-            CGEventPost(CGEventTapLocation.SessionEventTap,down);
-            CGEventPost(CGEventTapLocation.SessionEventTap,up);
+            PostEvent(down, targetPid);
+            PostEvent(up, targetPid);
         }
         finally { CFRelease(down); CFRelease(up); }
     }
@@ -271,6 +282,16 @@ public sealed class MacInputSimulator : IInputSimulator
 
     [DllImport(CoreGraphics)]
     private static extern void CGEventPost(CGEventTapLocation tap, nint @event);
+
+    /// <summary>
+    /// Targeted post — bypasses the global cursor / keyboard. The
+    /// receiving process gets the event via its native event queue
+    /// without any IOKit HID hop, so the user's real mouse stays put
+    /// and other apps see nothing. OCCU equivalent of clickTargeted /
+    /// scrollTargeted / dragTargeted / keysTargeted.
+    /// </summary>
+    [DllImport(CoreGraphics)]
+    private static extern void CGEventPostToPid(int pid, nint @event);
 
     [DllImport(CoreGraphics)]
     private static extern void CGEventSetIntegerValueField(nint @event, CGEventField field, long value);

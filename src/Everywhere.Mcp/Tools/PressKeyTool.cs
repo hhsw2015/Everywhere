@@ -29,7 +29,7 @@ public static class PressKeyTool
                 resolved.Value.Window.NativeWindowHandle,
                 requireFocus: true,
                 processId: resolved.Value.ProcessId);
-            input.PressKey(key);
+            input.PressKey(key, targetPid: resolved.Value.ProcessId);
             return new CallToolResult { Content = [new TextContentBlock { Text = "ok" }] };
         }
         catch (Exception ex)

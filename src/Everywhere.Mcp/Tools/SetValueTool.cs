@@ -84,17 +84,19 @@ public static class SetValueTool
                     requireFocus: true,
                     processId: resolved.Value.ProcessId);
             }
+            int? targetPid = resolved?.ProcessId;
             if (rect.Width > 0 && rect.Height > 0)
             {
-                input.Click(cx, cy, 1, MouseButton.Left);
+                input.Click(cx, cy, 1, MouseButton.Left, targetPid: targetPid);
             }
             // Select-all + delete clears whatever is there. xdotool-style
             // names — on Mac the simulator maps super→Cmd, on Linux it's
             // literally super, on Windows it maps to ctrl. Same intent
-            // ("select all + erase + type").
-            input.PressKey(OperatingSystem.IsMacOS() ? "super+a" : "ctrl+a");
-            input.PressKey("BackSpace");
-            input.TypeText(value);
+            // ("select all + erase + type"). All run targeted so the
+            // user's real keyboard / clipboard / focus are not disturbed.
+            input.PressKey(OperatingSystem.IsMacOS() ? "super+a" : "ctrl+a", targetPid: targetPid);
+            input.PressKey("BackSpace", targetPid: targetPid);
+            input.TypeText(value, targetPid: targetPid);
         }
         finally
         {

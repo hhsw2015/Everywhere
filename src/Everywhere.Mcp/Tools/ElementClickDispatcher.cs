@@ -94,7 +94,8 @@ internal static class ElementClickDispatcher
                         }
                         try
                         {
-                            input.Click(cx, cy, 1, MouseButton.Left);
+                            input.Click(cx, cy, 1, MouseButton.Left,
+                                targetPid: resolved?.ProcessId);
                         }
                         finally
                         {

@@ -30,7 +30,7 @@ public static class DragTool
                 resolved.Value.Window.NativeWindowHandle,
                 requireFocus: true,
                 processId: resolved.Value.ProcessId);
-            input.DragTo(from_x, from_y, to_x, to_y);
+            input.DragTo(from_x, from_y, to_x, to_y, targetPid: resolved.Value.ProcessId);
             return new CallToolResult { Content = [new TextContentBlock { Text = "ok" }] };
         }
         catch (Exception ex)

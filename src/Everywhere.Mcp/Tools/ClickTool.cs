@@ -42,11 +42,16 @@ public static class ClickTool
                 var button = ParseButton(mouse_button);
                 var clickCount = click_count is { } c && c > 0 ? c : 1;
 
+                // OCCU parity: targeted CGEventPostToPid keeps the user's
+                // real cursor + global keyboard state untouched. We still
+                // acquire focus (some apps still gate on AXMain/foreground)
+                // but the click itself is delivered straight to the target
+                // process so the user can keep using other apps in parallel.
                 using var _ = focusBorrow.Acquire(
                     resolved.Value.Window.NativeWindowHandle,
                     requireFocus: true,
                     processId: resolved.Value.ProcessId);
-                input.Click(x.Value, y.Value, clickCount, button);
+                input.Click(x.Value, y.Value, clickCount, button, targetPid: resolved.Value.ProcessId);
                 return new CallToolResult { Content = [new TextContentBlock { Text = "ok" }] };
             }
 
