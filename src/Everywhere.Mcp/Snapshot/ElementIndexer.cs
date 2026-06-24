@@ -54,13 +54,15 @@ public static class ElementIndexer
             // popovers, Win UIA with virtualized rows) hand out Parent
             // pointers that loop back into the subtree we're already in.
             // Identity-based dedup is unreliable (fresh wrappers per
-            // query) so we use Id — but only for Ids that look stable;
-            // empty / very short Ids (Windows fallback Id can collide
-            // across unrelated controls with matching bounds) would
-            // collapse legitimate siblings into one node, so we skip
-            // dedup for those.
+            // query) so we use Id. Earlier I added a length floor to
+            // filter the bounds-derived Windows fallback, but the actual
+            // fallback string is "h.x.y.w.h" form (≥11 chars), and
+            // legitimate short ids on Linux (hex GetHashCode) and
+            // Windows UIA RuntimeId (e.g. "2A.7F") would have been
+            // mis-filtered. Use any non-empty id as the dedup key; the
+            // collision-prone shape should be filtered at the producer.
             var id = TryGetId(element);
-            if (!string.IsNullOrEmpty(id) && id.Length >= 8 && !seen.Add(id)) continue;
+            if (!string.IsNullOrEmpty(id) && !seen.Add(id)) continue;
 
             var idx = nextIndex++;
             ordered.Add(new IndexedNode(idx, parentIndex, depth, element));
