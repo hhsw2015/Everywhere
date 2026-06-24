@@ -107,6 +107,12 @@ public sealed class SnapshotContextHotkeyInitializer : IAsyncInitializer
         {
             try
             {
+                // Yield long enough for the user's hotkey modifiers (Cmd/
+                // Shift/Alt/Ctrl) to be released. The previously-focused
+                // app (e.g. Arc) processes the key combo on key-up; if we
+                // raise the agent app while the system is still routing
+                // those keys, the source app re-asserts focus.
+                await Task.Delay(180);
                 await _writer.CaptureAsync();
             }
             catch (Exception ex)

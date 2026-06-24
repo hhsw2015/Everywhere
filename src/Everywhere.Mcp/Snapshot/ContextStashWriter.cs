@@ -476,7 +476,29 @@ public sealed class ContextStashWriter
                         agentAppId);
                     return;
                 }
+                // Last-ditch check immediately before TypeText: focus may
+                // have flipped during the final 150ms tick between the
+                // settle confirmation and now. A focus-stealing app (e.g.
+                // browser handling a global hotkey on key-up) can pull
+                // the frontmost slot back here.
+                if (!_appActivator.IsFrontmost(agentAppId))
+                {
+                    _logger.LogInformation(
+                        "LaunchPhrase: focus stolen from {Id} just before injection; skipping.",
+                        agentAppId);
+                    return;
+                }
                 _input.TypeText(phrase);
+                // Confirm again before pressing Return so we don't submit
+                // partial typing into the wrong app if focus flipped mid-
+                // injection (e.g. Arc grabbing focus on the first keystroke).
+                if (!_appActivator.IsFrontmost(agentAppId))
+                {
+                    _logger.LogInformation(
+                        "LaunchPhrase: focus stolen from {Id} during typing; not pressing Return.",
+                        agentAppId);
+                    return;
+                }
                 _input.PressKey("Return");
                 _logger.LogInformation("LaunchPhrase fired ({Len} chars) into {Id}.", phrase.Length, agentAppId);
             }
