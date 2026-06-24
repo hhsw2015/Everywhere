@@ -31,7 +31,7 @@ public static class ClickTool
                 var (error, element) = ElementResolver.Resolve(sessions, element_index, appHint: app);
                 if (error is not null) return error;
 
-                return ElementClickDispatcher.Click(element!);
+                return ElementClickDispatcher.Click(element!, input, focusBorrow, context, app);
             }
 
             if (x.HasValue && y.HasValue)
