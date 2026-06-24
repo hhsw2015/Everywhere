@@ -79,7 +79,27 @@ public sealed class CursorOverlayInitializer : IAsyncInitializer, ITargetWindowH
     {
         var ind = _indicator;
         if (ind is null) return;
-        ind.ShowFor(rect, label ?? "🤖 Everywhere operating");
+        // Always marshal to UI thread. Tools call us from MCP worker
+        // threads; touching an Avalonia Window from a non-UI thread
+        // throws (which previously bubbled all the way out of the tool
+        // call). Swallow any UI-side failure so the indicator stays
+        // strictly best-effort: a missing border must never break a
+        // click / type / press.
+        try
+        {
+            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+            {
+                try { ind.ShowFor(rect, label ?? "🤖 Everywhere operating"); }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "CursorOverlay: indicator ShowFor failed");
+                }
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "CursorOverlay: indicator post failed");
+        }
     }
 
     public ValueTask DisposeAsync()
