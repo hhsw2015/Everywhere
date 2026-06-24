@@ -78,12 +78,18 @@ internal static class ElementClickDispatcher
         // handler doesn't fire — only real CGEvent input does. Skip the
         // AX chain entirely and synthesize a coordinate click on those
         // processes.
-        var preferCoord = ClickHeuristics.PrefersCoordinateClick(processName, null)
-            && input is not null
-            && context is not null
-            && focusBorrow is not null
-            && !string.IsNullOrEmpty(appHint);
-        if (preferCoord)
+        // PrefersCoordinateClick whitelist disabled — the AX action-list
+        // gating in AXUIElement.Invoke (v0.9.57) handles SwiftUI
+        // Calculator generically: AXPress is not in the element's
+        // SupportedActions, so TryPerformActionGated returns false for
+        // every verb and Invoke() throws cleanly. The catch block then
+        // runs the coordinate fallback (HidEventTap, with focus borrow)
+        // — same path OCCU's performNonAXClickFallback takes. No need
+        // to also short-circuit here, which had the side effect of
+        // skipping the AX chain even when AXPress was actually
+        // available (slowing down the common case for normal apps and
+        // duplicating focus-borrow logic).
+        if (false)
         {
             var rectS = element.BoundingRectangle;
             if (rectS.Width > 0 && rectS.Height > 0)
