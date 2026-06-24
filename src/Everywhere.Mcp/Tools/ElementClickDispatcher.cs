@@ -71,6 +71,43 @@ internal static class ElementClickDispatcher
             catch { /* highlighter is best-effort */ }
         }
 
+        // SwiftUI bypass: macOS 26+ first-party apps (Calculator, etc.)
+        // accept AXPress with success status but the SwiftUI gesture
+        // handler doesn't fire — only real CGEvent input does. Skip the
+        // AX chain entirely and synthesize a coordinate click on those
+        // processes.
+        var preferCoord = ClickHeuristics.PrefersCoordinateClick(processName, null)
+            && input is not null
+            && context is not null
+            && !string.IsNullOrEmpty(appHint);
+        if (preferCoord)
+        {
+            var rectS = element.BoundingRectangle;
+            if (rectS.Width > 0 && rectS.Height > 0)
+            {
+                try
+                {
+                    var cx = rectS.X + rectS.Width / 2.0;
+                    var cy = rectS.Y + rectS.Height / 2.0;
+                    AppResolver.ResolvedApp? resolved = AppResolver.Resolve(context!, appHint!);
+                    IDisposable? focusHandle = resolved is not null
+                        ? focusBorrow!.Acquire(resolved.Value.Window.NativeWindowHandle, requireFocus: true, processId: resolved.Value.ProcessId)
+                        : null;
+                    try
+                    {
+                        input!.Click(cx, cy, 1, MouseButton.Left, targetPid: resolved?.ProcessId);
+                    }
+                    finally { focusHandle?.Dispose(); }
+                    return new CallToolResult { Content = [new TextContentBlock { Text = "ok (SwiftUI bypass, coordinate click)" }] };
+                }
+                catch (Exception coordEx)
+                {
+                    // Fall through to AX path if coordinate failed
+                    System.Diagnostics.Debug.WriteLine($"PrefersCoord click failed: {coordEx.Message}");
+                }
+            }
+        }
+
         try
         {
             element.Invoke();

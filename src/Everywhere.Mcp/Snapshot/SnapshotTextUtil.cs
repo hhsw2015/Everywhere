@@ -17,9 +17,17 @@ internal static class SnapshotTextUtil
     public static string Sanitize(string? value, int? characterLimit = DefaultCharacterLimit)
     {
         if (string.IsNullOrEmpty(value)) return string.Empty;
-        var collapsed = value.Replace("\r\n", "\\n").Replace("\n", "\\n").Trim();
+        // Trim *first* (so leading/trailing newlines are dropped, not
+        // escaped to literal "\n"), then escape interior newlines.
+        var collapsed = value.Trim().Replace("\r\n", "\\n").Replace("\n", "\\n");
         if (characterLimit is int limit && limit >= 0 && collapsed.Length > limit)
+        {
+            // Don't split a UTF-16 surrogate pair — emoji / supplementary-
+            // plane CJK are common in accessibility labels and an orphan
+            // high-surrogate would render as a replacement char.
+            if (limit > 0 && char.IsHighSurrogate(collapsed[limit - 1])) limit--;
             return collapsed[..limit] + "...";
+        }
         return collapsed;
     }
 }

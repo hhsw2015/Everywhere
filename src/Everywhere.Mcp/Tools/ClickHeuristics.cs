@@ -56,6 +56,32 @@ internal static class ClickHeuristics
     /// shells route every row through a synthetic-text DOM that AX
     /// surfaces as a flat child list — Press lives on the ancestor.
     /// </summary>
+    /// <summary>
+    /// macOS 26+ rebuilt several first-party apps (Calculator, parts of
+    /// System Settings, the new System Information panes) on SwiftUI.
+    /// Their AXPress action returns success but the underlying SwiftUI
+    /// gesture handler treats AX-driven activation as a no-op — only
+    /// real CGEvent input fires the on-tap closure. Detect those
+    /// processes and skip the AX chain entirely so ClickTool falls
+    /// straight to the coordinate-input fallback.
+    /// </summary>
+    public static bool PrefersCoordinateClick(string? processName, string? bundleIdentifier)
+    {
+        var name = processName?.Trim().ToLowerInvariant();
+        var bid  = bundleIdentifier?.Trim().ToLowerInvariant();
+        if (!string.IsNullOrEmpty(bid))
+        {
+            // First-party SwiftUI rewrites known to no-op AXPress.
+            if (bid == "com.apple.calculator") return true;
+            if (bid == "com.apple.systeminformation") return true;
+            // System Settings panes are SwiftUI for newer macOS — but
+            // its bundle is com.apple.systempreferences and AX still
+            // works there, so don't blanket-block.
+        }
+        if (!string.IsNullOrEmpty(name) && name == "calculator") return true;
+        return false;
+    }
+
     private static bool IsElectronScopedWebApp(string? processName, string? bundleIdentifier)
     {
         var bid = bundleIdentifier?.Trim().ToLowerInvariant();
