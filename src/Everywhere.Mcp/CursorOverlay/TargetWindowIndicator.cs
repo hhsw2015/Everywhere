@@ -17,12 +17,19 @@ using Avalonia.Platform;
 using Avalonia.Rendering.SceneGraph;
 using Avalonia.Skia;
 using Avalonia.Threading;
+using Everywhere.Interop;
 using SkiaSharp;
 
 namespace Everywhere.Mcp.CursorOverlay;
 
 public sealed class TargetWindowIndicator : IAsyncDisposable
 {
+    private readonly IWindowHelper? _windowHelper;
+    public TargetWindowIndicator(IWindowHelper? windowHelper = null)
+    {
+        _windowHelper = windowHelper;
+    }
+
     private const double DefaultDisplaySeconds = 1.8;
     private const double FadeInSeconds = 0.18;
     private const double FadeOutSeconds = 0.55;
@@ -52,8 +59,12 @@ public sealed class TargetWindowIndicator : IAsyncDisposable
 
     public void ShowFor(PixelRect rect, string label = "🤖 Everywhere operating")
     {
-        if (!IsEnabled || _disposed) return;
-        if (rect.Width < 24 || rect.Height < 24) return;
+        if (!IsEnabled || _disposed) { Hide(); return; }
+        // Tiny / off-screen / invalid frames: hide any prior indicator
+        // instead of leaving stale chrome around the wrong window. OCR
+        // pointed out the agent could be operating window B while the
+        // border still wraps window A.
+        if (rect.Width < 24 || rect.Height < 24) { Hide(); return; }
         EnsureWindow();
         _shownAt = DateTime.UtcNow;
         // Pad outward so the border doesn't clip the target window's own chrome.
@@ -78,6 +89,20 @@ public sealed class TargetWindowIndicator : IAsyncDisposable
     {
         if (_window is not null) return;
         _window = new IndicatorWindow();
+        // On Mac, IsHitTestVisible=false at the Avalonia layer doesn't
+        // stop NSWindow from receiving / consuming pointer events. The
+        // platform helper sets nativeWindow.IgnoresMouseEvents = true,
+        // which is what actually makes the indicator click-through so
+        // the agent's own click can pass through the border to the
+        // target app underneath.
+        if (_windowHelper is not null)
+        {
+            _window.Opened += (_, _) =>
+            {
+                try { _windowHelper.SetHitTestVisible(_window, false); }
+                catch { /* best-effort */ }
+            };
+        }
     }
 
     private void StartFadeTimer()
@@ -181,6 +206,11 @@ public sealed class TargetWindowIndicator : IAsyncDisposable
         }
     }
 
+    // Cached once, used per-Render to avoid re-allocating an SKTypeface
+    // each frame (~60fps for ~2.5s per show = ~150 reuse).
+    private static readonly SKTypeface _badgeTypeface =
+        SKTypeface.FromFamilyName("Helvetica Neue", SKFontStyle.Bold) ?? SKTypeface.Default;
+
     private sealed class IndicatorDrawOperation : ICustomDrawOperation
     {
         private readonly Rect _bounds;
@@ -275,7 +305,7 @@ public sealed class TargetWindowIndicator : IAsyncDisposable
 
             // 4) Top-left "operating" badge — pill, glass, with green
             //    pulse dot + white text. Emoji-free for crispness.
-            using var font = new SKFont(SKTypeface.FromFamilyName("Helvetica Neue", SKFontStyle.Bold) ?? SKTypeface.Default, 12);
+            using var font = new SKFont(_badgeTypeface, 12);
             using var textPaint = new SKPaint
             {
                 IsAntialias = true,

@@ -36,23 +36,31 @@ public static class ElementIndexer
         ArgumentNullException.ThrowIfNull(root);
 
         var ordered = new List<IndexedNode>(capacity: Math.Min(maxNodeCount, 256));
-        var queue = new Queue<(IVisualElement element, int depth, int parentIndex, Avalonia.PixelRect? hitFrame)>();
+        // Each queue entry carries the *parent's* frame (not the walk
+        // root) so the OCCU-style "this subtree is suspiciously huge
+        // relative to where we are now" check compares like-with-like.
+        // Using the root made the heuristic dead code for full-window
+        // walks and over-aggressive for picked-element walks.
+        var queue = new Queue<(IVisualElement element, int depth, int parentIndex, Avalonia.PixelRect? parentFrame)>();
         var seen = new HashSet<string>(StringComparer.Ordinal);
-        Avalonia.PixelRect? rootFrame = SafeBounds(root);
-        queue.Enqueue((root, 0, -1, rootFrame));
+        queue.Enqueue((root, 0, -1, null));
 
         var nextIndex = 0;
         while (queue.Count > 0 && ordered.Count < maxNodeCount)
         {
-            var (element, depth, parentIndex, hitFrame) = queue.Dequeue();
+            var (element, depth, parentIndex, parentFrame) = queue.Dequeue();
 
             // Cycle guard. Some platform AX wrappers (Mac AX with detached
             // popovers, Win UIA with virtualized rows) hand out Parent
             // pointers that loop back into the subtree we're already in.
             // Identity-based dedup is unreliable (fresh wrappers per
-            // query) so we use Id.
+            // query) so we use Id — but only for Ids that look stable;
+            // empty / very short Ids (Windows fallback Id can collide
+            // across unrelated controls with matching bounds) would
+            // collapse legitimate siblings into one node, so we skip
+            // dedup for those.
             var id = TryGetId(element);
-            if (id is not null && !seen.Add(id)) continue;
+            if (!string.IsNullOrEmpty(id) && id.Length >= 8 && !seen.Add(id)) continue;
 
             var idx = nextIndex++;
             ordered.Add(new IndexedNode(idx, parentIndex, depth, element));
@@ -60,10 +68,13 @@ public static class ElementIndexer
             if (depth + 1 > maxDepth) continue;
 
             // OCCU shouldScanDescendantsOfHitRecord: skip descending when
-            // this element's frame is dramatically larger than the root
-            // (likely a top-level scroller / web area that engulfs the
-            // real target).
-            if (rootFrame is { } rf && hitFrame is { } hf && !ShouldScanDescendants(rf, hf))
+            // this element's frame is dramatically larger than its
+            // *parent* (likely a top-level scroller / web area that
+            // engulfs the real target). Comparing to the parent — not
+            // the walk root — works for both whole-window snapshots and
+            // picked-element expansions.
+            var ownFrame = SafeBounds(element);
+            if (parentFrame is { } pf && ownFrame is { } of && !ShouldScanDescendants(pf, of))
                 continue;
 
             // Per-child try/catch: a stale AX ref on one child must not
@@ -91,12 +102,13 @@ public static class ElementIndexer
                     }
                     if (child is null) continue;
                     if (ordered.Count + queue.Count >= maxNodeCount) break;
-                    queue.Enqueue((child, depth + 1, idx, SafeBounds(child)));
+                    queue.Enqueue((child, depth + 1, idx, ownFrame));
                 }
             }
             finally
             {
-                enumerator.Dispose();
+                try { enumerator.Dispose(); }
+                catch { /* stale AX ref on dispose; ignore — same family as the per-child catch above */ }
             }
         }
 

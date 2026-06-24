@@ -1,6 +1,7 @@
 using Avalonia.Threading;
 using Everywhere.Common;
 using Everywhere.Configuration;
+using Everywhere.Interop;
 using Everywhere.Mcp.Input;
 using Microsoft.Extensions.Logging;
 
@@ -16,16 +17,28 @@ public sealed class CursorOverlayInitializer : IAsyncInitializer, ITargetWindowH
 {
     private readonly Settings _settings;
     private readonly CursorTrace _trace;
+    private readonly IWindowHelper? _windowHelper;
     private readonly ILogger<CursorOverlayInitializer> _logger;
     private SoftwareCursorOverlay? _overlay;
     private CursorOverlayBridge? _bridge;
     private TargetWindowIndicator? _indicator;
 
-    public CursorOverlayInitializer(Settings settings, CursorTrace trace, ILogger<CursorOverlayInitializer> logger)
+    public CursorOverlayInitializer(
+        Settings settings,
+        CursorTrace trace,
+        ILogger<CursorOverlayInitializer> logger,
+        IWindowHelper? windowHelper = null)
     {
         _settings = settings;
         _trace = trace;
         _logger = logger;
+        // Mac path provides IWindowHelper which lets us set
+        // NSWindow.IgnoresMouseEvents on the indicator overlay. Without
+        // it, IsHitTestVisible=false only blocks Avalonia hit-testing —
+        // the underlying NSWindow still receives mouse events and would
+        // steal focus from the target app the indicator is trying to
+        // frame. Optional so non-Mac hosts work degraded.
+        _windowHelper = windowHelper;
     }
 
     public AsyncInitializerIndex Index => AsyncInitializerIndex.Startup;
@@ -54,7 +67,7 @@ public sealed class CursorOverlayInitializer : IAsyncInitializer, ITargetWindowH
                     {
                         _overlay = new SoftwareCursorOverlay();
                         _bridge = new CursorOverlayBridge(_trace, _overlay);
-                        _indicator = new TargetWindowIndicator();
+                        _indicator = new TargetWindowIndicator(_windowHelper);
                         _logger.LogInformation("CursorOverlay: bridge + indicator attached.");
                     }
                 }
