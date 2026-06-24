@@ -81,10 +81,10 @@ public static class AXAttributeConstants
 
     // Child traversal alternates — OCCU childTraversalAttributes
     // (AccessibilitySnapshot.swift L866). AXTable / AXOutline / AXList /
-    // AXBrowser surface their rows on AXRows, not on AXChildren; AXList
-    // additionally uses AXVisibleChildren. AXContents covers some
-    // SwiftUI / web container cases.
+    // AXBrowser surface their rows on AXRows, not on AXChildren;
+    // AXList additionally uses AXVisibleChildren (already declared
+    // above on L12). AXContents covers some SwiftUI / web container
+    // cases.
     public static readonly NSString Rows = new("AXRows");
-    public static readonly NSString VisibleChildren = new("AXVisibleChildren");
     public static readonly NSString Contents = new("AXContents");
 }
