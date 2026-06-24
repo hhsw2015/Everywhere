@@ -81,9 +81,10 @@ internal static class ElementClickDispatcher
                         // does — otherwise it lands on whichever app
                         // currently has focus.
                         IDisposable? focusHandle = null;
+                        AppResolver.ResolvedApp? resolved = null;
                         if (focusBorrow is not null && context is not null && !string.IsNullOrEmpty(appHint))
                         {
-                            var resolved = AppResolver.Resolve(context, appHint);
+                            resolved = AppResolver.Resolve(context, appHint);
                             if (resolved is not null)
                             {
                                 focusHandle = focusBorrow.Acquire(
