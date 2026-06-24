@@ -171,6 +171,36 @@ public sealed class OpenDiaBridge : IAsyncDisposable
         _logger.LogInformation("OpenDiaBridge: extension connected");
         StateChanged?.Invoke();
 
+        // Server-driven keep-alive: every 20s send a tiny ping frame so
+        // the Chrome MV3 service-worker idle timer keeps getting reset
+        // (Chrome 124+: WebSocket activity resets the SW idle deadline).
+        // The ext-side handler swallows {type:'ping'} frames.
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                while (!sessionCts.IsCancellationRequested && socket.State == WebSocketState.Open)
+                {
+                    await Task.Delay(TimeSpan.FromSeconds(20), sessionCts.Token).ConfigureAwait(false);
+                    if (socket.State != WebSocketState.Open) break;
+                    try
+                    {
+                        await SendAsync(socket, new JsonObject
+                        {
+                            ["type"] = "ping",
+                            ["timestamp"] = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+                        }, sessionCts.Token).ConfigureAwait(false);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogDebug(ex, "OpenDiaBridge: keepalive ping failed");
+                        break;
+                    }
+                }
+            }
+            catch (OperationCanceledException) { }
+        }, sessionCts.Token);
+
         var rentBuffer = ArrayPool<byte>.Shared.Rent(64 * 1024);
         var rentChars = ArrayPool<char>.Shared.Rent(64 * 1024);
         var decoder = Encoding.UTF8.GetDecoder();
