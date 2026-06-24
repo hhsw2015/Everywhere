@@ -2257,6 +2257,18 @@
     <data name="McpServerSettings_AutoCaptureContext_Description" xml:space="preserve">
         <value>Когда включено, закрепление UI-элемента горячей клавишей AgentPickElement также обновляет stash контекста для следующего запроса Claude Code. По умолчанию выключено. Для однократной ручной фиксации используйте горячую клавишу SnapshotContext.</value>
     </data>
+    <data name="McpServerSettings_OpenDiaEnabled_Header" xml:space="preserve">
+        <value>Мост браузера OpenDia</value>
+    </data>
+    <data name="McpServerSettings_OpenDiaEnabled_Description" xml:space="preserve">
+        <value>При включении Everywhere слушает локальный WebSocket-порт для расширения opendia Chrome/Firefox. Даёт MCP-клиентам полный доступ к браузеру (извлечение контента, клик, вкладки, история) без node.js. Расширение устанавливается отдельно на opendia.co.</value>
+    </data>
+    <data name="McpServerSettings_OpenDiaPort_Header" xml:space="preserve">
+        <value>Порт OpenDia</value>
+    </data>
+    <data name="McpServerSettings_OpenDiaPort_Description" xml:space="preserve">
+        <value>Локальный WebSocket-порт для расширения opendia (по умолчанию 5555).</value>
+    </data>
     <data name="McpServerSettings_AgentAppId_Header" xml:space="preserve">
         <value>Приложение агента</value>
     </data>

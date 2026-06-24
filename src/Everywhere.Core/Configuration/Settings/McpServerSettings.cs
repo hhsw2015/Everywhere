@@ -53,6 +53,28 @@ public sealed partial class McpServerSettings : SettingsBase, ISettingsCategory
         LocaleKey.McpServerSettings_AutoCaptureContext_Description)]
     public partial bool AutoCaptureContext { get; set; } = false;
 
+    /// <summary>
+    /// Native opendia browser bridge. When enabled, Everywhere stands up a
+    /// loopback websocket server on <see cref="OpenDiaPort"/> that the
+    /// unmodified opendia Chrome / Firefox extension connects to. The
+    /// extension's full tool surface (page_extract_content, element_click,
+    /// tab_list, get_history, ...) becomes available to any MCP client
+    /// pointed at Everywhere — no node.js / npm dependency.
+    /// </summary>
+    [ObservableProperty]
+    [DynamicResourceKey(
+        LocaleKey.McpServerSettings_OpenDiaEnabled_Header,
+        LocaleKey.McpServerSettings_OpenDiaEnabled_Description)]
+    public partial bool OpenDiaEnabled { get; set; } = false;
+
+    [ObservableProperty]
+    [DynamicResourceKey(
+        LocaleKey.McpServerSettings_OpenDiaPort_Header,
+        LocaleKey.McpServerSettings_OpenDiaPort_Description)]
+    [SettingsItem(IsVisibleBindingPath = nameof(OpenDiaEnabled), Group = "_")]
+    [SettingsIntegerItem(Min = 1, Max = 65535, IsSliderVisible = false)]
+    public partial int OpenDiaPort { get; set; } = 5555;
+
     [ObservableProperty]
     [DynamicResourceKey(
         LocaleKey.McpServerSettings_AgentAppId_Header,

@@ -2269,6 +2269,18 @@ Use scroll wheel or number keys to switch selection mode</value>
     <data name="McpServerSettings_AutoCaptureContext_Description" xml:space="preserve">
         <value>When enabled, pinning a UI element with the AgentPickElement hotkey also refreshes the context stash so the next Claude Code prompt picks it up. Off by default. Use the SnapshotContext hotkey for an explicit one-shot capture.</value>
     </data>
+    <data name="McpServerSettings_OpenDiaEnabled_Header" xml:space="preserve">
+        <value>OpenDia browser bridge</value>
+    </data>
+    <data name="McpServerSettings_OpenDiaEnabled_Description" xml:space="preserve">
+        <value>When enabled, Everywhere runs a loopback websocket server that the opendia Chrome/Firefox extension connects to. Adds full browser-page tools (extract content, click, fill, tabs, history) to MCP clients with no node.js dependency. Install the extension separately via opendia.co.</value>
+    </data>
+    <data name="McpServerSettings_OpenDiaPort_Header" xml:space="preserve">
+        <value>OpenDia port</value>
+    </data>
+    <data name="McpServerSettings_OpenDiaPort_Description" xml:space="preserve">
+        <value>Loopback websocket port for the opendia browser extension (default 5555).</value>
+    </data>
     <data name="McpServerSettings_AgentAppId_Header" xml:space="preserve">
         <value>Agent app</value>
     </data>

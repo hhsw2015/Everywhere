@@ -30,6 +30,10 @@ public static class EverywhereMcpServiceExtensions
             return options;
         });
         services.AddSingleton<EverywhereMcpHttpHost>();
+        // Native opendia browser bridge (off by default, enabled via
+        // McpServerSettings.OpenDiaEnabled). The bridge is a singleton so
+        // status surfaces / future MCP tool factory can read its state.
+        services.TryAddSingleton<OpenDia.OpenDiaBridge>();
         // Avalonia GUI hosts don't run a generic-host pipeline, so expose the listener as
         // an explicit Start call instead of an IHostedService. Hosts that *do* run a
         // generic host can register the host as IHostedService themselves.

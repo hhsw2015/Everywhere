@@ -2256,6 +2256,18 @@ Scrollrad oder Zifferntasten zum Wechseln des Auswahlmodus</value>
     <data name="McpServerSettings_AutoCaptureContext_Description" xml:space="preserve">
         <value>Aktualisiert den Kontext-Stash beim Anheften eines UI-Elements per AgentPickElement-Hotkey, sodass der nächste Claude-Code-Prompt ihn aufnimmt. Standardmäßig aus. Für eine manuelle einmalige Erfassung den SnapshotContext-Hotkey verwenden.</value>
     </data>
+    <data name="McpServerSettings_OpenDiaEnabled_Header" xml:space="preserve">
+        <value>OpenDia Browser-Bridge</value>
+    </data>
+    <data name="McpServerSettings_OpenDiaEnabled_Description" xml:space="preserve">
+        <value>Wenn aktiviert, hört Everywhere auf einen lokalen WebSocket-Port für die opendia Chrome/Firefox-Erweiterung. Fügt MCP-Clients vollen Browser-Tool-Zugang (Inhalte extrahieren, klicken, Tabs, Verlauf) hinzu — ohne node.js. Erweiterung separat unter opendia.co installieren.</value>
+    </data>
+    <data name="McpServerSettings_OpenDiaPort_Header" xml:space="preserve">
+        <value>OpenDia-Port</value>
+    </data>
+    <data name="McpServerSettings_OpenDiaPort_Description" xml:space="preserve">
+        <value>Lokaler WebSocket-Port für die opendia-Erweiterung (Standard 5555).</value>
+    </data>
     <data name="McpServerSettings_AgentAppId_Header" xml:space="preserve">
         <value>Agent-App</value>
     </data>

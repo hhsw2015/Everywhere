@@ -2257,6 +2257,18 @@
     <data name="McpServerSettings_AutoCaptureContext_Description" xml:space="preserve">
         <value>켜면 AgentPickElement 단축키로 UI 요소를 고정할 때 컨텍스트 stash 도 함께 갱신되어 다음 Claude Code 프롬프트에 전달됩니다. 기본값은 꺼짐. 한 번만 수동 캡처하려면 SnapshotContext 단축키를 사용하세요.</value>
     </data>
+    <data name="McpServerSettings_OpenDiaEnabled_Header" xml:space="preserve">
+        <value>OpenDia 브라우저 브리지</value>
+    </data>
+    <data name="McpServerSettings_OpenDiaEnabled_Description" xml:space="preserve">
+        <value>활성화하면 Everywhere가 로컬 WebSocket 포트를 열어 opendia Chrome/Firefox 확장 프로그램을 받습니다. MCP 클라이언트에 전체 브라우저 조작 기능을 추가하며 node.js가 필요하지 않습니다. 확장은 opendia.co에서 별도 설치하세요.</value>
+    </data>
+    <data name="McpServerSettings_OpenDiaPort_Header" xml:space="preserve">
+        <value>OpenDia 포트</value>
+    </data>
+    <data name="McpServerSettings_OpenDiaPort_Description" xml:space="preserve">
+        <value>opendia 브라우저 확장이 연결하는 로컬 WebSocket 포트(기본 5555).</value>
+    </data>
     <data name="McpServerSettings_AgentAppId_Header" xml:space="preserve">
         <value>에이전트 앱</value>
     </data>

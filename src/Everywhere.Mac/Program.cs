@@ -105,6 +105,7 @@ public static class Program
                 .AddTransient<IAsyncInitializer, ClearContextStashHotkeyInitializer>()
                 .AddTransient<IAsyncInitializer, WhiteboardHotkeyInitializer>()
                 .AddTransient<IAsyncInitializer, LinkRectHotkeyInitializer>()
+                .AddTransient<IAsyncInitializer, Everywhere.Mcp.OpenDia.OpenDiaBridgeInitializer>()
                 .AddTransient<IAsyncInitializer>(sp => sp.GetRequiredService<Everywhere.Mcp.Snapshot.AutoCaptureService>())
 
             #endregion

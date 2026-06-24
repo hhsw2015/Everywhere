@@ -2256,6 +2256,18 @@ Seçim modunu değiştirmek için kaydırıcı veya rakam tuşlarını kullanın
     <data name="McpServerSettings_AutoCaptureContext_Description" xml:space="preserve">
         <value>Açıldığında, AgentPickElement kısayolu ile bir UI öğesi sabitlendiğinde bağlam stash dosyası da yenilenir; bir sonraki Claude Code istemi bunu alır. Varsayılan olarak kapalı. Tek seferlik manuel yakalama için SnapshotContext kısayolunu kullan.</value>
     </data>
+    <data name="McpServerSettings_OpenDiaEnabled_Header" xml:space="preserve">
+        <value>OpenDia tarayıcı köprüsü</value>
+    </data>
+    <data name="McpServerSettings_OpenDiaEnabled_Description" xml:space="preserve">
+        <value>Etkinleştirildiğinde Everywhere, opendia Chrome/Firefox uzantısı için yerel bir WebSocket portu açar. MCP istemcilerine tam tarayıcı erişimi (içerik çıkarma, tıklama, sekmeler, geçmiş) sağlar; node.js gerekmez. Uzantıyı opendia.co üzerinden ayrıca yükleyin.</value>
+    </data>
+    <data name="McpServerSettings_OpenDiaPort_Header" xml:space="preserve">
+        <value>OpenDia portu</value>
+    </data>
+    <data name="McpServerSettings_OpenDiaPort_Description" xml:space="preserve">
+        <value>opendia uzantısı için yerel WebSocket portu (varsayılan 5555).</value>
+    </data>
     <data name="McpServerSettings_AgentAppId_Header" xml:space="preserve">
         <value>Ajan uygulaması</value>
     </data>

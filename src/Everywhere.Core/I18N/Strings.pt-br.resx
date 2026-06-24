@@ -2258,6 +2258,18 @@ Use a roda do mouse ou teclas numéricas para alternar o modo de seleção</valu
     <data name="McpServerSettings_AutoCaptureContext_Description" xml:space="preserve">
         <value>Quando ativado, fixar um elemento de UI com o atalho AgentPickElement também atualiza o stash de contexto para o próximo prompt do Claude Code. Desativado por padrão. Para uma captura manual pontual, use o atalho SnapshotContext.</value>
     </data>
+    <data name="McpServerSettings_OpenDiaEnabled_Header" xml:space="preserve">
+        <value>Ponte de navegador OpenDia</value>
+    </data>
+    <data name="McpServerSettings_OpenDiaEnabled_Description" xml:space="preserve">
+        <value>Quando habilitado, o Everywhere escuta uma porta WebSocket local para a extensão opendia Chrome/Firefox. Adiciona aos clientes MCP acesso completo ao navegador (extração, clique, abas, histórico) sem node.js. Instale a extensão separadamente em opendia.co.</value>
+    </data>
+    <data name="McpServerSettings_OpenDiaPort_Header" xml:space="preserve">
+        <value>Porta OpenDia</value>
+    </data>
+    <data name="McpServerSettings_OpenDiaPort_Description" xml:space="preserve">
+        <value>Porta WebSocket local para a extensão opendia (padrão 5555).</value>
+    </data>
     <data name="McpServerSettings_AgentAppId_Header" xml:space="preserve">
         <value>App do agente</value>
     </data>

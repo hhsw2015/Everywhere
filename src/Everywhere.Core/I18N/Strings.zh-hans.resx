@@ -2270,6 +2270,18 @@
     <data name="McpServerSettings_AutoCaptureContext_Description" xml:space="preserve">
         <value>勾选后，按 AgentPickElement 热键固定 UI 元素时会顺带刷新上下文 stash，下一次 Claude Code 提问就能拿到。默认关闭。如果只想手动一次性捕获，按 SnapshotContext 热键。</value>
     </data>
+    <data name="McpServerSettings_OpenDiaEnabled_Header" xml:space="preserve">
+        <value>OpenDia 浏览器桥接</value>
+    </data>
+    <data name="McpServerSettings_OpenDiaEnabled_Description" xml:space="preserve">
+        <value>启用后，Everywhere 监听一个本地 websocket 端口供 opendia Chrome/Firefox 扩展连接。让 MCP 客户端获得完整的浏览器操作能力（提取内容、点击、表单、标签页、历史等），无需 node.js。请在 opendia.co 自行安装扩展。</value>
+    </data>
+    <data name="McpServerSettings_OpenDiaPort_Header" xml:space="preserve">
+        <value>OpenDia 端口</value>
+    </data>
+    <data name="McpServerSettings_OpenDiaPort_Description" xml:space="preserve">
+        <value>opendia 浏览器扩展连接的本地 websocket 端口（默认 5555）。</value>
+    </data>
     <data name="McpServerSettings_AgentAppId_Header" xml:space="preserve">
         <value>Agent 应用</value>
     </data>

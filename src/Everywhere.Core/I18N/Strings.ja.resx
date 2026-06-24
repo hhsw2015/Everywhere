@@ -2257,6 +2257,18 @@
     <data name="McpServerSettings_AutoCaptureContext_Description" xml:space="preserve">
         <value>オンにすると AgentPickElement ホットキーで UI 要素をピン留めしたときに併せてコンテキスト stash を更新します。次の Claude Code のプロンプトに自動で渡ります。既定はオフ。手動で一度だけ取りたいときは SnapshotContext ホットキーを使ってください。</value>
     </data>
+    <data name="McpServerSettings_OpenDiaEnabled_Header" xml:space="preserve">
+        <value>OpenDia ブラウザブリッジ</value>
+    </data>
+    <data name="McpServerSettings_OpenDiaEnabled_Description" xml:space="preserve">
+        <value>有効化すると Everywhere がローカル WebSocket ポートを開き opendia Chrome/Firefox 拡張機能を受け付けます。MCP クライアントに完全なブラウザ操作機能（コンテンツ抽出/クリック/タブ/履歴）が追加され、node.js 不要。拡張機能は opendia.co から個別にインストールしてください。</value>
+    </data>
+    <data name="McpServerSettings_OpenDiaPort_Header" xml:space="preserve">
+        <value>OpenDia ポート</value>
+    </data>
+    <data name="McpServerSettings_OpenDiaPort_Description" xml:space="preserve">
+        <value>opendia ブラウザ拡張機能が接続するローカル WebSocket ポート（既定 5555）。</value>
+    </data>
     <data name="McpServerSettings_AgentAppId_Header" xml:space="preserve">
         <value>エージェントアプリ</value>
     </data>
