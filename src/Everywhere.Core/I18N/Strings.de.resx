@@ -2262,6 +2262,12 @@ Scrollrad oder Zifferntasten zum Wechseln des Auswahlmodus</value>
     <data name="McpServerSettings_AgentAppId_Description" xml:space="preserve">
         <value>Wenn gesetzt, holt Everywhere diese App nach einer Kontext-Erfassung (per SnapshotContext-Hotkey oder AgentPickElement-Pin) in den Vordergrund, sodass du ohne manuellen Fensterwechsel weiter im KI-Agenten tippen kannst. Akzeptiert Bundle-ID (z. B. com.github.cmux), Programmnamen oder den lokalisierten App-Namen. Leer lassen zum Deaktivieren.</value>
     </data>
+    <data name="McpServerSettings_LaunchPhrase_Header" xml:space="preserve">
+        <value>Startphrase</value>
+    </data>
+    <data name="McpServerSettings_LaunchPhrase_Description" xml:space="preserve">
+        <value>Optional. Text, der automatisch in der Agent-App eingegeben und abgesendet wird, sobald Everywhere Inhalte erfasst hat. Leer lassen, um nur zu wechseln.</value>
+    </data>
     <data name="Strategy_BuiltIn_Browser_Name" xml:space="preserve">
         <value>Browser-Assistent</value>
     </data>

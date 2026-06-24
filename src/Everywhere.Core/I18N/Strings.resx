@@ -2275,6 +2275,12 @@ Use scroll wheel or number keys to switch selection mode</value>
     <data name="McpServerSettings_AgentAppId_Description" xml:space="preserve">
         <value>When set, Everywhere brings this app to the foreground after capturing context (via the SnapshotContext hotkey or AgentPickElement pin) so you can keep typing into your AI agent without manually switching windows. Accepts a bundle id (e.g. com.github.cmux), executable name, or localised app name. Leave empty to disable.</value>
     </data>
+    <data name="McpServerSettings_LaunchPhrase_Header" xml:space="preserve">
+        <value>Launch phrase</value>
+    </data>
+    <data name="McpServerSettings_LaunchPhrase_Description" xml:space="preserve">
+        <value>Optional text typed and submitted in the agent app right after Everywhere captures content (link batch, pick, whiteboard). Leave empty to raise the agent and let you type.</value>
+    </data>
     <data name="Strategy_BuiltIn_Browser_Name" xml:space="preserve">
         <value>Browser Assistant</value>
     </data>

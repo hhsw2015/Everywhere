@@ -2263,6 +2263,12 @@
     <data name="McpServerSettings_AgentAppId_Description" xml:space="preserve">
         <value>設定後，Everywhere 會在擷取上下文（透過 SnapshotContext 熱鍵或 AgentPickElement 釘選）之後自動把該應用程式帶到最上層，省去手動切換視窗。可填 bundle id（如 com.github.cmux）、執行檔名稱或本地化應用程式名。留空停用。</value>
     </data>
+    <data name="McpServerSettings_LaunchPhrase_Header" xml:space="preserve">
+        <value>啟動話術</value>
+    </data>
+    <data name="McpServerSettings_LaunchPhrase_Description" xml:space="preserve">
+        <value>選填。Everywhere 將內容遞交給智慧體後，自動在該應用輸入並回車的文本。留空則僅切換到智慧體，由你自行輸入。</value>
+    </data>
     <data name="Strategy_BuiltIn_Browser_Name" xml:space="preserve">
         <value>瀏覽器助手</value>
     </data>

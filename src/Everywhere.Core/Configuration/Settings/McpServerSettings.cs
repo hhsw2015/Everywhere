@@ -61,6 +61,20 @@ public sealed partial class McpServerSettings : SettingsBase, ISettingsCategory
     public partial string AgentAppId { get; set; } = string.Empty;
 
     /// <summary>
+    /// Optional kick-off phrase typed into the agent app + Enter after
+    /// Everywhere has captured user-picked context (LinkRect harvest, pick,
+    /// whiteboard region) AND raised the agent app to the front. Only fires
+    /// when this is non-empty AND the capture actually produced data —
+    /// blank phrase means "raise the agent and let me type".
+    /// </summary>
+    [ObservableProperty]
+    [DynamicResourceKey(
+        LocaleKey.McpServerSettings_LaunchPhrase_Header,
+        LocaleKey.McpServerSettings_LaunchPhrase_Description)]
+    [SettingsStringItem(Watermark = "take a look")]
+    public partial string LaunchPhrase { get; set; } = string.Empty;
+
+    /// <summary>
     /// User-registered local web apps that self-describe their agent skills
     /// at a /.well-known/-style URL. ContextStashWriter matches the active
     /// window title against each entry's regex; on hit, it injects a hint

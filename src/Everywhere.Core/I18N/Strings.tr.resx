@@ -2262,6 +2262,12 @@ Seçim modunu değiştirmek için kaydırıcı veya rakam tuşlarını kullanın
     <data name="McpServerSettings_AgentAppId_Description" xml:space="preserve">
         <value>Doldurulduğunda, Everywhere bağlam yakalandıktan sonra (SnapshotContext kısayolu veya AgentPickElement sabitlemesi) bu uygulamayı öne getirir; pencere değiştirmeden AI ajanına yazmaya devam edebilirsin. Bundle id (örn. com.github.cmux), çalıştırılabilir dosya adı veya yerelleştirilmiş uygulama adı kabul eder. Devre dışı bırakmak için boş bırak.</value>
     </data>
+    <data name="McpServerSettings_LaunchPhrase_Header" xml:space="preserve">
+        <value>Başlatma ifadesi</value>
+    </data>
+    <data name="McpServerSettings_LaunchPhrase_Description" xml:space="preserve">
+        <value>İsteğe bağlı. Everywhere içerik yakaladıktan hemen sonra ajan uygulamasına otomatik girilip gönderilen metin. Boş bırakılırsa yalnızca uygulamaya geçilir.</value>
+    </data>
     <data name="Strategy_BuiltIn_Browser_Name" xml:space="preserve">
         <value>Tarayıcı Asistanı</value>
     </data>

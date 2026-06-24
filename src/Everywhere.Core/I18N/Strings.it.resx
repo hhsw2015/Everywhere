@@ -2263,6 +2263,12 @@ Rotella o tasti numerici per cambiare modalità di selezione</value>
     <data name="McpServerSettings_AgentAppId_Description" xml:space="preserve">
         <value>Se impostata, Everywhere porta questa app in primo piano dopo una cattura di contesto (tramite la scorciatoia SnapshotContext o il pin di AgentPickElement), così puoi continuare a digitare nel tuo agente IA senza cambiare finestra. Accetta bundle id (es. com.github.cmux), nome dell'eseguibile o nome localizzato dell'app. Lascia vuoto per disabilitare.</value>
     </data>
+    <data name="McpServerSettings_LaunchPhrase_Header" xml:space="preserve">
+        <value>Frase di avvio</value>
+    </data>
+    <data name="McpServerSettings_LaunchPhrase_Description" xml:space="preserve">
+        <value>Facoltativo. Testo digitato e inviato automaticamente nell'app dell'agente subito dopo la cattura. Vuoto = solo passare all'app.</value>
+    </data>
     <data name="Strategy_BuiltIn_Browser_Name" xml:space="preserve">
         <value>Assistente Browser</value>
     </data>

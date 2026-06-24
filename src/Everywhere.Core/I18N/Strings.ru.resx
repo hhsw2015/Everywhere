@@ -2263,6 +2263,12 @@
     <data name="McpServerSettings_AgentAppId_Description" xml:space="preserve">
         <value>Если задано, Everywhere после захвата контекста (горячая клавиша SnapshotContext или закрепление AgentPickElement) выводит это приложение на передний план, чтобы вы могли продолжать ввод в ИИ-агента без ручного переключения окон. Принимает bundle id (например, com.github.cmux), имя исполняемого файла или локализованное имя приложения. Оставьте пустым, чтобы отключить.</value>
     </data>
+    <data name="McpServerSettings_LaunchPhrase_Header" xml:space="preserve">
+        <value>Фраза запуска</value>
+    </data>
+    <data name="McpServerSettings_LaunchPhrase_Description" xml:space="preserve">
+        <value>Необязательно. Текст, автоматически вводимый и отправляемый в приложение агента сразу после захвата контента. Пусто — только переключение.</value>
+    </data>
     <data name="Strategy_BuiltIn_Browser_Name" xml:space="preserve">
         <value>Помощник браузера</value>
     </data>

@@ -2276,6 +2276,12 @@
     <data name="McpServerSettings_AgentAppId_Description" xml:space="preserve">
         <value>填写后，Everywhere 在抓取上下文（通过 SnapshotContext 热键或 AgentPickElement 固定）之后会自动把该应用切到前台，免去你手动切换窗口的麻烦。可以是 bundle id（例如 com.github.cmux）、可执行文件名或本地化应用名。留空则禁用。</value>
     </data>
+    <data name="McpServerSettings_LaunchPhrase_Header" xml:space="preserve">
+        <value>启动话术</value>
+    </data>
+    <data name="McpServerSettings_LaunchPhrase_Description" xml:space="preserve">
+        <value>可选。Everywhere 把内容感知到智能体后，自动在该应用输入并回车的文本（如 &quot;take a look&quot;）。留空则只切换到智能体，由你自己输入。</value>
+    </data>
     <data name="Strategy_BuiltIn_Browser_Name" xml:space="preserve">
         <value>浏览器助手</value>
     </data>

@@ -34,6 +34,8 @@ public sealed class ContextStashWriter
     private readonly PickStash _pickStash;
     private readonly WhiteboardStash _whiteboardStash;
     private readonly IAppActivator _appActivator;
+    private readonly IInputSimulator _input;
+    private readonly IClipboardReader _clipboard;
     private readonly Settings _settings;
     private readonly ILogger<ContextStashWriter> _logger;
     private readonly SemaphoreSlim _writeLock = new(1, 1);
@@ -45,6 +47,8 @@ public sealed class ContextStashWriter
         PickStash pickStash,
         WhiteboardStash whiteboardStash,
         IAppActivator appActivator,
+        IInputSimulator input,
+        IClipboardReader clipboard,
         Settings settings,
         ILogger<ContextStashWriter> logger)
     {
@@ -54,6 +58,8 @@ public sealed class ContextStashWriter
         _pickStash = pickStash;
         _whiteboardStash = whiteboardStash;
         _appActivator = appActivator;
+        _input = input;
+        _clipboard = clipboard;
         _settings = settings;
         _logger = logger;
     }
@@ -250,6 +256,12 @@ public sealed class ContextStashWriter
                 return;
             }
 
+            // Pick up any xlb shift-multi-pick batch sitting on the
+            // clipboard (sentinel-prefixed) so a single SnapshotContext
+            // press carries both the window snapshot AND the URL list
+            // the user just collected. Sentinel guard ensures arbitrary
+            // clipboard text is never harvested.
+            var clipboardLinks = TryReadXlbMultiPick();
             var payload = new ContextSnapshotPayload(
                 SchemaVersion: CurrentSchemaVersion,
                 CapturedAtUtc: DateTimeOffset.UtcNow,
@@ -261,7 +273,8 @@ public sealed class ContextStashWriter
                 SelectedApp: selectionApp,
                 PinPending: pinPending ? true : null,
                 WhiteboardPending: whiteboardPending ? true : null,
-                WhiteboardRegionCount: whiteboardPending ? whiteboardRegions!.Count : null);
+                WhiteboardRegionCount: whiteboardPending ? whiteboardRegions!.Count : null,
+                PickedLinks: clipboardLinks);
 
             await WriteAtomicAsync(FormatForHook(payload), cancellationToken);
             _logger.LogInformation("Context stash captured for {App} ({Title}).", appKey, topLevel?.Name);
@@ -309,7 +322,77 @@ public sealed class ContextStashWriter
             return;
         }
         if (!raised) return;
+        TryFireLaunchPhrase(id);
+    }
 
+    /// <summary>
+    /// After raising the agent app, optionally type a user-configured phrase
+    /// + Enter so the agent immediately acts on whatever Everywhere just
+    /// captured. Only reached via ActivateAgentApp() which is only called
+    /// after a successful stash write — empty/no-op captures can never
+    /// trigger an injection. Skipped when phrase is blank.
+    /// </summary>
+    private const string XlbMultiPickSentinel = "xlb-multi-pick://";
+
+    /// <summary>
+    /// Look at the system clipboard for xlinkBook's shift-multi-pick batch:
+    ///     xlb-multi-pick://
+    ///     https://...
+    ///     https://...
+    /// Anything not preceded by the sentinel is ignored — random clipboard
+    /// text never lands in the agent context.
+    /// </summary>
+    private IReadOnlyList<PickedLink>? TryReadXlbMultiPick()
+    {
+        string? raw;
+        try { raw = _clipboard.GetText(); }
+        catch { return null; }
+        if (string.IsNullOrWhiteSpace(raw)) return null;
+        var trimmed = raw.TrimStart();
+        if (!trimmed.StartsWith(XlbMultiPickSentinel, StringComparison.OrdinalIgnoreCase))
+            return null;
+        var lines = trimmed.Split('\n', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        var picked = new List<PickedLink>(Math.Min(lines.Length, 200));
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var line in lines)
+        {
+            if (line.StartsWith(XlbMultiPickSentinel, StringComparison.OrdinalIgnoreCase)) continue;
+            if (line.Length > 2048) continue;
+            if (!Uri.TryCreate(line, UriKind.Absolute, out var u)) continue;
+            if (u.Scheme is not ("http" or "https" or "mailto")) continue;
+            var canonical = u.ToString();
+            if (!seen.Add(canonical)) continue;
+            picked.Add(new PickedLink(canonical, canonical));
+            if (picked.Count >= 200) break;
+        }
+        return picked.Count == 0 ? null : picked;
+    }
+
+    private void TryFireLaunchPhrase(string agentAppId)
+    {
+        var phrase = _settings.McpServer.LaunchPhrase;
+        if (string.IsNullOrWhiteSpace(phrase)) return;
+        // Fire-and-forget. Wait long enough for the just-raised agent app
+        // to actually receive keyboard focus before injecting — macOS
+        // raise is async and typing into the previously-focused app is
+        // the mis-fire we want to avoid. If the user manually clicks
+        // away during this window the stroke lands wherever they
+        // landed; that's their choice and matches every other "send
+        // hotkey to frontmost" tool's behavior.
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await Task.Delay(450);
+                _input.TypeText(phrase);
+                _input.PressKey("Return");
+                _logger.LogInformation("LaunchPhrase fired ({Len} chars) into {Id}.", phrase.Length, agentAppId);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "LaunchPhrase injection failed");
+            }
+        });
     }
 
     /// <summary>
