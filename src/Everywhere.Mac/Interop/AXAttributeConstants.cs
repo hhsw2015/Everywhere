@@ -39,15 +39,17 @@ public static class AXAttributeConstants
     // toggles respond to Confirm, files respond to Open, context menus
     // are surfaced via ShowMenu). Calling the wrong verb returns
     // AXError.ActionUnsupported, so we walk a fallback chain.
-    // ponytail: Press is special — pre-allocated as a static field
-    // its underlying CFString handle came back as 0x0 in production
-    // (v0.9.100 perform.log). Cause unknown; possibly AOT init order
-    // or trim removal. Allocate lazily via a property; trades one
-    // alloc per click chain for a guaranteed live handle. Confirm /
-    // Open / ShowMenu are kept as static fields — they work — until
-    // proven they hit the same issue.
-    private static NSString? _press;
-    public static NSString Press => _press ??= new NSString("AXPress");
+    // ponytail: Press's underlying CFString handle keeps coming back
+    // as 0x0. v0.9.100: static readonly field → handle=0x0. v0.9.101:
+    // lazy property cached in `_press` → first call worked
+    // (handle=0xBEB4...), second call back to handle=0x0. The cached
+    // NSObject is being GC'd / its native handle released between
+    // clicks. A normal field anchor is not enough; the .NET–ObjC
+    // binding releases the underlying CFString once nothing points
+    // at the managed instance through a strong root the runtime
+    // recognizes. Allocate fresh every read — cheap (one Foundation
+    // call) and guaranteed live for the duration of the call site.
+    public static NSString Press => new NSString("AXPress");
     public static readonly NSString Confirm = new("AXConfirm");
     public static readonly NSString Open = new("AXOpen");
     public static readonly NSString ShowMenu = new("AXShowMenu");
