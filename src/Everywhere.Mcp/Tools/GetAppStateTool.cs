@@ -66,7 +66,10 @@ public static class GetAppStateTool
                 WindowTitle = window.Name,
                 WindowBounds = new WindowBounds(bounds.X, bounds.Y, bounds.Width, bounds.Height),
                 ScreenshotPngBase64 = screenshotBase64,
-                TreeText = treeText,
+                TreeText = SnapshotRenderer.AppendOccuFooter(
+                    treeText,
+                    context.FocusedElement?.GetSelectionText(),
+                    context.FocusedElement?.Name),
                 // ponytail: TreeJson is a 1:1 duplicate of TreeText (same
                 // tree, JSON shape) and roughly doubles the payload —
                 // 30KB → 60KB on Calculator, splattering across the MCP

@@ -68,7 +68,10 @@ public static class GetFocusedContextTool
                 WindowTitle = topLevel.Name,
                 WindowBounds = new WindowBounds(bounds.X, bounds.Y, bounds.Width, bounds.Height),
                 ScreenshotPngBase64 = screenshot,
-                TreeText = SnapshotRenderer.Render(nodes, showFullText: false),
+                TreeText = SnapshotRenderer.AppendOccuFooter(
+                    SnapshotRenderer.Render(nodes, showFullText: false),
+                    focused.GetSelectionText(),
+                    focused.Name),
                 FocusedSummary = focused.Name,
                 SelectedText = focused.GetSelectionText(),
                 OmittedChildren = omitted,

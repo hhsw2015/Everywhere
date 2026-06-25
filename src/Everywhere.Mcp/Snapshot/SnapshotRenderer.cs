@@ -16,6 +16,51 @@ namespace Everywhere.Mcp.Snapshot;
 /// </summary>
 public static class SnapshotRenderer
 {
+    /// <summary>
+    /// 1:1 OCCU AccessibilitySnapshot.renderedText (AS L71-89):
+    ///   App=&lt;ref&gt; (pid &lt;N&gt;)
+    ///   Window: "&lt;title&gt;", App: &lt;name&gt;.
+    ///   &lt;tree lines&gt;
+    ///   [blank]
+    ///   Selected text: [...]            (when non-empty)
+    ///   The focused UI element is X.    (else, when summary non-empty)
+    /// </summary>
+    public static string WrapOccu(
+        string appReference, int pid, string? windowTitle, string appName,
+        string treeText, string? selectedText, string? focusedSummary)
+    {
+        var sb = new StringBuilder();
+        sb.Append("App=").Append(appReference).Append(" (pid ").Append(pid).Append(")\n");
+        sb.Append("Window: \"").Append(windowTitle ?? "").Append("\", App: ").Append(appName).Append(".\n");
+        sb.Append(treeText);
+        if (!string.IsNullOrEmpty(selectedText))
+        {
+            sb.Append("\n\nSelected text: [").Append(selectedText).Append("]");
+        }
+        else if (!string.IsNullOrEmpty(focusedSummary))
+        {
+            sb.Append("\n\nThe focused UI element is ").Append(focusedSummary).Append(".");
+        }
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// Footer-only helper: appends OCCU's "Selected text" / "focused UI
+    /// element" trailer to an already-rendered tree.
+    /// </summary>
+    public static string AppendOccuFooter(string treeText, string? selectedText, string? focusedSummary)
+    {
+        if (!string.IsNullOrEmpty(selectedText))
+        {
+            return treeText + "\n\nSelected text: [" + selectedText + "]";
+        }
+        if (!string.IsNullOrEmpty(focusedSummary))
+        {
+            return treeText + "\n\nThe focused UI element is " + focusedSummary + ".";
+        }
+        return treeText;
+    }
+
     public static string Render(IReadOnlyList<ElementIndexer.IndexedNode> nodes, bool showFullText)
     {
         ArgumentNullException.ThrowIfNull(nodes);

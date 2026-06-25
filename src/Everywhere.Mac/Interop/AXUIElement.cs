@@ -610,9 +610,9 @@ public partial class AXUIElement : NSObject, IVisualElement
         if (TryPerformActionGated(AXAttributeConstants.Confirm, available, clickCount)) { Thread.Sleep(150); return; }
         if (TryPerformActionGated(AXAttributeConstants.Open, available, clickCount)) { Thread.Sleep(150); return; }
 
-        // 3. Last-ditch: surface ShowMenu (right-click semantics) for
-        //    targets that only react to context menus.
-        if (TryPerformActionGated(AXAttributeConstants.ShowMenu, available, clickCount)) { Thread.Sleep(150); return; }
+        // (ShowMenu intentionally NOT tried here — OCCU reserves it
+        // for right-click only, CUS L724-727. Surfacing it on left
+        // click would invert the user's intent.)
 
         // 4. OCCU descendantClickCandidates (CUS L1040): if neither this
         //    element nor its list-item parent advertised a Press, walk

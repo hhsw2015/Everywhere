@@ -38,26 +38,28 @@ public sealed class FocusBorrow
         {
             // 1:1 OCCU prepareAppForGlobalPointerInput
             // (InputSimulation.swift L48-56):
-            //   raiseAppWindowViaAccessibility(pid)
-            //   Thread.sleep(0.12)
-            //   app.runningApplication.activate([])
-            //   Thread.sleep(0.25)
-            // OCCU runs the full sequence every time — no
-            // "skip if already foreground" early-exit. SwiftUI gestures
-            // need the activate-after-raise pump even when the app
-            // already looks frontmost; skipping it was masking races on
-            // Calculator. Match OCCU literally.
-            _backend.TryAxRaise(targetWindow);
-            Thread.Sleep(UpstreamConstants.FocusAxRaiseDelay);
-            if (processId > 0)
+            //   if raiseAppWindowViaAccessibility(pid) { sleep 120ms; return }
+            //   else { activate([.activateAllWindows]); sleep 250ms }
+            // OCCU short-circuits after a successful AXRaise — the
+            // activate-all-windows leg only runs as fallback when AX
+            // refused. We previously ran BOTH legs unconditionally
+            // (extra 250ms per click); match OCCU.
+            if (_backend.TryAxRaise(targetWindow))
             {
-                _backend.ActivateProcess(processId);
+                Thread.Sleep(UpstreamConstants.FocusAxRaiseDelay);
             }
             else
             {
-                _backend.Activate(targetWindow);
+                if (processId > 0)
+                {
+                    _backend.ActivateProcess(processId);
+                }
+                else
+                {
+                    _backend.Activate(targetWindow);
+                }
+                Thread.Sleep(UpstreamConstants.FocusActivateDelay);
             }
-            Thread.Sleep(UpstreamConstants.FocusActivateDelay);
         }
         catch
         {

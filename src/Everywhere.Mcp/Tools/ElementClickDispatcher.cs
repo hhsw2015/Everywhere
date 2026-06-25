@@ -131,10 +131,15 @@ internal static class ElementClickDispatcher
 
         try
         {
-            // OCCU performAction repeats the verb clickCount times.
-            // Right-click is handled differently — only AXShowMenu is
-            // tried, never Press/Confirm/Open. We delegate to
-            // TryInvokeAction("ShowMenu") for that case.
+            // 1:1 OCCU performPreferredClick (ComputerUseService.swift
+            // L699-732):
+            //   .left   → selectContainingListItem / AXPress / AXConfirm / AXOpen
+            //   .right  → AXShowMenu only
+            //   .middle → break (no AX verb attempted; falls to coord)
+            //
+            // Each verb fires only when the element advertises it; on
+            // miss we throw and the catch below runs the coord fallback,
+            // mirroring OCCU's performNonAXClickFallback path.
             if (mouseButton == MouseButton.Right)
             {
                 if (element.TryInvokeAction("showmenu"))
@@ -142,6 +147,12 @@ internal static class ElementClickDispatcher
                     return new CallToolResult { Content = [new TextContentBlock { Text = "ok (right-click → ShowMenu)" }] };
                 }
                 throw new InvalidOperationException("right-click requires AXShowMenu, which the element does not advertise");
+            }
+            if (mouseButton == MouseButton.Middle)
+            {
+                // OCCU L728-729: case .middle: break — no AX action
+                // attempted, drop straight to coord fallback.
+                throw new InvalidOperationException("middle-click has no AX action; deferring to coordinate fallback");
             }
             element.Invoke(clickCount);
             return new CallToolResult { Content = [new TextContentBlock { Text = "ok" }] };
@@ -186,29 +197,38 @@ internal static class ElementClickDispatcher
                             : null;
                         try
                         {
-                            // 1:1 OCCU port. OCCU's nominal default is
-                            // PostToPid (ComputerUseService.swift L1668-1672),
-                            // but its actual "make SwiftUI Calculator work"
-                            // mode is the GLOBAL physical-pointer path,
-                            // gated behind OPEN_COMPUTER_USE_ALLOW_GLOBAL_POINTER_FALLBACKS=1
-                            // (L1656-1664) which calls
-                            // prepareAppForGlobalPointerInput
-                            // (InputSimulation.swift L48-56: AXRaise +
-                            // NSRunningApplication.activate + 120ms + 250ms)
-                            // then clickGlobally (HidSystemState +
-                            // .cghidEventTap, L58-67).
+                            // 1:1 OCCU performNonAXClickFallback
+                            // (ComputerUseService.swift L1647-1684).
                             //
-                            // For Everywhere we always enable that mode
-                            // because our entire product hinges on
-                            // SwiftUI / Electron / unusual apps working.
-                            // FocusBorrow.Acquire above is the .NET mirror
-                            // of prepareAppForGlobalPointerInput (Spec §7
-                            // documents the AXRaise → 120ms → activate →
-                            // 250ms sequence). targetPid=null routes
-                            // MacInputSimulator.Click through HidSystemState
-                            // + global event-tap, matching OCCU L60-67.
+                            // OCCU default = targeted PostToPid (L1668-1672):
+                            // no cursor warp, no focus steal — events go
+                            // straight to the app's run loop. Works for
+                            // AppKit; SwiftUI / Electron with
+                            // NSGestureRecognizer on the global tap may
+                            // silently ignore them.
+                            //
+                            // OCCU global path (L1656-1664) runs
+                            // prepareAppForGlobalPointerInput + clickGlobally
+                            // and ONLY fires when env
+                            // OPEN_COMPUTER_USE_ALLOW_GLOBAL_POINTER_FALLBACKS=1.
+                            // That mode steals foreground focus and races
+                            // physical cursor. Opt-in is the right default
+                            // because the cure (focus theft) is worse than
+                            // the disease for most apps.
+                            //
+                            // We mirror the env flag name with EVERYWHERE_*
+                            // prefix.
+                            var allowGlobal = Environment.GetEnvironmentVariable(
+                                "EVERYWHERE_ALLOW_GLOBAL_POINTER_FALLBACKS") == "1";
+                            if (Environment.GetEnvironmentVariable("EVERYWHERE_DEBUG_INPUT_FALLBACKS") == "1")
+                            {
+                                // OCCU debugInputFallback (CUS L1566-1575):
+                                // single stderr line per coord fallback.
+                                Console.Error.WriteLine(
+                                    $"[everywhere] {(allowGlobal ? "global" : "targeted")} pointer fallback tool=click app={appHint ?? "?"} target=({cx},{cy})");
+                            }
                             input.Click(cx, cy, clickCount, mouseButton,
-                                targetPid: null);
+                                targetPid: allowGlobal ? null : resolved?.ProcessId);
                         }
                         finally
                         {
@@ -224,31 +244,12 @@ internal static class ElementClickDispatcher
                     }
                     catch (Exception coordEx)
                     {
-                        // Last-ditch: keyboard fallback. OCCU
-                        // canUseKeyboardTextFallback (CUS L285) — for
-                        // text-shaped elements (TextField/TextArea/
-                        // settable values) Space/Return acts like
-                        // click-to-activate. We use Space because it's
-                        // the AppKit convention for buttons, and
-                        // textfields ignore it as a no-op so the chain
-                        // is safe.
-                        if (input is not null && resolved is not null
-                            && (element.Type is VisualElementType.Button
-                                or VisualElementType.CheckBox
-                                or VisualElementType.RadioButton))
-                        {
-                            try
-                            {
-                                input.PressKey("space", targetPid: resolved.Value.ProcessId);
-                                return new CallToolResult { Content = [new TextContentBlock
-                                {
-                                    Text = $"ok (AX failed: {axEx.Message}; coord failed: {coordEx.Message}; keyboard space fallback succeeded)",
-                                }] };
-                            }
-                            catch { /* truly nothing worked */ }
-                        }
+                        // 1:1 OCCU: when both AX and coord fallback fail,
+                        // OCCU throws (CUS L1675-1679). No keyboard
+                        // fallback layer on top — that was our
+                        // extension; drop it.
                         return ToolErrors.Error(
-                            $"AX action chain failed ({axEx.Message}) and coordinate fallback failed ({coordEx.Message}).");
+                            $"click could not be handled through accessibility ({axEx.Message}) and coordinate fallback failed ({coordEx.Message}). Set EVERYWHERE_ALLOW_GLOBAL_POINTER_FALLBACKS=1 to allow physical-pointer fallback.");
                     }
                 }
             }

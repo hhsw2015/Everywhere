@@ -69,12 +69,17 @@ public static class GetAppContextTool
                 WindowTitle = window.Name,
                 WindowBounds = new WindowBounds(bounds.X, bounds.Y, bounds.Width, bounds.Height),
                 ScreenshotPngBase64 = screenshotBase64,
-                TreeText = treeText,
+                TreeText = SnapshotRenderer.AppendOccuFooter(
+                    treeText,
+                    context.FocusedElement?.GetSelectionText(),
+                    context.FocusedElement?.Name),
                 // ponytail: TreeJson duplicates TreeText, ~doubles payload.
                 // Opt in via env when an old client needs it.
                 TreeJson = Environment.GetEnvironmentVariable("EVERYWHERE_INCLUDE_TREE_JSON") == "1"
                     ? TreeJsonBuilder.Build(nodes)
                     : null,
+                FocusedSummary = context.FocusedElement?.Name,
+                SelectedText = context.FocusedElement?.GetSelectionText(),
             };
             SemanticEnricher.Apply(inner, nodes);
 
