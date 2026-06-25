@@ -25,7 +25,9 @@ public static class GetFocusedContextTool
         IVisualElementContext context,
         SessionStore sessions,
         CancellationToken cancellationToken,
-        int? budget = null)
+        int? budget = null,
+        bool include_screenshot = false,
+        bool include_tree_json = false)
     {
         try
         {
@@ -50,10 +52,20 @@ public static class GetFocusedContextTool
             var totalDescendants = topLevel.GetDescendants(includeSelf: true).Count();
             var omitted = totalDescendants > nodes.Count;
 
-            // ponytail: never inline the base64 screenshot (see
-            // GetAppContextTool). Callers wanting an image hit the
-            // dedicated `screenshot` tool.
+            // ponytail: see GetAppContextTool. Default off, opt in per call.
             string? screenshot = null;
+            if (include_screenshot)
+            {
+                try
+                {
+                    using var captured = await topLevel.CaptureAsync(cancellationToken);
+                    screenshot = ScreenshotEncoder.EncodeBase64(captured);
+                }
+                catch
+                {
+                    // best-effort screenshot.
+                }
+            }
 
             var bounds = topLevel.BoundingRectangle;
             var result = new FocusedContextResult
@@ -70,10 +82,8 @@ public static class GetFocusedContextTool
                 SelectedText = focused.GetSelectionText(),
                 OmittedChildren = omitted,
                 OmittedNodeCount = Math.Max(0, totalDescendants - nodes.Count),
-                // ponytail: TreeJson duplicates TreeText. Opt-in only.
-                TreeJson = Environment.GetEnvironmentVariable("EVERYWHERE_INCLUDE_TREE_JSON") == "1"
-                    ? TreeJsonBuilder.Build(nodes)
-                    : null,
+                // ponytail: TreeJson duplicates TreeText. Default omit, opt in per call.
+                TreeJson = include_tree_json ? TreeJsonBuilder.Build(nodes) : null,
             };
             SemanticEnricher.Apply(result, nodes);
 

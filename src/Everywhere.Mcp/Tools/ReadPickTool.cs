@@ -28,7 +28,8 @@ public static class ReadPickTool
     public static CallToolResult ReadPick(
         PickStash stash,
         SessionStore sessions,
-        [Description("Output mode: auto | links | text | full. Default auto.")] string? mode = null)
+        [Description("Output mode: auto | links | text | full. Default auto.")] string? mode = null,
+        bool include_tree_json = false)
     {
         try
         {
@@ -79,10 +80,8 @@ public static class ReadPickTool
                     WindowBounds = new WindowBounds(bounds.X, bounds.Y, bounds.Width, bounds.Height),
                     FocusedSummary = picked.GetText(maxLength: UpstreamConstants.SnapshotTextDefaultCharacterLimit),
                     TreeText = SnapshotRenderer.Render(nodes, showFullText: false),
-                    // ponytail: TreeJson duplicates TreeText. Opt-in only.
-                    TreeJson = Environment.GetEnvironmentVariable("EVERYWHERE_INCLUDE_TREE_JSON") == "1"
-                        ? TreeJsonBuilder.Build(nodes)
-                        : null,
+                    // ponytail: TreeJson duplicates TreeText. Default omit, opt in per call.
+                    TreeJson = include_tree_json ? TreeJsonBuilder.Build(nodes) : null,
                 };
                 SemanticEnricher.Apply(payload, nodes);
                 element = payload;

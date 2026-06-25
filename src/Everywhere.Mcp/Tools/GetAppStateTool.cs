@@ -30,7 +30,9 @@ public static class GetAppStateTool
         FocusBorrow focusBorrow,
         CancellationToken cancellationToken,
         bool show_full_text = false,
-        bool raise_if_needed = false)
+        bool raise_if_needed = false,
+        bool include_screenshot = false,
+        bool include_tree_json = false)
     {
         try
         {
@@ -48,10 +50,20 @@ public static class GetAppStateTool
 
             var treeText = SnapshotRenderer.Render(nodes, show_full_text);
 
-            // ponytail: never inline the base64 screenshot (see
-            // GetAppContextTool). Callers wanting an image hit the
-            // dedicated `screenshot` tool.
+            // ponytail: see GetAppContextTool. Default off, opt in per call.
             string? screenshotBase64 = null;
+            if (include_screenshot)
+            {
+                try
+                {
+                    using var captured = await window.CaptureAsync(cancellationToken);
+                    screenshotBase64 = ScreenshotEncoder.EncodeBase64(captured);
+                }
+                catch
+                {
+                    // best-effort screenshot.
+                }
+            }
 
             var bounds = window.BoundingRectangle;
             var result = new AppStateResult
@@ -67,12 +79,8 @@ public static class GetAppStateTool
                 // ponytail: TreeJson is a 1:1 duplicate of TreeText (same
                 // tree, JSON shape) and roughly doubles the payload —
                 // 30KB → 60KB on Calculator, splattering across the MCP
-                // 25k-token result cap. Default omit; opt in by env so
-                // existing clients can still get it.
-                // ponytail: env-flag opt-in, drop entirely if no client asks.
-                TreeJson = Environment.GetEnvironmentVariable("EVERYWHERE_INCLUDE_TREE_JSON") == "1"
-                    ? TreeJsonBuilder.Build(nodes)
-                    : null,
+                // ponytail: TreeJson duplicates TreeText. Default omit, opt in per call.
+                TreeJson = include_tree_json ? TreeJsonBuilder.Build(nodes) : null,
                 FocusedSummary = context.FocusedElement?.Name,
                 SelectedText = context.FocusedElement?.GetSelectionText(),
             };

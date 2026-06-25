@@ -15,7 +15,8 @@ public static class ExpandElementTool
     public static CallToolResult ExpandElement(
         string element_index,
         SessionStore sessions,
-        int? budget = null)
+        int? budget = null,
+        bool include_tree_json = false)
     {
         try
         {
@@ -38,10 +39,8 @@ public static class ExpandElementTool
                 WindowTitle = element.Name,
                 WindowBounds = new WindowBounds(bounds.X, bounds.Y, bounds.Width, bounds.Height),
                 TreeText = SnapshotRenderer.Render(nodes, showFullText: false),
-                // ponytail: TreeJson duplicates TreeText. Opt-in only.
-                TreeJson = Environment.GetEnvironmentVariable("EVERYWHERE_INCLUDE_TREE_JSON") == "1"
-                    ? TreeJsonBuilder.Build(nodes)
-                    : null,
+                // ponytail: TreeJson duplicates TreeText. Default omit, opt in per call.
+                TreeJson = include_tree_json ? TreeJsonBuilder.Build(nodes) : null,
             };
             SemanticEnricher.Apply(payload, nodes);
 
