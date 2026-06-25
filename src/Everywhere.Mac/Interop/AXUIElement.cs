@@ -621,7 +621,16 @@ public partial class AXUIElement : NSObject, IVisualElement
         //    is a wrapper Group around the real Button.
         if (TryDescendantClick(this, depth: 0, clickCount)) { Thread.Sleep(150); return; }
 
-        // 5. OCCU activateClickTarget (CUS L915): for left-click on
+        // 5. OCCU includeNearbyHitTesting (CUS L838-869): before
+        //    activation/coord fallback, do AXHitTest at clickActionPoints
+        //    (center + leading offset, OCCU CUS L173-189) and try each
+        //    hit-record. SwiftUI buttons whose own AXPress no-ops often
+        //    have a child Group / shape element at the same hit-point
+        //    whose AXPress works. Without this retry we drop straight
+        //    to coord on Calculator-style apps.
+        if (TryNearbyHitTest(clickCount)) { Thread.Sleep(150); return; }
+
+        // 6. OCCU activateClickTarget (CUS L915): for left-click on
         //    activation-only roles (AXWindow), AXRaise + setMain +
         //    setFocused gives the agent a 'click that brings to front'
         //    even when no action verb fits.
@@ -634,6 +643,52 @@ public partial class AXUIElement : NSObject, IVisualElement
         // dispatcher catches and runs the coord fallback.
         throw new InvalidOperationException(
             $"No supported AX action available (role={Role}, actions=[{string.Join(",", available)}])");
+    }
+
+    /// <summary>
+    /// OCCU CUS L838-869 + L173-189: hit-test at a small set of points
+    /// inside this element's frame (center + a "leading" offset) and
+    /// try AX click chain on whatever element AXHitTest returns there.
+    /// SwiftUI binds AXPress to a child gesture target whose ref the
+    /// snapshot walker never reached; hit-test surfaces it.
+    /// </summary>
+    private bool TryNearbyHitTest(int clickCount)
+    {
+        var bounds = BoundingRectangle;
+        if (bounds.Width <= 0 || bounds.Height <= 0) return false;
+
+        var app = ElementFromPid(ProcessId);
+        if (app is null) return false;
+
+        // OCCU localClickActionPoints (CUS L173-189): center always,
+        // plus a leading point at min(max(w*0.3, 20), max(w-4, 20))
+        // from the left edge. Skip leading if it collapses onto center.
+        var center = (X: (float)(bounds.X + bounds.Width / 2.0), Y: (float)(bounds.Y + bounds.Height / 2.0));
+        var leadingOffset = Math.Min(Math.Max(bounds.Width * 0.3, 20), Math.Max(bounds.Width - 4, 20));
+        var leading = (X: (float)(bounds.X + leadingOffset), Y: center.Y);
+
+        var points = Math.Abs(leading.X - center.X) < 1
+            ? new[] { center }
+            : new[] { center, leading };
+
+        foreach (var (px, py) in points)
+        {
+            var hit = app.ElementAtPosition(px, py);
+            if (hit is null) continue;
+            // Avoid recursing into ourselves — same handle, same outcome.
+            if (CFInterop.CFHash((nint)hit.Handle) == CFInterop.CFHash((nint)Handle)) continue;
+
+            try
+            {
+                var hitAvail = hit.SupportedActions;
+                if (hitAvail.Count == 0) continue;
+                if (hit.TryPerformActionGated(AXAttributeConstants.Press, hitAvail, clickCount)) return true;
+                if (hit.TryPerformActionGated(AXAttributeConstants.Confirm, hitAvail, clickCount)) return true;
+                if (hit.TryPerformActionGated(AXAttributeConstants.Open, hitAvail, clickCount)) return true;
+            }
+            catch { /* try next point */ }
+        }
+        return false;
     }
 
     private bool TryDescendantClick(AXUIElement node, int depth, int clickCount)

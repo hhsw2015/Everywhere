@@ -1,7 +1,6 @@
 // Mirrors: packages/OpenComputerUseKit/Sources/OpenComputerUseKit/InputSimulation.swift
 // Upstream: iFurySt/open-codex-computer-use@<sha-pinned-in-UPSTREAM_REF.md>
 
-using System.IO;
 using System.Runtime.InteropServices;
 using Everywhere.Mcp.Input;
 
@@ -246,16 +245,6 @@ public sealed class MacInputSimulator : IInputSimulator
         try
         {
             CGEventSetIntegerValueField(ev, CGEventField.MouseEventClickState, clickState);
-            // ponytail: temporary diagnostic. Writes one line per event to
-            // /tmp/everywhere-click.log. Verifies P/Invoke marshalling
-            // matches what we think we're sending. Drop after the
-            // PostToPid mystery is resolved.
-            try
-            {
-                File.AppendAllText("/tmp/everywhere-click.log",
-                    $"[{DateTime.Now:HH:mm:ss.fff}] PostMouse src={source:X} type={type} pt=({x:0},{y:0}) btn={button} clickState={clickState} pid={targetPid?.ToString() ?? "global"} ev={ev:X}\n");
-            }
-            catch { }
             PostEvent(ev, targetPid);
         }
         finally { CFRelease(ev); }
