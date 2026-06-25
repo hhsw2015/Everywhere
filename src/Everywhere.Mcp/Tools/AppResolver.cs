@@ -11,6 +11,24 @@ namespace Everywhere.Mcp.Tools;
 /// </summary>
 internal static class AppResolver
 {
+    // Per-pid memoization for TryEnableBestEffortAccessibility.
+    // The enable call sets AXManualAccessibility + AXEnhancedUserInterface,
+    // which on apps like Notes / Finder / Chromium triggers a full AX
+    // subsystem rebuild — tens of seconds the first time. Calling it on
+    // every Resolve compounded that on every click. OCCU does it once
+    // per snapshot lifetime; we do it once per process lifetime here.
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<int, bool> _a11yEnabledPids = new();
+
+    private static void EnsureA11yEnabledOnce(IVisualElementContext context, int pid)
+    {
+        if (pid <= 0) return;
+        if (_a11yEnabledPids.TryGetValue(pid, out _)) return;
+        // Mark first to avoid duplicate concurrent calls; if the call
+        // throws or fails we just won't retry, which matches OCCU.
+        _a11yEnabledPids[pid] = true;
+        try { context.TryEnableBestEffortAccessibility(pid); } catch { /* best-effort */ }
+    }
+
     public readonly record struct ResolvedApp(IVisualElement Window, string AppKey, int ProcessId);
 
     public static ResolvedApp? Resolve(IVisualElementContext context, string app)
@@ -53,7 +71,7 @@ internal static class AppResolver
                 if (top is not null && Matches(top, app))
                 {
                     var key = AppKey.FromProcessId(top.ProcessId);
-                    context.TryEnableBestEffortAccessibility(top.ProcessId);
+                    EnsureA11yEnabledOnce(context, top.ProcessId);
                     var freshTop = context.FreshFocusedWindowOf(top.ProcessId) ?? top;
                     return new ResolvedApp(freshTop, key, top.ProcessId);
                 }
@@ -62,7 +80,7 @@ internal static class AppResolver
         }
 
         var best = candidates.OrderByDescending(c => c.Area).First();
-        context.TryEnableBestEffortAccessibility(best.ProcessId);
+        EnsureA11yEnabledOnce(context, best.ProcessId);
         // 1:1 OCCU AccessibilitySnapshot.swift L108-L130: replace the
         // window candidate with a fresh AXUIElementCreateApplication →
         // kAXFocusedWindow ref before traversal. Element refs sourced
