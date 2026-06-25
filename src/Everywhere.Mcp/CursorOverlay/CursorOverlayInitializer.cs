@@ -65,7 +65,7 @@ public sealed class CursorOverlayInitializer : IAsyncInitializer, ITargetWindowH
                 {
                     if (_overlay is null)
                     {
-                        _overlay = new SoftwareCursorOverlay();
+                        _overlay = new SoftwareCursorOverlay(_windowHelper);
                         _bridge = new CursorOverlayBridge(_trace, _overlay);
                         _indicator = new TargetWindowIndicator(_windowHelper);
                         _logger.LogInformation("CursorOverlay: bridge + indicator attached.");

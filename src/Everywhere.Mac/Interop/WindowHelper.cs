@@ -205,4 +205,28 @@ public class WindowHelper : IWindowHelper
     {
         NSApplication.SharedApplication.RequestUserAttention(NSRequestUserAttentionType.InformationalRequest);
     }
+
+    public void ConfigureAsCursorOverlay(Window window)
+    {
+        if (GetNativeWindow(window) is not { } nw) return;
+
+        // 1:1 OCCU CursorPanel (SoftwareCursorOverlay.swift L294-306):
+        // borderless + nonactivating already implied by Avalonia
+        // Topmost+SystemDecorations.None+ShowActivated=false. We add
+        // the AppKit-only bits Avalonia does not surface.
+        nw.IgnoresMouseEvents = true;
+        nw.HasShadow = false;
+        nw.IsOpaque = false;
+        nw.CollectionBehavior =
+            NSWindowCollectionBehavior.CanJoinAllSpaces |
+            NSWindowCollectionBehavior.FullScreenAuxiliary |
+            NSWindowCollectionBehavior.Stationary |
+            NSWindowCollectionBehavior.IgnoresCycle;
+        // OCCU starts at .normal then bumps to target window's layer
+        // per click (configureOrdering L328). With no target metadata
+        // here we sit at FloatingWindow — above ordinary app content,
+        // below screensaver — which is what OCCU effectively lands on
+        // most clicks.
+        nw.Level = NSWindowLevel.Floating;
+    }
 }

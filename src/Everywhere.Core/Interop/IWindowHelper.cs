@@ -47,4 +47,14 @@ public interface IWindowHelper
     /// </summary>
     /// <param name="window"></param>
     void RequestUserAttention(Window window);
+
+    /// <summary>
+    /// Configure a window for use as a transient pointer overlay
+    /// (software-cursor / target-window indicator). Mirrors OCCU
+    /// CursorPanel setup (SoftwareCursorOverlay.swift L294-306):
+    /// nonactivating, click-through, can-join-all-spaces, full-screen
+    /// auxiliary, stationary, ignores-cycle, lifted to floating level.
+    /// No-op default for non-Mac platforms.
+    /// </summary>
+    void ConfigureAsCursorOverlay(Window window) { }
 }

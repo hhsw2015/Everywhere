@@ -54,6 +54,17 @@ public sealed class SoftwareCursorOverlay : IAsyncDisposable
     // new one. Track them so the next call can Stop the old one.
     private DispatcherTimer? _moveTimer;
     private DispatcherTimer? _pulseTimer;
+    // ponytail: optional NSWindow shim. Only the Mac backend has a
+    // real implementation; Windows/null leaves the overlay as a plain
+    // Topmost Avalonia window, which is the previous behavior.
+    private readonly Everywhere.Interop.IWindowHelper? _windowHelper;
+    private bool _nativeOverlayConfigured;
+
+    public SoftwareCursorOverlay(Everywhere.Interop.IWindowHelper? windowHelper = null)
+    {
+        _windowHelper = windowHelper;
+    }
+
     private double _idlePhase;
     private double _currentClickProgress;
     private double _currentRotation;
@@ -83,6 +94,11 @@ public sealed class SoftwareCursorOverlay : IAsyncDisposable
         var now = NowSeconds();
 
         _window!.Show();
+        if (!_nativeOverlayConfigured && _windowHelper is not null)
+        {
+            try { _windowHelper.ConfigureAsCursorOverlay(_window); _nativeOverlayConfigured = true; }
+            catch { /* overlay is best-effort. */ }
+        }
         if (isFreshStart)
         {
             _visualDynamicsState = CursorVisualDynamicsState.At(startPoint, now);
