@@ -89,15 +89,16 @@ public static class ElementIndexer
 
             if (depth + 1 > maxDepth) continue;
 
-            // OCCU shouldScanDescendantsOfHitRecord: skip descending when
-            // this element's frame is dramatically larger than its
-            // *parent* (likely a top-level scroller / web area that
-            // engulfs the real target). Comparing to the parent — not
-            // the walk root — works for both whole-window snapshots and
-            // picked-element expansions.
-            var ownFrame = SafeBounds(element);
-            if (parentFrame is { } pf && ownFrame is { } of && !ShouldScanDescendants(pf, of))
-                continue;
+            // ponytail: ShouldScanDescendants needed BoundingRectangle
+            // (Position + Size = 2 cross-process round-trips per node).
+            // On Notes-class apps with ~500-1000 nodes that alone cost
+            // 6-10s of Walk time. The check only filtered "scroller
+            // larger than parent" cases — render-time elide handles
+            // the same noise without paying the up-front cost.
+            // Track parentFrame for Render but don't fetch ownFrame
+            // during walk; ownFrame is fetched lazily in Render where
+            // it's cached via AXValue caching (v0.9.108+).
+            var ownFrame = (Avalonia.PixelRect?)null;
 
             // Per-child try/catch: a stale AX ref on one child must not
             // abort the entire snapshot walk.
