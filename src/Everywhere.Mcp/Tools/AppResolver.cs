@@ -22,10 +22,10 @@ internal static class AppResolver
     private static void EnsureA11yEnabledOnce(IVisualElementContext context, int pid)
     {
         if (pid <= 0) return;
-        if (_a11yEnabledPids.TryGetValue(pid, out _)) return;
-        // Mark first to avoid duplicate concurrent calls; if the call
-        // throws or fails we just won't retry, which matches OCCU.
-        _a11yEnabledPids[pid] = true;
+        // TryAdd is atomic — only the first thread per pid proceeds to
+        // the (expensive) enable call. If the call throws we don't
+        // retry, matching OCCU's once-per-snapshot behavior.
+        if (!_a11yEnabledPids.TryAdd(pid, true)) return;
         try { context.TryEnableBestEffortAccessibility(pid); } catch { /* best-effort */ }
     }
 

@@ -1033,7 +1033,12 @@ public partial class AXUIElement : NSObject, IVisualElement
     private System.Collections.Generic.Dictionary<nint, NSObject?>? _scalarAttrCache;
 
     private static bool IsCacheable<T>() where T : NSObject =>
-        typeof(T) == typeof(NSNumber) || typeof(T) == typeof(NSString) || typeof(T) == typeof(AXValue);
+        // Scalar wrappers only. AXValue removed — caching it caused
+        // CFType retain-without-release leaks on large trees
+        // (BoundingRectangle is called on every node). NSNumber /
+        // NSString are small + immutable, so missed release on those
+        // is bounded by the per-element cache slot count.
+        typeof(T) == typeof(NSNumber) || typeof(T) == typeof(NSString);
 
     private T? GetAttribute<T>(NSString attributeName) where T : NSObject
     {
@@ -1052,7 +1057,10 @@ public partial class AXUIElement : NSObject, IVisualElement
             _scalarAttrCache ??= new System.Collections.Generic.Dictionary<nint, NSObject?>(12);
             if (!_scalarAttrCache.ContainsKey(key))
             {
-                obj?.DangerousRetain();
+                // No DangerousRetain — Runtime.GetNSObject(owns:true)
+                // already holds a CFRetain, and the managed wrapper
+                // releases it when GC collects the AXUIElement (which
+                // owns this _scalarAttrCache dictionary).
                 _scalarAttrCache[key] = obj;
             }
         }

@@ -63,6 +63,8 @@ public static class ElementIndexer
         queue.Enqueue((root, 0, -1, null, null));
 
         var nextIndex = 0;
+        // OCR review: log when budget actually fires so a hang is
+        // distinguishable from "tree was actually small".
         while (queue.Count > 0 && ordered.Count < maxNodeCount && Environment.TickCount64 < stopAt)
         {
             var (element, depth, parentIndex, parentFrame, parentWebAreaDepth) = queue.Dequeue();
@@ -142,6 +144,15 @@ public static class ElementIndexer
                 try { enumerator.Dispose(); }
                 catch { /* stale AX ref on dispose; ignore — same family as the per-child catch above */ }
             }
+        }
+
+        if (Environment.TickCount64 >= stopAt && queue.Count > 0)
+        {
+            // Surface the truncation so the user / caller can distinguish
+            // "walked the whole tree (it was small)" from "tree larger
+            // than budget allowed; partial tree returned".
+            System.Diagnostics.Debug.WriteLine(
+                $"[everywhere] ElementIndexer.Walk hit {(int)deadlineSpan.TotalSeconds}s deadline at {ordered.Count} nodes; {queue.Count} nodes left in queue.");
         }
 
         return ordered;
