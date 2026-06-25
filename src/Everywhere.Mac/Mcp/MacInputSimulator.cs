@@ -35,28 +35,16 @@ public sealed class MacInputSimulator : IInputSimulator
         try
         {
             var (cgButton, downType, upType) = Map(button);
-            // 1:1 OCCU port (InputSimulation.swift L58-80). No Warp, no
-            // Associate. OCCU relies entirely on its caller having raised
-            // the target app first via prepareAppForGlobalPointerInput
-            // (AXRaise + NSRunningApplication.activate + 370ms settle).
-            // Our FocusBorrow Spec §7 path provides the same guarantee.
-            // For the targeted (PostToPid) default, hit-test isn't even
-            // involved so cursor position is irrelevant. For the global
-            // HidSystemState path (rare; only used when caller passes
-            // targetPid=null), we trust the caller to have prepped focus.
-            // ponytail: SwiftUI gesture recognizers need a measurable down→up
-            // dwell to register a tap, and the next tap needs the previous
-            // gesture state to settle. Without these sleeps consecutive
-            // digit-clicks on Calculator 26 only land ~3/5. Numbers match
-            // OCCU InputSimulation.swift L78-79 + L90 (35ms dwell, 80ms
-            // inter-tap). MouseMoved→Down is left tight (no sleep) since
-            // the move is just a position hint.
+            // 1:1 OCCU port (InputSimulation.swift L58-80). PostMouse
+            // already sleeps 30ms after every event (matches OCCU
+            // postMouseEvent / postMouseEventToPid L231/L241), so this
+            // loop has no extra sleeps — just like OCCU's clickGlobally /
+            // clickTargeted, which call their post helpers 3× back-to-
+            // back per iteration with no surrounding pauses.
             for (var i = 0; i < Math.Max(clickCount, 1); i++)
             {
-                if (i > 0) Thread.Sleep(80);
                 PostMouse(src, CGEventType.MouseMoved, x, y, cgButton, clickCount, targetPid);
                 PostMouse(src, downType, x, y, cgButton, clickCount, targetPid);
-                Thread.Sleep(35);
                 PostMouse(src, upType, x, y, cgButton, clickCount, targetPid);
             }
         }

@@ -627,23 +627,13 @@ public partial class AXUIElement : NSObject, IVisualElement
         //    even when no action verb fits.
         if (canUseActivationOnlyClickFallback(Role) && TryActivate(available)) { Thread.Sleep(150); return; }
 
-        // Auto-upgrade signal: AXPress advertised AND chain fell through
-        // is enough to flag SwiftUI-on-AppKit (SwiftUI binds AXPress to
-        // the gesture recognizer at hit-test, so AXUIElementPerformAction
-        // either no-ops with .success or fails with a host-specific
-        // error). Tag is a stable substring; dispatcher does
-        // Contains("[swiftui]").
-        // ponytail: stop reading the [ThreadStatic] LastInvokeError —
-        // async/await may resume on a different thread and the slot
-        // reads back as default(AXError)=Success. The advertise-vs-
-        // result divergence is the real signal: if the AX chain fell
-        // all the way through and Press was on the menu, treat it as
-        // SwiftUI without needing a specific error code.
-        var swiftuiHint = available.Any(a => string.Equals(a, "AXPress", StringComparison.OrdinalIgnoreCase))
-            ? " [swiftui]"
-            : string.Empty;
+        // 1:1 OCCU: when performAXClickSequence returns false (every
+        // action verb + descendant + activation fallback rejected),
+        // the caller (ComputerUseService L408-416) falls through to
+        // performNonAXClickFallback. We mirror: throw a plain failure,
+        // dispatcher catches and runs the coord fallback.
         throw new InvalidOperationException(
-            $"No supported AX action available (role={Role}, actions=[{string.Join(",", available)}]){swiftuiHint}");
+            $"No supported AX action available (role={Role}, actions=[{string.Join(",", available)}])");
     }
 
     private bool TryDescendantClick(AXUIElement node, int depth, int clickCount)

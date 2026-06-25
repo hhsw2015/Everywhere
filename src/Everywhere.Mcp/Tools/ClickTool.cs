@@ -45,20 +45,18 @@ public static class ClickTool
                 var button = ParseButton(mouse_button);
                 var clickCount = click_count is { } c && c > 0 ? c : 1;
 
-                using var _ = focusBorrow.Acquire(
-                    resolved.Value.Window.NativeWindowHandle,
-                    requireFocus: true,
-                    processId: resolved.Value.ProcessId);
                 highlighter.Highlight(resolved.Value.Window.BoundingRectangle,
                     $"Everywhere · {app}");
 
-                // OCCU x/y path (CUS L430-470): first try AX click on
-                // candidates at the point — bestElement (smallest
-                // containing) and hitTestElement (raw AXHitTest). Each
-                // candidate runs through performAXClickSequence with
-                // includeNearbyHitTesting=false (the point IS the hit).
-                // Falls back to coordinate CGEvent only when every AX
-                // candidate fails.
+                // 1:1 OCCU x/y click (ComputerUseService.swift L430-475).
+                // First: try every AX candidate at the point (bestElement
+                // + AXHitTest). Each candidate runs through
+                // performPreferredClick. Fall through to performNonAXClick-
+                // Fallback only when every AX candidate refuses.
+                //
+                // OCCU does NOT prepareAppForGlobalPointerInput on this
+                // path; targeted PostToPid carries the event regardless
+                // of frontmost. Match: no FocusBorrow Acquire.
                 var ix = (int)Math.Round(x.Value);
                 var iy = (int)Math.Round(y.Value);
                 var hit = context.ElementFromPoint(new Avalonia.PixelPoint(ix, iy));
@@ -77,9 +75,24 @@ public static class ClickTool
                     catch { /* AX failed → coord fallback */ }
                 }
 
-                // Coordinate fallback. Use HidEventTap (targetPid=null)
-                // so SwiftUI gestures fire — see v0.9.56 commit.
-                input.Click(x.Value, y.Value, clickCount, button, targetPid: null);
+                // Coord fallback. OCCU default = clickTargeted
+                // (postToPid). Global gated by env, same as the
+                // element-index path in ElementClickDispatcher.
+                var allowGlobal = Environment.GetEnvironmentVariable(
+                    "EVERYWHERE_ALLOW_GLOBAL_POINTER_FALLBACKS") == "1";
+                if (allowGlobal)
+                {
+                    using var _ = focusBorrow.Acquire(
+                        resolved.Value.Window.NativeWindowHandle,
+                        requireFocus: true,
+                        processId: resolved.Value.ProcessId);
+                    input.Click(x.Value, y.Value, clickCount, button, targetPid: null);
+                }
+                else
+                {
+                    input.Click(x.Value, y.Value, clickCount, button,
+                        targetPid: resolved.Value.ProcessId);
+                }
                 return new CallToolResult { Content = [new TextContentBlock { Text = "ok" }] };
             }
 

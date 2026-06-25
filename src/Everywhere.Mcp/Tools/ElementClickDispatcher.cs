@@ -73,62 +73,6 @@ internal static class ElementClickDispatcher
             catch { /* highlighter is best-effort */ }
         }
 
-        // SwiftUI bypass: macOS 26+ first-party apps (Calculator, etc.)
-        // accept AXPress with success status but the SwiftUI gesture
-        // handler doesn't fire — only real CGEvent input does. Skip the
-        // AX chain entirely and synthesize a coordinate click on those
-        // processes.
-        // PrefersCoordinateClick whitelist disabled — the AX action-list
-        // gating in AXUIElement.Invoke (v0.9.57) handles SwiftUI
-        // Calculator generically: AXPress is not in the element's
-        // SupportedActions, so TryPerformActionGated returns false for
-        // every verb and Invoke() throws cleanly. The catch block then
-        // runs the coordinate fallback (HidEventTap, with focus borrow)
-        // — same path OCCU's performNonAXClickFallback takes. No need
-        // to also short-circuit here, which had the side effect of
-        // skipping the AX chain even when AXPress was actually
-        // available (slowing down the common case for normal apps and
-        // duplicating focus-borrow logic).
-        if (false)
-        {
-            var rectS = element.BoundingRectangle;
-            if (rectS.Width > 0 && rectS.Height > 0)
-            {
-                try
-                {
-                    var cx = rectS.X + rectS.Width / 2.0;
-                    var cy = rectS.Y + rectS.Height / 2.0;
-                    AppResolver.ResolvedApp? resolved = AppResolver.Resolve(context!, appHint!);
-                    // Indicator already fired up at the AX-walked
-                    // top-window rect a few lines above; don't double-
-                    // call here (would visually flicker the same border).
-                    IDisposable? focusHandle = resolved is not null
-                        ? focusBorrow!.Acquire(resolved.Value.Window.NativeWindowHandle, requireFocus: true, processId: resolved.Value.ProcessId)
-                        : null;
-                    try
-                    {
-                        // SwiftUI gesture handlers in macOS 26+ Calculator
-                        // hook NSGestureRecognizer on the systemwide
-                        // event tap; CGEventPostToPid bypasses that tap
-                        // and the gesture never fires. Use the GLOBAL
-                        // SessionEventTap (targetPid=null) here so the
-                        // event reaches the OS hit-test pipeline.
-                        // This DOES move the user's real cursor for the
-                        // duration of the click — the cost of accuracy
-                        // on these specific apps.
-                        input!.Click(cx, cy, clickCount, mouseButton, targetPid: null);
-                    }
-                    finally { focusHandle?.Dispose(); }
-                    return new CallToolResult { Content = [new TextContentBlock { Text = "ok (SwiftUI bypass, coordinate click)" }] };
-                }
-                catch (Exception coordEx)
-                {
-                    // Fall through to AX path if coordinate failed
-                    System.Diagnostics.Debug.WriteLine($"PrefersCoord click failed: {coordEx.Message}");
-                }
-            }
-        }
-
         try
         {
             // 1:1 OCCU performPreferredClick (ComputerUseService.swift
@@ -170,79 +114,61 @@ internal static class ElementClickDispatcher
                 var rect = element.BoundingRectangle;
                 if (rect.Width > 0 && rect.Height > 0)
                 {
-                    // Resolve up-front so the keyboard fallback in the
-                    // catch block can read the same ProcessId for
-                    // PressKey targeting. Hoisting outside the try also
-                    // sidesteps the previous CS0103 'resolved not in
-                    // scope' error.
+                    // 1:1 OCCU performNonAXClickFallback
+                    // (ComputerUseService.swift L1647-1682):
+                    //   if global-pointer-fallbacks env=1:
+                    //       prepareAppForGlobalPointerInput(app)
+                    //       clickGlobally(point, button, clickCount)
+                    //   else:
+                    //       clickTargeted(point, button, clickCount, pid)
+                    //
+                    // Targeted is the default. NO FocusBorrow, NO AXRaise,
+                    // NO activate, NO restore — OCCU never touches focus
+                    // on the targeted path. CGEventPostToPid delivers
+                    // straight to the app's run loop regardless of which
+                    // app is currently frontmost. We mirror exactly.
+                    var allowGlobal = Environment.GetEnvironmentVariable(
+                        "EVERYWHERE_ALLOW_GLOBAL_POINTER_FALLBACKS") == "1";
+                    var cx = rect.X + rect.Width / 2.0;
+                    var cy = rect.Y + rect.Height / 2.0;
+
                     AppResolver.ResolvedApp? resolved = null;
-                    if (focusBorrow is not null && context is not null && !string.IsNullOrEmpty(appHint))
+                    if (context is not null && !string.IsNullOrEmpty(appHint))
                     {
                         try { resolved = AppResolver.Resolve(context, appHint); }
                         catch { /* AppResolver may throw on dead pid */ }
                     }
+
+                    if (Environment.GetEnvironmentVariable("EVERYWHERE_DEBUG_INPUT_FALLBACKS") == "1")
+                    {
+                        Console.Error.WriteLine(
+                            $"[everywhere] {(allowGlobal ? "global" : "targeted")} pointer fallback tool=click app={appHint ?? "?"} target=({cx},{cy})");
+                    }
+
                     try
                     {
-                        var cx = rect.X + rect.Width / 2.0;
-                        var cy = rect.Y + rect.Height / 2.0;
-                        // Best-effort focus: AX invoke didn't need the
-                        // target foreground, but a real CGEvent click
-                        // does — otherwise it lands on whichever app
-                        // currently has focus.
-                        IDisposable? focusHandle = resolved is not null
-                            ? focusBorrow!.Acquire(
+                        if (allowGlobal && focusBorrow is not null && resolved is not null)
+                        {
+                            // 1:1 OCCU L1662-1663: prepareAppForGlobalPointerInput
+                            // then clickGlobally (HidEventTap).
+                            using var _ = focusBorrow.Acquire(
                                 resolved.Value.Window.NativeWindowHandle,
                                 requireFocus: true,
-                                processId: resolved.Value.ProcessId)
-                            : null;
-                        try
+                                processId: resolved.Value.ProcessId);
+                            input.Click(cx, cy, clickCount, mouseButton, targetPid: null);
+                        }
+                        else
                         {
-                            // 1:1 OCCU performNonAXClickFallback
-                            // (ComputerUseService.swift L1647-1684).
-                            //
-                            // OCCU default = targeted PostToPid (L1668-1672):
-                            // no cursor warp, no focus steal — events go
-                            // straight to the app's run loop. Works for
-                            // AppKit; SwiftUI / Electron with
-                            // NSGestureRecognizer on the global tap may
-                            // silently ignore them.
-                            //
-                            // OCCU global path (L1656-1664) runs
-                            // prepareAppForGlobalPointerInput + clickGlobally
-                            // and ONLY fires when env
-                            // OPEN_COMPUTER_USE_ALLOW_GLOBAL_POINTER_FALLBACKS=1.
-                            // That mode steals foreground focus and races
-                            // physical cursor. Opt-in is the right default
-                            // because the cure (focus theft) is worse than
-                            // the disease for most apps.
-                            //
-                            // We mirror the env flag name with EVERYWHERE_*
-                            // prefix.
-                            // Auto-detect SwiftUI: AXUIElement.Invoke
-                            // tags its exception message with " [swiftui]"
-                            // when AXPress was advertised but
-                            // AXUIElementPerformAction returned
-                            // CannotComplete/Failure (the SwiftUI
-                            // gesture-recognizer signature). Upgrade to
-                            // GLOBAL automatically — the only path that
-                            // hits the SwiftUI gesture tap. Mirrors
-                            // OCCU's env-flag opt-in but keyed on a
-                            // real failure mode instead of user config.
-                            var swiftuiDetected = axEx.Message.Contains("[swiftui]", StringComparison.Ordinal);
-                            var allowGlobal = swiftuiDetected
-                                || Environment.GetEnvironmentVariable("EVERYWHERE_ALLOW_GLOBAL_POINTER_FALLBACKS") == "1";
-                            if (Environment.GetEnvironmentVariable("EVERYWHERE_DEBUG_INPUT_FALLBACKS") == "1")
+                            // 1:1 OCCU L1668-1672: clickTargeted via postToPid.
+                            // No prep. targetPid required — when AppResolver
+                            // can't supply one we surface the AX failure
+                            // verbatim rather than guessing a frontmost.
+                            if (resolved is null)
                             {
-                                // OCCU debugInputFallback (CUS L1566-1575).
-                                Console.Error.WriteLine(
-                                    $"[everywhere] {(allowGlobal ? "global" : "targeted")} pointer fallback tool=click app={appHint ?? "?"} target=({cx},{cy}) swiftui={swiftuiDetected}");
+                                return ToolErrors.FromException(axEx, "invoke element");
                             }
                             input.Click(cx, cy, clickCount, mouseButton,
-                                targetPid: allowGlobal ? null : resolved?.ProcessId);
-                        }
-                        finally
-                        {
-                            focusHandle?.Dispose();
+                                targetPid: resolved.Value.ProcessId);
                         }
                         return new CallToolResult
                         {
@@ -254,10 +180,7 @@ internal static class ElementClickDispatcher
                     }
                     catch (Exception coordEx)
                     {
-                        // 1:1 OCCU: when both AX and coord fallback fail,
-                        // OCCU throws (CUS L1675-1679). No keyboard
-                        // fallback layer on top — that was our
-                        // extension; drop it.
+                        // 1:1 OCCU L1675-1680: both failed.
                         return ToolErrors.Error(
                             $"click could not be handled through accessibility ({axEx.Message}) and coordinate fallback failed ({coordEx.Message}). Set EVERYWHERE_ALLOW_GLOBAL_POINTER_FALLBACKS=1 to allow physical-pointer fallback.");
                     }
