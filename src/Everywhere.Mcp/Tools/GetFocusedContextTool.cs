@@ -73,7 +73,10 @@ public static class GetFocusedContextTool
                 SelectedText = focused.GetSelectionText(),
                 OmittedChildren = omitted,
                 OmittedNodeCount = Math.Max(0, totalDescendants - nodes.Count),
-                TreeJson = TreeJsonBuilder.Build(nodes),
+                // ponytail: TreeJson duplicates TreeText. Opt-in only.
+                TreeJson = Environment.GetEnvironmentVariable("EVERYWHERE_INCLUDE_TREE_JSON") == "1"
+                    ? TreeJsonBuilder.Build(nodes)
+                    : null,
             };
             SemanticEnricher.Apply(result, nodes);
 

@@ -67,7 +67,15 @@ public static class GetAppStateTool
                 WindowBounds = new WindowBounds(bounds.X, bounds.Y, bounds.Width, bounds.Height),
                 ScreenshotPngBase64 = screenshotBase64,
                 TreeText = treeText,
-                TreeJson = TreeJsonBuilder.Build(nodes),
+                // ponytail: TreeJson is a 1:1 duplicate of TreeText (same
+                // tree, JSON shape) and roughly doubles the payload —
+                // 30KB → 60KB on Calculator, splattering across the MCP
+                // 25k-token result cap. Default omit; opt in by env so
+                // existing clients can still get it.
+                // ponytail: env-flag opt-in, drop entirely if no client asks.
+                TreeJson = Environment.GetEnvironmentVariable("EVERYWHERE_INCLUDE_TREE_JSON") == "1"
+                    ? TreeJsonBuilder.Build(nodes)
+                    : null,
                 FocusedSummary = context.FocusedElement?.Name,
                 SelectedText = context.FocusedElement?.GetSelectionText(),
             };

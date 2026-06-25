@@ -45,7 +45,10 @@ public static class PickElementTool
                 WindowTitle = picked.Name,
                 WindowBounds = new WindowBounds(bounds.X, bounds.Y, bounds.Width, bounds.Height),
                 TreeText = SnapshotRenderer.Render(nodes, showFullText: false),
-                TreeJson = TreeJsonBuilder.Build(nodes),
+                // ponytail: TreeJson duplicates TreeText. Opt-in only.
+                TreeJson = Environment.GetEnvironmentVariable("EVERYWHERE_INCLUDE_TREE_JSON") == "1"
+                    ? TreeJsonBuilder.Build(nodes)
+                    : null,
             };
             SemanticEnricher.Apply(payload, nodes);
 

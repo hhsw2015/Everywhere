@@ -33,17 +33,35 @@ public static class SnapshotRenderer
         var sb = new StringBuilder();
         foreach (var node in nodes)
         {
+            // ponytail: each AX property is a CrossProcess IPC call —
+            // Name/States/SupportedActions etc are NOT cached on the
+            // element. ShouldElide() then re-asks Name/Text/States/Actions,
+            // doubling every IPC. Fetch each one ONCE here, reuse for
+            // both elide check and render. On a 60-node tree this cuts
+            // ~480 IPC calls to ~240 — get_app_state drops from a slow
+            // multi-second roundtrip to something interactive.
+            var el = node.Element;
+            var name = el.Name;
+            var text = el.GetText(maxLength: limit < 0 ? -1 : limit);
+            var states = el.States;
+            IReadOnlyList<string>? rawActions = null;
+            try { rawActions = el.SupportedActions; }
+            catch (System.Runtime.InteropServices.COMException) { }
+            catch (ObjectDisposedException) { }
+            catch (InvalidOperationException) { }
+            var filteredActions = SnapshotActionFilter.Filter(rawActions);
+
             // OCCU shouldElideNode: skip rendering for empty AXGroup/Panel
             // wrappers that contribute no information — they only add
             // tree noise. We still keep them in the indexed map (for
             // parent-id lookup) but they won't appear in tree_text.
-            if (ShouldElide(node, byParent)) continue;
+            if (ShouldElide(node, byParent, name, text, states, filteredActions)) continue;
 
             sb.Append(' ', node.Depth * 2);
             sb.Append('[').Append(node.Index).Append("] ");
             sb.Append(DisplayRole(node.Element));
 
-            var name = SnapshotTextUtil.Sanitize(node.Element.Name, limit);
+            name = SnapshotTextUtil.Sanitize(name, limit);
             // OCCU summaryMarkdownLinkText (AccessibilitySnapshot.swift
             // L1770-1789): AXLink rows render as "[label](url)" so the
             // agent can copy/follow the URL straight out of the
@@ -60,7 +78,7 @@ public static class SnapshotRenderer
                 sb.Append(' ').Append('"').Append(EscapeQuotes(name)).Append('"');
             }
 
-            var text = SnapshotTextUtil.Sanitize(node.Element.GetText(maxLength: limit), limit);
+            text = SnapshotTextUtil.Sanitize(text, limit);
             if (!string.IsNullOrEmpty(text) && text != name)
             {
                 sb.Append(" text=\"").Append(EscapeQuotes(text)).Append('"');
@@ -85,7 +103,6 @@ public static class SnapshotRenderer
             sb.Append(" (bounds=").Append(bounds.X).Append(',').Append(bounds.Y)
               .Append(',').Append(bounds.Width).Append(',').Append(bounds.Height).Append(')');
 
-            var states = node.Element.States;
             if (states != VisualElementStates.None)
             {
                 sb.Append(" [").Append(states.ToString().Replace(", ", ",")).Append(']');
@@ -95,19 +112,14 @@ public static class SnapshotRenderer
             // verbs the agent doesn't get from the type alone (slider
             // Increment, popover ShowMenu), surface them inline. Same
             // whitelist/dedup as TreeJsonBuilder via SnapshotActionFilter.
-            IReadOnlyList<string>? rawActions = null;
-            try { rawActions = node.Element.SupportedActions; }
-            catch (System.Runtime.InteropServices.COMException) { }
-            catch (ObjectDisposedException) { }
-            catch (InvalidOperationException) { }
-            var filtered = SnapshotActionFilter.Filter(rawActions);
-            if (filtered.Count > 0)
+            // filteredActions was computed once at the top of the loop.
+            if (filteredActions.Count > 0)
             {
                 sb.Append(" actions=[");
-                for (var i = 0; i < filtered.Count; i++)
+                for (var i = 0; i < filteredActions.Count; i++)
                 {
                     if (i > 0) sb.Append(',');
-                    sb.Append(filtered[i]);
+                    sb.Append(filteredActions[i]);
                 }
                 sb.Append(']');
             }
@@ -144,19 +156,21 @@ public static class SnapshotRenderer
     /// </summary>
     private static bool ShouldElide(
         ElementIndexer.IndexedNode node,
-        Dictionary<int, List<ElementIndexer.IndexedNode>> byParent)
+        Dictionary<int, List<ElementIndexer.IndexedNode>> byParent,
+        string? cachedName,
+        string? cachedText,
+        VisualElementStates cachedStates,
+        IReadOnlyList<string> cachedFilteredActions)
     {
         if (node.Depth == 0) return false; // never elide root
         var children = byParent.TryGetValue(node.Index, out var list) ? list : null;
         var childCount = children?.Count ?? 0;
-        IReadOnlyList<string>? actions = null;
-        try { actions = node.Element.SupportedActions; } catch { }
         return SnapshotElideRules.ShouldElide(
             type: node.Element.Type,
-            name: node.Element.Name,
-            text: node.Element.GetText(maxLength: 64),
-            states: node.Element.States,
-            actions: SnapshotActionFilter.Filter(actions),
+            name: cachedName,
+            text: cachedText,
+            states: cachedStates,
+            actions: cachedFilteredActions,
             childCount: childCount,
             webAreaDepth: node.WebAreaDepth);
     }

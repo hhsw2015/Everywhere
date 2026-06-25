@@ -70,7 +70,11 @@ public static class GetAppContextTool
                 WindowBounds = new WindowBounds(bounds.X, bounds.Y, bounds.Width, bounds.Height),
                 ScreenshotPngBase64 = screenshotBase64,
                 TreeText = treeText,
-                TreeJson = TreeJsonBuilder.Build(nodes),
+                // ponytail: TreeJson duplicates TreeText, ~doubles payload.
+                // Opt in via env when an old client needs it.
+                TreeJson = Environment.GetEnvironmentVariable("EVERYWHERE_INCLUDE_TREE_JSON") == "1"
+                    ? TreeJsonBuilder.Build(nodes)
+                    : null,
             };
             SemanticEnricher.Apply(inner, nodes);
 
