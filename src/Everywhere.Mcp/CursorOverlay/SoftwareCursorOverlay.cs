@@ -48,6 +48,12 @@ public sealed class SoftwareCursorOverlay : IAsyncDisposable
     private Point? _displayedTipPosition;
     private DispatcherTimer? _idleTimer;
     private DispatcherTimer? _hideTimer;
+    // ponytail: AnimateMove / AnimateClickPulse used to leak their
+    // DispatcherTimer when a new MoveCursor / PulseClick landed mid-
+    // animation — the prior tick handler kept firing and fought the
+    // new one. Track them so the next call can Stop the old one.
+    private DispatcherTimer? _moveTimer;
+    private DispatcherTimer? _pulseTimer;
     private double _idlePhase;
     private double _currentClickProgress;
     private double _currentRotation;
@@ -136,6 +142,8 @@ public sealed class SoftwareCursorOverlay : IAsyncDisposable
     {
         StopIdleAnimation();
         CancelPendingHide();
+        _moveTimer?.Stop(); _moveTimer = null;
+        _pulseTimer?.Stop(); _pulseTimer = null;
         _displayedTipPosition = null;
         _restingTipPosition = null;
         _visualDynamicsState = null;
@@ -171,6 +179,13 @@ public sealed class SoftwareCursorOverlay : IAsyncDisposable
     {
         // Upstream uses calibrated travel duration + spring progress
         // animator. We do the same — same parameters, same math.
+        // ponytail: cancel any in-flight Move timer first; OCCU runs
+        // moveCursor synchronously on main, so it can't race itself.
+        // Our async API can — without this, two Move calls in quick
+        // succession had two timers fighting over PlaceCursor.
+        _moveTimer?.Stop();
+        _moveTimer = null;
+
         var candidates = HeadingDrivenCursorMotionModel.MakeCandidates(
             start, end, bounds: null, startForward: CurrentForwardVector(), endForward: RestingForwardVector());
         var bestN = HeadingDrivenCursorMotionModel.ChooseBestCandidate(candidates);
@@ -184,6 +199,7 @@ public sealed class SoftwareCursorOverlay : IAsyncDisposable
         var springState = default(CursorMotionSpringState);
 
         var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1.0 / 60) };
+        _moveTimer = timer;
         timer.Tick += (_, _) =>
         {
             var elapsed = NowSeconds() - startTime;
@@ -198,6 +214,7 @@ public sealed class SoftwareCursorOverlay : IAsyncDisposable
             if (normalizedElapsed >= 1 || CursorMotionProgressAnimator.IsCloseEnough(progress))
             {
                 timer.Stop();
+                if (ReferenceEquals(_moveTimer, timer)) _moveTimer = null;
                 var (s2, r2) = AdvanceVisualDynamics(end, NowSeconds());
                 _visualDynamicsState = s2;
                 PlaceCursor(r2, clickProgress: 0);
@@ -208,13 +225,28 @@ public sealed class SoftwareCursorOverlay : IAsyncDisposable
 
     private void AnimateClickPulse(Point point, int clickCount, bool rightButton)
     {
+        // ponytail: cancel any pulse in flight (mirrors AnimateMove).
+        _pulseTimer?.Stop();
+        _pulseTimer = null;
+
         var pulseBias = rightButton ? 0.82 : 1.0;
         var pulseIndex = 0;
         const double duration = 0.16;
+        // OCCU SoftwareCursorOverlay.swift:574-576 — between repeats.
+        const double interPulsePause = 0.05;
         var pulseStart = NowSeconds();
+        bool inPause = false;
+        double pauseStart = 0;
         var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1.0 / 60) };
+        _pulseTimer = timer;
         timer.Tick += (_, _) =>
         {
+            if (inPause)
+            {
+                if (NowSeconds() - pauseStart < interPulsePause) return;
+                inPause = false;
+                pulseStart = NowSeconds();
+            }
             var elapsed = NowSeconds() - pulseStart;
             var rawProgress = Math.Min(Math.Max(elapsed / duration, 0), 1);
             var clickProgress = Math.Sin(rawProgress * Math.PI) * pulseBias;
@@ -224,8 +256,14 @@ public sealed class SoftwareCursorOverlay : IAsyncDisposable
             if (rawProgress >= 1)
             {
                 pulseIndex++;
-                if (pulseIndex >= clickCount) { timer.Stop(); return; }
-                pulseStart = NowSeconds();
+                if (pulseIndex >= clickCount)
+                {
+                    timer.Stop();
+                    if (ReferenceEquals(_pulseTimer, timer)) _pulseTimer = null;
+                    return;
+                }
+                inPause = true;
+                pauseStart = NowSeconds();
             }
         };
         timer.Start();

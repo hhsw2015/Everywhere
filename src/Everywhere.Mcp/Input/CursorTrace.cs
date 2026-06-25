@@ -43,6 +43,7 @@ public enum CursorTraceKind
     Drag,
     KeyPress,
     Type,
+    Settle,
 }
 
 public readonly record struct CursorTraceEvent(

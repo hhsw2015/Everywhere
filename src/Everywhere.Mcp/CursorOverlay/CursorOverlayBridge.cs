@@ -40,6 +40,9 @@ public sealed class CursorOverlayBridge : IDisposable
                     _overlay.MoveCursor(new Point(tx, ty));
                 }
                 break;
+            case CursorTraceKind.Settle:
+                _overlay.Settle(new Point(ev.X, ev.Y));
+                break;
             case CursorTraceKind.KeyPress:
             case CursorTraceKind.Type:
                 // Overlay shows nothing for keyboard events — the cursor
