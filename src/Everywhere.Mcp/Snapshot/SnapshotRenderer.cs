@@ -42,7 +42,11 @@ public static class SnapshotRenderer
             // multi-second roundtrip to something interactive.
             var el = node.Element;
             var name = el.Name;
-            var text = el.GetText(maxLength: limit < 0 ? -1 : limit);
+            // Probe with maxLength:1 — Elide only checks IsNullOrEmpty,
+            // and GetText for AXRow/AXTableRow/AXOutlineRow walks up to
+            // 4 levels of descendants, so an unbounded fetch we may
+            // throw away is wasted work.
+            var probeText = el.GetText(maxLength: 1);
             var states = el.States;
             IReadOnlyList<string>? rawActions = null;
             try { rawActions = el.SupportedActions; }
@@ -55,7 +59,10 @@ public static class SnapshotRenderer
             // wrappers that contribute no information — they only add
             // tree noise. We still keep them in the indexed map (for
             // parent-id lookup) but they won't appear in tree_text.
-            if (ShouldElide(node, byParent, name, text, states, filteredActions)) continue;
+            if (ShouldElide(node, byParent, name, probeText, states, filteredActions)) continue;
+
+            // Past Elide → fetch full text only now.
+            var text = string.IsNullOrEmpty(probeText) ? probeText : el.GetText(maxLength: limit);
 
             sb.Append(' ', node.Depth * 2);
             sb.Append('[').Append(node.Index).Append("] ");

@@ -21,6 +21,19 @@ public interface IInputSimulator
 {
     void MoveTo(double x, double y, int? targetPid = null);
 
+    /// <summary>
+    /// Synthesize mouse down+up at (x,y).
+    ///
+    /// Precondition (macOS, targetPid=null): the caller MUST have raised
+    /// the target app within the last ~370ms — typically by holding a
+    /// <see cref="FocusBorrow.Acquire"/> with requireFocus:true, which
+    /// runs OCCU's prepareAppForGlobalPointerInput sequence (AXRaise →
+    /// 120ms → activate → 250ms). Without that prep, the global click
+    /// hits whatever window is currently frontmost and the cursor's
+    /// physical position, NOT the (x,y) you passed. The MacInputSimulator
+    /// implementation no longer warps the cursor as a safety net; it
+    /// trusts the caller to have prepared focus.
+    /// </summary>
     void Click(double x, double y, int clickCount = 1, MouseButton button = MouseButton.Left, int? targetPid = null);
 
     void DragTo(double fromX, double fromY, double toX, double toY, int? targetPid = null);
