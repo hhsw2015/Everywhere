@@ -39,9 +39,18 @@ public static class ElementIndexer
     public static IReadOnlyList<IndexedNode> Walk(
         IVisualElement root,
         int maxNodeCount = UpstreamConstants.AccessibilityTreeMaxNodeCount,
-        int maxDepth = UpstreamConstants.AccessibilityTreeMaxDepth)
+        int maxDepth = UpstreamConstants.AccessibilityTreeMaxDepth,
+        TimeSpan? deadline = null)
     {
         ArgumentNullException.ThrowIfNull(root);
+
+        // Hard wall-clock budget. Without it, large AX trees (Notes,
+        // Finder ~500-1000+ nodes × 2 round-trips per node) make the
+        // tool hang for 20-60s, indistinguishable from a deadlock to
+        // the user. We'd rather return a partial tree at the deadline
+        // than make the user kill the call.
+        var deadlineSpan = deadline ?? TimeSpan.FromSeconds(5);
+        var stopAt = Environment.TickCount64 + (long)deadlineSpan.TotalMilliseconds;
 
         var ordered = new List<IndexedNode>(capacity: Math.Min(maxNodeCount, 256));
         // Each queue entry carries the *parent's* frame (not the walk
@@ -54,7 +63,7 @@ public static class ElementIndexer
         queue.Enqueue((root, 0, -1, null, null));
 
         var nextIndex = 0;
-        while (queue.Count > 0 && ordered.Count < maxNodeCount)
+        while (queue.Count > 0 && ordered.Count < maxNodeCount && Environment.TickCount64 < stopAt)
         {
             var (element, depth, parentIndex, parentFrame, parentWebAreaDepth) = queue.Dequeue();
 

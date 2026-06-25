@@ -61,11 +61,16 @@ public static class SnapshotRenderer
         return treeText;
     }
 
-    public static string Render(IReadOnlyList<ElementIndexer.IndexedNode> nodes, bool showFullText)
+    public static string Render(IReadOnlyList<ElementIndexer.IndexedNode> nodes, bool showFullText, TimeSpan? deadline = null)
     {
         ArgumentNullException.ThrowIfNull(nodes);
 
-        // Build childrenByParent so shouldElideNode can peek.
+        // Render-time deadline: each node still costs 4-5 cross-process
+        // AX round-trips after caching, so a 1000-node tree can take
+        // 5-15s. Stop and return whatever we have if budget exhausted.
+        var deadlineSpan = deadline ?? TimeSpan.FromSeconds(5);
+        var stopAt = Environment.TickCount64 + (long)deadlineSpan.TotalMilliseconds;
+
         var byParent = new Dictionary<int, List<ElementIndexer.IndexedNode>>();
         foreach (var n in nodes)
         {
@@ -76,8 +81,14 @@ public static class SnapshotRenderer
 
         var limit = showFullText ? -1 : UpstreamConstants.SnapshotTextDefaultCharacterLimit;
         var sb = new StringBuilder();
+        var truncated = false;
         foreach (var node in nodes)
         {
+            if (Environment.TickCount64 >= stopAt)
+            {
+                truncated = true;
+                break;
+            }
             // ponytail: each AX property is a CrossProcess IPC call —
             // Name/States/SupportedActions etc are NOT cached on the
             // element. ShouldElide() then re-asks Name/Text/States/Actions,
@@ -177,6 +188,12 @@ public static class SnapshotRenderer
             }
 
             sb.AppendLine();
+        }
+
+        if (truncated)
+        {
+            sb.AppendLine();
+            sb.AppendLine($"... (render deadline {(int)deadlineSpan.TotalSeconds}s reached, output truncated; tree had {nodes.Count} nodes)");
         }
 
         return sb.ToString();
