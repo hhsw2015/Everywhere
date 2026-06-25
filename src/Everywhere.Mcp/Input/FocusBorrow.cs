@@ -81,21 +81,19 @@ public sealed class FocusBorrow
         public void Dispose()
         {
             if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
-            try
-            {
-                if (prev != 0)
-                {
-                    backend.Activate(prev);
-                }
-            }
-            catch
-            {
-                // ponytail: restore is best-effort, log channel reserved for the host's logger.
-            }
-            finally
-            {
-                gate.Release();
-            }
+            // ponytail: don't restore the previous foreground app. OCCU
+            // doesn't (ComputerUseService.swift never calls back into
+            // NSRunningApplication.activate after prepareAppForGlobalPointer-
+            // Input), and on SwiftUI apps where AX no-ops force the
+            // global event-tap path, restoring immediately after the
+            // event post yanked focus away while the SwiftUI gesture
+            // recognizer was still settling — middle clicks in a 5-tap
+            // burst silently dropped. Leaving the target foreground is
+            // the cost of accuracy; matches OCCU's behavior. `prev` and
+            // `backend` are now unused on this path.
+            _ = prev;
+            _ = backend;
+            gate.Release();
         }
     }
 
