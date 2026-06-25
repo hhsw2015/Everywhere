@@ -65,8 +65,23 @@ public static class ElementIndexer
         var nextIndex = 0;
         // OCR review: log when budget actually fires so a hang is
         // distinguishable from "tree was actually small".
+        var walkStart = Environment.TickCount64;
+        var lastLog = walkStart;
         while (queue.Count > 0 && ordered.Count < maxNodeCount && Environment.TickCount64 < stopAt)
         {
+            // Heartbeat every 50 nodes — confirms loop is alive and
+            // shows where time is spent.
+            if (ordered.Count % 50 == 0 && ordered.Count > 0)
+            {
+                var nowMs = Environment.TickCount64;
+                if (nowMs - lastLog > 200)
+                {
+                    try { System.IO.File.AppendAllText("/tmp/everywhere-perf.log",
+                        $"[{System.DateTime.Now:HH:mm:ss.fff}]   Walk progress {ordered.Count} nodes (+{nowMs-walkStart}ms)\n"); }
+                    catch { }
+                    lastLog = nowMs;
+                }
+            }
             var (element, depth, parentIndex, parentFrame, parentWebAreaDepth) = queue.Dequeue();
 
             // Cycle guard. Some platform AX wrappers (Mac AX with detached

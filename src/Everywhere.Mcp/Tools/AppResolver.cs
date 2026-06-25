@@ -22,7 +22,12 @@ internal static class AppResolver
     private static void EnsureA11yEnabledOnce(IVisualElementContext context, int pid)
     {
         if (pid <= 0) return;
-        if (!_a11yEnabledPids.TryAdd(pid, true)) return;
+        if (!_a11yEnabledPids.TryAdd(pid, true))
+        {
+            LogStep("    [a11y] cache hit, skipped", System.Environment.TickCount64);
+            return;
+        }
+        LogStep("    [a11y] cache miss, will call SetAttribute(AXManualAccessibility)", System.Environment.TickCount64);
         // CRITICAL: AXUIElementSetAttributeValue(AXManualAccessibility)
         // is synchronous and blocking. Notes / Finder / Electron etc
         // can take 30+s the first time it fires (full AX subsystem
@@ -35,12 +40,16 @@ internal static class AppResolver
         // in the background, so the NEXT click on the same pid will
         // see the upgraded tree. SwiftUI Calculator-class apps still
         // get enhanced AX on the second call.
+        var taskT = System.Environment.TickCount64;
         var task = System.Threading.Tasks.Task.Run(() =>
         {
+            var inner = System.Environment.TickCount64;
             try { context.TryEnableBestEffortAccessibility(pid); } catch { /* best-effort */ }
+            LogStep($"    [a11y] inner SetAttribute returned (or threw)", inner);
         });
         try { task.Wait(System.TimeSpan.FromMilliseconds(1500)); }
         catch { /* timeout / aggregation — abandon. */ }
+        LogStep("    [a11y] task.Wait(1500ms) returned", taskT);
     }
 
     public readonly record struct ResolvedApp(IVisualElement Window, string AppKey, int ProcessId);

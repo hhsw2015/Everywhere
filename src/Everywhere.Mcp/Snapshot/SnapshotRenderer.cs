@@ -82,8 +82,23 @@ public static class SnapshotRenderer
         var limit = showFullText ? -1 : UpstreamConstants.SnapshotTextDefaultCharacterLimit;
         var sb = new StringBuilder();
         var truncated = false;
+        var renderStart = Environment.TickCount64;
+        var renderLastLog = renderStart;
+        var renderIdx = 0;
         foreach (var node in nodes)
         {
+            renderIdx++;
+            if (renderIdx % 50 == 0)
+            {
+                var nowMs = Environment.TickCount64;
+                if (nowMs - renderLastLog > 200)
+                {
+                    try { System.IO.File.AppendAllText("/tmp/everywhere-perf.log",
+                        $"[{System.DateTime.Now:HH:mm:ss.fff}]   Render progress {renderIdx}/{nodes.Count} (+{nowMs-renderStart}ms)\n"); }
+                    catch { }
+                    renderLastLog = nowMs;
+                }
+            }
             if (Environment.TickCount64 >= stopAt)
             {
                 truncated = true;
