@@ -54,4 +54,12 @@ public readonly record struct CursorTraceEvent(
     double? ToY = null,
     int ClickCount = 1,
     MouseButton Button = MouseButton.Left,
-    string? Label = null);
+    string? Label = null,
+    // ponytail: pid of the click's target app, when known (Click +
+    // Drag from the dispatcher path). Lets the overlay raise itself
+    // above that app's windows specifically — 1:1 OCCU
+    // configureOrdering (SoftwareCursorOverlay.swift L319-345) which
+    // sets panel.level to target window layer and orders above it.
+    // null means "no target known" — overlay falls back to floating
+    // level + orderFront(nil).
+    int? TargetProcessId = null);

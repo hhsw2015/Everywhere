@@ -26,9 +26,11 @@ public sealed class CursorOverlayBridge : IDisposable
         switch (ev.Kind)
         {
             case CursorTraceKind.Move:
+                _overlay.RaiseAboveTarget(ev.TargetProcessId);
                 _overlay.MoveCursor(new Point(ev.X, ev.Y));
                 break;
             case CursorTraceKind.Click:
+                _overlay.RaiseAboveTarget(ev.TargetProcessId);
                 _overlay.MoveCursor(new Point(ev.X, ev.Y));
                 _overlay.PulseClick(new Point(ev.X, ev.Y), ev.ClickCount,
                     rightButton: ev.Button == MouseButton.Right);
@@ -36,6 +38,7 @@ public sealed class CursorOverlayBridge : IDisposable
             case CursorTraceKind.Drag:
                 if (ev.ToX is { } tx && ev.ToY is { } ty)
                 {
+                    _overlay.RaiseAboveTarget(ev.TargetProcessId);
                     _overlay.MoveCursor(new Point(ev.X, ev.Y));
                     _overlay.MoveCursor(new Point(tx, ty));
                 }

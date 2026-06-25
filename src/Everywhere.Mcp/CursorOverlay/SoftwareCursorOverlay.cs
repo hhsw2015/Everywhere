@@ -141,6 +141,23 @@ public sealed class SoftwareCursorOverlay : IAsyncDisposable
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    /// 1:1 OCCU configureOrdering (SoftwareCursorOverlay.swift
+    /// L319-345). Lift the overlay above the click's target app
+    /// front window so the cursor stays visible if that app uses a
+    /// non-default window level (panels, fullscreen views, etc.).
+    /// Caller passes targetProcessId from the click trace; null →
+    /// floating + plain front-most.
+    /// </summary>
+    public void RaiseAboveTarget(int? targetProcessId)
+    {
+        if (_disposed || _windowHelper is null) return;
+        EnsureWindow();
+        if (_window is null || !_window.IsVisible) return;
+        try { _windowHelper.RaiseOverlayAboveTarget(_window, targetProcessId); }
+        catch { /* best-effort. */ }
+    }
+
     public void Settle(Point target)
     {
         if (!IsEnabled || _disposed) return;

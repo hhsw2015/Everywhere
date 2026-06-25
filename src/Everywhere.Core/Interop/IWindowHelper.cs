@@ -57,4 +57,15 @@ public interface IWindowHelper
     /// No-op default for non-Mac platforms.
     /// </summary>
     void ConfigureAsCursorOverlay(Window window) { }
+
+    /// <summary>
+    /// Lift a cursor-overlay window to sit above the front window of
+    /// the target process. Mirrors OCCU configureOrdering
+    /// (SoftwareCursorOverlay.swift L319-345): set panel.level to the
+    /// target window's layer and order(.above, relativeTo: target
+    /// window id). When targetProcessId is null or the target has no
+    /// front window, falls back to floating level + plain front-most.
+    /// No-op default for non-Mac.
+    /// </summary>
+    void RaiseOverlayAboveTarget(Window window, int? targetProcessId) { }
 }

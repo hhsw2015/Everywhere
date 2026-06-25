@@ -23,19 +23,19 @@ public sealed class TracedInputSimulator : IInputSimulator
 
     public void MoveTo(double x, double y, int? targetPid = null)
     {
-        _trace.Publish(new CursorTraceEvent(CursorTraceKind.Move, x, y));
+        _trace.Publish(new CursorTraceEvent(CursorTraceKind.Move, x, y, TargetProcessId: targetPid));
         _inner.MoveTo(x, y, targetPid);
     }
 
     public void Click(double x, double y, int clickCount = 1, MouseButton button = MouseButton.Left, int? targetPid = null)
     {
-        _trace.Publish(new CursorTraceEvent(CursorTraceKind.Click, x, y, ClickCount: clickCount, Button: button));
+        _trace.Publish(new CursorTraceEvent(CursorTraceKind.Click, x, y, ClickCount: clickCount, Button: button, TargetProcessId: targetPid));
         _inner.Click(x, y, clickCount, button, targetPid);
     }
 
     public void DragTo(double fromX, double fromY, double toX, double toY, int? targetPid = null)
     {
-        _trace.Publish(new CursorTraceEvent(CursorTraceKind.Drag, fromX, fromY, ToX: toX, ToY: toY));
+        _trace.Publish(new CursorTraceEvent(CursorTraceKind.Drag, fromX, fromY, ToX: toX, ToY: toY, TargetProcessId: targetPid));
         _inner.DragTo(fromX, fromY, toX, toY, targetPid);
     }
 

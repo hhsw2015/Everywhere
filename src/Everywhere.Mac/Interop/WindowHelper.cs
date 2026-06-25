@@ -206,6 +206,66 @@ public class WindowHelper : IWindowHelper
         NSApplication.SharedApplication.RequestUserAttention(NSRequestUserAttentionType.InformationalRequest);
     }
 
+    public void RaiseOverlayAboveTarget(Window window, int? targetProcessId)
+    {
+        if (GetNativeWindow(window) is not { } nw) return;
+
+        // Default: floating + plain orderFront. OCCU's
+        // configureOrdering(targetWindow=nil) branch (L342).
+        if (targetProcessId is not { } pid || pid <= 0)
+        {
+            nw.Level = NSWindowLevel.Floating;
+            nw.OrderFront(null);
+            return;
+        }
+
+        // Walk on-screen windows from top to bottom; pick the highest
+        // one belonging to the target pid. Mirrors OCCU's
+        // CursorTargetWindow lookup which uses the front window's
+        // CGWindowID + window layer.
+        uint targetWindowId = 0;
+        int targetLayer = 0;
+        try
+        {
+            var listPtr = CGInterop.CGWindowListCopyWindowInfo(
+                CGWindowListOption.OnScreenOnly | CGWindowListOption.ExcludeDesktopElements,
+                relativeToWindow: 0);
+            if (listPtr != 0)
+            {
+                using var arr = Runtime.GetNSObject<NSArray>(listPtr, owns: true);
+                if (arr is { Count: > 0 })
+                {
+                    using var pidKey = new NSString("kCGWindowOwnerPID");
+                    using var idKey = new NSString("kCGWindowNumber");
+                    using var layerKey = new NSString("kCGWindowLayer");
+                    for (nuint i = 0; i < arr.Count; i++)
+                    {
+                        using var dict = arr.GetItem<NSDictionary>(i);
+                        if (dict is null) continue;
+                        if (dict.ObjectForKey(pidKey) is not NSNumber ownerObj || ownerObj.Int32Value != pid) continue;
+                        if (dict.ObjectForKey(idKey) is not NSNumber idObj) continue;
+                        targetWindowId = idObj.UInt32Value;
+                        if (dict.ObjectForKey(layerKey) is NSNumber layerObj) targetLayer = layerObj.Int32Value;
+                        break; // CGWindowList returns front-to-back order.
+                    }
+                }
+            }
+        }
+        catch { /* best-effort. */ }
+
+        // 1:1 OCCU L328-330: panel.level = NSWindow.Level(rawValue: target.layer)
+        nw.Level = (NSWindowLevel)targetLayer;
+        if (targetWindowId != 0)
+        {
+            // 1:1 OCCU L340: panel.order(.above, relativeTo: target.windowID)
+            nw.OrderWindow(NSWindowOrderingMode.Above, (nint)targetWindowId);
+        }
+        else
+        {
+            nw.OrderFront(null);
+        }
+    }
+
     public void ConfigureAsCursorOverlay(Window window)
     {
         if (GetNativeWindow(window) is not { } nw) return;
