@@ -358,7 +358,25 @@ public sealed class SoftwareCursorOverlay : IAsyncDisposable
         return new Vector(Math.Cos(angle), Math.Sin(angle));
     }
 
-    private static Point ClampTipPosition(Point target) => target; // No multi-screen clamp on this platform path.
+    /// <summary>
+    /// 1:1 OCCU SoftwareCursorOverlay.swift:774-789 — clamp the
+    /// requested tip position into the visible frame of the screen
+    /// containing the point (or main, or first). Without this a click
+    /// destined for a window on a secondary display whose
+    /// AppKit/Avalonia coordinate space crosses screen boundaries
+    /// would render the cursor off-edge.
+    /// </summary>
+    private Point ClampTipPosition(Point target)
+    {
+        if (_window?.Screens is not { } screens) return target;
+        var pt = new PixelPoint((int)target.X, (int)target.Y);
+        var screen = screens.ScreenFromPoint(pt) ?? screens.Primary ?? (screens.All.Count > 0 ? screens.All[0] : null);
+        if (screen is null) return target;
+        var wa = screen.WorkingArea;
+        var x = Math.Min(Math.Max(target.X, wa.X), wa.X + wa.Width);
+        var y = Math.Min(Math.Max(target.Y, wa.Y), wa.Y + wa.Height);
+        return new Point(x, y);
+    }
     private static Point DefaultInitialTipPosition() => new(TipAnchor.X, TipAnchor.Y);
     private static double Distance(Point a, Point b)
     {
