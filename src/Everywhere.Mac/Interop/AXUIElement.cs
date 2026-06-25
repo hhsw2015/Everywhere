@@ -1015,10 +1015,28 @@ public partial class AXUIElement : NSObject, IVisualElement
 
     #region Helpers
 
+    // Per-element attribute cache. SnapshotRenderer hits the same
+    // element 10+ times per render (Enabled, Focused, Hidden, ...);
+    // the underlying AXUIElementCopyAttributeValue is a synchronous
+    // cross-process call (~3-5ms), so a 500-node tree spent 30-50s on
+    // duplicate fetches. Cache scope is the element instance — ie one
+    // walk; we deliberately don't cache across walks because AX state
+    // changes (focus, enabled, value) need to be observable.
+    // null entries mean "queried, not present" — distinguished from
+    // "not yet queried" by Dictionary.ContainsKey.
+    private System.Collections.Generic.Dictionary<nint, NSObject?>? _attrCache;
+
     private T? GetAttribute<T>(NSString attributeName) where T : NSObject
     {
+        _attrCache ??= new System.Collections.Generic.Dictionary<nint, NSObject?>(8);
+        var key = (nint)attributeName.Handle;
+        if (_attrCache.TryGetValue(key, out var cached)) return cached as T;
         var error = CopyAttributeValue(Handle, attributeName.Handle, out var value);
-        return error == AXError.Success && value != 0 ? Runtime.GetNSObject<T>(value, owns: true) : null;
+        var obj = error == AXError.Success && value != 0
+            ? Runtime.GetNSObject<T>(value, owns: true)
+            : null;
+        _attrCache[key] = obj;
+        return obj;
     }
 
     private AXUIElement? GetAttributeAsElement(NSString attributeName)
