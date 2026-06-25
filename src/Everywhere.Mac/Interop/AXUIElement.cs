@@ -1057,6 +1057,73 @@ public partial class AXUIElement : NSObject, IVisualElement
     }
 
     /// <summary>
+    /// Set a boolean AX attribute on a process's application element using
+    /// CoreFoundation's kCFBooleanTrue / kCFBooleanFalse singletons.
+    /// AXUIElementSetAttributeValue rejects NSNumber for the private
+    /// AXManualAccessibility / AXEnhancedUserInterface attributes —
+    /// only the CFBoolean singleton is accepted (returns .success).
+    /// 1:1 with OCCU AccessibilitySnapshot.swift L356-357.
+    /// </summary>
+    public static bool SetAppBoolAttribute(int pid, string attributeName, bool value)
+    {
+        if (pid <= 0) return false;
+        var appHandle = CreateApplication(pid);
+        if (appHandle == 0) return false;
+        try
+        {
+            var cfBool = value ? GetCFBooleanTrue() : GetCFBooleanFalse();
+            if (cfBool == 0) return false;
+            using var nsAttr = new Foundation.NSString(attributeName);
+            var err = SetAttributeValue(appHandle, nsAttr.Handle, cfBool);
+            return err == AXError.Success;
+        }
+        finally
+        {
+            CFInterop.CFRelease(appHandle);
+        }
+    }
+
+    private static nint GetCFBooleanTrue()
+    {
+        if (s_cfBooleanTrue == 0)
+        {
+            s_cfBooleanTrue = LoadCFSymbol("kCFBooleanTrue");
+        }
+        return s_cfBooleanTrue;
+    }
+
+    private static nint GetCFBooleanFalse()
+    {
+        if (s_cfBooleanFalse == 0)
+        {
+            s_cfBooleanFalse = LoadCFSymbol("kCFBooleanFalse");
+        }
+        return s_cfBooleanFalse;
+    }
+
+    private static nint s_cfBooleanTrue;
+    private static nint s_cfBooleanFalse;
+
+    private static nint LoadCFSymbol(string symbolName)
+    {
+        const string CoreFoundationLib = "/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation";
+        var lib = NativeLibrary.Load(CoreFoundationLib);
+        if (lib == 0) return 0;
+        try
+        {
+            // kCFBooleanTrue is exported as a pointer-to-pointer global —
+            // dlsym returns the address of the variable, dereference once
+            // to get the actual CFBoolean handle.
+            if (!NativeLibrary.TryGetExport(lib, symbolName, out var addr) || addr == 0) return 0;
+            return Marshal.ReadIntPtr(addr);
+        }
+        catch
+        {
+            return 0;
+        }
+    }
+
+    /// <summary>
     /// Gets the AXUIElement corresponding to the specified CGWindowID.
     /// This is a reverse lookup using _AXUIElementGetWindow under the hood.
     /// </summary>

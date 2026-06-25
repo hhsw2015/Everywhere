@@ -80,15 +80,13 @@ public partial class VisualElementContext(IWindowHelper windowHelper) : IVisualE
         // "full" mode via these two private attributes. Set on the
         // application element, then re-walk the tree.
         if (processId <= 0) return false;
-        using var app = AXUIElement.ElementFromPid(processId);
-        if (app is null) return false;
-        using var manualKey = new Foundation.NSString("AXManualAccessibility");
-        using var enhancedKey = new Foundation.NSString("AXEnhancedUserInterface");
-        using var trueValue = Foundation.NSNumber.FromBoolean(true);
-        var manualOk = app.SetAttribute(manualKey, trueValue);
-        var enhancedOk = app.SetAttribute(enhancedKey, trueValue);
-        // ponytail diagnostic: log result so we can see whether the
-        // upgrade is being accepted by the target app on this host.
+        // 1:1 OCCU AccessibilitySnapshot.swift:352-358. Must use the
+        // CoreFoundation kCFBooleanTrue singleton — AXUIElementSet-
+        // AttributeValue rejects NSNumber(true) on these private
+        // attributes (silent .failure). v0.9.91 diagnostic confirmed:
+        // both calls returned false in production with NSNumber.
+        var manualOk = AXUIElement.SetAppBoolAttribute(processId, "AXManualAccessibility", true);
+        var enhancedOk = AXUIElement.SetAppBoolAttribute(processId, "AXEnhancedUserInterface", true);
         try
         {
             System.IO.File.AppendAllText("/tmp/everywhere-a11y.log",
