@@ -20,4 +20,11 @@
     <ProjectReference Include="..\Everywhere.Core\Everywhere.Core.csproj" />
     <ProjectReference Include="..\Everywhere.Terminal\Everywhere.Terminal.csproj" />
   </ItemGroup>
+
+  <ItemGroup>
+    <!-- 1:1 OCCU CursorPanel uses the bundled "official-software-cursor-
+         window-252.png" as the primary glyph (NSImage rotate/scale at
+         draw time). Source: open-computer-use@0.1.53 MIT. -->
+    <EmbeddedResource Include="CursorOverlay\Assets\official-software-cursor-window-252.png" />
+  </ItemGroup>
 </Project>

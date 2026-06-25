@@ -49,11 +49,42 @@ internal static class CursorGlyphRenderer
     private static readonly SKColor PointerStroke = new(
         red: (byte)(0.90 * 255), green: (byte)(0.90 * 255), blue: (byte)(0.90 * 255), alpha: (byte)(0.92 * 255));
 
+    // 1:1 OCCU bundled PNG primary path. The procedural contour stays
+    // as fallback if the asset can't be loaded. Sourced from
+    // open-computer-use@0.1.53/Resources, MIT.
+    private static SKBitmap? _referenceBitmap;
+    private static bool _referenceBitmapTried;
+    private const string ReferenceBitmapResourceName =
+        "Everywhere.Mcp.CursorOverlay.Assets.official-software-cursor-window-252.png";
+
+    private static SKBitmap? LoadReferenceBitmap()
+    {
+        if (_referenceBitmapTried) return _referenceBitmap;
+        _referenceBitmapTried = true;
+        try
+        {
+            var asm = typeof(CursorGlyphRenderer).Assembly;
+            using var stream = asm.GetManifestResourceStream(ReferenceBitmapResourceName);
+            if (stream is null) return null;
+            using var ms = new System.IO.MemoryStream();
+            stream.CopyTo(ms);
+            ms.Position = 0;
+            _referenceBitmap = SKBitmap.Decode(ms);
+        }
+        catch
+        {
+            _referenceBitmap = null;
+        }
+        return _referenceBitmap;
+    }
+
     /// <summary>
     /// Draws the official-style software cursor glyph at the given
-    /// bounds. Upstream had a referenceImage fast-path (bundled PNG);
-    /// we always draw the procedural form so the binary stays small
-    /// and the result is identical across platforms.
+    /// bounds. 1:1 OCCU SoftwareCursorGlyphRenderer primary path: blit
+    /// the bundled 252×252 RGBA PNG with the same rotate / scale
+    /// transform as the procedural body. Falls back to procedural
+    /// contour drawing if the asset is unavailable (binary-trimmed
+    /// build, asset load failure).
     /// </summary>
     public static void Draw(SKCanvas canvas, Rect bounds, CursorGlyphRenderState state)
     {
@@ -67,8 +98,43 @@ internal static class CursorGlyphRenderer
             midY + CursorGlyphMetrics.PointerOffset.Y + drawingState.CursorBodyOffset.Y + (pulse * 0.35));
 
         DrawFog(canvas, fogCenter, pulse, drawingState.FogOpacity, drawingState.FogScale);
+
+        var refBitmap = LoadReferenceBitmap();
+        if (refBitmap is not null)
+        {
+            DrawReferenceBitmap(canvas, refBitmap, bounds, pointerCenter, drawingState.Rotation, pulse,
+                drawingState.CursorBodyOffset, new Point(midX, midY));
+            return;
+        }
+
         DrawPointer(canvas, pointerCenter, drawingState.Rotation, pulse,
             drawingState.CursorBodyOffset, new Point(midX, midY));
+    }
+
+    /// <summary>
+    /// Mirror OCCU's NSImage.draw fast-path: stretch the 252×252 art
+    /// over the full window canvas and apply the same body / artwork
+    /// transforms as the procedural fallback so motion + click pulse
+    /// behavior is identical.
+    /// </summary>
+    private static void DrawReferenceBitmap(SKCanvas canvas, SKBitmap bitmap, Rect bounds, Point pointerCenter,
+        double rotation, double clickProgress, Vector cursorBodyOffset, Point boundsMidpoint)
+    {
+        canvas.Save();
+        canvas.Translate((float)(boundsMidpoint.X + cursorBodyOffset.X), (float)(boundsMidpoint.Y + cursorBodyOffset.Y));
+        canvas.RotateRadians((float)rotation);
+        canvas.Scale((float)(1 - clickProgress * 0.04), (float)(1 + clickProgress * 0.02));
+        canvas.Translate(-(float)(boundsMidpoint.X + cursorBodyOffset.X), -(float)(boundsMidpoint.Y + cursorBodyOffset.Y));
+        canvas.Translate((float)pointerCenter.X, (float)pointerCenter.Y);
+        canvas.RotateRadians((float)CursorGlyphMetrics.PointerArtworkRotation);
+        canvas.Translate(-(float)pointerCenter.X, -(float)pointerCenter.Y);
+
+        var dst = SKRect.Create(
+            (float)bounds.X, (float)bounds.Y,
+            (float)bounds.Width, (float)bounds.Height);
+        using var paint = new SKPaint { IsAntialias = true, FilterQuality = SKFilterQuality.High };
+        canvas.DrawBitmap(bitmap, dst, paint);
+        canvas.Restore();
     }
 
     private static void DrawFog(SKCanvas canvas, Point center, double pulse, double fogOpacity, double fogScale)
