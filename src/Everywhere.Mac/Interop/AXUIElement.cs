@@ -759,15 +759,16 @@ public partial class AXUIElement : NSObject, IVisualElement
         try
         {
             var availDump = available.Count > 0 ? string.Join(",", available) : "<empty>";
-            var handle = (nint)actionName.Handle;
+            var handle = actionName is null ? (nint)0 : (nint)actionName.Handle;
             System.IO.File.AppendAllText("/tmp/everywhere-perform.log",
-                $"[{System.DateTime.Now:HH:mm:ss.fff}] Gated handle=0x{handle:X} n='{n}' (len={n.Length}) avail=[{availDump}] found={found}\n");
+                $"[{System.DateTime.Now:HH:mm:ss.fff}] Gated handle=0x{handle:X} n='{n}' (len={(n?.Length ?? -1)}) avail=[{availDump}] found={found}\n");
         }
         catch (Exception ex)
         {
             try { System.IO.File.AppendAllText("/tmp/everywhere-perform.log", $"Gated log err: {ex.Message}\n"); } catch { }
         }
         if (!found) return false;
+        if (actionName is null) return false;
         var attempts = Math.Max(clickCount, 1);
         for (var i = 0; i < attempts; i++)
         {
@@ -777,7 +778,7 @@ public partial class AXUIElement : NSObject, IVisualElement
             // Previous fuller version did exactly that — file never
             // appeared even though this branch was reached.
             string actionNameStr;
-            try { actionNameStr = (string)actionName; } catch { actionNameStr = "?"; }
+            try { actionNameStr = (string?)actionName ?? "?"; } catch { actionNameStr = "?"; }
             try
             {
                 System.IO.File.AppendAllText("/tmp/everywhere-perform.log",
