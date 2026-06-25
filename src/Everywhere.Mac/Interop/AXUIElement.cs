@@ -755,6 +755,15 @@ public partial class AXUIElement : NSObject, IVisualElement
         for (var i = 0; i < attempts; i++)
         {
             var error = PerformAction(Handle, actionName.Handle);
+            // ponytail diagnostic: log every PerformAction with element
+            // role + raw handle so we can compare against OCCU's run on
+            // the same Calculator button.
+            try
+            {
+                System.IO.File.AppendAllText("/tmp/everywhere-perform.log",
+                    $"[{System.DateTime.Now:HH:mm:ss.fff}] PerformAction action={actionName} role={Role} handle={(nint)Handle:X} pid={ProcessId} -> {error}\n");
+            }
+            catch { }
             if (error != AXError.Success)
             {
                 // Auto-detect SwiftUI signature: the verb WAS advertised
