@@ -186,8 +186,22 @@ internal static class ElementClickDispatcher
                             : null;
                         try
                         {
+                            // GLOBAL tap (targetPid=null), not PostToPid.
+                            // SwiftUI macOS 26+ (Calculator) accepts AXPress
+                            // with success status but the gesture never
+                            // fires, AND CGEventPostToPid bypasses the
+                            // systemwide gesture-recognizer tap so the same
+                            // click via PostToPid is silently ignored. The
+                            // GLOBAL HidEventTap is the only path that
+                            // actually triggers the SwiftUI gesture.
+                            // FocusBorrow above already raised the target
+                            // app via AXRaise + activate + 250ms settle
+                            // (Spec §7), so the global event hits the right
+                            // window. MacInputSimulator latches the cursor
+                            // around the down/up sequence so the user's
+                            // trackpad can't slide it away mid-click.
                             input.Click(cx, cy, clickCount, mouseButton,
-                                targetPid: resolved?.ProcessId);
+                                targetPid: null);
                         }
                         finally
                         {

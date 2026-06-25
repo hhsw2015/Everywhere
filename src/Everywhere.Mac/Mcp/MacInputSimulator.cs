@@ -35,23 +35,30 @@ public sealed class MacInputSimulator : IInputSimulator
         try
         {
             var (cgButton, downType, upType) = Map(button);
-            // For GLOBAL clicks (targetPid=null → HidEventTap), warp the
-            // hardware cursor to the click point first. Otherwise mouseDown
-            // can land on the physical-cursor's prior position because
-            // macOS samples real-cursor location at hit-test time.
-            // Targeted (PostToPid) doesn't go through the system tap so
-            // it doesn't need this.
+            // For GLOBAL clicks (targetPid=null → HidEventTap), warp the real
+            // hardware cursor first AND keep it latched for the duration of
+            // the click. macOS samples the physical cursor position at
+            // hit-test time on HidEventTap, so the synthesized mouseDown
+            // misses if the user's trackpad slides the cursor away during
+            // our inter-event sleeps. CGWarpMouseCursorPosition implicitly
+            // disassociates mouse/cursor for ~250ms; we let that latch run
+            // through the down/up sequence and re-associate AFTER so the
+            // user regains control. Targeted (PostToPid) bypasses hit-test
+            // and doesn't need any of this.
             if (!targetPid.HasValue)
             {
                 CGWarpMouseCursorPosition(new CGPoint(x, y));
-                CGAssociateMouseAndMouseCursorPosition(1);
-                Thread.Sleep(10); // settle
+                Thread.Sleep(15); // let warp settle before the first event
             }
             for (var i = 0; i < Math.Max(clickCount, 1); i++)
             {
                 PostMouse(src, CGEventType.MouseMoved, x, y, cgButton, clickCount, targetPid);
                 PostMouse(src, downType, x, y, cgButton, clickCount, targetPid);
                 PostMouse(src, upType, x, y, cgButton, clickCount, targetPid);
+            }
+            if (!targetPid.HasValue)
+            {
+                CGAssociateMouseAndMouseCursorPosition(1);
             }
         }
         finally { CFRelease(src); }
