@@ -14,13 +14,16 @@ public enum ScreenshotFormat
 
 public sealed record ScreenshotEncodeOptions(
     ScreenshotFormat Format = ScreenshotFormat.Jpeg,
-    int Quality = 80,
-    int MaxHeight = 1080);
+    int Quality = 70,
+    int MaxHeight = 1080,
+    int MaxWidth = 1920);
 
 /// <summary>
-/// Encodes a captured bitmap into a base64 string. Default JPEG@80 / 1080p height
-/// keeps a typical 1728×1080 desktop screenshot at ~150-300 KB ⇒ ~50-75 K agent
-/// tokens, vs. PNG-100 ~1 MB ⇒ ~330 K tokens.
+/// Encodes a captured bitmap into a base64 string. Default JPEG@70 /
+/// 1920×1080 cap keeps a 5K-display window screenshot at ~70-100 KB ⇒
+/// ~25-35 K agent tokens, vs. PNG-100 ~3 MB ⇒ ~1 M tokens. quality=70
+/// is visually indistinguishable from 80 on UI chrome but ~15% smaller.
+/// Pass MaxWidth=0 / MaxHeight=0 to disable that axis.
 /// </summary>
 public static class ScreenshotEncoder
 {
@@ -63,11 +66,11 @@ public static class ScreenshotEncoder
         EncodeBase64(captured, new(ScreenshotFormat.Png, 100, 0));
 
     public static string? EncodePngBase64(Bitmap? bitmap) =>
-        EncodeBase64(bitmap, new(ScreenshotFormat.Png, 100, 0));
+        EncodeBase64(bitmap, new(ScreenshotFormat.Png, 100, 0, 0));
 
     private static string Encode(SKImage source, ScreenshotEncodeOptions opts)
     {
-        var (w, h) = ComputeSize(source.Width, source.Height, opts.MaxHeight);
+        var (w, h) = ComputeSize(source.Width, source.Height, opts.MaxWidth, opts.MaxHeight);
         var quality = Math.Clamp(opts.Quality, 1, 100);
 
         byte[] bytes;
@@ -98,12 +101,16 @@ public static class ScreenshotEncoder
         return Convert.ToBase64String(bytes);
     }
 
-    private static (int W, int H) ComputeSize(int srcW, int srcH, int maxHeight)
+    private static (int W, int H) ComputeSize(int srcW, int srcH, int maxWidth, int maxHeight)
     {
-        if (maxHeight <= 0 || srcH <= maxHeight) return (srcW, srcH);
-        var ratio = (double)maxHeight / srcH;
+        // Pick the more restrictive axis so neither dimension exceeds its cap.
+        var ratioW = maxWidth > 0 && srcW > maxWidth ? (double)maxWidth / srcW : 1.0;
+        var ratioH = maxHeight > 0 && srcH > maxHeight ? (double)maxHeight / srcH : 1.0;
+        var ratio = Math.Min(ratioW, ratioH);
+        if (ratio >= 1.0) return (srcW, srcH);
+
         var w = Math.Max(2, (int)Math.Round(srcW * ratio));
-        var h = Math.Max(2, maxHeight);
+        var h = Math.Max(2, (int)Math.Round(srcH * ratio));
         // Some encoders (yuv420p downstream) require even dimensions.
         if (w % 2 != 0) w--;
         if (h % 2 != 0) h--;

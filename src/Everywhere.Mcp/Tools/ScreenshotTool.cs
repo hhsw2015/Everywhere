@@ -15,9 +15,9 @@ public static class ScreenshotTool
     [Description(
         "Capture a base64-encoded screenshot. Targets in priority order: element_index → app_hint " +
         "→ focused window. " +
-        "Defaults: format=jpeg, quality=80, max_height=1080 — yields ~150-300 KB " +
-        "(~50-75 K agent tokens) vs. legacy PNG ~1 MB (~330 K tokens). " +
-        "Pass format=\"png\" + quality=100 + max_height=0 when you need bit-perfect output (OCR / diff). " +
+        "Defaults: format=jpeg, quality=70, max_height=1080, max_width=1920 — keeps a 5K-display " +
+        "window at ~70-100 KB (~25-35 K agent tokens) vs. PNG-100 ~3 MB (~1 M tokens). " +
+        "Pass format=\"png\" + quality=100 + max_height=0 + max_width=0 when you need bit-perfect output (OCR / diff). " +
         "raise_if_needed: When true, briefly raise the target to the foreground before capture and " +
         "restore the previous foreground. Use only when the target may be obscured / off-screen / not " +
         "actively rendered (background tabs in some apps, occluded windows). " +
@@ -33,6 +33,7 @@ public static class ScreenshotTool
         string? format = null,
         int? quality = null,
         int? max_height = null,
+        int? max_width = null,
         bool raise_if_needed = false)
     {
         try
@@ -70,10 +71,13 @@ public static class ScreenshotTool
                 ? focusBorrow.Acquire(windowHandle, requireFocus: true, processId: processId)
                 : null;
 
+            // Use record defaults (Quality=70, MaxHeight=1080, MaxWidth=1920)
+            // unless caller overrides. ScreenshotEncoder.cs is the source of truth.
             var opts = new ScreenshotEncodeOptions(
                 Format: ParseFormat(format),
-                Quality: quality ?? 80,
-                MaxHeight: max_height ?? 1080);
+                Quality: quality ?? 70,
+                MaxHeight: max_height ?? 1080,
+                MaxWidth: max_width ?? 1920);
 
             using var captured = await target!.CaptureAsync(cancellationToken);
             var base64 = ScreenshotEncoder.EncodeBase64(captured, opts);
