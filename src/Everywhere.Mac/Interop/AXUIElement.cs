@@ -627,14 +627,18 @@ public partial class AXUIElement : NSObject, IVisualElement
         //    even when no action verb fits.
         if (canUseActivationOnlyClickFallback(Role) && TryActivate(available)) { Thread.Sleep(150); return; }
 
-        // Auto-upgrade signal: if AXPress was advertised but
-        // AXUIElementPerformAction returned a real error (cannotComplete
-        // / failure), SwiftUI-on-AppKit is the most likely cause. We
-        // tag the exception message so the dispatcher's coord fallback
-        // upgrades to GLOBAL without needing the env-var. Tag is a
-        // stable substring; dispatcher does Contains("[swiftui]").
-        var swiftuiHint = (LastInvokeError == AXError.CannotComplete
-                          || LastInvokeError == AXError.Failure)
+        // Auto-upgrade signal: if AXPress was advertised but the whole
+        // chain still failed, SwiftUI-on-AppKit is the most likely cause
+        // (SwiftUI binds AXPress to the gesture recognizer at hit-test
+        // time; AXUIElementPerformAction either no-ops with .success or
+        // returns one of several errors — Calculator 26 returns codes
+        // outside cannotComplete/failure on some hosts). Detection now
+        // keys on "AXPress advertised AND chain fell through" — any non-
+        // Success LastInvokeError counts. Tag is a stable substring;
+        // dispatcher does Contains("[swiftui]").
+        // ponytail: broader than the original 2-error allowlist, narrow
+        // back if we ever see a non-SwiftUI app trip the tag.
+        var swiftuiHint = LastInvokeError != AXError.Success
                           && available.Any(a => string.Equals(a, "AXPress", StringComparison.OrdinalIgnoreCase))
             ? " [swiftui]"
             : string.Empty;
