@@ -123,6 +123,15 @@ public interface IVisualElementContext : IObservable<TextSelectionData>
     IVisualElement? FreshFocusedWindowOf(int processId) => null;
 
     /// <summary>
+    /// Fast app lookup by name fragment without enumerating every
+    /// other app's AX tree. macOS impl uses NSWorkspace.runningApps
+    /// to find a pid match, then AXUIElementCreateApplication +
+    /// AXFocusedWindow / AXMainWindow for the front window. Returns
+    /// null if no match — caller falls back to full screen-walk.
+    /// </summary>
+    IVisualElement? TryFastResolveByName(string name) => null;
+
+    /// <summary>
     /// Let the user pick an element from the screen.
     /// </summary>
     /// <param name="initialMode">

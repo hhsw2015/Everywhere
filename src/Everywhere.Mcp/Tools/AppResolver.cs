@@ -81,21 +81,50 @@ internal static class AppResolver
 
         var candidates = new List<(IVisualElement Window, string AppKey, int ProcessId, long Area)>();
         var stepT = System.Environment.TickCount64;
-        foreach (var screen in context.Screens)
+
+        // Fast path: ask the platform context for the candidate pid by
+        // name (NSWorkspace.runningApplications, etc) — bypasses
+        // enumerating every other app's AX tree, which is what made
+        // Notes/Finder Resolve cost 10-30s on machines with many apps
+        // open. Falls back to the screen walk only if the platform
+        // can't provide a fast lookup.
+        IVisualElement? fastWindow = null;
+        int fastPid = 0;
+        foreach (var q in queries)
         {
-            foreach (var topLevel in screen.Children)
+            if (context.TryFastResolveByName(q) is { } hit)
             {
-                if (!queries.Any(q => Matches(topLevel, q)))
-                {
-                    continue;
-                }
-                var key = AppKey.FromProcessId(topLevel.ProcessId);
-                var bounds = topLevel.BoundingRectangle;
-                var area = (long)Math.Max(0, bounds.Width) * Math.Max(0, bounds.Height);
-                candidates.Add((topLevel, key, topLevel.ProcessId, area));
+                fastWindow = hit;
+                fastPid = hit.ProcessId;
+                break;
             }
         }
-        LogStep($"  Resolve.scanCandidates(found={candidates.Count})", stepT);
+        if (fastWindow is not null)
+        {
+            var key = AppKey.FromProcessId(fastPid);
+            var bounds = fastWindow.BoundingRectangle;
+            var area = (long)Math.Max(0, bounds.Width) * Math.Max(0, bounds.Height);
+            candidates.Add((fastWindow, key, fastPid, area));
+            LogStep($"  Resolve.fastResolve(pid={fastPid})", stepT);
+        }
+        else
+        {
+            foreach (var screen in context.Screens)
+            {
+                foreach (var topLevel in screen.Children)
+                {
+                    if (!queries.Any(q => Matches(topLevel, q)))
+                    {
+                        continue;
+                    }
+                    var key = AppKey.FromProcessId(topLevel.ProcessId);
+                    var bounds = topLevel.BoundingRectangle;
+                    var area = (long)Math.Max(0, bounds.Width) * Math.Max(0, bounds.Height);
+                    candidates.Add((topLevel, key, topLevel.ProcessId, area));
+                }
+            }
+            LogStep($"  Resolve.scanCandidates(found={candidates.Count})", stepT);
+        }
 
         if (candidates.Count == 0)
         {

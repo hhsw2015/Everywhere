@@ -76,6 +76,24 @@ public partial class VisualElementContext(IWindowHelper windowHelper) : IVisualE
         return AXUIElement.FreshFocusedWindowOf(processId);
     }
 
+    public IVisualElement? TryFastResolveByName(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return null;
+        var apps = NSWorkspace.SharedWorkspace.RunningApplications;
+        foreach (var app in apps)
+        {
+            if (app.ActivationPolicy == NSApplicationActivationPolicy.Prohibited) continue;
+            var localized = app.LocalizedName;
+            var bundle = app.BundleIdentifier;
+            if ((localized != null && localized.Contains(name, StringComparison.OrdinalIgnoreCase)) ||
+                (bundle != null && bundle.Contains(name, StringComparison.OrdinalIgnoreCase)))
+            {
+                return AXUIElement.FreshFocusedWindowOf(app.ProcessIdentifier);
+            }
+        }
+        return null;
+    }
+
     public bool TryEnableBestEffortAccessibility(int processId)
     {
         // 1:1 OCCU AccessibilitySnapshot.swift:352-358. SwiftUI buttons
