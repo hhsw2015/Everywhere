@@ -22,11 +22,25 @@ internal static class AppResolver
     private static void EnsureA11yEnabledOnce(IVisualElementContext context, int pid)
     {
         if (pid <= 0) return;
-        // TryAdd is atomic — only the first thread per pid proceeds to
-        // the (expensive) enable call. If the call throws we don't
-        // retry, matching OCCU's once-per-snapshot behavior.
         if (!_a11yEnabledPids.TryAdd(pid, true)) return;
-        try { context.TryEnableBestEffortAccessibility(pid); } catch { /* best-effort */ }
+        // CRITICAL: AXUIElementSetAttributeValue(AXManualAccessibility)
+        // is synchronous and blocking. Notes / Finder / Electron etc
+        // can take 30+s the first time it fires (full AX subsystem
+        // rebuild, no way to cancel). That's the "几分钟" hang —
+        // it's BEFORE Walk so the deadline can't help.
+        //
+        // Cap it at 1.5s. The call is fired on the thread pool with a
+        // bounded wait; if it doesn't return in time we abandon the
+        // wait and continue. The system's still working on the rebuild
+        // in the background, so the NEXT click on the same pid will
+        // see the upgraded tree. SwiftUI Calculator-class apps still
+        // get enhanced AX on the second call.
+        var task = System.Threading.Tasks.Task.Run(() =>
+        {
+            try { context.TryEnableBestEffortAccessibility(pid); } catch { /* best-effort */ }
+        });
+        try { task.Wait(System.TimeSpan.FromMilliseconds(1500)); }
+        catch { /* timeout / aggregation — abandon. */ }
     }
 
     public readonly record struct ResolvedApp(IVisualElement Window, string AppKey, int ProcessId);
