@@ -772,7 +772,7 @@ public partial class AXUIElement : NSObject, IVisualElement
         var attempts = Math.Max(clickCount, 1);
         for (var i = 0; i < attempts; i++)
         {
-            var error = PerformAction(Handle, actionName.Handle);
+            var error = PerformAction(Handle, actionName!.Handle);
             // ponytail diagnostic: minimal log so a throw in Role /
             // (nint)Handle / ProcessId getters can't swallow the entry.
             // Previous fuller version did exactly that — file never
