@@ -750,18 +750,29 @@ public partial class AXUIElement : NSObject, IVisualElement
                 break;
             }
         }
+        // ponytail: log every gated call so we know whether `found`
+        // is the gate that drops us short of PerformAction.
+        try
+        {
+            System.IO.File.AppendAllText("/tmp/everywhere-perform.log",
+                $"[{System.DateTime.Now:HH:mm:ss.fff}] Gated action={n} availableCount={available.Count} found={found}\n");
+        }
+        catch { }
         if (!found) return false;
         var attempts = Math.Max(clickCount, 1);
         for (var i = 0; i < attempts; i++)
         {
             var error = PerformAction(Handle, actionName.Handle);
-            // ponytail diagnostic: log every PerformAction with element
-            // role + raw handle so we can compare against OCCU's run on
-            // the same Calculator button.
+            // ponytail diagnostic: minimal log so a throw in Role /
+            // (nint)Handle / ProcessId getters can't swallow the entry.
+            // Previous fuller version did exactly that — file never
+            // appeared even though this branch was reached.
+            string actionNameStr;
+            try { actionNameStr = actionName.ToString(); } catch { actionNameStr = "?"; }
             try
             {
                 System.IO.File.AppendAllText("/tmp/everywhere-perform.log",
-                    $"[{System.DateTime.Now:HH:mm:ss.fff}] PerformAction action={actionName} role={Role} handle={(nint)Handle:X} pid={ProcessId} -> {error}\n");
+                    $"[{System.DateTime.Now:HH:mm:ss.fff}] PerformAction action={actionNameStr} -> {error}\n");
             }
             catch { }
             if (error != AXError.Success)
