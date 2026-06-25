@@ -740,7 +740,12 @@ public partial class AXUIElement : NSObject, IVisualElement
         // Only post when the element actually advertises this action.
         // The .success short-circuit on unsupported verbs in macOS AX
         // makes blind posting unreliable.
-        var n = actionName.ToString();
+        // ponytail: NSString.ToString() returned "" in production
+        // (v0.9.96 perform.log showed "action= availableCount=1
+        // found=False"), so the entire gate was a no-op and dispatcher
+        // threw "actions=[AXPress]" while available really did contain
+        // "AXPress". Use NSString implicit string conversion instead.
+        string n = (string)actionName;
         var found = false;
         for (var i = 0; i < available.Count; i++)
         {
@@ -750,12 +755,10 @@ public partial class AXUIElement : NSObject, IVisualElement
                 break;
             }
         }
-        // ponytail: log every gated call so we know whether `found`
-        // is the gate that drops us short of PerformAction.
         try
         {
             System.IO.File.AppendAllText("/tmp/everywhere-perform.log",
-                $"[{System.DateTime.Now:HH:mm:ss.fff}] Gated action={n} availableCount={available.Count} found={found}\n");
+                $"[{System.DateTime.Now:HH:mm:ss.fff}] Gated action='{n}' availableCount={available.Count} found={found}\n");
         }
         catch { }
         if (!found) return false;
@@ -768,11 +771,11 @@ public partial class AXUIElement : NSObject, IVisualElement
             // Previous fuller version did exactly that — file never
             // appeared even though this branch was reached.
             string actionNameStr;
-            try { actionNameStr = actionName.ToString(); } catch { actionNameStr = "?"; }
+            try { actionNameStr = (string)actionName; } catch { actionNameStr = "?"; }
             try
             {
                 System.IO.File.AppendAllText("/tmp/everywhere-perform.log",
-                    $"[{System.DateTime.Now:HH:mm:ss.fff}] PerformAction action={actionNameStr} -> {error}\n");
+                    $"[{System.DateTime.Now:HH:mm:ss.fff}] PerformAction action='{actionNameStr}' -> {error}\n");
             }
             catch { }
             if (error != AXError.Success)
