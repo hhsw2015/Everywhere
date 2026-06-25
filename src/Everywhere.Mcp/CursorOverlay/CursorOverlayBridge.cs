@@ -19,6 +19,7 @@ public sealed class CursorOverlayBridge : IDisposable
         _trace = trace;
         _overlay = overlay;
         _trace.Event += OnTraceEvent;
+        _trace.MoveAndAwait = overlay.MoveCursorAsync;
     }
 
     private void OnTraceEvent(CursorTraceEvent ev)

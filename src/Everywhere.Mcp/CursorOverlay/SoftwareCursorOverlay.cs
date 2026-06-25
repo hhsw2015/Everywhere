@@ -76,15 +76,30 @@ public sealed class SoftwareCursorOverlay : IAsyncDisposable
     public void Disable() { lock (_gate) { IsEnabled = false; Reset(); } }
     public void Enable()  { lock (_gate) IsEnabled = true; }
 
+    /// <summary>
+    /// Move the soft cursor and return a Task that completes when the
+    /// spring animation has visibly converged on the target — mirrors
+    /// OCCU's DispatchQueue.main.sync + synchronous moveCursor. Callers
+    /// awaiting this can sequence a follow-up action (AX click, AX
+    /// state change) so the cursor appears to "arrive, then act"
+    /// instead of the target reacting before the cursor catches up.
+    /// </summary>
     public Task MoveCursorAsync(Point target)
     {
-        Dispatcher.UIThread.Post(() => MoveCursor(target));
-        return Task.CompletedTask;
+        var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        Dispatcher.UIThread.Post(() => MoveCursor(target, tcs));
+        return tcs.Task;
     }
 
-    public void MoveCursor(Point target)
+    public void MoveCursor(Point target) => MoveCursor(target, completion: null);
+
+    private void MoveCursor(Point target, TaskCompletionSource<bool>? completion)
     {
-        if (!IsEnabled || _disposed) return;
+        if (!IsEnabled || _disposed)
+        {
+            completion?.TrySetResult(false);
+            return;
+        }
         EnsureWindow();
         StopIdleAnimation();
         CancelPendingHide();
@@ -99,9 +114,6 @@ public sealed class SoftwareCursorOverlay : IAsyncDisposable
             try { _windowHelper.ConfigureAsCursorOverlay(_window); _nativeOverlayConfigured = true; }
             catch { /* overlay is best-effort. */ }
         }
-        // OCR fix: order(.above, target) is silently ignored on a
-        // hidden NSWindow, so apply pending RaiseAboveTarget here,
-        // after Show. Bridge stages the request before MoveCursor.
         ApplyPendingOrdering();
         if (isFreshStart)
         {
@@ -117,7 +129,15 @@ public sealed class SoftwareCursorOverlay : IAsyncDisposable
         }
 
         if (Distance(startPoint, constrained) > 2)
-            AnimateMove(startPoint, constrained);
+        {
+            AnimateMove(startPoint, constrained, completion);
+        }
+        else
+        {
+            // No motion needed — cursor already at target. Signal
+            // completion immediately so the awaiter can proceed.
+            completion?.TrySetResult(true);
+        }
     }
 
     public Task PulseClickAsync(Point target, int clickCount = 1, bool rightButton = false)
@@ -227,7 +247,9 @@ public sealed class SoftwareCursorOverlay : IAsyncDisposable
         _window?.SetOrigin(origin);
     }
 
-    private void AnimateMove(Point start, Point end)
+    private void AnimateMove(Point start, Point end) => AnimateMove(start, end, completion: null);
+
+    private void AnimateMove(Point start, Point end, TaskCompletionSource<bool>? completion)
     {
         // Upstream uses calibrated travel duration + spring progress
         // animator. We do the same — same parameters, same math.
@@ -274,6 +296,7 @@ public sealed class SoftwareCursorOverlay : IAsyncDisposable
                 var (s2, r2) = AdvanceVisualDynamics(end, NowSeconds());
                 _visualDynamicsState = s2;
                 PlaceCursor(r2, clickProgress: 0);
+                completion?.TrySetResult(true);
             }
         };
         timer.Start();

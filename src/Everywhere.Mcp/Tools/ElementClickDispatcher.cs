@@ -116,21 +116,24 @@ internal static class ElementClickDispatcher
                     tx = rect.X + rect.Width / 2.0;
                     ty = rect.Y + rect.Height / 2.0;
                     haveCenter = true;
-                    tracedSim.Trace.Publish(new Everywhere.Mcp.Input.CursorTraceEvent(
-                        Everywhere.Mcp.Input.CursorTraceKind.Move, tx, ty));
-                    // OCCU's moveVisualCursor uses DispatchQueue.main.sync
-                    // and blocks until SoftwareCursorOverlay.moveCursor
-                    // returns (spring runs synchronously to close-enough).
-                    // We can't get the same semantics through Avalonia's
-                    // Dispatcher.UIThread.Post — it's fire-and-forget. So
-                    // we sleep long enough that the spring has
-                    // realistically converged before AX flips the target.
-                    // Spring config: response=1.4, dampingFraction=0.9.
-                    // CloseEnoughTimeValue from CursorMotionModel lands
-                    // around 280-320ms; 320ms gives us a margin of safety
-                    // and matches OCCU's "cursor visibly arrives, then
-                    // the click happens" feel.
-                    System.Threading.Thread.Sleep(320);
+                    // 1:1 OCCU moveVisualCursor (DispatchQueue.main.sync):
+                    // wait until the spring has actually converged on the
+                    // target before AX changes button state. The trace's
+                    // MoveAndAwait hook returns a Task that completes
+                    // when AnimateMove's tick loop hits close-enough. If
+                    // no overlay is wired (headless / cursor disabled),
+                    // the hook is null and we just fire-and-forget via
+                    // Publish + skip the wait.
+                    if (tracedSim.Trace.MoveAndAwait is { } awaiter)
+                    {
+                        try { awaiter(new Avalonia.Point(tx, ty)).GetAwaiter().GetResult(); }
+                        catch { /* overlay best-effort */ }
+                    }
+                    else
+                    {
+                        tracedSim.Trace.Publish(new Everywhere.Mcp.Input.CursorTraceEvent(
+                            Everywhere.Mcp.Input.CursorTraceKind.Move, tx, ty));
+                    }
                 }
             }
             element.Invoke(clickCount);

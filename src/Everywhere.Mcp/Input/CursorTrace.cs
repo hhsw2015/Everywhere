@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using Avalonia;
 using Avalonia.Threading;
 
 namespace Everywhere.Mcp.Input;
@@ -18,11 +19,18 @@ public sealed class CursorTrace
 {
     public event Action<CursorTraceEvent>? Event;
 
+    /// <summary>
+    /// Optional sync hook for the AX-success path in
+    /// ElementClickDispatcher: bridge installs a handler that
+    /// invokes SoftwareCursorOverlay.MoveCursorAsync and returns its
+    /// Task. Dispatcher awaits the Task before calling AX so the
+    /// soft cursor visibly arrives at the target before the button
+    /// reacts. Null when no overlay is wired up.
+    /// </summary>
+    public Func<Point, Task>? MoveAndAwait { get; set; }
+
     public void Publish(CursorTraceEvent ev)
     {
-        // UI thread will subscribe; marshal the post-back to it so the
-        // event handler can directly mutate Avalonia visuals without
-        // re-dispatching every call.
         var handler = Event;
         if (handler is null) return;
         if (Dispatcher.UIThread.CheckAccess())
