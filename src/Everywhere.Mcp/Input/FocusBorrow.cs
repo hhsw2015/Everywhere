@@ -33,9 +33,13 @@ public sealed class FocusBorrow
             throw new TimeoutException("FocusBorrow contention exceeded 5s.");
         }
 
-        var prev = _backend.GetForegroundWindow();
+        // ponytail: GetForegroundWindow ran outside the try-catch, so any
+        // exception there leaked the gate process-wide until restart.
+        // Bring it inside.
+        nint prev;
         try
         {
+            prev = _backend.GetForegroundWindow();
             // 1:1 OCCU prepareAppForGlobalPointerInput
             // (InputSimulation.swift L48-56):
             //   if raiseAppWindowViaAccessibility(pid) { sleep 120ms; return }
