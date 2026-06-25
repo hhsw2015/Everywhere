@@ -132,6 +132,18 @@ public interface IVisualElementContext : IObservable<TextSelectionData>
     IVisualElement? TryFastResolveByName(string name) => null;
 
     /// <summary>
+    /// Fast list of running apps without enumerating every app's AX
+    /// children (which is what made list_apps cost 10-30s on machines
+    /// with many apps open). macOS impl uses
+    /// NSWorkspace.runningApplications + AXUIElementCreateApplication
+    /// per app to get only the focused/main window — no walks through
+    /// other apps' subtrees. Returns empty when the platform can't
+    /// provide a fast lookup; caller falls back to the screen walk.
+    /// </summary>
+    IReadOnlyList<(IVisualElement Window, int ProcessId)> TryFastListApps() =>
+        System.Array.Empty<(IVisualElement, int)>();
+
+    /// <summary>
     /// Let the user pick an element from the screen.
     /// </summary>
     /// <param name="initialMode">

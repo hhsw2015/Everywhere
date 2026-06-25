@@ -94,6 +94,22 @@ public partial class VisualElementContext(IWindowHelper windowHelper) : IVisualE
         return null;
     }
 
+    public IReadOnlyList<(IVisualElement Window, int ProcessId)> TryFastListApps()
+    {
+        var apps = NSWorkspace.SharedWorkspace.RunningApplications;
+        var result = new List<(IVisualElement, int)>(apps.Length);
+        foreach (var app in apps)
+        {
+            if (app.ActivationPolicy == NSApplicationActivationPolicy.Prohibited) continue;
+            var pid = app.ProcessIdentifier;
+            if (pid <= 0) continue;
+            var win = AXUIElement.FreshFocusedWindowOf(pid);
+            if (win is null) continue;
+            result.Add((win, pid));
+        }
+        return result;
+    }
+
     public bool TryEnableBestEffortAccessibility(int processId)
     {
         // 1:1 OCCU AccessibilitySnapshot.swift:352-358. SwiftUI buttons

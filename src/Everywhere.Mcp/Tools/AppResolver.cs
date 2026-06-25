@@ -157,10 +157,20 @@ internal static class AppResolver
 
     public static IReadOnlyList<ResolvedApp> ListApps(IVisualElementContext context)
     {
-        // Per process, keep the LARGEST visible top-level window so the title we report is
-        // the one a user would actually associate with that app (avoids reporting a menubar
-        // overlay's title when the app also has a real main window). Do NOT drop menubar-only
-        // apps — they are real installed programs the agent may need to drive.
+        // Fast path via NSWorkspace; bypasses the per-app AX subtree walks
+        // that made the original Screens.Children path cost 10-30s.
+        var fast = context.TryFastListApps();
+        if (fast.Count > 0)
+        {
+            var resultFast = new List<ResolvedApp>(fast.Count);
+            foreach (var (window, pid) in fast)
+            {
+                resultFast.Add(new ResolvedApp(window, AppKey.FromProcessId(pid), pid));
+            }
+            return resultFast;
+        }
+
+        // Fallback (Windows backend / Mac edge cases).
         var byProcess = new Dictionary<int, (IVisualElement Window, long Area)>();
         foreach (var screen in context.Screens)
         {
