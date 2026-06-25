@@ -218,14 +218,24 @@ internal static class ElementClickDispatcher
                             //
                             // We mirror the env flag name with EVERYWHERE_*
                             // prefix.
-                            var allowGlobal = Environment.GetEnvironmentVariable(
-                                "EVERYWHERE_ALLOW_GLOBAL_POINTER_FALLBACKS") == "1";
+                            // Auto-detect SwiftUI: AXUIElement.Invoke
+                            // tags its exception message with " [swiftui]"
+                            // when AXPress was advertised but
+                            // AXUIElementPerformAction returned
+                            // CannotComplete/Failure (the SwiftUI
+                            // gesture-recognizer signature). Upgrade to
+                            // GLOBAL automatically — the only path that
+                            // hits the SwiftUI gesture tap. Mirrors
+                            // OCCU's env-flag opt-in but keyed on a
+                            // real failure mode instead of user config.
+                            var swiftuiDetected = axEx.Message.Contains("[swiftui]", StringComparison.Ordinal);
+                            var allowGlobal = swiftuiDetected
+                                || Environment.GetEnvironmentVariable("EVERYWHERE_ALLOW_GLOBAL_POINTER_FALLBACKS") == "1";
                             if (Environment.GetEnvironmentVariable("EVERYWHERE_DEBUG_INPUT_FALLBACKS") == "1")
                             {
-                                // OCCU debugInputFallback (CUS L1566-1575):
-                                // single stderr line per coord fallback.
+                                // OCCU debugInputFallback (CUS L1566-1575).
                                 Console.Error.WriteLine(
-                                    $"[everywhere] {(allowGlobal ? "global" : "targeted")} pointer fallback tool=click app={appHint ?? "?"} target=({cx},{cy})");
+                                    $"[everywhere] {(allowGlobal ? "global" : "targeted")} pointer fallback tool=click app={appHint ?? "?"} target=({cx},{cy}) swiftui={swiftuiDetected}");
                             }
                             input.Click(cx, cy, clickCount, mouseButton,
                                 targetPid: allowGlobal ? null : resolved?.ProcessId);

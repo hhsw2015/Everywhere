@@ -1,4 +1,5 @@
-﻿using System.Runtime.InteropServices;
+﻿using System.Linq;
+using System.Runtime.InteropServices;
 using Avalonia;
 using CoreFoundation;
 using Everywhere.Interop;
@@ -626,8 +627,19 @@ public partial class AXUIElement : NSObject, IVisualElement
         //    even when no action verb fits.
         if (canUseActivationOnlyClickFallback(Role) && TryActivate(available)) { Thread.Sleep(150); return; }
 
+        // Auto-upgrade signal: if AXPress was advertised but
+        // AXUIElementPerformAction returned a real error (cannotComplete
+        // / failure), SwiftUI-on-AppKit is the most likely cause. We
+        // tag the exception message so the dispatcher's coord fallback
+        // upgrades to GLOBAL without needing the env-var. Tag is a
+        // stable substring; dispatcher does Contains("[swiftui]").
+        var swiftuiHint = (LastInvokeError == AXError.CannotComplete
+                          || LastInvokeError == AXError.Failure)
+                          && available.Any(a => string.Equals(a, "AXPress", StringComparison.OrdinalIgnoreCase))
+            ? " [swiftui]"
+            : string.Empty;
         throw new InvalidOperationException(
-            $"No supported AX action available (role={Role}, actions=[{string.Join(",", available)}])");
+            $"No supported AX action available (role={Role}, actions=[{string.Join(",", available)}]){swiftuiHint}");
     }
 
     private bool TryDescendantClick(AXUIElement node, int depth, int clickCount)
@@ -694,11 +706,34 @@ public partial class AXUIElement : NSObject, IVisualElement
         for (var i = 0; i < attempts; i++)
         {
             var error = PerformAction(Handle, actionName.Handle);
-            if (error != AXError.Success) return false;
+            if (error != AXError.Success)
+            {
+                // Auto-detect SwiftUI signature: the verb WAS advertised
+                // but PerformAction came back with a non-Success error.
+                // SwiftUI-on-AppKit binds AXPress to the gesture
+                // recognizer at hit-test time, so AXUIElement gets a
+                // cannotComplete / failure when invoked headlessly.
+                // Cache it so the dispatcher's coord fallback can
+                // upgrade to GLOBAL automatically without env-var.
+                LastInvokeError = error;
+                return false;
+            }
             if (i < attempts - 1) Thread.Sleep(50);
         }
+        LastInvokeError = AXError.Success;
         return true;
     }
+
+    /// <summary>
+    /// Thread-local last AX error from TryPerformActionGated. Read by
+    /// ElementClickDispatcher to decide whether the click failure
+    /// looks like a SwiftUI gesture-recognizer rejection (verb was
+    /// available, AXUIElementPerformAction returned non-Success) —
+    /// in that case the coord fallback upgrades to GLOBAL even
+    /// without EVERYWHERE_ALLOW_GLOBAL_POINTER_FALLBACKS=1.
+    /// </summary>
+    [ThreadStatic]
+    public static AXError LastInvokeError;
 
     /// <summary>
     /// AX action with explicit verb selector — used by perform_secondary_action
