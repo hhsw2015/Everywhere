@@ -71,6 +71,26 @@ public partial class VisualElementContext(IWindowHelper windowHelper) : IVisualE
         return AXUIElement.ElementFromWindowId((uint)windowHandle);
     }
 
+    public bool TryEnableBestEffortAccessibility(int processId)
+    {
+        // 1:1 OCCU AccessibilitySnapshot.swift:352-358. SwiftUI buttons
+        // (Calculator 26 was the smoking gun) advertise AXPress but
+        // AXUIElementPerformAction silently no-ops on the cached
+        // element ref until the app's a11y subsystem is upgraded to
+        // "full" mode via these two private attributes. Set on the
+        // application element, then re-walk the tree.
+        if (processId <= 0) return false;
+        var app = AXUIElement.ElementFromPid(processId);
+        if (app is null) return false;
+        var manualOk = app.SetAttribute(
+            new Foundation.NSString("AXManualAccessibility"),
+            Foundation.NSNumber.FromBoolean(true));
+        var enhancedOk = app.SetAttribute(
+            new Foundation.NSString("AXEnhancedUserInterface"),
+            Foundation.NSNumber.FromBoolean(true));
+        return manualOk || enhancedOk;
+    }
+
     public Task<IVisualElement?> PickVisualElementAsync(ScreenSelectionMode? initialMode)
     {
         return PickerSession.PickAsync(windowHelper, initialMode);

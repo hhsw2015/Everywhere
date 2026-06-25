@@ -96,6 +96,20 @@ public interface IVisualElementContext : IObservable<TextSelectionData>
     IVisualElement? ElementFromWindowHandle(nint windowHandle);
 
     /// <summary>
+    /// Best-effort hint to the OS accessibility layer that we want the
+    /// full a11y tree for this process. On macOS this sets
+    /// AXManualAccessibility + AXEnhancedUserInterface on the
+    /// application element, which Chromium/Electron and (critically)
+    /// SwiftUI use to switch from a simplified surrogate tree to the
+    /// real gesture-bindable elements. Without it,
+    /// AXUIElementPerformAction(AXPress) on a SwiftUI button can
+    /// silently no-op. Mirrors OCCU AccessibilitySnapshot.swift L109 /
+    /// L352. Returns true if at least one attribute was accepted;
+    /// caller treats failure as harmless.
+    /// </summary>
+    bool TryEnableBestEffortAccessibility(int processId) => false;
+
+    /// <summary>
     /// Let the user pick an element from the screen.
     /// </summary>
     /// <param name="initialMode">

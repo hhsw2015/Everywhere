@@ -53,6 +53,7 @@ internal static class AppResolver
                 if (top is not null && Matches(top, app))
                 {
                     var key = AppKey.FromProcessId(top.ProcessId);
+                    context.TryEnableBestEffortAccessibility(top.ProcessId);
                     return new ResolvedApp(top, key, top.ProcessId);
                 }
             }
@@ -60,6 +61,12 @@ internal static class AppResolver
         }
 
         var best = candidates.OrderByDescending(c => c.Area).First();
+        // 1:1 OCCU AccessibilitySnapshot L109: enable best-effort
+        // accessibility modes on the resolved app before any traversal
+        // or click. Lights up SwiftUI / Electron / Chromium real
+        // gesture elements (AXManualAccessibility +
+        // AXEnhancedUserInterface). No-op on Windows backend.
+        context.TryEnableBestEffortAccessibility(best.ProcessId);
         return new ResolvedApp(best.Window, best.AppKey, best.ProcessId);
     }
 
