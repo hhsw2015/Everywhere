@@ -627,19 +627,19 @@ public partial class AXUIElement : NSObject, IVisualElement
         //    even when no action verb fits.
         if (canUseActivationOnlyClickFallback(Role) && TryActivate(available)) { Thread.Sleep(150); return; }
 
-        // Auto-upgrade signal: if AXPress was advertised but the whole
-        // chain still failed, SwiftUI-on-AppKit is the most likely cause
-        // (SwiftUI binds AXPress to the gesture recognizer at hit-test
-        // time; AXUIElementPerformAction either no-ops with .success or
-        // returns one of several errors — Calculator 26 returns codes
-        // outside cannotComplete/failure on some hosts). Detection now
-        // keys on "AXPress advertised AND chain fell through" — any non-
-        // Success LastInvokeError counts. Tag is a stable substring;
-        // dispatcher does Contains("[swiftui]").
-        // ponytail: broader than the original 2-error allowlist, narrow
-        // back if we ever see a non-SwiftUI app trip the tag.
-        var swiftuiHint = LastInvokeError != AXError.Success
-                          && available.Any(a => string.Equals(a, "AXPress", StringComparison.OrdinalIgnoreCase))
+        // Auto-upgrade signal: AXPress advertised AND chain fell through
+        // is enough to flag SwiftUI-on-AppKit (SwiftUI binds AXPress to
+        // the gesture recognizer at hit-test, so AXUIElementPerformAction
+        // either no-ops with .success or fails with a host-specific
+        // error). Tag is a stable substring; dispatcher does
+        // Contains("[swiftui]").
+        // ponytail: stop reading the [ThreadStatic] LastInvokeError —
+        // async/await may resume on a different thread and the slot
+        // reads back as default(AXError)=Success. The advertise-vs-
+        // result divergence is the real signal: if the AX chain fell
+        // all the way through and Press was on the menu, treat it as
+        // SwiftUI without needing a specific error code.
+        var swiftuiHint = available.Any(a => string.Equals(a, "AXPress", StringComparison.OrdinalIgnoreCase))
             ? " [swiftui]"
             : string.Empty;
         throw new InvalidOperationException(
