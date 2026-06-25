@@ -39,7 +39,15 @@ public static class AXAttributeConstants
     // toggles respond to Confirm, files respond to Open, context menus
     // are surfaced via ShowMenu). Calling the wrong verb returns
     // AXError.ActionUnsupported, so we walk a fallback chain.
-    public static readonly NSString Press = new("AXPress");
+    // ponytail: Press is special — pre-allocated as a static field
+    // its underlying CFString handle came back as 0x0 in production
+    // (v0.9.100 perform.log). Cause unknown; possibly AOT init order
+    // or trim removal. Allocate lazily via a property; trades one
+    // alloc per click chain for a guaranteed live handle. Confirm /
+    // Open / ShowMenu are kept as static fields — they work — until
+    // proven they hit the same issue.
+    private static NSString? _press;
+    public static NSString Press => _press ??= new NSString("AXPress");
     public static readonly NSString Confirm = new("AXConfirm");
     public static readonly NSString Open = new("AXOpen");
     public static readonly NSString ShowMenu = new("AXShowMenu");
