@@ -39,19 +39,37 @@ public static class GetAppContextTool
         {
             if (string.IsNullOrWhiteSpace(app_hint)) return ToolErrors.ParameterRequired("app_hint");
 
+            void LogPhase(string phase, long t0)
+            {
+                var ms = System.Environment.TickCount64 - t0;
+                try
+                {
+                    System.IO.File.AppendAllText("/tmp/everywhere-perf.log",
+                        $"[{System.DateTime.Now:HH:mm:ss.fff}] get_app_context({app_hint}) {phase} took {ms}ms\n");
+                }
+                catch { }
+            }
+
+            var t0 = System.Environment.TickCount64;
+            var t = t0;
             var resolved = AppResolver.Resolve(context, app_hint);
+            LogPhase("Resolve", t); t = System.Environment.TickCount64;
             if (resolved is null) return ToolErrors.AppNotRunning(app_hint);
 
             using var borrow = raise_if_needed
                 ? focusBorrow.Acquire(resolved.Value.Window.NativeWindowHandle, requireFocus: true, processId: resolved.Value.ProcessId)
                 : null;
+            LogPhase("FocusBorrow.Acquire", t); t = System.Environment.TickCount64;
 
             var window = resolved.Value.Window;
             var nodes = ElementIndexer.Walk(window);
+            LogPhase($"Walk(nodes={nodes.Count})", t); t = System.Environment.TickCount64;
             var elementMap = ElementIndexer.ToIndexMap(nodes);
             sessions.Issue(resolved.Value.AppKey, elementMap, window.NativeWindowHandle);
 
             var treeText = SnapshotRenderer.Render(nodes, show_full_text);
+            LogPhase("Render", t);
+            LogPhase("TOTAL", t0);
 
             // ponytail: base64 screenshot dominates payload size when on
             // (~50KB-300KB). Default off; opt in per-call via

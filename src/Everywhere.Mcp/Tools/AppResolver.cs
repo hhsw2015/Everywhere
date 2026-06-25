@@ -45,12 +45,24 @@ internal static class AppResolver
 
     public readonly record struct ResolvedApp(IVisualElement Window, string AppKey, int ProcessId);
 
+    private static void LogStep(string label, long t0)
+    {
+        var ms = System.Environment.TickCount64 - t0;
+        try
+        {
+            System.IO.File.AppendAllText("/tmp/everywhere-perf.log",
+                $"[{System.DateTime.Now:HH:mm:ss.fff}]   {label} took {ms}ms\n");
+        }
+        catch { }
+    }
+
     public static ResolvedApp? Resolve(IVisualElementContext context, string app)
     {
         if (string.IsNullOrWhiteSpace(app))
         {
             return null;
         }
+        var rt = System.Environment.TickCount64;
 
         // Build a list of candidate query strings: original hint plus any category aliases
         // ("browser" → arc/safari/chrome/...) so a generic noun resolves to whichever
@@ -59,6 +71,7 @@ internal static class AppResolver
         queries.AddRange(AppAliases.Expand(app));
 
         var candidates = new List<(IVisualElement Window, string AppKey, int ProcessId, long Area)>();
+        var stepT = System.Environment.TickCount64;
         foreach (var screen in context.Screens)
         {
             foreach (var topLevel in screen.Children)
@@ -73,6 +86,7 @@ internal static class AppResolver
                 candidates.Add((topLevel, key, topLevel.ProcessId, area));
             }
         }
+        LogStep($"  Resolve.scanCandidates(found={candidates.Count})", stepT);
 
         if (candidates.Count == 0)
         {
@@ -94,16 +108,12 @@ internal static class AppResolver
         }
 
         var best = candidates.OrderByDescending(c => c.Area).First();
+        var enableT = System.Environment.TickCount64;
         EnsureA11yEnabledOnce(context, best.ProcessId);
-        // 1:1 OCCU AccessibilitySnapshot.swift L108-L130: replace the
-        // window candidate with a fresh AXUIElementCreateApplication →
-        // kAXFocusedWindow ref before traversal. Element refs sourced
-        // through Avalonia's ScreenSelectionSession path are stale
-        // surrogates on SwiftUI; fresh refs from the application root
-        // accept AXUIElementPerformAction. Falls back to the original
-        // candidate when the fresh lookup returns null (other
-        // platforms, transient launch state).
+        LogStep("  Resolve.EnsureA11yEnabledOnce", enableT);
+        var freshT = System.Environment.TickCount64;
         var freshWindow = context.FreshFocusedWindowOf(best.ProcessId) ?? best.Window;
+        LogStep("  Resolve.FreshFocusedWindowOf", freshT);
         return new ResolvedApp(freshWindow, best.AppKey, best.ProcessId);
     }
 
