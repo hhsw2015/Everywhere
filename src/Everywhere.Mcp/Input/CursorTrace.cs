@@ -21,13 +21,18 @@ public sealed class CursorTrace
 
     /// <summary>
     /// Optional sync hook for the AX-success path in
-    /// ElementClickDispatcher: bridge installs a handler that
-    /// invokes SoftwareCursorOverlay.MoveCursorAsync and returns its
-    /// Task. Dispatcher awaits the Task before calling AX so the
-    /// soft cursor visibly arrives at the target before the button
-    /// reacts. Null when no overlay is wired up.
+    /// ElementClickDispatcher: bridge installs a handler that raises
+    /// the overlay above the target window then invokes
+    /// SoftwareCursorOverlay.MoveCursorAsync and returns its Task.
+    /// Dispatcher awaits the Task before calling AX so the soft
+    /// cursor visibly arrives at the target before the button
+    /// reacts. Null when no overlay is wired up. Pass the target
+    /// pid so the bridge can apply OCCU-style window ordering on
+    /// this code path too — without it, AX-only clicks bypass the
+    /// per-target NSWindow level adjustment that the trace event
+    /// path applies.
     /// </summary>
-    public Func<Point, Task>? MoveAndAwait { get; set; }
+    public Func<int?, Point, Task>? MoveAndAwait { get; set; }
 
     public void Publish(CursorTraceEvent ev)
     {

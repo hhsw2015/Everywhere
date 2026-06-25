@@ -133,10 +133,18 @@ internal static class ElementClickDispatcher
                             // let this caller hold FocusBorrow forever.
                             // 1500ms is well above the spring's normal
                             // ~280-320ms close-enough time.
-                            var t = awaiter(new Avalonia.Point(tx, ty));
-                            t.Wait(System.TimeSpan.FromMilliseconds(1500));
+                            var pid = element.ProcessId is int p && p > 0 ? p : (int?)null;
+                            var t = awaiter(pid, new Avalonia.Point(tx, ty));
+                            if (!t.Wait(System.TimeSpan.FromMilliseconds(1500)))
+                            {
+                                System.Diagnostics.Debug.WriteLine(
+                                    "[everywhere] cursor MoveAndAwait timed out >1500ms; click proceeding without visible arrival");
+                            }
                         }
-                        catch { /* overlay best-effort */ }
+                        catch (System.Exception ex)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"[everywhere] cursor MoveAndAwait error: {ex.GetType().Name}: {ex.Message}");
+                        }
                     }
                     else
                     {

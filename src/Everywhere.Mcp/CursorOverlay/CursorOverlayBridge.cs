@@ -19,7 +19,15 @@ public sealed class CursorOverlayBridge : IDisposable
         _trace = trace;
         _overlay = overlay;
         _trace.Event += OnTraceEvent;
-        _trace.MoveAndAwait = overlay.MoveCursorAsync;
+        _trace.MoveAndAwait = (pid, point) =>
+        {
+            // Match OnTraceEvent(Move) ordering: raise overlay above
+            // the target's front window first, otherwise an AX-only
+            // click on a foreground app with custom window levels
+            // would render the soft cursor underneath the target.
+            _overlay.RaiseAboveTarget(pid);
+            return _overlay.MoveCursorAsync(point);
+        };
     }
 
     private void OnTraceEvent(CursorTraceEvent ev)

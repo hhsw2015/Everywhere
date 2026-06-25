@@ -215,7 +215,7 @@ public sealed class SoftwareCursorOverlay : IAsyncDisposable
         StopIdleAnimation();
         CancelPendingHide();
         _moveTimer?.Stop(); _moveTimer = null;
-        _activeMoveCompletion?.TrySetResult(false); _activeMoveCompletion = null;
+        System.Threading.Interlocked.Exchange(ref _activeMoveCompletion, null)?.TrySetResult(false);
         _pulseTimer?.Stop(); _pulseTimer = null;
         _displayedTipPosition = null;
         _restingTipPosition = null;
@@ -262,8 +262,12 @@ public sealed class SoftwareCursorOverlay : IAsyncDisposable
         // succession had two timers fighting over PlaceCursor.
         // Unblock any awaiter still hanging on the prior animation
         // so dispatcher.AX-path doesn't leak its FocusBorrow gate.
-        _activeMoveCompletion?.TrySetResult(false);
-        _activeMoveCompletion = completion;
+        // Atomic swap: if Reset() races on a worker thread, we want
+        // exactly one of (this AnimateMove, that Reset) to win the
+        // signal-then-replace; without Interlocked the new completion
+        // could be installed before the prior is signaled.
+        var prior = System.Threading.Interlocked.Exchange(ref _activeMoveCompletion, completion);
+        prior?.TrySetResult(false);
         _moveTimer?.Stop();
         _moveTimer = null;
 
@@ -275,7 +279,7 @@ public sealed class SoftwareCursorOverlay : IAsyncDisposable
             // No motion candidate — short-circuit the await so caller
             // isn't blocked.
             completion?.TrySetResult(false);
-            if (ReferenceEquals(_activeMoveCompletion, completion)) _activeMoveCompletion = null;
+            System.Threading.Interlocked.CompareExchange(ref _activeMoveCompletion, null, completion);
             return;
         }
         var best = bestN.Value;
@@ -298,7 +302,13 @@ public sealed class SoftwareCursorOverlay : IAsyncDisposable
             // (e.g. ElementClickDispatcher.AX path's GetResult()) sits
             // forever, holds FocusBorrow, and every subsequent
             // get_app_context times out with "contention exceeded 5s".
-            if (!ReferenceEquals(_moveTimer, timer)) { timer.Stop(); completion?.TrySetResult(false); return; }
+            if (!ReferenceEquals(_moveTimer, timer))
+            {
+                timer.Stop();
+                completion?.TrySetResult(false);
+                System.Threading.Interlocked.CompareExchange(ref _activeMoveCompletion, null, completion);
+                return;
+            }
             var elapsed = NowSeconds() - startTime;
             var normalizedElapsed = Math.Clamp(elapsed / Math.Max(duration, 0.001), 0, 1);
             var springTime = normalizedElapsed * springTargetDuration;
@@ -316,7 +326,7 @@ public sealed class SoftwareCursorOverlay : IAsyncDisposable
                 _visualDynamicsState = s2;
                 PlaceCursor(r2, clickProgress: 0);
                 completion?.TrySetResult(true);
-                if (ReferenceEquals(_activeMoveCompletion, completion)) _activeMoveCompletion = null;
+                System.Threading.Interlocked.CompareExchange(ref _activeMoveCompletion, null, completion);
             }
         };
         timer.Start();
