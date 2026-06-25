@@ -212,27 +212,15 @@ public partial class AXUIElement : NSObject, IVisualElement
         }
     }
 
-    private static readonly NSString[] StateAttrKeys =
-    {
-        AXAttributeConstants.Enabled, AXAttributeConstants.Focused,
-        AXAttributeConstants.Hidden, AXAttributeConstants.Selected,
-        AXAttributeConstants.Expanded, AXAttributeConstants.Required,
-        AXAttributeConstants.Edited, AXAttributeConstants.MainTrait,
-        AXAttributeConstants.MinimizedAttr, AXAttributeConstants.GrabbedAttr,
-        AXAttributeConstants.Value,
-    };
-    // Build the CFArray once at static init — every States() call
-    // would otherwise allocate + free a 11-element NSArray, undoing
-    // most of the batch round-trip savings.
-    private static readonly NSArray StateAttrNames = NSArray.FromNSObjects(StateAttrKeys);
-
     public VisualElementStates States
     {
         get
         {
-            // Batch prefetch in one round-trip; subsequent GetAttribute
-            // calls below are pure dictionary lookups.
-            PrefetchAttributes(StateAttrNames, StateAttrKeys);
+            // Per-attr cache (v0.9.108) covers duplicate fetches in the
+            // same render. Batch path (v0.9.109/110) caused hangs in
+            // AOT-trimmed builds (NSString static-init ordering vs
+            // NSArray.FromNSObjects building a CFArray of zero-handle
+            // elements) — reverted to single-attr fetches via cache.
             var states = VisualElementStates.None;
             if (GetAttribute<NSNumber>(AXAttributeConstants.Enabled)?.BoolValue == false) states |= VisualElementStates.Disabled;
             if (GetAttribute<NSNumber>(AXAttributeConstants.Focused)?.BoolValue == true) states |= VisualElementStates.Focused;
@@ -1038,41 +1026,34 @@ public partial class AXUIElement : NSObject, IVisualElement
     // the cache for the whole element.
     // null entries mean "queried, not present" — distinguished from
     // "not yet queried" by Dictionary.ContainsKey.
+    // Per-element scalar attribute cache (v0.9.108). Only NSNumber /
+    // NSString / AXValue cached — collection types skip to avoid
+    // caller-disposal races. Single-threaded by convention (snapshot
+    // render runs sequentially); no lock needed.
     private System.Collections.Generic.Dictionary<nint, NSObject?>? _scalarAttrCache;
-    private readonly object _scalarCacheLock = new();
 
     private static bool IsCacheable<T>() where T : NSObject =>
-        typeof(T) == typeof(NSNumber) || typeof(T) == typeof(NSString);
+        typeof(T) == typeof(NSNumber) || typeof(T) == typeof(NSString) || typeof(T) == typeof(AXValue);
 
     private T? GetAttribute<T>(NSString attributeName) where T : NSObject
     {
         var cacheable = IsCacheable<T>();
         var key = (nint)attributeName.Handle;
-        if (cacheable)
-        {
-            lock (_scalarCacheLock)
-            {
-                if (_scalarAttrCache is not null && _scalarAttrCache.TryGetValue(key, out var cached))
-                    return cached as T;
-            }
-        }
+        if (cacheable && _scalarAttrCache is { } cache && cache.TryGetValue(key, out var cached))
+            return cached as T;
+
         var error = CopyAttributeValue(Handle, attributeName.Handle, out var value);
         var obj = error == AXError.Success && value != 0
             ? Runtime.GetNSObject<T>(value, owns: true)
             : null;
+
         if (cacheable)
         {
-            lock (_scalarCacheLock)
+            _scalarAttrCache ??= new System.Collections.Generic.Dictionary<nint, NSObject?>(12);
+            if (!_scalarAttrCache.ContainsKey(key))
             {
-                _scalarAttrCache ??= new System.Collections.Generic.Dictionary<nint, NSObject?>(12);
-                if (!_scalarAttrCache.ContainsKey(key))
-                {
-                    // Retain so the element owns the lifetime; release
-                    // by leaving the entry behind when this AXUIElement
-                    // is GC'd alongside its underlying CFType.
-                    obj?.DangerousRetain();
-                    _scalarAttrCache[key] = obj;
-                }
+                obj?.DangerousRetain();
+                _scalarAttrCache[key] = obj;
             }
         }
         return obj;
@@ -1288,44 +1269,9 @@ public partial class AXUIElement : NSObject, IVisualElement
     [LibraryImport(AppServices, EntryPoint = "AXUIElementCopyAttributeValue")]
     private static partial AXError CopyAttributeValue(nint element, nint attribute, out nint value);
 
-    [LibraryImport(AppServices, EntryPoint = "AXUIElementCopyMultipleAttributeValues")]
-    private static partial AXError CopyMultipleAttributeValues(nint element, nint attributes, uint options, out nint values);
-
-    // kAXCopyMultipleAttributeOptionStopOnError = 0x1.
-    private const uint AXStopOnError = 0x1;
-
-    /// <summary>
-    /// Prefetch a set of attributes in one cross-process round-trip
-    /// (AXUIElementCopyMultipleAttributeValues) and seed the per-
-    /// element scalar cache. Returns silently on partial-error so the
-    /// caller's per-attr GetAttribute fallbacks still execute on miss.
-    /// </summary>
-    public void PrefetchAttributes(NSArray names, IReadOnlyList<NSString> nameKeys)
-    {
-        if (nameKeys.Count == 0) return;
-
-        // StopOnError: bail to per-attr fallbacks rather than caching
-        // AXValueErrorRef wrappers in error slots.
-        var err = CopyMultipleAttributeValues((nint)Handle, (nint)names.Handle, AXStopOnError, out var values);
-        if (err != AXError.Success || values == 0) return;
-        using var arr = Runtime.GetNSObject<NSArray>(values, owns: true);
-        if (arr is null || arr.Count != (nuint)nameKeys.Count) return;
-
-        lock (_scalarCacheLock)
-        {
-            _scalarAttrCache ??= new System.Collections.Generic.Dictionary<nint, NSObject?>(nameKeys.Count);
-            for (var i = 0; i < nameKeys.Count; i++)
-            {
-                var key = (nint)nameKeys[i].Handle;
-                if (_scalarAttrCache.ContainsKey(key)) continue;
-                var item = arr.GetItem<NSObject>((nuint)i);
-                // Retain so the value survives `arr.Dispose()` below.
-                // Element's lifetime now owns this CFType ref.
-                item?.DangerousRetain();
-                _scalarAttrCache[key] = item;
-            }
-        }
-    }
+    // PrefetchAttributes (v0.9.109/110 batch path) removed — caused
+    // hangs in AOT-trimmed builds. Cache layer (v0.9.108) alone is
+    // sufficient for the 80% case (duplicate fetches in same render).
 
     // CoreFoundation path is identical to the one used in MacBrowserUrlReader.
     private const string CoreFoundationLib =
