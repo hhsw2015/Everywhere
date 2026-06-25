@@ -212,7 +212,7 @@ public partial class AXUIElement : NSObject, IVisualElement
         }
     }
 
-    private static readonly NSString[] StateAttrs =
+    private static readonly NSString[] StateAttrKeys =
     {
         AXAttributeConstants.Enabled, AXAttributeConstants.Focused,
         AXAttributeConstants.Hidden, AXAttributeConstants.Selected,
@@ -221,16 +221,18 @@ public partial class AXUIElement : NSObject, IVisualElement
         AXAttributeConstants.MinimizedAttr, AXAttributeConstants.GrabbedAttr,
         AXAttributeConstants.Value,
     };
+    // Build the CFArray once at static init — every States() call
+    // would otherwise allocate + free a 11-element NSArray, undoing
+    // most of the batch round-trip savings.
+    private static readonly NSArray StateAttrNames = NSArray.FromNSObjects(StateAttrKeys);
 
     public VisualElementStates States
     {
         get
         {
-            // Batch prefetch all state attrs in one cross-process
-            // round-trip via AXUIElementCopyMultipleAttributeValues
-            // (~3-5ms one shot vs 11 separate calls). Cache hit
-            // afterward returns immediately.
-            PrefetchAttributes(StateAttrs);
+            // Batch prefetch in one round-trip; subsequent GetAttribute
+            // calls below are pure dictionary lookups.
+            PrefetchAttributes(StateAttrNames, StateAttrKeys);
             var states = VisualElementStates.None;
             if (GetAttribute<NSNumber>(AXAttributeConstants.Enabled)?.BoolValue == false) states |= VisualElementStates.Disabled;
             if (GetAttribute<NSNumber>(AXAttributeConstants.Focused)?.BoolValue == true) states |= VisualElementStates.Focused;
@@ -1028,27 +1030,51 @@ public partial class AXUIElement : NSObject, IVisualElement
 
     #region Helpers
 
-    // Per-element attribute cache. SnapshotRenderer hits the same
-    // element 10+ times per render (Enabled, Focused, Hidden, ...);
-    // the underlying AXUIElementCopyAttributeValue is a synchronous
-    // cross-process call (~3-5ms), so a 500-node tree spent 30-50s on
-    // duplicate fetches. Cache scope is the element instance — ie one
-    // walk; we deliberately don't cache across walks because AX state
-    // changes (focus, enabled, value) need to be observable.
+    // Per-element scalar attribute cache. ONLY caches immutable scalar
+    // wrappers (NSNumber/NSString) so caller `using` blocks can't
+    // dispose a shared instance. NSArray and other collection wrappers
+    // are intentionally NOT cached — Children/Rows/Contents callers
+    // wrap them in `using` and disposing a cached array would invalidate
+    // the cache for the whole element.
     // null entries mean "queried, not present" — distinguished from
     // "not yet queried" by Dictionary.ContainsKey.
-    private System.Collections.Generic.Dictionary<nint, NSObject?>? _attrCache;
+    private System.Collections.Generic.Dictionary<nint, NSObject?>? _scalarAttrCache;
+    private readonly object _scalarCacheLock = new();
+
+    private static bool IsCacheable<T>() where T : NSObject =>
+        typeof(T) == typeof(NSNumber) || typeof(T) == typeof(NSString);
 
     private T? GetAttribute<T>(NSString attributeName) where T : NSObject
     {
-        _attrCache ??= new System.Collections.Generic.Dictionary<nint, NSObject?>(8);
+        var cacheable = IsCacheable<T>();
         var key = (nint)attributeName.Handle;
-        if (_attrCache.TryGetValue(key, out var cached)) return cached as T;
+        if (cacheable)
+        {
+            lock (_scalarCacheLock)
+            {
+                if (_scalarAttrCache is not null && _scalarAttrCache.TryGetValue(key, out var cached))
+                    return cached as T;
+            }
+        }
         var error = CopyAttributeValue(Handle, attributeName.Handle, out var value);
         var obj = error == AXError.Success && value != 0
             ? Runtime.GetNSObject<T>(value, owns: true)
             : null;
-        _attrCache[key] = obj;
+        if (cacheable)
+        {
+            lock (_scalarCacheLock)
+            {
+                _scalarAttrCache ??= new System.Collections.Generic.Dictionary<nint, NSObject?>(12);
+                if (!_scalarAttrCache.ContainsKey(key))
+                {
+                    // Retain so the element owns the lifetime; release
+                    // by leaving the entry behind when this AXUIElement
+                    // is GC'd alongside its underlying CFType.
+                    obj?.DangerousRetain();
+                    _scalarAttrCache[key] = obj;
+                }
+            }
+        }
         return obj;
     }
 
@@ -1265,42 +1291,39 @@ public partial class AXUIElement : NSObject, IVisualElement
     [LibraryImport(AppServices, EntryPoint = "AXUIElementCopyMultipleAttributeValues")]
     private static partial AXError CopyMultipleAttributeValues(nint element, nint attributes, uint options, out nint values);
 
+    // kAXCopyMultipleAttributeOptionStopOnError = 0x1.
+    private const uint AXStopOnError = 0x1;
+
     /// <summary>
     /// Prefetch a set of attributes in one cross-process round-trip
     /// (AXUIElementCopyMultipleAttributeValues) and seed the per-
-    /// element cache. Subsequent GetAttribute&lt;T&gt; calls hit the
-    /// cache. Use before a render pass that touches many attrs.
+    /// element scalar cache. Returns silently on partial-error so the
+    /// caller's per-attr GetAttribute fallbacks still execute on miss.
     /// </summary>
-    public void PrefetchAttributes(IReadOnlyList<NSString> names)
+    public void PrefetchAttributes(NSArray names, IReadOnlyList<NSString> nameKeys)
     {
-        if (names.Count == 0) return;
-        _attrCache ??= new System.Collections.Generic.Dictionary<nint, NSObject?>(names.Count);
+        if (nameKeys.Count == 0) return;
 
-        var nsArray = NSArray.FromNSObjects(names.ToArray());
-        try
+        // StopOnError: bail to per-attr fallbacks rather than caching
+        // AXValueErrorRef wrappers in error slots.
+        var err = CopyMultipleAttributeValues((nint)Handle, (nint)names.Handle, AXStopOnError, out var values);
+        if (err != AXError.Success || values == 0) return;
+        using var arr = Runtime.GetNSObject<NSArray>(values, owns: true);
+        if (arr is null || arr.Count != (nuint)nameKeys.Count) return;
+
+        lock (_scalarCacheLock)
         {
-            // options=0 → return errors per-slot (we treat any error
-            // slot as null and let the call site fall back to single
-            // GetAttribute on miss).
-            var err = CopyMultipleAttributeValues((nint)Handle, (nint)nsArray.Handle, 0, out var values);
-            if (err != AXError.Success || values == 0) return;
-            using var arr = Runtime.GetNSObject<NSArray>(values, owns: true);
-            if (arr is null || arr.Count != (nuint)names.Count) return;
-            for (var i = 0; i < names.Count; i++)
+            _scalarAttrCache ??= new System.Collections.Generic.Dictionary<nint, NSObject?>(nameKeys.Count);
+            for (var i = 0; i < nameKeys.Count; i++)
             {
-                var key = (nint)names[i].Handle;
-                // CopyMultipleAttributeValues returns AXValueErrorRef
-                // wrappers in error slots; our cache treats them as
-                // present-but-null. Distinguish via NSDictionary type
-                // check on AXError-bearing slots — too costly. Just
-                // store the raw NSObject; downstream `as T` returns
-                // null on type mismatch which is the same outcome.
-                _attrCache[key] = arr.GetItem<NSObject>((nuint)i);
+                var key = (nint)nameKeys[i].Handle;
+                if (_scalarAttrCache.ContainsKey(key)) continue;
+                var item = arr.GetItem<NSObject>((nuint)i);
+                // Retain so the value survives `arr.Dispose()` below.
+                // Element's lifetime now owns this CFType ref.
+                item?.DangerousRetain();
+                _scalarAttrCache[key] = item;
             }
-        }
-        finally
-        {
-            nsArray.Dispose();
         }
     }
 
