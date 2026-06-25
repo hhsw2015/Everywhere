@@ -71,6 +71,11 @@ public partial class VisualElementContext(IWindowHelper windowHelper) : IVisualE
         return AXUIElement.ElementFromWindowId((uint)windowHandle);
     }
 
+    public IVisualElement? FreshFocusedWindowOf(int processId)
+    {
+        return AXUIElement.FreshFocusedWindowOf(processId);
+    }
+
     public bool TryEnableBestEffortAccessibility(int processId)
     {
         // 1:1 OCCU AccessibilitySnapshot.swift:352-358. SwiftUI buttons

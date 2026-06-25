@@ -54,20 +54,25 @@ internal static class AppResolver
                 {
                     var key = AppKey.FromProcessId(top.ProcessId);
                     context.TryEnableBestEffortAccessibility(top.ProcessId);
-                    return new ResolvedApp(top, key, top.ProcessId);
+                    var freshTop = context.FreshFocusedWindowOf(top.ProcessId) ?? top;
+                    return new ResolvedApp(freshTop, key, top.ProcessId);
                 }
             }
             return null;
         }
 
         var best = candidates.OrderByDescending(c => c.Area).First();
-        // 1:1 OCCU AccessibilitySnapshot L109: enable best-effort
-        // accessibility modes on the resolved app before any traversal
-        // or click. Lights up SwiftUI / Electron / Chromium real
-        // gesture elements (AXManualAccessibility +
-        // AXEnhancedUserInterface). No-op on Windows backend.
         context.TryEnableBestEffortAccessibility(best.ProcessId);
-        return new ResolvedApp(best.Window, best.AppKey, best.ProcessId);
+        // 1:1 OCCU AccessibilitySnapshot.swift L108-L130: replace the
+        // window candidate with a fresh AXUIElementCreateApplication →
+        // kAXFocusedWindow ref before traversal. Element refs sourced
+        // through Avalonia's ScreenSelectionSession path are stale
+        // surrogates on SwiftUI; fresh refs from the application root
+        // accept AXUIElementPerformAction. Falls back to the original
+        // candidate when the fresh lookup returns null (other
+        // platforms, transient launch state).
+        var freshWindow = context.FreshFocusedWindowOf(best.ProcessId) ?? best.Window;
+        return new ResolvedApp(freshWindow, best.AppKey, best.ProcessId);
     }
 
     public static IReadOnlyList<ResolvedApp> ListApps(IVisualElementContext context)

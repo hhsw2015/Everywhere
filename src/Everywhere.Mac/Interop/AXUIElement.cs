@@ -1066,6 +1066,31 @@ public partial class AXUIElement : NSObject, IVisualElement
     }
 
     /// <summary>
+    /// 1:1 OCCU AccessibilitySnapshot.swift L108-L130 traversal entry:
+    /// fresh AXUIElementCreateApplication(pid) → kAXFocusedWindow.
+    /// The element refs cached from this traversal accept
+    /// AXUIElementPerformAction; refs sourced via Avalonia's
+    /// ScreenSelectionSession path or _AXUIElementGetWindow reverse
+    /// lookup do not (silently no-op on SwiftUI / Calculator 26).
+    /// </summary>
+    public static AXUIElement? FreshFocusedWindowOf(int pid)
+    {
+        if (pid <= 0) return null;
+        using var app = ElementFromPid(pid);
+        if (app is null) return null;
+        var err = CopyAttributeValue((nint)app.Handle, (nint)AXAttributeConstants.FocusedWindow.Handle, out var focusedWindowPtr);
+        if (err != AXError.Success || focusedWindowPtr == 0)
+        {
+            // Some apps don't have a focused window after launch. Fall
+            // back to MainWindow.
+            using var mainWindowAttr = new Foundation.NSString("AXMainWindow");
+            err = CopyAttributeValue((nint)app.Handle, (nint)mainWindowAttr.Handle, out focusedWindowPtr);
+            if (err != AXError.Success || focusedWindowPtr == 0) return null;
+        }
+        return new AXUIElement(focusedWindowPtr);
+    }
+
+    /// <summary>
     /// Set a boolean AX attribute on a process's application element using
     /// CoreFoundation's kCFBooleanTrue / kCFBooleanFalse singletons.
     /// AXUIElementSetAttributeValue rejects NSNumber for the private

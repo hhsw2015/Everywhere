@@ -110,6 +110,19 @@ public interface IVisualElementContext : IObservable<TextSelectionData>
     bool TryEnableBestEffortAccessibility(int processId) => false;
 
     /// <summary>
+    /// Return a "fresh" focused-window IVisualElement sourced via the
+    /// platform AX entry-point (1:1 OCCU AccessibilitySnapshot.swift
+    /// L108-L130: AXUIElementCreateApplication(pid) → kAXFocusedWindow).
+    /// Refs walked from this root accept AXUIElementPerformAction;
+    /// refs reverse-looked-up via Avalonia ScreenSelectionSession or
+    /// _AXUIElementGetWindow do not on SwiftUI hosts (Calculator 26).
+    /// Returns null on platforms where this distinction does not
+    /// apply (Windows backend always returns null and the caller
+    /// falls back to whatever it had).
+    /// </summary>
+    IVisualElement? FreshFocusedWindowOf(int processId) => null;
+
+    /// <summary>
     /// Let the user pick an element from the screen.
     /// </summary>
     /// <param name="initialMode">
