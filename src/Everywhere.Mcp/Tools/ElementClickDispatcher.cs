@@ -118,11 +118,19 @@ internal static class ElementClickDispatcher
                     haveCenter = true;
                     tracedSim.Trace.Publish(new Everywhere.Mcp.Input.CursorTraceEvent(
                         Everywhere.Mcp.Input.CursorTraceKind.Move, tx, ty));
-                    // Let the soft cursor's spring catch up to the new
-                    // tip before AX changes target state. Spring close-
-                    // enough time is ~120-180ms in CursorMotionModel;
-                    // 150ms is the safe middle.
-                    System.Threading.Thread.Sleep(150);
+                    // OCCU's moveVisualCursor uses DispatchQueue.main.sync
+                    // and blocks until SoftwareCursorOverlay.moveCursor
+                    // returns (spring runs synchronously to close-enough).
+                    // We can't get the same semantics through Avalonia's
+                    // Dispatcher.UIThread.Post — it's fire-and-forget. So
+                    // we sleep long enough that the spring has
+                    // realistically converged before AX flips the target.
+                    // Spring config: response=1.4, dampingFraction=0.9.
+                    // CloseEnoughTimeValue from CursorMotionModel lands
+                    // around 280-320ms; 320ms gives us a margin of safety
+                    // and matches OCCU's "cursor visibly arrives, then
+                    // the click happens" feel.
+                    System.Threading.Thread.Sleep(320);
                 }
             }
             element.Invoke(clickCount);
