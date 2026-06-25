@@ -87,6 +87,14 @@ public partial class VisualElementContext(IWindowHelper windowHelper) : IVisualE
         using var trueValue = Foundation.NSNumber.FromBoolean(true);
         var manualOk = app.SetAttribute(manualKey, trueValue);
         var enhancedOk = app.SetAttribute(enhancedKey, trueValue);
+        // ponytail diagnostic: log result so we can see whether the
+        // upgrade is being accepted by the target app on this host.
+        try
+        {
+            System.IO.File.AppendAllText("/tmp/everywhere-a11y.log",
+                $"[{System.DateTime.Now:HH:mm:ss.fff}] EnableBestEffortA11y pid={processId} manual={manualOk} enhanced={enhancedOk}\n");
+        }
+        catch { }
         return manualOk || enhancedOk;
     }
 
