@@ -12,6 +12,14 @@ namespace Everywhere.Mcp.Input;
 /// </summary>
 public sealed class TracedInputSimulator : IInputSimulator
 {
+    /// <summary>
+    /// Expose the underlying trace channel so callers that *bypass*
+    /// the CGEvent path (AX action chain success) can still surface
+    /// a virtual cursor pulse — otherwise an AX-only click silently
+    /// jumps the user's view to the new state with no visual feedback.
+    /// </summary>
+    public CursorTrace Trace => _trace;
+
     private readonly IInputSimulator _inner;
     private readonly CursorTrace _trace;
 

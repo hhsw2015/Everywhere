@@ -98,7 +98,40 @@ internal static class ElementClickDispatcher
                 // attempted, drop straight to coord fallback.
                 throw new InvalidOperationException("middle-click has no AX action; deferring to coordinate fallback");
             }
+            // AX success path bypasses IInputSimulator entirely, so the
+            // cursor-overlay never sees a Move/Click trace event and
+            // the user gets no visual feedback. Stage the visual move
+            // BEFORE invoking AX (otherwise the target reacts before
+            // the soft cursor has visibly arrived — looks like the
+            // cursor lags behind the click), then pulse AFTER.
+            Everywhere.Mcp.Input.TracedInputSimulator? tracedSim =
+                input as Everywhere.Mcp.Input.TracedInputSimulator;
+            double tx = 0, ty = 0;
+            bool haveCenter = false;
+            if (tracedSim is not null)
+            {
+                var rect = element.BoundingRectangle;
+                if (rect.Width > 0 && rect.Height > 0)
+                {
+                    tx = rect.X + rect.Width / 2.0;
+                    ty = rect.Y + rect.Height / 2.0;
+                    haveCenter = true;
+                    tracedSim.Trace.Publish(new Everywhere.Mcp.Input.CursorTraceEvent(
+                        Everywhere.Mcp.Input.CursorTraceKind.Move, tx, ty));
+                    // Let the soft cursor's spring catch up to the new
+                    // tip before AX changes target state. Spring close-
+                    // enough time is ~120-180ms in CursorMotionModel;
+                    // 150ms is the safe middle.
+                    System.Threading.Thread.Sleep(150);
+                }
+            }
             element.Invoke(clickCount);
+            if (tracedSim is not null && haveCenter)
+            {
+                tracedSim.Trace.Publish(new Everywhere.Mcp.Input.CursorTraceEvent(
+                    Everywhere.Mcp.Input.CursorTraceKind.Click,
+                    tx, ty, ClickCount: clickCount, Button: mouseButton));
+            }
             return new CallToolResult { Content = [new TextContentBlock { Text = "ok" }] };
         }
         catch (Exception axEx)

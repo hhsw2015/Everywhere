@@ -92,12 +92,6 @@ public partial class VisualElementContext(IWindowHelper windowHelper) : IVisualE
         // both calls returned false in production with NSNumber.
         var manualOk = AXUIElement.SetAppBoolAttribute(processId, "AXManualAccessibility", true);
         var enhancedOk = AXUIElement.SetAppBoolAttribute(processId, "AXEnhancedUserInterface", true);
-        try
-        {
-            System.IO.File.AppendAllText("/tmp/everywhere-a11y.log",
-                $"[{System.DateTime.Now:HH:mm:ss.fff}] EnableBestEffortA11y pid={processId} manual={manualOk} enhanced={enhancedOk}\n");
-        }
-        catch { }
         return manualOk || enhancedOk;
     }
 
