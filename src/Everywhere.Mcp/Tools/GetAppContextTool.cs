@@ -51,16 +51,12 @@ public static class GetAppContextTool
 
             var treeText = SnapshotRenderer.Render(nodes, show_full_text);
 
+            // ponytail: never inline the base64 screenshot — it is the
+            // single largest field (~50KB on a small window), dominates
+            // payload size, and the typical caller only reads tree_text.
+            // Vision-capable callers can hit the dedicated `screenshot`
+            // tool, which returns just the image.
             string? screenshotBase64 = null;
-            try
-            {
-                using var captured = await window.CaptureAsync(cancellationToken);
-                screenshotBase64 = ScreenshotEncoder.EncodeBase64(captured);
-            }
-            catch
-            {
-                // best-effort screenshot.
-            }
 
             var bounds = window.BoundingRectangle;
             var inner = new AppStateResult

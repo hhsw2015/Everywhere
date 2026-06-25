@@ -48,16 +48,10 @@ public static class GetAppStateTool
 
             var treeText = SnapshotRenderer.Render(nodes, show_full_text);
 
+            // ponytail: never inline the base64 screenshot (see
+            // GetAppContextTool). Callers wanting an image hit the
+            // dedicated `screenshot` tool.
             string? screenshotBase64 = null;
-            try
-            {
-                using var captured = await window.CaptureAsync(cancellationToken);
-                screenshotBase64 = ScreenshotEncoder.EncodeBase64(captured);
-            }
-            catch
-            {
-                // best-effort screenshot; tree text is the load-bearing signal.
-            }
 
             var bounds = window.BoundingRectangle;
             var result = new AppStateResult

@@ -50,16 +50,10 @@ public static class GetFocusedContextTool
             var totalDescendants = topLevel.GetDescendants(includeSelf: true).Count();
             var omitted = totalDescendants > nodes.Count;
 
+            // ponytail: never inline the base64 screenshot (see
+            // GetAppContextTool). Callers wanting an image hit the
+            // dedicated `screenshot` tool.
             string? screenshot = null;
-            try
-            {
-                using var captured = await topLevel.CaptureAsync(cancellationToken);
-                screenshot = ScreenshotEncoder.EncodeBase64(captured);
-            }
-            catch
-            {
-                // best-effort screenshot.
-            }
 
             var bounds = topLevel.BoundingRectangle;
             var result = new FocusedContextResult
