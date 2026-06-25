@@ -740,12 +740,13 @@ public partial class AXUIElement : NSObject, IVisualElement
         // Only post when the element actually advertises this action.
         // The .success short-circuit on unsupported verbs in macOS AX
         // makes blind posting unreliable.
-        // ponytail: NSString.ToString() returned "" in production
-        // (v0.9.96 perform.log showed "action= availableCount=1
-        // found=False"), so the entire gate was a no-op and dispatcher
-        // threw "actions=[AXPress]" while available really did contain
-        // "AXPress". Use NSString implicit string conversion instead.
-        string n = (string)actionName;
+        // ponytail: even (string)actionName returned "" for the Press
+        // call in v0.9.97 — the cast invokes NSString's implicit
+        // operator which derefs the underlying CFString handle. If
+        // the static AXAttributeConstants.Press got disposed somewhere
+        // upstream, its handle is 0 and the cast yields "". Diagnose
+        // by printing the raw handle alongside.
+        string n = (string?)actionName ?? "";
         var found = false;
         for (var i = 0; i < available.Count; i++)
         {
@@ -757,10 +758,15 @@ public partial class AXUIElement : NSObject, IVisualElement
         }
         try
         {
+            var availDump = available.Count > 0 ? string.Join(",", available) : "<empty>";
+            var handle = (nint)actionName.Handle;
             System.IO.File.AppendAllText("/tmp/everywhere-perform.log",
-                $"[{System.DateTime.Now:HH:mm:ss.fff}] Gated action='{n}' availableCount={available.Count} found={found}\n");
+                $"[{System.DateTime.Now:HH:mm:ss.fff}] Gated handle=0x{handle:X} n='{n}' (len={n.Length}) avail=[{availDump}] found={found}\n");
         }
-        catch { }
+        catch (Exception ex)
+        {
+            try { System.IO.File.AppendAllText("/tmp/everywhere-perform.log", $"Gated log err: {ex.Message}\n"); } catch { }
+        }
         if (!found) return false;
         var attempts = Math.Max(clickCount, 1);
         for (var i = 0; i < attempts; i++)
