@@ -35,30 +35,20 @@ public sealed class MacInputSimulator : IInputSimulator
         try
         {
             var (cgButton, downType, upType) = Map(button);
-            // For GLOBAL clicks (targetPid=null → HidEventTap), warp the real
-            // hardware cursor first AND keep it latched for the duration of
-            // the click. macOS samples the physical cursor position at
-            // hit-test time on HidEventTap, so the synthesized mouseDown
-            // misses if the user's trackpad slides the cursor away during
-            // our inter-event sleeps. CGWarpMouseCursorPosition implicitly
-            // disassociates mouse/cursor for ~250ms; we let that latch run
-            // through the down/up sequence and re-associate AFTER so the
-            // user regains control. Targeted (PostToPid) bypasses hit-test
-            // and doesn't need any of this.
-            if (!targetPid.HasValue)
-            {
-                CGWarpMouseCursorPosition(new CGPoint(x, y));
-                Thread.Sleep(15); // let warp settle before the first event
-            }
+            // 1:1 OCCU port (InputSimulation.swift L58-80). No Warp, no
+            // Associate. OCCU relies entirely on its caller having raised
+            // the target app first via prepareAppForGlobalPointerInput
+            // (AXRaise + NSRunningApplication.activate + 370ms settle).
+            // Our FocusBorrow Spec §7 path provides the same guarantee.
+            // For the targeted (PostToPid) default, hit-test isn't even
+            // involved so cursor position is irrelevant. For the global
+            // HidSystemState path (rare; only used when caller passes
+            // targetPid=null), we trust the caller to have prepped focus.
             for (var i = 0; i < Math.Max(clickCount, 1); i++)
             {
                 PostMouse(src, CGEventType.MouseMoved, x, y, cgButton, clickCount, targetPid);
                 PostMouse(src, downType, x, y, cgButton, clickCount, targetPid);
                 PostMouse(src, upType, x, y, cgButton, clickCount, targetPid);
-            }
-            if (!targetPid.HasValue)
-            {
-                CGAssociateMouseAndMouseCursorPosition(1);
             }
         }
         finally { CFRelease(src); }

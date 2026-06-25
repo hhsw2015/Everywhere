@@ -186,20 +186,27 @@ internal static class ElementClickDispatcher
                             : null;
                         try
                         {
-                            // GLOBAL tap (targetPid=null), not PostToPid.
-                            // SwiftUI macOS 26+ (Calculator) accepts AXPress
-                            // with success status but the gesture never
-                            // fires, AND CGEventPostToPid bypasses the
-                            // systemwide gesture-recognizer tap so the same
-                            // click via PostToPid is silently ignored. The
-                            // GLOBAL HidEventTap is the only path that
-                            // actually triggers the SwiftUI gesture.
-                            // FocusBorrow above already raised the target
-                            // app via AXRaise + activate + 250ms settle
-                            // (Spec §7), so the global event hits the right
-                            // window. MacInputSimulator latches the cursor
-                            // around the down/up sequence so the user's
-                            // trackpad can't slide it away mid-click.
+                            // 1:1 OCCU port. OCCU's nominal default is
+                            // PostToPid (ComputerUseService.swift L1668-1672),
+                            // but its actual "make SwiftUI Calculator work"
+                            // mode is the GLOBAL physical-pointer path,
+                            // gated behind OPEN_COMPUTER_USE_ALLOW_GLOBAL_POINTER_FALLBACKS=1
+                            // (L1656-1664) which calls
+                            // prepareAppForGlobalPointerInput
+                            // (InputSimulation.swift L48-56: AXRaise +
+                            // NSRunningApplication.activate + 120ms + 250ms)
+                            // then clickGlobally (HidSystemState +
+                            // .cghidEventTap, L58-67).
+                            //
+                            // For Everywhere we always enable that mode
+                            // because our entire product hinges on
+                            // SwiftUI / Electron / unusual apps working.
+                            // FocusBorrow.Acquire above is the .NET mirror
+                            // of prepareAppForGlobalPointerInput (Spec §7
+                            // documents the AXRaise → 120ms → activate →
+                            // 250ms sequence). targetPid=null routes
+                            // MacInputSimulator.Click through HidSystemState
+                            // + global event-tap, matching OCCU L60-67.
                             input.Click(cx, cy, clickCount, mouseButton,
                                 targetPid: null);
                         }
