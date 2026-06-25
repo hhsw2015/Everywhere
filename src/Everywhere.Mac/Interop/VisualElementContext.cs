@@ -80,14 +80,13 @@ public partial class VisualElementContext(IWindowHelper windowHelper) : IVisualE
         // "full" mode via these two private attributes. Set on the
         // application element, then re-walk the tree.
         if (processId <= 0) return false;
-        var app = AXUIElement.ElementFromPid(processId);
+        using var app = AXUIElement.ElementFromPid(processId);
         if (app is null) return false;
-        var manualOk = app.SetAttribute(
-            new Foundation.NSString("AXManualAccessibility"),
-            Foundation.NSNumber.FromBoolean(true));
-        var enhancedOk = app.SetAttribute(
-            new Foundation.NSString("AXEnhancedUserInterface"),
-            Foundation.NSNumber.FromBoolean(true));
+        using var manualKey = new Foundation.NSString("AXManualAccessibility");
+        using var enhancedKey = new Foundation.NSString("AXEnhancedUserInterface");
+        using var trueValue = Foundation.NSNumber.FromBoolean(true);
+        var manualOk = app.SetAttribute(manualKey, trueValue);
+        var enhancedOk = app.SetAttribute(enhancedKey, trueValue);
         return manualOk || enhancedOk;
     }
 

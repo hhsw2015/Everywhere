@@ -11,7 +11,7 @@ namespace Everywhere.Mcp.Tools;
 public static class ClickTool
 {
     [McpServerTool(Name = "click")]
-    [Description("Click on a UI element. Pass element_index from a prior get_app_state when the target is in the indexed tree (no pointer movement, target window need not be foreground). Pass x/y screen pixel coordinates for free-form clicks (the target window will be brought to the foreground first). click_count defaults to 1; mouse_button defaults to left.")]
+    [Description("Click a UI element. Pass element_index from a prior get_app_state when the target is in the indexed tree (no pointer movement, target window need not be foreground). Pass x/y screen pixel coordinates for free-form clicks (no foreground swap by default — the click is delivered via CGEventPostToPid; set EVERYWHERE_ALLOW_GLOBAL_POINTER_FALLBACKS=1 to use the global HID tap, which raises the target first). click_count defaults to 1; mouse_button defaults to left.")]
     public static CallToolResult Click(
         string app,
         SessionStore sessions,

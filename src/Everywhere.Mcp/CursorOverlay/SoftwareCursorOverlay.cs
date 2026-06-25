@@ -99,6 +99,10 @@ public sealed class SoftwareCursorOverlay : IAsyncDisposable
             try { _windowHelper.ConfigureAsCursorOverlay(_window); _nativeOverlayConfigured = true; }
             catch { /* overlay is best-effort. */ }
         }
+        // OCR fix: order(.above, target) is silently ignored on a
+        // hidden NSWindow, so apply pending RaiseAboveTarget here,
+        // after Show. Bridge stages the request before MoveCursor.
+        ApplyPendingOrdering();
         if (isFreshStart)
         {
             _visualDynamicsState = CursorVisualDynamicsState.At(startPoint, now);
@@ -148,13 +152,28 @@ public sealed class SoftwareCursorOverlay : IAsyncDisposable
     /// non-default window level (panels, fullscreen views, etc.).
     /// Caller passes targetProcessId from the click trace; null →
     /// floating + plain front-most.
+    ///
+    /// Stashes the requested target — actual NSWindow ordering runs
+    /// from ApplyPendingOrdering() inside MoveCursor, AFTER Show().
+    /// Calling order(.above, ...) on a hidden window is silently
+    /// ignored on AppKit, so we have to defer until the panel is
+    /// on-screen.
     /// </summary>
     public void RaiseAboveTarget(int? targetProcessId)
     {
         if (_disposed || _windowHelper is null) return;
-        EnsureWindow();
-        if (_window is null || !_window.IsVisible) return;
-        try { _windowHelper.RaiseOverlayAboveTarget(_window, targetProcessId); }
+        _pendingTargetProcessId = targetProcessId;
+        _hasPendingOrdering = true;
+    }
+
+    private int? _pendingTargetProcessId;
+    private bool _hasPendingOrdering;
+
+    private void ApplyPendingOrdering()
+    {
+        if (!_hasPendingOrdering || _windowHelper is null || _window is null) return;
+        _hasPendingOrdering = false;
+        try { _windowHelper.RaiseOverlayAboveTarget(_window, _pendingTargetProcessId); }
         catch { /* best-effort. */ }
     }
 
@@ -235,6 +254,10 @@ public sealed class SoftwareCursorOverlay : IAsyncDisposable
         _moveTimer = timer;
         timer.Tick += (_, _) =>
         {
+            // OCR fix: previous timer.Stop() doesn't preempt a tick
+            // already queued in the dispatcher; that stale tick would
+            // otherwise overwrite the new animation's PlaceCursor.
+            if (!ReferenceEquals(_moveTimer, timer)) { timer.Stop(); return; }
             var elapsed = NowSeconds() - startTime;
             var normalizedElapsed = Math.Clamp(elapsed / Math.Max(duration, 0.001), 0, 1);
             var springTime = normalizedElapsed * springTargetDuration;
@@ -274,6 +297,8 @@ public sealed class SoftwareCursorOverlay : IAsyncDisposable
         _pulseTimer = timer;
         timer.Tick += (_, _) =>
         {
+            // OCR fix: same stale-tick guard as AnimateMove.
+            if (!ReferenceEquals(_pulseTimer, timer)) { timer.Stop(); return; }
             if (inPause)
             {
                 if (NowSeconds() - pauseStart < interPulsePause) return;

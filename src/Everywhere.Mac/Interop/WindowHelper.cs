@@ -253,17 +253,21 @@ public class WindowHelper : IWindowHelper
         }
         catch { /* best-effort. */ }
 
+        if (targetWindowId == 0)
+        {
+            // Couldn't locate a front window for the target pid (app
+            // launching, off-screen, just-quit). Don't demote our
+            // overlay to NSWindowLevel.Normal — keep it floating like
+            // the no-pid branch above.
+            nw.Level = NSWindowLevel.Floating;
+            nw.OrderFront(null);
+            return;
+        }
+
         // 1:1 OCCU L328-330: panel.level = NSWindow.Level(rawValue: target.layer)
         nw.Level = (NSWindowLevel)targetLayer;
-        if (targetWindowId != 0)
-        {
-            // 1:1 OCCU L340: panel.order(.above, relativeTo: target.windowID)
-            nw.OrderWindow(NSWindowOrderingMode.Above, (nint)targetWindowId);
-        }
-        else
-        {
-            nw.OrderFront(null);
-        }
+        // 1:1 OCCU L340: panel.order(.above, relativeTo: target.windowID)
+        nw.OrderWindow(NSWindowOrderingMode.Above, (nint)targetWindowId);
     }
 
     public void ConfigureAsCursorOverlay(Window window)
