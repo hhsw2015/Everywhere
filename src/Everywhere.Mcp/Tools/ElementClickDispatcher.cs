@@ -126,7 +126,16 @@ internal static class ElementClickDispatcher
                     // Publish + skip the wait.
                     if (tracedSim.Trace.MoveAndAwait is { } awaiter)
                     {
-                        try { awaiter(new Avalonia.Point(tx, ty)).GetAwaiter().GetResult(); }
+                        try
+                        {
+                            // Hard timeout. If the UI thread can't tick
+                            // for some reason (busy/contention), don't
+                            // let this caller hold FocusBorrow forever.
+                            // 1500ms is well above the spring's normal
+                            // ~280-320ms close-enough time.
+                            var t = awaiter(new Avalonia.Point(tx, ty));
+                            t.Wait(System.TimeSpan.FromMilliseconds(1500));
+                        }
                         catch { /* overlay best-effort */ }
                     }
                     else

@@ -215,6 +215,7 @@ public sealed class SoftwareCursorOverlay : IAsyncDisposable
         StopIdleAnimation();
         CancelPendingHide();
         _moveTimer?.Stop(); _moveTimer = null;
+        _activeMoveCompletion?.TrySetResult(false); _activeMoveCompletion = null;
         _pulseTimer?.Stop(); _pulseTimer = null;
         _displayedTipPosition = null;
         _restingTipPosition = null;
@@ -247,6 +248,8 @@ public sealed class SoftwareCursorOverlay : IAsyncDisposable
         _window?.SetOrigin(origin);
     }
 
+    private TaskCompletionSource<bool>? _activeMoveCompletion;
+
     private void AnimateMove(Point start, Point end) => AnimateMove(start, end, completion: null);
 
     private void AnimateMove(Point start, Point end, TaskCompletionSource<bool>? completion)
@@ -257,13 +260,24 @@ public sealed class SoftwareCursorOverlay : IAsyncDisposable
         // moveCursor synchronously on main, so it can't race itself.
         // Our async API can — without this, two Move calls in quick
         // succession had two timers fighting over PlaceCursor.
+        // Unblock any awaiter still hanging on the prior animation
+        // so dispatcher.AX-path doesn't leak its FocusBorrow gate.
+        _activeMoveCompletion?.TrySetResult(false);
+        _activeMoveCompletion = completion;
         _moveTimer?.Stop();
         _moveTimer = null;
 
         var candidates = HeadingDrivenCursorMotionModel.MakeCandidates(
             start, end, bounds: null, startForward: CurrentForwardVector(), endForward: RestingForwardVector());
         var bestN = HeadingDrivenCursorMotionModel.ChooseBestCandidate(candidates);
-        if (bestN is null) return;
+        if (bestN is null)
+        {
+            // No motion candidate — short-circuit the await so caller
+            // isn't blocked.
+            completion?.TrySetResult(false);
+            if (ReferenceEquals(_activeMoveCompletion, completion)) _activeMoveCompletion = null;
+            return;
+        }
         var best = bestN.Value;
         var path = best.Path;
         var duration = OfficialCursorMotionModel.CalibratedTravelDuration(Distance(start, end), best.Measurement);
@@ -279,7 +293,12 @@ public sealed class SoftwareCursorOverlay : IAsyncDisposable
             // OCR fix: previous timer.Stop() doesn't preempt a tick
             // already queued in the dispatcher; that stale tick would
             // otherwise overwrite the new animation's PlaceCursor.
-            if (!ReferenceEquals(_moveTimer, timer)) { timer.Stop(); return; }
+            // CRITICAL: also SetResult on the superseded completion so
+            // its awaiter unblocks — otherwise an already-awaited Move
+            // (e.g. ElementClickDispatcher.AX path's GetResult()) sits
+            // forever, holds FocusBorrow, and every subsequent
+            // get_app_context times out with "contention exceeded 5s".
+            if (!ReferenceEquals(_moveTimer, timer)) { timer.Stop(); completion?.TrySetResult(false); return; }
             var elapsed = NowSeconds() - startTime;
             var normalizedElapsed = Math.Clamp(elapsed / Math.Max(duration, 0.001), 0, 1);
             var springTime = normalizedElapsed * springTargetDuration;
@@ -297,6 +316,7 @@ public sealed class SoftwareCursorOverlay : IAsyncDisposable
                 _visualDynamicsState = s2;
                 PlaceCursor(r2, clickProgress: 0);
                 completion?.TrySetResult(true);
+                if (ReferenceEquals(_activeMoveCompletion, completion)) _activeMoveCompletion = null;
             }
         };
         timer.Start();
