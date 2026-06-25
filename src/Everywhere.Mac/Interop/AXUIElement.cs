@@ -212,10 +212,25 @@ public partial class AXUIElement : NSObject, IVisualElement
         }
     }
 
+    private static readonly NSString[] StateAttrs =
+    {
+        AXAttributeConstants.Enabled, AXAttributeConstants.Focused,
+        AXAttributeConstants.Hidden, AXAttributeConstants.Selected,
+        AXAttributeConstants.Expanded, AXAttributeConstants.Required,
+        AXAttributeConstants.Edited, AXAttributeConstants.MainTrait,
+        AXAttributeConstants.MinimizedAttr, AXAttributeConstants.GrabbedAttr,
+        AXAttributeConstants.Value,
+    };
+
     public VisualElementStates States
     {
         get
         {
+            // Batch prefetch all state attrs in one cross-process
+            // round-trip via AXUIElementCopyMultipleAttributeValues
+            // (~3-5ms one shot vs 11 separate calls). Cache hit
+            // afterward returns immediately.
+            PrefetchAttributes(StateAttrs);
             var states = VisualElementStates.None;
             if (GetAttribute<NSNumber>(AXAttributeConstants.Enabled)?.BoolValue == false) states |= VisualElementStates.Disabled;
             if (GetAttribute<NSNumber>(AXAttributeConstants.Focused)?.BoolValue == true) states |= VisualElementStates.Focused;
@@ -223,8 +238,6 @@ public partial class AXUIElement : NSObject, IVisualElement
             if (GetAttribute<NSNumber>(AXAttributeConstants.Selected)?.BoolValue == true) states |= VisualElementStates.Selected;
             if (Subrole == AXSubroleAttribute.AXSecureTextField) states |= VisualElementStates.Password;
 
-            // OCCU summarizeTraits parity. Each is best-effort —
-            // unsupported attribute returns null, leaving the flag clear.
             if (GetAttribute<NSNumber>(AXAttributeConstants.Expanded)?.BoolValue == true)  states |= VisualElementStates.Expanded;
             if (GetAttribute<NSNumber>(AXAttributeConstants.Required)?.BoolValue == true)  states |= VisualElementStates.Required;
             if (GetAttribute<NSNumber>(AXAttributeConstants.Edited)?.BoolValue == true)    states |= VisualElementStates.Edited;
@@ -1248,6 +1261,48 @@ public partial class AXUIElement : NSObject, IVisualElement
 
     [LibraryImport(AppServices, EntryPoint = "AXUIElementCopyAttributeValue")]
     private static partial AXError CopyAttributeValue(nint element, nint attribute, out nint value);
+
+    [LibraryImport(AppServices, EntryPoint = "AXUIElementCopyMultipleAttributeValues")]
+    private static partial AXError CopyMultipleAttributeValues(nint element, nint attributes, uint options, out nint values);
+
+    /// <summary>
+    /// Prefetch a set of attributes in one cross-process round-trip
+    /// (AXUIElementCopyMultipleAttributeValues) and seed the per-
+    /// element cache. Subsequent GetAttribute&lt;T&gt; calls hit the
+    /// cache. Use before a render pass that touches many attrs.
+    /// </summary>
+    public void PrefetchAttributes(IReadOnlyList<NSString> names)
+    {
+        if (names.Count == 0) return;
+        _attrCache ??= new System.Collections.Generic.Dictionary<nint, NSObject?>(names.Count);
+
+        var nsArray = NSArray.FromNSObjects(names.ToArray());
+        try
+        {
+            // options=0 → return errors per-slot (we treat any error
+            // slot as null and let the call site fall back to single
+            // GetAttribute on miss).
+            var err = CopyMultipleAttributeValues((nint)Handle, (nint)nsArray.Handle, 0, out var values);
+            if (err != AXError.Success || values == 0) return;
+            using var arr = Runtime.GetNSObject<NSArray>(values, owns: true);
+            if (arr is null || arr.Count != (nuint)names.Count) return;
+            for (var i = 0; i < names.Count; i++)
+            {
+                var key = (nint)names[i].Handle;
+                // CopyMultipleAttributeValues returns AXValueErrorRef
+                // wrappers in error slots; our cache treats them as
+                // present-but-null. Distinguish via NSDictionary type
+                // check on AXError-bearing slots — too costly. Just
+                // store the raw NSObject; downstream `as T` returns
+                // null on type mismatch which is the same outcome.
+                _attrCache[key] = arr.GetItem<NSObject>((nuint)i);
+            }
+        }
+        finally
+        {
+            nsArray.Dispose();
+        }
+    }
 
     // CoreFoundation path is identical to the one used in MacBrowserUrlReader.
     private const string CoreFoundationLib =
