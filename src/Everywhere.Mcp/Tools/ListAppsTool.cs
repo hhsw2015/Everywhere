@@ -1,7 +1,5 @@
 using System.ComponentModel;
-using System.Text.Json;
 using Everywhere.Interop;
-using Everywhere.Mcp.Tools.Schemas;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 
@@ -17,36 +15,14 @@ public static class ListAppsTool
         "parameter of other tools), \"title\" (the largest window's title), and \"process_id\". " +
         "PREFER get_app_context(app_hint) when the user names an app — it does list+match+snapshot " +
         "in one call.")]
-    public static CallToolResult ListApps(IVisualElementContext context, IServiceProvider services)
+    public static CallToolResult ListApps(IServiceProvider services)
     {
-        var backend = services.GetService(typeof(IAxBridgeBackend)) as IAxBridgeBackend;
-        if (backend is not null)
-        {
-            var (text, isError) = backend.ListApps();
-            return isError
-                ? ToolErrors.Error(text)
-                : new CallToolResult { Content = [new TextContentBlock { Text = text }] };
-        }
+        if (services.GetService(typeof(IAxBridgeBackend)) is not IAxBridgeBackend backend)
+            return ToolErrors.OccuRequired("list_apps");
 
-        try
-        {
-            var apps = AppResolver.ListApps(context)
-                .Select(a => new AppListItem
-                {
-                    App = a.AppKey,
-                    Title = a.Window.Name,
-                    ProcessId = a.ProcessId,
-                })
-                .ToArray();
-
-            return new CallToolResult
-            {
-                Content = [new TextContentBlock { Text = JsonSerializer.Serialize(apps) }],
-            };
-        }
-        catch (Exception ex)
-        {
-            return ToolErrors.FromException(ex, "list_apps");
-        }
+        var (text, isError) = backend.ListApps();
+        return isError
+            ? ToolErrors.Error(text)
+            : new CallToolResult { Content = [new TextContentBlock { Text = text }] };
     }
 }

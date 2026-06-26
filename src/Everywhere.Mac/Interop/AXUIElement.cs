@@ -818,12 +818,12 @@ public partial class AXUIElement : NSObject, IVisualElement
     }
 
     /// <summary>
-    /// Thread-local last AX error from TryPerformActionGated. Read by
-    /// ElementClickDispatcher to decide whether the click failure
-    /// looks like a SwiftUI gesture-recognizer rejection (verb was
-    /// available, AXUIElementPerformAction returned non-Success) —
-    /// in that case the coord fallback upgrades to GLOBAL even
-    /// without EVERYWHERE_ALLOW_GLOBAL_POINTER_FALLBACKS=1.
+    /// Thread-local last AX error from TryPerformActionGated. Used by
+    /// the perception tools that still invoke AX directly (PickElement,
+    /// ExpandElement, ScreenshotTool's element resolution, etc.) when
+    /// they need to differentiate "verb missing" from "verb refused".
+    /// The MCP automation tools no longer read this — they go through
+    /// the OCCU Swift bridge, which carries its own error channel.
     /// </summary>
     [ThreadStatic]
     public static AXError LastInvokeError;

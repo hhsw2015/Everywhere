@@ -230,6 +230,25 @@ public func ax_set_value(
     }
 }
 
+@_cdecl("ax_perform_secondary_action")
+public func ax_perform_secondary_action(
+    _ app: UnsafePointer<CChar>?,
+    _ elementIndex: UnsafePointer<CChar>?,
+    _ action: UnsafePointer<CChar>?
+) -> UnsafeMutablePointer<CChar>? {
+    guard let app, let elementIndex, let action else {
+        setLastError("ax_perform_secondary_action: required arg NULL"); return nil
+    }
+    let appStr = String(cString: app)
+    let idxStr = String(cString: elementIndex)
+    let actStr = String(cString: action)
+    return DispatchQueue.main.sync {
+        runOnMain {
+            return try service().performSecondaryAction(app: appStr, elementIndex: idxStr, action: actStr)
+        }.flatMap { resultToJsonCString($0) }
+    }
+}
+
 // MARK: - smoke test entry (called by the unit test target)
 
 // Returns 1 on success, 0 on failure. Used by Tests/AxHelperTests

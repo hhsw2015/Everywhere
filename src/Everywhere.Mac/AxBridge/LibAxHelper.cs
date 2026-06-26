@@ -48,6 +48,9 @@ internal static partial class LibAxHelper
     [LibraryImport(Lib, EntryPoint = "ax_set_value", StringMarshalling = StringMarshalling.Utf8)]
     internal static partial nint SetValue(string app, string elementIndex, string value);
 
+    [LibraryImport(Lib, EntryPoint = "ax_perform_secondary_action", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial nint PerformSecondaryAction(string app, string elementIndex, string action);
+
     /// <summary>
     /// Read a C-string returned by the bridge, then free it. Returns
     /// null when ptr is 0 — caller should consult LastError().

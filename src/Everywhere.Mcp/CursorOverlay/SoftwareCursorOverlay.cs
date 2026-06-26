@@ -304,7 +304,7 @@ public sealed class SoftwareCursorOverlay : IAsyncDisposable
             // otherwise overwrite the new animation's PlaceCursor.
             // CRITICAL: also SetResult on the superseded completion so
             // its awaiter unblocks — otherwise an already-awaited Move
-            // (e.g. ElementClickDispatcher.AX path's GetResult()) sits
+            // (e.g. an awaiter on the AX click path's GetResult()) sits
             // forever, holds FocusBorrow, and every subsequent
             // get_app_context times out with "contention exceeded 5s".
             if (!ReferenceEquals(_moveTimer, timer))

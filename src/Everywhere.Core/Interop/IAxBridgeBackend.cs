@@ -25,4 +25,5 @@ public interface IAxBridgeBackend
     (string Text, bool IsError) TypeText(string app, string text);
     (string Text, bool IsError) PressKey(string app, string key);
     (string Text, bool IsError) SetValue(string app, string elementIndex, string value);
+    (string Text, bool IsError) PerformSecondaryAction(string app, string elementIndex, string action);
 }

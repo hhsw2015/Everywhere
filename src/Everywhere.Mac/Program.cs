@@ -22,17 +22,21 @@ namespace Everywhere.Mac;
 public static class Program
 {
     /// <summary>
-    /// Wire the optional OCCU AX backend if requested + available.
-    /// EVERYWHERE_USE_OCCU=1 + libAxHelper.dylib loadable + a11y
-    /// permission granted ⇒ snapshot/click/etc tools route through
-    /// the Swift bridge instead of the (slower / more brittle) C#
-    /// P/Invoke path. Default: no IAxBridgeBackend registered, MCP
-    /// tools fall back to the existing IVisualElementContext stack.
+    /// Wire the OCCU AX backend (libAxHelper.dylib via Swift). All eight
+    /// MCP automation tools (list_apps / get_app_state / click / scroll /
+    /// drag / type_text / press_key / set_value) route through it; the
+    /// previously dual-path C# implementations have been removed. Set
+    /// EVERYWHERE_USE_OCCU=0 to skip registration — those tools then
+    /// hard-error with OccuRequired (kill switch for diagnostics only).
     /// </summary>
     private static IServiceCollection RegisterMacServices(IServiceCollection services)
     {
         var raw = Environment.GetEnvironmentVariable("EVERYWHERE_USE_OCCU");
-        if (!IsTruthy(raw)) return services;
+        if (IsExplicitlyDisabled(raw))
+        {
+            Console.Error.WriteLine("[occu] backend NOT registered (EVERYWHERE_USE_OCCU=0). Automation tools will hard-error.");
+            return services;
+        }
 
         // Do NOT call IsAvailable() here. The Swift bridge's first call
         // (ax_list_apps via ax_self_test) hops through DispatchQueue.main.sync.
@@ -43,18 +47,19 @@ public static class Program
         // surfaces dlopen / permission failures as (msg, isError=true)
         // on first real tool call without crashing startup.
         services.AddSingleton<IAxBridgeBackend, Everywhere.Mac.AxBridge.OccuAxBridgeBackend>();
-        Console.Error.WriteLine($"[occu] backend registered (env={raw}); first tool call will exercise libAxHelper.dylib");
+        Console.Error.WriteLine("[occu] backend registered; first tool call will exercise libAxHelper.dylib");
         return services;
     }
 
-    private static bool IsTruthy(string? v)
+    private static bool IsExplicitlyDisabled(string? v)
     {
         if (string.IsNullOrEmpty(v)) return false;
-        return v.Equals("1", StringComparison.OrdinalIgnoreCase)
-            || v.Equals("true", StringComparison.OrdinalIgnoreCase)
-            || v.Equals("yes", StringComparison.OrdinalIgnoreCase)
-            || v.Equals("on", StringComparison.OrdinalIgnoreCase);
+        return v.Equals("0", StringComparison.OrdinalIgnoreCase)
+            || v.Equals("false", StringComparison.OrdinalIgnoreCase)
+            || v.Equals("off", StringComparison.OrdinalIgnoreCase)
+            || v.Equals("no", StringComparison.OrdinalIgnoreCase);
     }
+
 
     [STAThread]
     public static async Task Main(string[] args)

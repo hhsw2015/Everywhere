@@ -1,6 +1,5 @@
 using System.ComponentModel;
 using Everywhere.Interop;
-using Everywhere.Mcp.Input;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 
@@ -14,37 +13,16 @@ public static class PressKeyTool
     public static CallToolResult PressKey(
         string app,
         string key,
-        IInputSimulator input,
-        FocusBorrow focusBorrow,
-        IVisualElementContext context,
-        Everywhere.Mcp.CursorOverlay.ITargetWindowHighlighter highlighter,
         IServiceProvider services)
     {
         if (string.IsNullOrEmpty(key)) return ToolErrors.ParameterRequired("key");
 
-        var backend = services.GetService(typeof(IAxBridgeBackend)) as IAxBridgeBackend;
-                if (backend is not null)
-        {
-            var (txt, isError) = backend.PressKey(app, key);
-            return isError ? ToolErrors.Error(txt) : new CallToolResult { Content = [new TextContentBlock { Text = txt }] };
-        }
+        if (services.GetService(typeof(IAxBridgeBackend)) is not IAxBridgeBackend backend)
+            return ToolErrors.OccuRequired("press_key");
 
-        var resolved = AppResolver.Resolve(context, app);
-        if (resolved is null) return ToolErrors.AppNotRunning(app);
-
-        try
-        {
-            using var _ = focusBorrow.Acquire(
-                resolved.Value.Window.NativeWindowHandle,
-                requireFocus: true,
-                processId: resolved.Value.ProcessId);
-            highlighter.Highlight(resolved.Value.Window.BoundingRectangle, $"Everywhere · {app}");
-            input.PressKey(key, targetPid: resolved.Value.ProcessId);
-            return new CallToolResult { Content = [new TextContentBlock { Text = "ok" }] };
-        }
-        catch (Exception ex)
-        {
-            return ToolErrors.FromException(ex, "press_key");
-        }
+        var (txt, isError) = backend.PressKey(app, key);
+        return isError
+            ? ToolErrors.Error(txt)
+            : new CallToolResult { Content = [new TextContentBlock { Text = txt }] };
     }
 }

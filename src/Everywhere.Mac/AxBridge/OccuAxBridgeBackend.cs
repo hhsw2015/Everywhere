@@ -38,6 +38,9 @@ internal sealed class OccuAxBridgeBackend : IAxBridgeBackend
     public (string Text, bool IsError) SetValue(string app, string elementIndex, string value)
         => Run(() => OccuTool.SetValue(app, elementIndex, value));
 
+    public (string Text, bool IsError) PerformSecondaryAction(string app, string elementIndex, string action)
+        => Run(() => OccuTool.PerformSecondaryAction(app, elementIndex, action));
+
     private static (string, bool) Run(Func<OccuTool.OccuResult> op)
     {
         try

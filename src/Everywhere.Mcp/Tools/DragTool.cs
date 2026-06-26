@@ -1,6 +1,5 @@
 using System.ComponentModel;
 using Everywhere.Interop;
-using Everywhere.Mcp.Input;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 
@@ -17,37 +16,14 @@ public static class DragTool
         double from_y,
         double to_x,
         double to_y,
-        IInputSimulator input,
-        FocusBorrow focusBorrow,
-        IVisualElementContext context,
-        Everywhere.Mcp.CursorOverlay.ITargetWindowHighlighter highlighter,
         IServiceProvider services)
     {
-        var backend = services.GetService(typeof(IAxBridgeBackend)) as IAxBridgeBackend;
-                if (backend is not null)
-        {
-            var (text, isError) = backend.Drag(app, from_x, from_y, to_x, to_y);
-            return isError
-                ? ToolErrors.Error(text)
-                : new CallToolResult { Content = [new TextContentBlock { Text = text }] };
-        }
+        if (services.GetService(typeof(IAxBridgeBackend)) is not IAxBridgeBackend backend)
+            return ToolErrors.OccuRequired("drag");
 
-        var resolved = AppResolver.Resolve(context, app);
-        if (resolved is null) return ToolErrors.AppNotRunning(app);
-
-        try
-        {
-            using var _ = focusBorrow.Acquire(
-                resolved.Value.Window.NativeWindowHandle,
-                requireFocus: true,
-                processId: resolved.Value.ProcessId);
-            highlighter.Highlight(resolved.Value.Window.BoundingRectangle, $"Everywhere · {app}");
-            input.DragTo(from_x, from_y, to_x, to_y, targetPid: resolved.Value.ProcessId);
-            return new CallToolResult { Content = [new TextContentBlock { Text = "ok" }] };
-        }
-        catch (Exception ex)
-        {
-            return ToolErrors.FromException(ex, "drag");
-        }
+        var (text, isError) = backend.Drag(app, from_x, from_y, to_x, to_y);
+        return isError
+            ? ToolErrors.Error(text)
+            : new CallToolResult { Content = [new TextContentBlock { Text = text }] };
     }
 }

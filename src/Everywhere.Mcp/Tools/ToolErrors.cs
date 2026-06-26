@@ -29,6 +29,19 @@ internal static class ToolErrors
         Error($"Required parameter '{name}' missing.");
 
     /// <summary>
+    /// Tool requires the OCCU AX backend (libAxHelper.dylib) but it is not
+    /// registered. Mac builds register it on launch; the env-var kill switch
+    /// EVERYWHERE_USE_OCCU=0 disables registration. Linux/Windows reach this
+    /// path because no backend exists on those platforms yet.
+    /// </summary>
+    public static CallToolResult OccuRequired(string toolName) =>
+        Error(
+            $"{toolName}: OCCU AX backend not available. On macOS, ensure " +
+            "EVERYWHERE_USE_OCCU is not set to 0 and that libAxHelper.dylib " +
+            "is bundled in Contents/MonoBundle. This tool no longer has a " +
+            "C# fallback path.");
+
+    /// <summary>
     /// Wraps an unexpected exception into a clean tool error, hiding internal types and
     /// stack-shaped strings while preserving enough signal for the agent to route.
     /// </summary>

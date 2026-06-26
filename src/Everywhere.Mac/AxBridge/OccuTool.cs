@@ -90,4 +90,7 @@ internal static class OccuTool
 
     public static OccuResult SetValue(string app, string elementIndex, string value)
         => Parse(LibAxHelper.SetValue(app, elementIndex, value));
+
+    public static OccuResult PerformSecondaryAction(string app, string elementIndex, string action)
+        => Parse(LibAxHelper.PerformSecondaryAction(app, elementIndex, action));
 }

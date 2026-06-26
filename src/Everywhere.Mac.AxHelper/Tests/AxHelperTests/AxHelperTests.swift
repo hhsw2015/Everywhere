@@ -73,6 +73,10 @@ struct AxHelperTests {
         #expect(ax_drag(nil, 0, 0, 0, 0) == nil)
         let dragErr = consumeCString(ax_last_error())
         #expect(dragErr?.contains("NULL") == true)
+
+        #expect(ax_perform_secondary_action(nil, nil, nil) == nil)
+        let psaErr = consumeCString(ax_last_error())
+        #expect(psaErr?.contains("NULL") == true)
     }
 
     @Test func unknownAppReturnsErrorNotCrash() {
