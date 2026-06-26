@@ -67,10 +67,37 @@ To pick up upstream fixes:
 
 ## Tool surface contract
 
-Tool names and JSON shapes must stay byte-compatible with OCCU's MCP
-server output (`open-computer-use mcp`). Existing agent configs and
-LLM prompts assume the same shape. Any deviation goes through a SKILL
-doc note and a versioned compatibility flag — never a silent rename.
+Tool names and `text` content of MCP responses stay byte-compatible
+with OCCU's CLI output (`open-computer-use call <tool>`). Existing
+agent configs and LLM prompts assume the same shape. Verified by ad-hoc
+diff against Calculator / TextEdit / Finder snapshots; any drift goes
+through a SKILL doc note and a versioned compatibility flag — never a
+silent rename.
+
+### Intentional deviation: screenshot content stripped from tool responses
+
+OCCU's `snapshotResult` (ComputerUseService.swift L1684-1689) attaches a
+PNG screenshot as `content[1]` on every `get_app_state` / post-action
+response. The text in `content[0]` is byte-identical to ours; the
+difference is purely in the image attachment.
+
+Everywhere intentionally drops `content[1]`:
+
+- The cloud LLMs Everywhere routes through don't all accept image
+  content blocks; `text` is the lowest common denominator.
+- Image base64 is heavy (>30 KB per Calculator-sized window, much
+  larger for full-screen apps) and bloats every tool turn. Tokens
+  per snapshot would 5-10x.
+- Users / LLMs that genuinely want a screenshot already have a
+  cross-platform `screenshot` perception tool (`Everywhere.Mcp/Tools/
+  ScreenshotTool.cs`) that returns PNG on demand. Coupling the
+  screenshot to every snapshot is the wrong default for our deployment.
+
+Implementation: `Everywhere.Core.Interop.IAxBridgeBackend.GetAppState`
+returns `(string Text, bool IsError)` — the bridge surface deliberately
+exposes only `content[0].text`. `OccuTool.Parse` walks the result's
+content array, takes the first `type:"text"` block, and discards the
+rest. Do NOT "fix" this by re-attaching the image; it's a design choice.
 
 ## Cross-platform status
 

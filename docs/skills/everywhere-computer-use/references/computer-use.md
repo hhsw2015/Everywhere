@@ -78,7 +78,17 @@ Some web inputs (Stripe, Cloudflare, certain Electron password fields) reject sc
 
 ## Show-full-text
 
-Tree text is truncated at 500 chars per node by default. Pass `show_full_text: true` when the task needs document body / email body / chat scrollback verbatim. The flag only relaxes per-node text; it does not change tree depth or screenshot size.
+Tree text is truncated at 500 chars per node by default. Pass `show_full_text: true` when the task needs document body / email body / chat scrollback verbatim. The flag only relaxes per-node text; it does not change tree depth or include any screenshot.
+
+## No screenshot in `get_app_state`
+
+OCCU upstream's `get_app_state` attaches a PNG of the snapshotted window. Everywhere strips this on purpose:
+
+- Many cloud LLMs Everywhere routes through don't accept image blocks; text is the universal shape.
+- A Calculator-sized PNG is already 30 KB+ base64; full-window snapshots inflate every tool turn 5-10x.
+- A separate `screenshot` perception tool exists for explicit screenshot needs.
+
+If you want a picture of the window, call `screenshot(app, element_index?)` after `get_app_state`. Don't expect `get_app_state` to deliver one.
 
 ## Foreground vs background
 
