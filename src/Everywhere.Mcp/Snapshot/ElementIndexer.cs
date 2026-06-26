@@ -59,7 +59,10 @@ public static class ElementIndexer
         // Using the root made the heuristic dead code for full-window
         // walks and over-aggressive for picked-element walks.
         var queue = new Queue<(IVisualElement element, int depth, int parentIndex, Avalonia.PixelRect? parentFrame, int? webAreaDepth)>();
-        var seen = new HashSet<string>(StringComparer.Ordinal);
+        // 1:1 OCCU AccessibilitySnapshot.swift L621 — cheap CFHash-based
+        // cycle dedup, no per-node IPC. Was string-Id keyed which cost
+        // 2 IPC/node (ProcessId + NativeWindowHandle) in the BFS hot loop.
+        var seen = new HashSet<long>();
         queue.Enqueue((root, 0, -1, null, null));
 
         var nextIndex = 0;
@@ -95,8 +98,8 @@ public static class ElementIndexer
             // Windows UIA RuntimeId (e.g. "2A.7F") would have been
             // mis-filtered. Use any non-empty id as the dedup key; the
             // collision-prone shape should be filtered at the producer.
-            var id = TryGetId(element);
-            if (!string.IsNullOrEmpty(id) && !seen.Add(id)) continue;
+            var idKey = TryGetIdentityKey(element);
+            if (idKey != 0 && !seen.Add(idKey)) continue;
 
             var idx = nextIndex++;
             // OCCU webAreaDepth (L641/698/814): null until we cross an
@@ -184,9 +187,9 @@ public static class ElementIndexer
         return map;
     }
 
-    private static string? TryGetId(IVisualElement el)
+    private static long TryGetIdentityKey(IVisualElement el)
     {
-        try { return el.Id; } catch { return null; }
+        try { return el.IdentityKey; } catch { return 0; }
     }
 
     private static Avalonia.PixelRect? SafeBounds(IVisualElement el)

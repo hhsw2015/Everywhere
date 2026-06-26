@@ -195,6 +195,15 @@ public interface IVisualElement
     string Id { get; }
 
     /// <summary>
+    /// Cheap identity key for cycle / dedup checks during a tree walk.
+    /// Must NOT trigger an IPC round-trip — Id getters typically do
+    /// (ProcessId + window number) and the BFS walker hits this on
+    /// every node. macOS impl: CFHash of the underlying CFType handle.
+    /// Default = string Id hash (preserves correctness but costs IPC).
+    /// </summary>
+    long IdentityKey => Id?.GetHashCode() ?? 0;
+
+    /// <summary>
     /// Gets the visual parent, returns null if not found
     /// </summary>
     IVisualElement? Parent { get; }

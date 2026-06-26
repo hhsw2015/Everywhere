@@ -120,7 +120,13 @@ public static class SnapshotRenderer
             var name = el.Name;
             var nameMs = Environment.TickCount64 - nameT;
             var textT = Environment.TickCount64;
-            var probeText = el.GetText(maxLength: 1);
+            // 1:1 OCCU sanitizedValue (AccessibilitySnapshot.swift L635) —
+            // ONE GetText per node, full length. Probe-then-full was a
+            // ~2x IPC tax: probe(1) hit AXValue (which is NOT in the
+            // scalar cache for `NSObject` typings), then full GetText
+            // hit AXValue again, and on row-class nodes
+            // CollectDescendantText fanned out over Children too.
+            var text = el.GetText(maxLength: limit);
             var textMs = Environment.TickCount64 - textT;
             var statesT = Environment.TickCount64;
             var states = el.States;
@@ -142,13 +148,9 @@ public static class SnapshotRenderer
             }
 
             // OCCU shouldElideNode: skip rendering for empty AXGroup/Panel
-            // wrappers that contribute no information — they only add
-            // tree noise. We still keep them in the indexed map (for
-            // parent-id lookup) but they won't appear in tree_text.
-            if (ShouldElide(node, byParent, name, probeText, states, filteredActions)) continue;
-
-            // Past Elide → fetch full text only now.
-            var text = string.IsNullOrEmpty(probeText) ? probeText : el.GetText(maxLength: limit);
+            // wrappers. Pass `text` (already the full value) so we
+            // don't need a second probe call.
+            if (ShouldElide(node, byParent, name, text, states, filteredActions)) continue;
 
             sb.Append(' ', node.Depth * 2);
             sb.Append('[').Append(node.Index).Append("] ");

@@ -14,6 +14,12 @@ public partial class AXUIElement : NSObject, IVisualElement
 {
     public string Id => $"{ProcessId}.{NativeWindowHandle}.{CFInterop.CFHash(Handle)}";
 
+    // 1:1 OCCU cycle dedup (AccessibilitySnapshot.swift L621): OCCU
+    // walks `ancestors.contains(where: { CFEqual($0, root) })`. We
+    // mirror the cheap CFHash key — no AXUIElementGetPid /
+    // _AXUIElementGetWindow round-trips per node.
+    public long IdentityKey => (long)CFInterop.CFHash(Handle);
+
     public IVisualElement? Parent => field ??= GetAttributeAsElement(AXAttributeConstants.Parent);
 
     public VisualElementSiblingAccessor SiblingAccessor => new SiblingAccessorImpl(this);
@@ -40,16 +46,17 @@ public partial class AXUIElement : NSObject, IVisualElement
             // overlap (common on AXList).
             var seen = new HashSet<nint>();
 
-            // AXChildren — skipped only when a row-bearing primary
-            // attribute is already producing the children.
-            using var rowsProbe = usesRowsPrimary || usesVisiblePrimary
-                ? GetAttribute<NSArray>(AXAttributeConstants.Rows)
-                : null;
-            using var visProbe = usesVisiblePrimary
-                ? GetAttribute<NSArray>(AXAttributeConstants.VisibleChildren)
-                : null;
-            var hasRows = rowsProbe is { Count: > 0 };
-            var hasVisible = visProbe is { Count: > 0 };
+            // 1:1 OCCU children(of:) (AccessibilitySnapshot.swift L828-863):
+            // fetch each attribute array EXACTLY ONCE, reuse the same
+            // NSArray for both the "is it primary?" decision and the
+            // emit loop. Previous code probed Rows / VisibleChildren
+            // up-front then re-fetched them later — 2× IPC each on
+            // AXList nodes.
+            using var rows = GetAttribute<NSArray>(AXAttributeConstants.Rows);
+            using var visible = GetAttribute<NSArray>(AXAttributeConstants.VisibleChildren);
+            var hasRows = rows is { Count: > 0 };
+            var hasVisible = visible is { Count: > 0 };
+
             if (!(hasRows && usesRowsPrimary) && !(hasVisible && usesVisiblePrimary))
             {
                 using var children = GetAttribute<NSArray>(AXAttributeConstants.Children);
@@ -66,8 +73,6 @@ public partial class AXUIElement : NSObject, IVisualElement
                 }
             }
 
-            // AXRows — for AXTable / AXOutline / AXList / AXBrowser.
-            using var rows = GetAttribute<NSArray>(AXAttributeConstants.Rows);
             if (rows is not null)
             {
                 for (nuint i = 0; i < rows.Count; i++)
@@ -94,8 +99,6 @@ public partial class AXUIElement : NSObject, IVisualElement
                 }
             }
 
-            // AXVisibleChildren — AXList shows only on-screen items here.
-            using var visible = GetAttribute<NSArray>(AXAttributeConstants.VisibleChildren);
             if (visible is not null)
             {
                 for (nuint i = 0; i < visible.Count; i++)
@@ -216,26 +219,21 @@ public partial class AXUIElement : NSObject, IVisualElement
     {
         get
         {
-            // Per-attr cache (v0.9.108) covers duplicate fetches in the
-            // same render. Batch path (v0.9.109/110) caused hangs in
-            // AOT-trimmed builds (NSString static-init ordering vs
-            // NSArray.FromNSObjects building a CFArray of zero-handle
-            // elements) — reverted to single-attr fetches via cache.
+            // 1:1 OCCU summarizeTraits (AccessibilitySnapshot.swift L903-927):
+            // OCCU probes only Selected / Expanded / Enabled / Subrole.
+            // Other state flags (Focused, Hidden, Required, Edited, Main,
+            // Minimized, Grabbed) were our additions; they cost +6-8 IPC
+            // per node and OCCU's renderer never emits them, so the
+            // payload would never have shown them anyway.
             var states = VisualElementStates.None;
             if (GetAttribute<NSNumber>(AXAttributeConstants.Enabled)?.BoolValue == false) states |= VisualElementStates.Disabled;
-            if (GetAttribute<NSNumber>(AXAttributeConstants.Focused)?.BoolValue == true) states |= VisualElementStates.Focused;
-            if (GetAttribute<NSNumber>(AXAttributeConstants.Hidden)?.BoolValue == true) states |= VisualElementStates.Offscreen;
             if (GetAttribute<NSNumber>(AXAttributeConstants.Selected)?.BoolValue == true) states |= VisualElementStates.Selected;
+            if (GetAttribute<NSNumber>(AXAttributeConstants.Expanded)?.BoolValue == true) states |= VisualElementStates.Expanded;
             if (Subrole == AXSubroleAttribute.AXSecureTextField) states |= VisualElementStates.Password;
 
-            if (GetAttribute<NSNumber>(AXAttributeConstants.Expanded)?.BoolValue == true)  states |= VisualElementStates.Expanded;
-            if (GetAttribute<NSNumber>(AXAttributeConstants.Required)?.BoolValue == true)  states |= VisualElementStates.Required;
-            if (GetAttribute<NSNumber>(AXAttributeConstants.Edited)?.BoolValue == true)    states |= VisualElementStates.Edited;
-            if (GetAttribute<NSNumber>(AXAttributeConstants.MainTrait)?.BoolValue == true) states |= VisualElementStates.Main;
-            if (GetAttribute<NSNumber>(AXAttributeConstants.MinimizedAttr)?.BoolValue == true) states |= VisualElementStates.Minimized;
-            if (GetAttribute<NSNumber>(AXAttributeConstants.GrabbedAttr)?.BoolValue == true)   states |= VisualElementStates.Grabbed;
-
-            // AXValue on toggles / checkboxes: 1 = checked, 0 = unchecked.
+            // 1:1 OCCU valueTypeTrait — only read AXValue when it's
+            // settable (i.e. an actual toggle), otherwise we eat the
+            // IPC on every static label too.
             if (Role == AXRoleAttribute.AXCheckBox || Role == AXRoleAttribute.AXRadioButton)
             {
                 var v = GetAttribute<NSNumber>(AXAttributeConstants.Value);
@@ -290,9 +288,15 @@ public partial class AXUIElement : NSObject, IVisualElement
                     var tt = titleElement.GetAttribute<NSString>(AXAttributeConstants.Title);
                     if (!string.IsNullOrWhiteSpace(tt)) return tt;
                 }
-                // SwiftUI parks button labels in a child AXStaticText.
-                var childText = TryFirstChildStaticTextValue();
-                if (!string.IsNullOrWhiteSpace(childText)) return childText;
+                // 1:1 OCCU preferredDisplayTitle (AccessibilitySnapshot
+                // .swift L1093-1134): never walks Children for the
+                // title. We previously did "first AXStaticText child"
+                // for SwiftUI labels, but that triggered the full
+                // Children getter (Rows / Visible / Contents fan-out)
+                // on every leaf and was the worst per-node cost on
+                // Calculator-class apps. AXIdentifier fallback below
+                // already gives us "btn7"-style labels without IPC
+                // fan-out.
             }
             // AXIdentifier is the automation hook. UI test ids like "btn7"
             // are common on SwiftUI; better than empty.
