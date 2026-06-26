@@ -96,7 +96,7 @@ public static class Program
 
         await Entrance.InitializeAsync(args);
 
-        ServiceLocator.Build(x => x
+        ServiceLocator.Build(x => RegisterMacServices(x)
 
                 #region Basic
 
