@@ -21,9 +21,14 @@ struct AxHelperTests {
         return s
     }
 
-    @Test func selfTestSucceeds() {
+    @Test func selfTestRunsWithoutCrashing() {
+        // We accept either outcome:
+        //   1 = a11y granted, listApps succeeded (interactive dev box)
+        //   0 = a11y denied (CI runners), listApps returned isError
+        // The point is the dylib loads + the ObjC @try/@catch shim
+        // never lets an exception bubble out as a crash.
         let rc = ax_self_test()
-        #expect(rc == 1, "ax_self_test should return 1 on a healthy host (a11y permission granted)")
+        #expect(rc == 0 || rc == 1, "ax_self_test must return 0 or 1, got \(rc)")
     }
 
     @Test func listAppsReturnsValidJson() {
@@ -50,8 +55,24 @@ struct AxHelperTests {
         #expect(err2?.contains("app=NULL") == true)
 
         #expect(ax_type_text(nil, nil) == nil)
+        let typeErr = consumeCString(ax_last_error())
+        #expect(typeErr?.contains("NULL") == true)
+
         #expect(ax_press_key(nil, nil) == nil)
+        let pressErr = consumeCString(ax_last_error())
+        #expect(pressErr?.contains("NULL") == true)
+
         #expect(ax_set_value(nil, nil, nil) == nil)
+        let setErr = consumeCString(ax_last_error())
+        #expect(setErr?.contains("NULL") == true)
+
+        #expect(ax_scroll(nil, nil, nil, 1.0) == nil)
+        let scrollErr = consumeCString(ax_last_error())
+        #expect(scrollErr?.contains("NULL") == true)
+
+        #expect(ax_drag(nil, 0, 0, 0, 0) == nil)
+        let dragErr = consumeCString(ax_last_error())
+        #expect(dragErr?.contains("NULL") == true)
     }
 
     @Test func unknownAppReturnsErrorNotCrash() {

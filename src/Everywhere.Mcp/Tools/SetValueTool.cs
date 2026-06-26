@@ -29,7 +29,11 @@ public static class SetValueTool
         if (backend is not null)
         {
             var (txt, isError) = backend.SetValue(app, element_index, value);
-            return isError ? ToolErrors.Error(txt) : new CallToolResult { Content = [new TextContentBlock { Text = txt }] };
+            if (!isError)
+                return new CallToolResult { Content = [new TextContentBlock { Text = txt }] };
+            // OCCU's setValue is AXUIElementSetAttributeValue-only; web inputs
+            // (Stripe / Cloudflare / some Electron) reject that and need our
+            // keyboard fallback below. Don't return on isError — fall through.
         }
 
         var (error, element) = ElementResolver.Resolve(sessions, element_index, appHint: app);

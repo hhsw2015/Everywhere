@@ -33,18 +33,18 @@ public static class ScrollTool
         if (dir is not ("up" or "down" or "left" or "right"))
             return ToolErrors.Error($"Invalid direction '{direction}'. Expected up|down|left|right.");
 
+        var amount = pages ?? 1.0;
+        if (double.IsNaN(amount) || amount <= 0 || amount > MaxPages)
+            return ToolErrors.Error($"pages must be in (0, {MaxPages}].");
+
         if (backend is not null)
         {
-            var (txt, isError) = backend.Scroll(app, dir, element_index, pages ?? 1.0);
+            var (txt, isError) = backend.Scroll(app, dir, element_index, amount);
             return isError ? ToolErrors.Error(txt) : new CallToolResult { Content = [new TextContentBlock { Text = txt }] };
         }
 
         var (error, element) = ElementResolver.Resolve(sessions, element_index, appHint: app);
         if (error is not null) return error;
-
-        var amount = pages ?? 1.0;
-        if (double.IsNaN(amount) || amount <= 0 || amount > MaxPages)
-            return ToolErrors.Error($"pages must be in (0, {MaxPages}].");
 
         // Primary path: CGEvent scroll wheel at the element's center.
         // Mirrors OCCU scrollTargeted (CGEventCreateScrollWheelEvent2 +

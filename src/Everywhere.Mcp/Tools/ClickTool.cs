@@ -28,10 +28,13 @@ public static class ClickTool
     {
         if (backend is not null)
         {
-            var btn = mouse_button ?? "left";
+            var hasIdx = !string.IsNullOrEmpty(element_index);
+            var hasXY = x.HasValue && y.HasValue;
+            if (!hasIdx && !hasXY)
+                return ToolErrors.Error("click requires either element_index or both x and y.");
+            var btn = (mouse_button ?? "left").ToLowerInvariant();
             var cc = click_count is { } cnt && cnt > 0 ? cnt : 1;
-            var useXY = x.HasValue && y.HasValue && string.IsNullOrEmpty(element_index);
-            var (text, isError) = backend.Click(app, element_index, x ?? 0, y ?? 0, useXY, cc, btn);
+            var (text, isError) = backend.Click(app, element_index, x ?? 0, y ?? 0, hasXY && !hasIdx, cc, btn);
             return isError
                 ? ToolErrors.Error(text)
                 : new CallToolResult { Content = [new TextContentBlock { Text = text }] };

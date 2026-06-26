@@ -31,18 +31,38 @@ public static class Program
     /// </summary>
     private static IServiceCollection RegisterMacServices(IServiceCollection services)
     {
-        if (Environment.GetEnvironmentVariable("EVERYWHERE_USE_OCCU") == "1")
+        var raw = Environment.GetEnvironmentVariable("EVERYWHERE_USE_OCCU");
+        if (!IsTruthy(raw)) return services;
+
+        try
         {
-            try
+            if (Everywhere.Mac.AxBridge.LibAxHelper.IsAvailable())
             {
-                if (Everywhere.Mac.AxBridge.LibAxHelper.IsAvailable())
-                {
-                    services.AddSingleton<IAxBridgeBackend, Everywhere.Mac.AxBridge.OccuAxBridgeBackend>();
-                }
+                services.AddSingleton<IAxBridgeBackend, Everywhere.Mac.AxBridge.OccuAxBridgeBackend>();
+                Console.Error.WriteLine("[occu] backend registered (libAxHelper.dylib loaded, a11y permission OK)");
             }
-            catch { /* dylib missing / a11y denied — leave backend unregistered */ }
+            else
+            {
+                // ax_self_test failed: dylib loaded but listApps returned
+                // an error (a11y permission denied) or returned NULL.
+                Console.Error.WriteLine($"[occu] EVERYWHERE_USE_OCCU={raw} but ax_self_test failed; falling back to C# AX path. Last error: {Everywhere.Mac.AxBridge.LibAxHelper.LastErrorMessage()}");
+            }
+        }
+        catch (Exception ex)
+        {
+            // dlopen failed (dylib missing) / TypeLoadException etc.
+            Console.Error.WriteLine($"[occu] failed to register backend: {ex.GetType().Name}: {ex.Message}");
         }
         return services;
+    }
+
+    private static bool IsTruthy(string? v)
+    {
+        if (string.IsNullOrEmpty(v)) return false;
+        return v.Equals("1", StringComparison.OrdinalIgnoreCase)
+            || v.Equals("true", StringComparison.OrdinalIgnoreCase)
+            || v.Equals("yes", StringComparison.OrdinalIgnoreCase)
+            || v.Equals("on", StringComparison.OrdinalIgnoreCase);
     }
 
     [STAThread]
