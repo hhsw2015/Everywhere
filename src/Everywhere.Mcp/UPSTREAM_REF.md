@@ -56,14 +56,44 @@ there — those C# implementations stay.
 ## Files vendored from upstream (do not edit)
 
 Everything under `3rd/open-codex-computer-use/` is a pinned submodule.
-To pick up upstream fixes:
+Do NOT commit changes inside the submodule — they vanish on the next
+`git submodule update`. Real downstream fixes live as patch files
+under `3rd/everywhere-patches/` and are reapplied at build time by the
+`ApplyAxHelperPatches` MSBuild target in `Everywhere.Mac.csproj`.
+
+### Active patches
+
+| File | Touches | Why |
+|------|---------|-----|
+| `0001-cursor-isFlipped.patch` | `SoftwareCursorOverlay.swift` | Overrides `SoftwareCursorView.isFlipped` to `true` (Avalonia host renders cursor upside-down without it), and removes the original `clampTipPosition` margin that kept the entire 126x126 sprite inside `visibleFrame` — that margin yanked the tip ~20px back near right edges (visible after Calculator's history sidebar opens). |
+| `0003-cursor-offscreen-fallback.patch` | `ComputerUseService.swift` | `screenStatePointToAppKitGlobalPoint` requires the point to be strictly contained by some screen frame; misses fall through with no y-flip, dropping the cursor far below the target. The patch falls back to the nearest screen by squared-distance so a point a few pixels past the bezel still converts cleanly. |
+
+Patches are idempotent: `git apply` is run with a check pass first; if
+the patch is already applied (or the upstream changed) the build skips
+the apply step and continues. Failure surfaces as a build warning, not
+a hard error.
+
+### Upgrading vendored OCCU
 
 1. `cd 3rd/open-codex-computer-use && git fetch && git checkout <new-sha>`
-2. Bump the pinned SHA at the top of this file.
-3. From repo root: `cd src/Everywhere.Mac.AxHelper && swift test`
-4. Run `dotnet build` to rebuild the dylib + .NET layer.
+2. Bump the pinned SHA at the top of this file (`Last synced` and `Pinned commit`).
+3. `cd src/Everywhere.Mac.AxHelper && swift test` — the patches reapply
+   automatically through the MSBuild target on a real `dotnet build`,
+   but for a clean swift-only test run patch them manually:
+   ```sh
+   for p in 3rd/everywhere-patches/*.patch; do
+     git -C 3rd/open-codex-computer-use apply "$p"
+   done
+   swift test
+   git -C 3rd/open-codex-computer-use checkout -- packages/
+   ```
+4. `dotnet build` to rebuild the dylib + .NET layer.
 5. Smoke-test with `EVERYWHERE_USE_OCCU` enabled (default on macOS).
-6. Update the SKILL doc only if upstream changed tool names / JSON shape.
+6. If a patch no longer applies cleanly, regenerate it against the
+   new upstream rather than forcing the old hunks: build OCCU at the
+   new SHA with the same fix re-applied, then capture the diff with
+   `git diff > 3rd/everywhere-patches/000N-...patch`.
+7. Update the SKILL doc only if upstream changed tool names / JSON shape.
 
 ## Tool surface contract
 

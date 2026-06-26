@@ -50,9 +50,14 @@ If `click` / `set_value` / `perform_secondary_action` returns isError:
 3. If the element is a SwiftUI gesture button that ignores AXPress, fall back to coordinate `click` at its centre.
 4. For text inputs that reject `set_value`: focus the element, then `press_key("super+a")` + `press_key("BackSpace")` + `type_text(new_value)`.
 
-## Cursor renders upside-down or in the wrong spot
+## Cursor renders upside-down, off-target, or in the wrong spot
 
-The soft cursor's render coords are reconciled in `CursorGlyphRenderState.ViewSpaceDrawingState`. Mis-rotation almost always means motion-brain output (y-up screen state) wasn't being flipped for the y-down render surface. This was fixed in v0.9.137 by porting OCCU's `appKitDrawingState` flip recipe verbatim.
+The soft cursor is OCCU's `SoftwareCursorOverlay` running inside our Avalonia-hosted .NET process. Three downstream patches keep it aligned (live in `3rd/everywhere-patches/`):
+
+- **0001 isFlipped + clamp** — overrides `SoftwareCursorView.isFlipped` so the y axis matches our render surface, and removes OCCU's "keep entire 126x126 sprite inside visibleFrame" clamp so the tip sticks to the click target instead of being dragged ~20px back near screen edges.
+- **0003 offscreen fallback** — when a click target lands a few pixels past the screen bezel (Calculator's history sidebar pushes its right column to x=1737 on a 1728-wide main screen), `screenStatePointToAppKitGlobalPoint`'s strict `contains` lookup misses and skips the y-flip; the patch falls back to the nearest screen so coordinates outside the rect still convert correctly.
+
+If the cursor visibly drifts in a new app, suspect the same family of issues: AppKit coord-system assumptions, a screen-edge case OCCU's clamp didn't anticipate, or a layout where cached snapshot frames diverge from live AX bounds. Capture screen-state vs AppKit numbers before touching the patches.
 
 ## Tool only available on macOS
 
