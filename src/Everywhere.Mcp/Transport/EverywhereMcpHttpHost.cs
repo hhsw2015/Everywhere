@@ -47,6 +47,10 @@ public sealed class EverywhereMcpHttpHost : IHostedService, IAsyncDisposable
     private readonly IFinderReader _finder;
     private readonly IBrowserTabsReader _browserTabs;
     private readonly Everywhere.Mcp.CursorOverlay.ITargetWindowHighlighter _highlighter;
+    // Optional: only present on macOS when EVERYWHERE_USE_OCCU=1 wires
+    // OccuAxBridgeBackend on the parent container. If absent, tools fall
+    // back to their existing C# AX path.
+    private readonly IAxBridgeBackend? _axBridgeBackend;
 
     public EverywhereMcpHttpHost(
         EverywhereMcpHttpOptions options,
@@ -71,6 +75,7 @@ public sealed class EverywhereMcpHttpHost : IHostedService, IAsyncDisposable
         _browserTabs = parentServices.GetRequiredService<IBrowserTabsReader>();
         _highlighter = parentServices.GetService<Everywhere.Mcp.CursorOverlay.ITargetWindowHighlighter>()
             ?? new Everywhere.Mcp.CursorOverlay.NoopTargetWindowHighlighter();
+        _axBridgeBackend = parentServices.GetService<IAxBridgeBackend>();
     }
 
     public int BoundPort => Volatile.Read(ref _boundPort);
@@ -210,6 +215,11 @@ public sealed class EverywhereMcpHttpHost : IHostedService, IAsyncDisposable
         builder.Services.AddSingleton(_browserUrl);
         builder.Services.AddSingleton(_finder);
         builder.Services.AddSingleton(_browserTabs);
+        // Forward optional OCCU AX backend (may be null on non-macOS or
+        // when EVERYWHERE_USE_OCCU is unset). Tools resolve via
+        // GetService — null = fall back to the C# AX path.
+        if (_axBridgeBackend is not null)
+            builder.Services.AddSingleton(_axBridgeBackend);
 
         var mcpBuilder = builder.Services
             .AddMcpServer(opts =>
