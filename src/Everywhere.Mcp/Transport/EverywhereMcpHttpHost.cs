@@ -47,9 +47,11 @@ public sealed class EverywhereMcpHttpHost : IHostedService, IAsyncDisposable
     private readonly IFinderReader _finder;
     private readonly IBrowserTabsReader _browserTabs;
     private readonly Everywhere.Mcp.CursorOverlay.ITargetWindowHighlighter _highlighter;
-    // Optional: only present on macOS when EVERYWHERE_USE_OCCU=1 wires
-    // OccuAxBridgeBackend on the parent container. If absent, tools fall
-    // back to their existing C# AX path.
+    // Optional: present on macOS by default (registered in Mac/Program.cs);
+    // null when EVERYWHERE_USE_OCCU=0 disables registration, or on
+    // Windows / Linux where no backend is wired yet. The eight automation
+    // tools hard-error with OccuRequired when this is null — there is no
+    // C# fallback path anymore (retired in v0.9.138).
     private readonly IAxBridgeBackend? _axBridgeBackend;
 
     public EverywhereMcpHttpHost(

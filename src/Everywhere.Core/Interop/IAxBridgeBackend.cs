@@ -11,9 +11,10 @@ namespace Everywhere.Interop;
 /// shape of an MCP tools/call result content. Implementations MUST
 /// NOT throw — wrap any backend errors into <c>(message, true)</c>.
 ///
-/// Default DI binding: null. Mac DI registers the OCCU
-/// implementation when <c>EVERYWHERE_USE_OCCU=1</c> AND the helper
-/// dylib is loadable.
+/// Default DI binding on non-macOS: null. Mac DI registers the OCCU
+/// implementation by default; set <c>EVERYWHERE_USE_OCCU=0</c> as a
+/// kill switch to disable registration (the eight automation tools
+/// then hard-error with <c>OccuRequired</c>).
 /// </summary>
 public interface IAxBridgeBackend
 {

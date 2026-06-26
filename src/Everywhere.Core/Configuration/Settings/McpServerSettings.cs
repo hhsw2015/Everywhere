@@ -112,8 +112,14 @@ public sealed partial class McpServerSettings : SettingsBase, ISettingsCategory
     /// Software cursor overlay: a translucent cursor + motion trail
     /// rendered on top of the desktop so the user can see where
     /// Everywhere's MCP-driven Computer Use is moving / clicking.
-    /// Port of OCCU SoftwareCursorOverlay (CursorMotionModel +
-    /// SoftwareCursorGlyphRenderer). Default off — visible but harmless.
+    /// Historical .NET port of OCCU's SoftwareCursorOverlay; on macOS
+    /// the OCCU Swift bridge already renders its own cursor overlay
+    /// from inside libAxHelper.dylib whenever an automation tool
+    /// fires, so this .NET overlay is redundant on Mac and stays off
+    /// by default. Useful only on platforms where the OCCU bridge
+    /// isn't wired (currently Windows / Linux), and even there it
+    /// only animates for input that flows through IInputSimulator —
+    /// which the MCP tools no longer use.
     /// </summary>
     [ObservableProperty]
     [DynamicResourceKey(
