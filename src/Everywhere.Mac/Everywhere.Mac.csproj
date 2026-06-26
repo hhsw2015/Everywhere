@@ -210,12 +210,12 @@
   <Target Name="ApplyAxHelperPatches"
           BeforeTargets="BuildAxHelper"
           Condition="Exists('$(_AxHelperPatchDir)') AND Exists('$(_AxHelperVendorDir).git')">
-    <!-- Idempotent: `git apply --check` succeeds only when the patch
-         CAN be applied (= not yet applied). When it fails we either
-         already applied the patch or the upstream changed. We apply
-         only on the can-apply branch; otherwise leave the tree alone
-         so a fresh `git submodule update` cycle restores upstream and
-         re-applies on next build. -->
+    <!-- Idempotent: probe with `git apply` check mode first, which
+         succeeds only when the patch CAN be applied (i.e. not yet
+         applied). When it fails we either already applied the patch
+         or the upstream changed. Apply only on the can-apply branch;
+         otherwise leave the tree alone so a fresh `git submodule
+         update` cycle restores upstream and re-applies on next build. -->
     <Exec Command="for p in $(_AxHelperPatchDir)*.patch; do [ -f &quot;$p&quot; ] || continue; git -C $(_AxHelperVendorDir) apply --check &quot;$p&quot; 2&gt;/dev/null &amp;&amp; git -C $(_AxHelperVendorDir) apply &quot;$p&quot; &amp;&amp; echo &quot;[AxHelper] applied $p&quot; || echo &quot;[AxHelper] $p already applied or stale (skipped)&quot;; done"
           IgnoreExitCode="true" />
   </Target>
