@@ -71,10 +71,10 @@ public static class ElementIndexer
         {
             // Heartbeat every 50 nodes — confirms loop is alive and
             // shows where time is spent.
-            if (ordered.Count % 50 == 0 && ordered.Count > 0)
+            if (ordered.Count % 10 == 0 && ordered.Count > 0)
             {
                 var nowMs = Environment.TickCount64;
-                if (nowMs - lastLog > 200)
+                if (nowMs - lastLog > 50)
                 {
                     try { System.IO.File.AppendAllText("/tmp/everywhere-perf.log",
                         $"[{System.DateTime.Now:HH:mm:ss.fff}]   Walk progress {ordered.Count} nodes (+{nowMs-walkStart}ms)\n"); }

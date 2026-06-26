@@ -85,13 +85,16 @@ public static class SnapshotRenderer
         var renderStart = Environment.TickCount64;
         var renderLastLog = renderStart;
         var renderIdx = 0;
+        try { System.IO.File.AppendAllText("/tmp/everywhere-perf.log",
+            $"[{System.DateTime.Now:HH:mm:ss.fff}]   Render START nodes={nodes.Count}\n"); }
+        catch { }
         foreach (var node in nodes)
         {
             renderIdx++;
-            if (renderIdx % 50 == 0)
+            if (renderIdx % 10 == 0)
             {
                 var nowMs = Environment.TickCount64;
-                if (nowMs - renderLastLog > 200)
+                if (nowMs - renderLastLog > 50)
                 {
                     try { System.IO.File.AppendAllText("/tmp/everywhere-perf.log",
                         $"[{System.DateTime.Now:HH:mm:ss.fff}]   Render progress {renderIdx}/{nodes.Count} (+{nowMs-renderStart}ms)\n"); }
@@ -112,19 +115,31 @@ public static class SnapshotRenderer
             // ~480 IPC calls to ~240 — get_app_state drops from a slow
             // multi-second roundtrip to something interactive.
             var el = node.Element;
+            var nodeStart = Environment.TickCount64;
+            var nameT = Environment.TickCount64;
             var name = el.Name;
-            // Probe with maxLength:1 — Elide only checks IsNullOrEmpty,
-            // and GetText for AXRow/AXTableRow/AXOutlineRow walks up to
-            // 4 levels of descendants, so an unbounded fetch we may
-            // throw away is wasted work.
+            var nameMs = Environment.TickCount64 - nameT;
+            var textT = Environment.TickCount64;
             var probeText = el.GetText(maxLength: 1);
+            var textMs = Environment.TickCount64 - textT;
+            var statesT = Environment.TickCount64;
             var states = el.States;
+            var statesMs = Environment.TickCount64 - statesT;
+            var actionsT = Environment.TickCount64;
             IReadOnlyList<string>? rawActions = null;
             try { rawActions = el.SupportedActions; }
             catch (System.Runtime.InteropServices.COMException) { }
             catch (ObjectDisposedException) { }
             catch (InvalidOperationException) { }
+            var actionsMs = Environment.TickCount64 - actionsT;
             var filteredActions = SnapshotActionFilter.Filter(rawActions);
+            var totalNodeMs = Environment.TickCount64 - nodeStart;
+            if (totalNodeMs > 100) // log only slow nodes
+            {
+                try { System.IO.File.AppendAllText("/tmp/everywhere-perf.log",
+                    $"[{System.DateTime.Now:HH:mm:ss.fff}]   SLOW node #{node.Index} ({totalNodeMs}ms) name={nameMs} text={textMs} states={statesMs} actions={actionsMs}\n"); }
+                catch { }
+            }
 
             // OCCU shouldElideNode: skip rendering for empty AXGroup/Panel
             // wrappers that contribute no information — they only add
