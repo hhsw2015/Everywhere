@@ -34,25 +34,16 @@ public static class Program
         var raw = Environment.GetEnvironmentVariable("EVERYWHERE_USE_OCCU");
         if (!IsTruthy(raw)) return services;
 
-        try
-        {
-            if (Everywhere.Mac.AxBridge.LibAxHelper.IsAvailable())
-            {
-                services.AddSingleton<IAxBridgeBackend, Everywhere.Mac.AxBridge.OccuAxBridgeBackend>();
-                Console.Error.WriteLine("[occu] backend registered (libAxHelper.dylib loaded, a11y permission OK)");
-            }
-            else
-            {
-                // ax_self_test failed: dylib loaded but listApps returned
-                // an error (a11y permission denied) or returned NULL.
-                Console.Error.WriteLine($"[occu] EVERYWHERE_USE_OCCU={raw} but ax_self_test failed; falling back to C# AX path. Last error: {Everywhere.Mac.AxBridge.LibAxHelper.LastErrorMessage()}");
-            }
-        }
-        catch (Exception ex)
-        {
-            // dlopen failed (dylib missing) / TypeLoadException etc.
-            Console.Error.WriteLine($"[occu] failed to register backend: {ex.GetType().Name}: {ex.Message}");
-        }
+        // Do NOT call IsAvailable() here. The Swift bridge's first call
+        // (ax_list_apps via ax_self_test) hops through DispatchQueue.main.sync.
+        // GUI startup runs RegisterMacServices on the main thread BEFORE
+        // NSApp's run loop pumps it, so probing here deadlocks the launch
+        // (v0.9.133 symptom: process alive ~10s, never binds :7878, then
+        // exits). Register unconditionally; the backend's own try/catch
+        // surfaces dlopen / permission failures as (msg, isError=true)
+        // on first real tool call without crashing startup.
+        services.AddSingleton<IAxBridgeBackend, Everywhere.Mac.AxBridge.OccuAxBridgeBackend>();
+        Console.Error.WriteLine($"[occu] backend registered (env={raw}); first tool call will exercise libAxHelper.dylib");
         return services;
     }
 
