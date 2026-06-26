@@ -1,8 +1,17 @@
 diff --git a/packages/OpenComputerUseKit/Sources/OpenComputerUseKit/ComputerUseService.swift b/packages/OpenComputerUseKit/Sources/OpenComputerUseKit/ComputerUseService.swift
-index c892773..30cfe95 100644
+index c892773..f442974 100644
 --- a/packages/OpenComputerUseKit/Sources/OpenComputerUseKit/ComputerUseService.swift
 +++ b/packages/OpenComputerUseKit/Sources/OpenComputerUseKit/ComputerUseService.swift
-@@ -1515,7 +1515,11 @@ public final class ComputerUseService {
+@@ -396,6 +396,8 @@ public final class ComputerUseService {
+             guard let targetPoint = try globalClickPoint(for: record, snapshot: snapshot) else {
+                 throw ComputerUseError.stateUnavailable("element \(elementIndex) has no clickable frame")
+             }
++            everywhereLogCursorDiag(record: record, snapshot: snapshot)
++            everywhereLogTargetPoint(elementIndex: elementIndex, point: targetPoint)
+             let cursorTarget = makeVisualCursorTarget(
+                 at: targetPoint,
+                 targetWindowID: snapshot.targetWindowID,
+@@ -1515,7 +1517,11 @@ public final class ComputerUseService {
      }
  
      private func visualCursorTarget(for record: ElementRecord, snapshot: AppSnapshot) -> VisualCursorTarget? {
@@ -15,7 +24,7 @@ index c892773..30cfe95 100644
              localFrame: record.localFrame,
              windowBounds: snapshot.windowBounds,
              targetWindowID: snapshot.targetWindowID,
-@@ -1523,6 +1527,59 @@ public final class ComputerUseService {
+@@ -1523,6 +1529,75 @@ public final class ComputerUseService {
          )
      }
  
@@ -61,6 +70,22 @@ index c892773..30cfe95 100644
 +        msg += " allScreens=[\(appKitMappings)]"
 +        FileHandle.standardError.write((msg + "\n").data(using: .utf8) ?? Data())
 +        if let data = (msg + "\n").data(using: .utf8) {
++            let path = "/tmp/everywhere-cursor.log"
++            if let fh = FileHandle(forWritingAtPath: path) {
++                fh.seekToEndOfFile()
++                fh.write(data)
++                try? fh.close()
++            } else {
++                try? data.write(to: URL(fileURLWithPath: path))
++            }
++        }
++    }
++
++    private func everywhereLogTargetPoint(elementIndex: String, point: CGPoint) {
++        let appKitPoint = screenStatePointToAppKitGlobalPoint(fromScreenStatePoint: point)
++        let msg = "[ew-cursor-diag] CLICKPATH idx=\(elementIndex) targetPoint(screen-state)=(\(point.x),\(point.y)) appKitPoint=(\(appKitPoint.x),\(appKitPoint.y))\n"
++        FileHandle.standardError.write(msg.data(using: .utf8) ?? Data())
++        if let data = msg.data(using: .utf8) {
 +            let path = "/tmp/everywhere-cursor.log"
 +            if let fh = FileHandle(forWritingAtPath: path) {
 +                fh.seekToEndOfFile()
