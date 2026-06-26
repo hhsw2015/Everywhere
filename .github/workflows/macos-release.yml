@@ -43,6 +43,12 @@ jobs:
       with:
         node-version: '22'
 
+    - name: Verify Swift toolchain (required for AxHelper dylib)
+      run: |
+        which swift
+        swift --version
+        echo "Swift OK — AxHelper dylib build will be exercised by dotnet publish."
+
     - name: Resolve version
       run: node scripts/resolve-release-tag.mjs "$GITHUB_REF_NAME"
 

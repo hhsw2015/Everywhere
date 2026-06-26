@@ -192,43 +192,50 @@
   </Target>
 
   <!-- Swift AxHelper dylib: built from src/Everywhere.Mac.AxHelper.
-       Optional — runtime-gated by EVERYWHERE_USE_OCCU. If the dylib
-       is absent the C# AX path keeps working so dev machines without
-       Swift toolchain still build. -->
+       Runtime-gated by EVERYWHERE_USE_OCCU. Dev machines without a
+       Swift toolchain skip the build (the Package.swift Exists check
+       guards the entire chain), so the C# AX path keeps working.
+       When swift IS available the build must succeed — silent failures
+       had us shipping releases without the dylib for two versions. -->
   <PropertyGroup>
     <_AxHelperPackageDir>$(MSBuildThisFileDirectory)../Everywhere.Mac.AxHelper/</_AxHelperPackageDir>
-    <_AxHelperDylibPath>$(_AxHelperPackageDir).build/arm64-apple-macosx/release/libAxHelper.dylib</_AxHelperDylibPath>
+    <_AxHelperSwiftArch Condition="'$(RuntimeIdentifier)' == 'osx-x64'">x86_64</_AxHelperSwiftArch>
+    <_AxHelperSwiftArch Condition="'$(_AxHelperSwiftArch)' == ''">arm64</_AxHelperSwiftArch>
+    <_AxHelperDylibPath>$(_AxHelperPackageDir).build/$(_AxHelperSwiftArch)-apple-macosx/release/libAxHelper.dylib</_AxHelperDylibPath>
   </PropertyGroup>
-  <!-- Build the Swift AxHelper before .NET items are evaluated for
-       publish. Putting this in BeforeTargets="BeforeBuild" runs it
-       AFTER ItemGroup evaluation, so the <None Include> below was
-       evaluating Exists() before the dylib existed and quietly
-       skipping the bundle copy. Running before _ComputePublishLocation
-       and using DynamicItemGroup via Target lets the include happen
-       after the build. -->
   <Target Name="BuildAxHelper"
           BeforeTargets="BeforeBuild;_ComputeAxHelperPublishItems"
           Condition="Exists('$(_AxHelperPackageDir)Package.swift')">
-    <Message Text="[AxHelper] swift build -c release --arch arm64 in $(_AxHelperPackageDir)" Importance="high" />
-    <Exec Command="swift build -c release --arch arm64"
+    <Exec Command="command -v swift >/dev/null 2>&amp;1"
+          IgnoreExitCode="true"
+          ConsoleToMSBuild="true">
+      <Output TaskParameter="ExitCode" PropertyName="_AxHelperSwiftAvailable" />
+    </Exec>
+    <Warning Text="[AxHelper] swift toolchain not on PATH — skipping Swift dylib build. OCCU backend will be unavailable at runtime."
+             Condition="'$(_AxHelperSwiftAvailable)' != '0'" />
+    <Message Text="[AxHelper] swift build -c release --arch $(_AxHelperSwiftArch) in $(_AxHelperPackageDir)"
+             Importance="high"
+             Condition="'$(_AxHelperSwiftAvailable)' == '0'" />
+    <Exec Command="swift build -c release --arch $(_AxHelperSwiftArch)"
           WorkingDirectory="$(_AxHelperPackageDir)"
-          ContinueOnError="true"
-          IgnoreExitCode="true" />
-    <Message Text="[AxHelper] dylib at $(_AxHelperDylibPath) exists=$([System.IO.File]::Exists('$(_AxHelperDylibPath)'))" Importance="high" />
+          Condition="'$(_AxHelperSwiftAvailable)' == '0'" />
+    <Error Text="[AxHelper] swift build succeeded but $(_AxHelperDylibPath) is missing — Package.swift product or arch mismatch."
+           Condition="'$(_AxHelperSwiftAvailable)' == '0' And !Exists('$(_AxHelperDylibPath)')" />
   </Target>
+  <!-- .NET MAUI macOS only recognises Contents/MonoBundle/ for native
+       dylibs; Contents/Frameworks/ silently dropped the file from the
+       publish output. Co-locate with libAvaloniaNative et al. so the
+       existing _CoreSignAppBundle codesign loop signs it for free. -->
   <Target Name="_ComputeAxHelperPublishItems"
           BeforeTargets="_ComputePublishLocation;PrepareForPublish;Build"
           DependsOnTargets="BuildAxHelper">
     <ItemGroup Condition="Exists('$(_AxHelperDylibPath)')">
-      <None Include="$(_AxHelperDylibPath)" PublishFolderType="RootDirectory">
-        <Link>Contents/Frameworks/libAxHelper.dylib</Link>
+      <None Include="$(_AxHelperDylibPath)" PublishFolderType="Assembly">
         <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
         <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       </None>
     </ItemGroup>
-    <Message Text="[AxHelper] bundled libAxHelper.dylib → Contents/Frameworks/" Importance="high" Condition="Exists('$(_AxHelperDylibPath)')" />
-    <Warning Text="[AxHelper] libAxHelper.dylib NOT found at $(_AxHelperDylibPath) — OCCU backend will be unavailable at runtime"
-             Condition="!Exists('$(_AxHelperDylibPath)')" />
+    <Message Text="[AxHelper] bundled libAxHelper.dylib → Contents/MonoBundle/" Importance="high" Condition="Exists('$(_AxHelperDylibPath)')" />
   </Target>
 
 </Project>
