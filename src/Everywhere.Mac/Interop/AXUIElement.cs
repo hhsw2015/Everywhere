@@ -18,7 +18,7 @@ public partial class AXUIElement : NSObject, IVisualElement
     // walks `ancestors.contains(where: { CFEqual($0, root) })`. We
     // mirror the cheap CFHash key — no AXUIElementGetPid /
     // _AXUIElementGetWindow round-trips per node.
-    public long IdentityKey => (long)CFInterop.CFHash(Handle);
+    public ulong IdentityKey => (ulong)CFInterop.CFHash(Handle);
 
     public IVisualElement? Parent => field ??= GetAttributeAsElement(AXAttributeConstants.Parent);
 
@@ -229,6 +229,16 @@ public partial class AXUIElement : NSObject, IVisualElement
             if (GetAttribute<NSNumber>(AXAttributeConstants.Enabled)?.BoolValue == false) states |= VisualElementStates.Disabled;
             if (GetAttribute<NSNumber>(AXAttributeConstants.Selected)?.BoolValue == true) states |= VisualElementStates.Selected;
             if (GetAttribute<NSNumber>(AXAttributeConstants.Expanded)?.BoolValue == true) states |= VisualElementStates.Expanded;
+            // Focused + Hidden are NOT in OCCU's summarizeTraits (saving
+            // 2 IPC/node would be ~2k IPC on a 1000-node tree) but
+            // downstream consumers (focused_path computation,
+            // ScreenshotEncoder offscreen culling, picker hover
+            // highlight) DEPEND on these bits being set on at least
+            // the focused element, so we keep them. If perf still
+            // hurts, gate behind a "renderer-asked" flag rather than
+            // delete outright.
+            if (GetAttribute<NSNumber>(AXAttributeConstants.Focused)?.BoolValue == true) states |= VisualElementStates.Focused;
+            if (GetAttribute<NSNumber>(AXAttributeConstants.Hidden)?.BoolValue == true) states |= VisualElementStates.Offscreen;
             if (Subrole == AXSubroleAttribute.AXSecureTextField) states |= VisualElementStates.Password;
 
             // 1:1 OCCU valueTypeTrait — only read AXValue when it's
@@ -288,15 +298,12 @@ public partial class AXUIElement : NSObject, IVisualElement
                     var tt = titleElement.GetAttribute<NSString>(AXAttributeConstants.Title);
                     if (!string.IsNullOrWhiteSpace(tt)) return tt;
                 }
-                // 1:1 OCCU preferredDisplayTitle (AccessibilitySnapshot
-                // .swift L1093-1134): never walks Children for the
-                // title. We previously did "first AXStaticText child"
-                // for SwiftUI labels, but that triggered the full
-                // Children getter (Rows / Visible / Contents fan-out)
-                // on every leaf and was the worst per-node cost on
-                // Calculator-class apps. AXIdentifier fallback below
-                // already gives us "btn7"-style labels without IPC
-                // fan-out.
+                // SwiftUI parks button labels in a child AXStaticText.
+                // Use the AXChildren-only fast path (TryFirstChild...
+                // now bypasses the full Children fan-out so this is
+                // 1 IPC per leaf, not 4).
+                var childText = TryFirstChildStaticTextValue();
+                if (!string.IsNullOrWhiteSpace(childText)) return childText;
             }
             // AXIdentifier is the automation hook. UI test ids like "btn7"
             // are common on SwiftUI; better than empty.
@@ -331,11 +338,19 @@ public partial class AXUIElement : NSObject, IVisualElement
     {
         try
         {
+            // Use the raw AXChildren attribute only — do NOT go through
+            // the full Children getter which fans out into Rows /
+            // VisibleChildren / Contents (4× IPC per child). For
+            // SwiftUI Button("Save") the label is in the immediate
+            // AXChildren array and 1 IPC suffices.
+            using var children = GetAttribute<NSArray>(AXAttributeConstants.Children);
+            if (children is null) return null;
             int seen = 0;
-            foreach (var c in Children)
+            for (nuint i = 0; i < children.Count && seen < 12; i++)
             {
-                if (++seen > 12) break;
-                if (c is not AXUIElement child) continue;
+                using var child = FromCopyArray(children, i);
+                if (child is null) continue;
+                seen++;
                 if (child.Role != AXRoleAttribute.AXStaticText) continue;
                 var v = child.GetAttribute<NSObject>(AXAttributeConstants.Value)?.ToString();
                 if (!string.IsNullOrWhiteSpace(v)) return v;

@@ -199,9 +199,13 @@ public interface IVisualElement
     /// Must NOT trigger an IPC round-trip — Id getters typically do
     /// (ProcessId + window number) and the BFS walker hits this on
     /// every node. macOS impl: CFHash of the underlying CFType handle.
-    /// Default = string Id hash (preserves correctness but costs IPC).
+    /// Best-effort: hash collisions theoretically merge two unrelated
+    /// nodes; on a &lt;10k-node UI tree the probability is negligible
+    /// but consumers should treat dedup as advisory, not a guarantee.
+    /// Returns 0 to mean "no key available — caller should fall back
+    /// to string Id dedup".
     /// </summary>
-    long IdentityKey => Id?.GetHashCode() ?? 0;
+    ulong IdentityKey => 0;
 
     /// <summary>
     /// Gets the visual parent, returns null if not found

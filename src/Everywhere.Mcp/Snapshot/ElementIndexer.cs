@@ -60,9 +60,12 @@ public static class ElementIndexer
         // walks and over-aggressive for picked-element walks.
         var queue = new Queue<(IVisualElement element, int depth, int parentIndex, Avalonia.PixelRect? parentFrame, int? webAreaDepth)>();
         // 1:1 OCCU AccessibilitySnapshot.swift L621 — cheap CFHash-based
-        // cycle dedup, no per-node IPC. Was string-Id keyed which cost
-        // 2 IPC/node (ProcessId + NativeWindowHandle) in the BFS hot loop.
-        var seen = new HashSet<long>();
+        // cycle dedup, no per-node IPC on the macOS path. Backends that
+        // can't provide a free IdentityKey return 0 from the default
+        // implementation; we fall through to string-Id dedup for those
+        // (Windows UIA / others) so correctness is preserved.
+        var seen = new HashSet<ulong>();
+        var seenStringIds = new HashSet<string>(StringComparer.Ordinal);
         queue.Enqueue((root, 0, -1, null, null));
 
         var nextIndex = 0;
@@ -99,7 +102,17 @@ public static class ElementIndexer
             // mis-filtered. Use any non-empty id as the dedup key; the
             // collision-prone shape should be filtered at the producer.
             var idKey = TryGetIdentityKey(element);
-            if (idKey != 0 && !seen.Add(idKey)) continue;
+            if (idKey != 0)
+            {
+                if (!seen.Add(idKey)) continue;
+            }
+            else
+            {
+                // Backend doesn't provide a cheap IdentityKey — fall
+                // back to string Id (more IPC but preserves dedup).
+                var sid = TryGetStringId(element);
+                if (!string.IsNullOrEmpty(sid) && !seenStringIds.Add(sid)) continue;
+            }
 
             var idx = nextIndex++;
             // OCCU webAreaDepth (L641/698/814): null until we cross an
@@ -187,9 +200,14 @@ public static class ElementIndexer
         return map;
     }
 
-    private static long TryGetIdentityKey(IVisualElement el)
+    private static ulong TryGetIdentityKey(IVisualElement el)
     {
         try { return el.IdentityKey; } catch { return 0; }
+    }
+
+    private static string? TryGetStringId(IVisualElement el)
+    {
+        try { return el.Id; } catch { return null; }
     }
 
     private static Avalonia.PixelRect? SafeBounds(IVisualElement el)
