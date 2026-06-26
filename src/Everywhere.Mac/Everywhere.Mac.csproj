@@ -222,20 +222,22 @@
     <Error Text="[AxHelper] swift build succeeded but $(_AxHelperDylibPath) is missing — Package.swift product or arch mismatch."
            Condition="'$(_AxHelperSwiftAvailable)' == '0' And !Exists('$(_AxHelperDylibPath)')" />
   </Target>
-  <!-- .NET MAUI macOS only recognises Contents/MonoBundle/ for native
-       dylibs; Contents/Frameworks/ silently dropped the file from the
-       publish output. Co-locate with libAvaloniaNative et al. so the
-       existing _CoreSignAppBundle codesign loop signs it for free. -->
-  <Target Name="_ComputeAxHelperPublishItems"
-          BeforeTargets="_ComputePublishLocation;PrepareForPublish;Build"
-          DependsOnTargets="BuildAxHelper">
-    <ItemGroup Condition="Exists('$(_AxHelperDylibPath)')">
-      <None Include="$(_AxHelperDylibPath)" PublishFolderType="Assembly">
-        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
-        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      </None>
-    </ItemGroup>
-    <Message Text="[AxHelper] bundled libAxHelper.dylib → Contents/MonoBundle/" Importance="high" Condition="Exists('$(_AxHelperDylibPath)')" />
+  <!-- .NET MAUI macOS bundler ignores both <None Link="Contents/Frameworks/...">
+       and PublishFolderType="Assembly" for arbitrary dylibs — the build runs,
+       MSBuild prints "bundled" messages, but _CreateAppBundle silently drops
+       the file. Same pattern used for libonigwrap (see _CopyLibOnigWrapToBundle
+       above): copy the dylib into the .app AFTER bundle creation.
+       Runs BEFORE _CoreSignAppBundle so the find-MonoBundle loop signs it. -->
+  <Target Name="_CopyAxHelperDylibToBundle"
+          AfterTargets="_CreateAppBundle"
+          BeforeTargets="SignOnBuild;SignAndPackageOnPublish"
+          DependsOnTargets="BuildAxHelper"
+          Condition="Exists('$(_AxHelperDylibPath)')">
+    <MakeDir Directories="$(AppBundleDir)/Contents/MonoBundle"
+             Condition="!Exists('$(AppBundleDir)/Contents/MonoBundle')" />
+    <Copy SourceFiles="$(_AxHelperDylibPath)"
+          DestinationFolder="$(AppBundleDir)/Contents/MonoBundle" />
+    <Message Text="[AxHelper] copied libAxHelper.dylib → $(AppBundleDir)/Contents/MonoBundle/" Importance="high" />
   </Target>
 
 </Project>
