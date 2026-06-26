@@ -1,0 +1,20 @@
+diff --git a/packages/OpenComputerUseKit/Sources/OpenComputerUseKit/SoftwareCursorOverlay.swift b/packages/OpenComputerUseKit/Sources/OpenComputerUseKit/SoftwareCursorOverlay.swift
+index 2dfe3ad..9b45752 100644
+--- a/packages/OpenComputerUseKit/Sources/OpenComputerUseKit/SoftwareCursorOverlay.swift
++++ b/packages/OpenComputerUseKit/Sources/OpenComputerUseKit/SoftwareCursorOverlay.swift
+@@ -823,6 +823,15 @@ private final class CursorPanel: NSPanel {
+ }
+ 
+ private final class SoftwareCursorView: NSView {
++    // Everywhere downstream patch: NSView default isFlipped=false (y-up).
++    // OCCU expects that and pre-flips Y in appKitDrawingState. Inside the
++    // Avalonia-hosted .NET process the cursor renders upside-down — likely
++    // a layer-backed-view geometry difference from OCCU's standalone host.
++    // Forcing y-down here puts both surfaces on the same axis and cancels
++    // appKitDrawingState's pre-flip cleanly. If you re-sync upstream OCCU,
++    // re-apply this override.
++    override var isFlipped: Bool { true }
++
+     var rotation: CGFloat = 0
+     var cursorBodyOffset: CGVector = CGVector(dx: 0, dy: 0)
+     var fogOffset: CGVector = CGVector(dx: 0, dy: 0)

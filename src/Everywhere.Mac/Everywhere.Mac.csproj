@@ -203,8 +203,25 @@
     <_AxHelperSwiftArch Condition="'$(_AxHelperSwiftArch)' == ''">arm64</_AxHelperSwiftArch>
     <_AxHelperDylibPath>$(_AxHelperPackageDir).build/$(_AxHelperSwiftArch)-apple-macosx/release/libAxHelper.dylib</_AxHelperDylibPath>
   </PropertyGroup>
+  <PropertyGroup>
+    <_AxHelperPatchDir>$(MSBuildThisFileDirectory)../../3rd/everywhere-patches/</_AxHelperPatchDir>
+    <_AxHelperVendorDir>$(MSBuildThisFileDirectory)../../3rd/open-codex-computer-use/</_AxHelperVendorDir>
+  </PropertyGroup>
+  <Target Name="ApplyAxHelperPatches"
+          BeforeTargets="BuildAxHelper"
+          Condition="Exists('$(_AxHelperPatchDir)') AND Exists('$(_AxHelperVendorDir).git')">
+    <!-- Idempotent: `git apply --check` succeeds only when the patch
+         CAN be applied (= not yet applied). When it fails we either
+         already applied the patch or the upstream changed. We apply
+         only on the can-apply branch; otherwise leave the tree alone
+         so a fresh `git submodule update` cycle restores upstream and
+         re-applies on next build. -->
+    <Exec Command="for p in $(_AxHelperPatchDir)*.patch; do [ -f &quot;$p&quot; ] || continue; git -C $(_AxHelperVendorDir) apply --check &quot;$p&quot; 2&gt;/dev/null &amp;&amp; git -C $(_AxHelperVendorDir) apply &quot;$p&quot; &amp;&amp; echo &quot;[AxHelper] applied $p&quot; || echo &quot;[AxHelper] $p already applied or stale (skipped)&quot;; done"
+          IgnoreExitCode="true" />
+  </Target>
   <Target Name="BuildAxHelper"
           BeforeTargets="BeforeBuild;_ComputeAxHelperPublishItems"
+          DependsOnTargets="ApplyAxHelperPatches"
           Condition="Exists('$(_AxHelperPackageDir)Package.swift')">
     <Exec Command="command -v swift >/dev/null 2>&amp;1"
           IgnoreExitCode="true"

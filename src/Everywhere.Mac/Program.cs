@@ -38,21 +38,6 @@ public static class Program
             return services;
         }
 
-        // Suppress OCCU's embedded NSPanel cursor overlay. It renders
-        // upside-down inside our Avalonia/.NET host (its NSView assumes
-        // demo-app NSScreen behaviour we don't reproduce). OCCU exposes
-        // VisualCursorSupport.isEnabled gated on this env var; default
-        // is "on" upstream, we flip it to "off" before any ax_* call so
-        // SoftwareCursorOverlay.moveCursor / settle / pulseClick become
-        // no-ops. Lets the user opt into the native .NET overlay
-        // (McpServerSettings.CursorOverlayEnabled) instead, which handles
-        // our coordinate system correctly. Power users can override by
-        // setting OPEN_COMPUTER_USE_VISUAL_CURSOR=1 explicitly.
-        if (Environment.GetEnvironmentVariable("OPEN_COMPUTER_USE_VISUAL_CURSOR") is null)
-        {
-            Environment.SetEnvironmentVariable("OPEN_COMPUTER_USE_VISUAL_CURSOR", "0");
-            Console.Error.WriteLine("[occu] embedded cursor overlay disabled (OPEN_COMPUTER_USE_VISUAL_CURSOR=0). Set =1 to re-enable.");
-        }
 
         // Do NOT call IsAvailable() here. The Swift bridge's first call
         // (ax_list_apps via ax_self_test) hops through DispatchQueue.main.sync.

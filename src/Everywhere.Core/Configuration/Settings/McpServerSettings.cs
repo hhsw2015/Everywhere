@@ -109,19 +109,17 @@ public sealed partial class McpServerSettings : SettingsBase, ISettingsCategory
     public partial ObservableCollection<KnownApp> KnownApps { get; set; } = [];
 
     /// <summary>
-    /// Software cursor overlay: a translucent cursor + motion trail
-    /// rendered on top of the desktop so the user can see where
-    /// Everywhere's MCP-driven Computer Use is moving / clicking.
-    /// Historical .NET port of OCCU's SoftwareCursorOverlay; on macOS
-    /// the OCCU Swift bridge already renders its own cursor overlay
-    /// from inside libAxHelper.dylib whenever an automation tool
-    /// fires, so this .NET overlay is redundant on Mac and stays off
-    /// by default. Useful only on platforms where the OCCU bridge
-    /// isn't wired (currently Windows / Linux), and even there it
-    /// only animates for input that flows through IInputSimulator —
-    /// which the MCP tools no longer use.
+    /// Software cursor overlay: historical .NET port of OCCU's overlay.
+    /// Hidden from settings UI — on macOS the OCCU Swift bridge owns
+    /// the cursor overlay (libAxHelper.dylib renders its own NSPanel
+    /// during ax_click / ax_scroll / ax_drag), so the .NET overlay
+    /// would conflict. On Windows / Linux the MCP automation tools
+    /// don't fire IInputSimulator, so the overlay would never animate.
+    /// The persisted value is still honoured for diagnostic builds
+    /// that flip it via settings.json directly.
     /// </summary>
     [ObservableProperty]
+    [SettingsItemIgnore]
     [DynamicResourceKey(
         LocaleKey.McpServerSettings_CursorOverlayEnabled_Header,
         LocaleKey.McpServerSettings_CursorOverlayEnabled_Description)]
