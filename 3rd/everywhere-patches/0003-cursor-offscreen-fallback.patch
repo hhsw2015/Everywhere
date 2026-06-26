@@ -1,0 +1,41 @@
+diff --git a/packages/OpenComputerUseKit/Sources/OpenComputerUseKit/ComputerUseService.swift b/packages/OpenComputerUseKit/Sources/OpenComputerUseKit/ComputerUseService.swift
+index c892773..ce289fb 100644
+--- a/packages/OpenComputerUseKit/Sources/OpenComputerUseKit/ComputerUseService.swift
++++ b/packages/OpenComputerUseKit/Sources/OpenComputerUseKit/ComputerUseService.swift
+@@ -30,7 +30,22 @@ func screenStatePointToAppKitGlobalPoint(
+     fromScreenStatePoint point: CGPoint,
+     screenMappings: [VisualCursorScreenMapping] = currentVisualCursorScreenMappings()
+ ) -> CGPoint {
+-    guard let mapping = screenMappings.first(where: { $0.screenStateFrame.contains(point) }) else {
++    // Everywhere downstream patch: when a point falls outside every
++    // screen frame (e.g. a window snapped to the edge with content
++    // bounds extending a few pixels beyond the visible area, like
++    // Calculator's history-sidebar layout poking past 1728px on a
++    // 1728×1080 main screen), the original code returned `point`
++    // unchanged. That skipped the y-flip and dumped the cursor
++    // somewhere far below the actual control. Instead, fall back to
++    // the nearest screen by Euclidean distance and run the same
++    // transform — extrapolating the y-flip is correct for points
++    // that are only a few pixels past the bezel.
++    let mapping = screenMappings.first { $0.screenStateFrame.contains(point) }
++        ?? screenMappings.min(by: { lhs, rhs in
++            distanceFromRect(point: point, rect: lhs.screenStateFrame)
++                < distanceFromRect(point: point, rect: rhs.screenStateFrame)
++        })
++    guard let mapping else {
+         return point
+     }
+ 
+@@ -43,6 +58,12 @@ func screenStatePointToAppKitGlobalPoint(
+     )
+ }
+ 
++private func distanceFromRect(point: CGPoint, rect: CGRect) -> CGFloat {
++    let dx = max(rect.minX - point.x, 0, point.x - rect.maxX)
++    let dy = max(rect.minY - point.y, 0, point.y - rect.maxY)
++    return dx * dx + dy * dy
++}
++
+ func visualCursorAppKitPoint(
+     fromScreenStatePoint point: CGPoint,
+     screenMappings: [VisualCursorScreenMapping] = currentVisualCursorScreenMappings()
