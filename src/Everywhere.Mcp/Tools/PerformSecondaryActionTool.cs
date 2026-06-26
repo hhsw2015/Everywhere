@@ -13,8 +13,8 @@ public static class PerformSecondaryActionTool
         "Invoke a named accessibility action on an indexed element. Pass any AXAction the " +
         "element exposes (e.g. \"AXPress\", \"AXShowMenu\", \"AXIncrement\", \"AXRaise\"). " +
         "Use get_app_state and inspect the element's \"Secondary Actions:\" list for valid " +
-        "values. Common shortcuts: \"press\" / \"click\" → AXPress; \"context_menu\" / " +
-        "\"right_click\" → AXShowMenu (the OCCU backend resolves these aliases).")]
+        "values. Common aliases are accepted: \"press\" / \"click\" → AXPress; " +
+        "\"context_menu\" / \"right_click\" → AXShowMenu.")]
     public static CallToolResult PerformSecondaryAction(
         string app,
         string element_index,

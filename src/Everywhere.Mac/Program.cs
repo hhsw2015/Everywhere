@@ -22,22 +22,27 @@ namespace Everywhere.Mac;
 public static class Program
 {
     /// <summary>
-    /// Wire the OCCU AX backend (libAxHelper.dylib via Swift). All eight
-    /// MCP automation tools (list_apps / get_app_state / click / scroll /
-    /// drag / type_text / press_key / set_value) route through it; the
-    /// previously dual-path C# implementations have been removed. Set
-    /// EVERYWHERE_USE_OCCU=0 to skip registration — those tools then
-    /// hard-error with OccuRequired (kill switch for diagnostics only).
+    /// Wire the OCCU AX backend (libAxHelper.dylib via Swift). All nine
+    /// MCP automation tools (list_apps / get_app_state / click /
+    /// perform_secondary_action / scroll / drag / type_text / press_key /
+    /// set_value) route through it; the previously dual-path C#
+    /// implementations have been removed. Set EVERYWHERE_USE_OCCU=0 to
+    /// skip registration — those tools then hard-error with OccuRequired
+    /// (kill switch for diagnostics only). Unrecognised values are
+    /// treated as "enabled" with a stderr warning.
     /// </summary>
     private static IServiceCollection RegisterMacServices(IServiceCollection services)
     {
         var raw = Environment.GetEnvironmentVariable("EVERYWHERE_USE_OCCU");
         if (IsExplicitlyDisabled(raw))
         {
-            Console.Error.WriteLine("[occu] backend NOT registered (EVERYWHERE_USE_OCCU=0). Automation tools will hard-error.");
+            Console.Error.WriteLine($"[occu] backend NOT registered (EVERYWHERE_USE_OCCU={raw}). Automation tools will hard-error.");
             return services;
         }
-
+        if (!string.IsNullOrEmpty(raw) && !IsExplicitlyEnabled(raw))
+        {
+            Console.Error.WriteLine($"[occu] EVERYWHERE_USE_OCCU={raw} not recognised — treating as enabled (use 0/false/off/no to disable).");
+        }
 
         // Do NOT call IsAvailable() here. The Swift bridge's first call
         // (ax_list_apps via ax_self_test) hops through DispatchQueue.main.sync.
@@ -50,6 +55,15 @@ public static class Program
         services.AddSingleton<IAxBridgeBackend, Everywhere.Mac.AxBridge.OccuAxBridgeBackend>();
         Console.Error.WriteLine("[occu] backend registered; first tool call will exercise libAxHelper.dylib");
         return services;
+    }
+
+    private static bool IsExplicitlyEnabled(string? v)
+    {
+        if (string.IsNullOrEmpty(v)) return false;
+        return v.Equals("1", StringComparison.OrdinalIgnoreCase)
+            || v.Equals("true", StringComparison.OrdinalIgnoreCase)
+            || v.Equals("on", StringComparison.OrdinalIgnoreCase)
+            || v.Equals("yes", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool IsExplicitlyDisabled(string? v)
