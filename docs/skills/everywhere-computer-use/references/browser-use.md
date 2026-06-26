@@ -11,7 +11,9 @@ NOT a sandbox. For a sandbox use a separate skill.
 |------|---------|
 | `browser_tab_list` | Every tab: id, title, url, active, pinned, status. Start here. |
 | `browser_tab_create(url?)` / `browser_tab_close(tabId)` / `browser_tab_switch(tabId)` | Tab CRUD. |
+| `browser_open_incognito_tab(url?)` | New incognito window/tab. |
 | `browser_page_navigate(tabId, url)` | Navigate the tab. |
+| `browser_emulate_device(tabId, device)` | Mobile/tablet emulation for the tab. |
 | `browser_claim_tab(tabId)` / `browser_finalize_tabs` / `browser_name_session(name)` | Session management. |
 
 ### Read
@@ -23,7 +25,8 @@ NOT a sandbox. For a sandbox use a separate skill.
 | `browser_page_extract_content(tabId)` | Readable-mode main content. |
 | `browser_get_page_links(tabId)` | All anchors deduped. |
 | `browser_get_selected_text(tabId)` | User's highlighted text. |
-| `browser_get_cookies(tabId, domain?)` | Cookies. |
+| `browser_get_cookies(tabId, domain?)` | Read cookies. |
+| `browser_set_cookie(tabId, ...)` / `browser_clear_cookies(tabId, domain?)` | Write / clear cookies. |
 | `browser_screenshot(tabId, fullPage?)` | PNG. |
 | `browser_page_style(tabId, selector)` | Computed CSS. |
 | `browser_element_get_state(tabId, selector)` | visibility/disabled/value/etc. |
@@ -34,9 +37,10 @@ NOT a sandbox. For a sandbox use a separate skill.
 | `browser_element_click(tabId, selector)` | Click. |
 | `browser_element_fill(tabId, selector, value)` | Fill input. |
 | `browser_dispatch_keys(tabId, keys: ["k"])` | Keyboard event. **Array required**, not bare string. |
+| `browser_move_mouse(tabId, x, y)` | Move pointer (e.g. trigger hover). |
 | `browser_page_scroll(tabId, x?, y?)` | Scroll. |
-| `browser_wait_for_selector(tabId, selector, timeoutMs?)` / `browser_page_wait_for(tabId, condition)` | Sync. |
-| `browser_clipboard_read_text` / `browser_clipboard_write_text` | Page-side clipboard. |
+| `browser_wait_for_selector(tabId, selector, timeoutMs?)` / `browser_page_wait_for(tabId, condition)` / `browser_wait_for_download(tabId, ...)` | Sync. |
+| `browser_clipboard_read_text` / `browser_clipboard_write_text` / `browser_clipboard_read` / `browser_clipboard_write` | Page-side clipboard (text + arbitrary). |
 
 ### Bookmarks / history
 | Tool | Purpose |
@@ -44,10 +48,11 @@ NOT a sandbox. For a sandbox use a separate skill.
 | `browser_get_bookmarks` / `browser_add_bookmark(url, title?)` | Bookmark tree. |
 | `browser_get_history(query?)` | History search. |
 
-### CDP (escape hatch)
+### Eval / CDP (escape hatch)
 | Tool | Purpose |
 |------|---------|
-| `browser_cdp_evaluate(tabId, expression)` | Evaluate JS via CDP. Use when extension-side `evaluate_js` is blocked by MV3 CSP. |
+| `browser_evaluate_js(tabId, code)` | Extension-side JS eval. Blocked by MV3 CSP on most production pages — see Constraints below. |
+| `browser_cdp_evaluate(tabId, expression)` | Evaluate JS via CDP. Use when `browser_evaluate_js` is refused by CSP. |
 | `browser_cdp_input_mouse(tabId, x, y, type)` | Mouse at coordinates. For canvas / WebGL / shadow DOM that intercepts CSS clicks. |
 | `browser_cdp_input_keys` | Lower-level keyboard. |
 | `browser_cdp_list_network_requests(tabId)` / `browser_cdp_get_response_body(tabId, requestId)` | Network inspection. |

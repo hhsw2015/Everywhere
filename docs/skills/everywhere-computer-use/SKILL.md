@@ -11,7 +11,7 @@ Three independent families. Pick one per step, do not mix mid-action.
 |---|---|---|
 | Perception | Read user-current state (pin / whiteboard / selection / focus / clipboard / browser url / Finder selection / terminal output / idle / screenshot) | All |
 | Computer Use | Drive native macOS apps (click / type / scroll / drag / set_value / press_key / perform_secondary_action / get_app_state / list_apps) | macOS only |
-| Browser Use | Drive user's real browser via companion extension (35 `browser_*` tools: tabs / DOM / dispatch_keys / CDP / cookies / bookmarks / history / screenshot) | All (where extension installed) |
+| Browser Use | Drive user's real browser via companion extension (`browser_*` tools: tabs / DOM / dispatch_keys / CDP / cookies / bookmarks / history / screenshot / clipboard) | All (where extension installed) |
 
 ## Decision
 
