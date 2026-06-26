@@ -1,8 +1,34 @@
 diff --git a/packages/OpenComputerUseKit/Sources/OpenComputerUseKit/SoftwareCursorOverlay.swift b/packages/OpenComputerUseKit/Sources/OpenComputerUseKit/SoftwareCursorOverlay.swift
-index 2dfe3ad..9b45752 100644
+index 2dfe3ad..2467d77 100644
 --- a/packages/OpenComputerUseKit/Sources/OpenComputerUseKit/SoftwareCursorOverlay.swift
 +++ b/packages/OpenComputerUseKit/Sources/OpenComputerUseKit/SoftwareCursorOverlay.swift
-@@ -823,6 +823,15 @@ private final class CursorPanel: NSPanel {
+@@ -776,11 +776,21 @@ enum SoftwareCursorOverlay {
+             return tipPosition
+         }
+ 
++        // Everywhere downstream patch: original code kept the entire 126x126
++        // cursor sprite inside visibleFrame by inflating the clamp by
++        // (windowSize - tipAnchor). On real apps with wide content (Calculator
++        // history sidebar pushes button centres past x=1662.35 on a 1728-wide
++        // screen), that clamp drags the tip back by up to ~20px, leaving the
++        // arrow short of the actual click target. Click still hits, but the
++        // visible cursor sits noticeably left of any right-column button.
++        // Clamp only the tip itself to visibleFrame; let the sprite bleed off
++        // the edge — correct UX for a software cursor: tip must follow the
++        // target precisely, sprite is decoration.
+         let visibleFrame = screen.visibleFrame
+-        let minX = visibleFrame.minX + artwork.geometry.tipAnchor.x
+-        let maxX = visibleFrame.maxX - (artwork.geometry.windowSize.width - artwork.geometry.tipAnchor.x)
+-        let minY = visibleFrame.minY + artwork.geometry.tipAnchor.y
+-        let maxY = visibleFrame.maxY - (artwork.geometry.windowSize.height - artwork.geometry.tipAnchor.y)
++        let minX = visibleFrame.minX
++        let maxX = visibleFrame.maxX
++        let minY = visibleFrame.minY
++        let maxY = visibleFrame.maxY
+ 
+         return CGPoint(
+             x: tipPosition.x.clamped(to: minX...maxX),
+@@ -823,6 +833,15 @@ private final class CursorPanel: NSPanel {
  }
  
  private final class SoftwareCursorView: NSView {
