@@ -9,7 +9,7 @@ Everywhere exposes three **independent** capability families. They share an MCP 
 
 1. **Perception** *(Everywhere-native, cross-platform)* — what is the *user* already pointing at? A pinned element, a screen frame they drew, highlighted text, focused window, clipboard, idle time, browser url, Finder selection. Perception tools are READ-ONLY and don't drive any UI. They tell you what the user means before you act. **This is Everywhere's distinctive layer** — most agents can't ask the user "what do you mean by *this*?" without launching a picker; Everywhere already has the answer cached.
 2. **Computer Use** *(macOS only in this build)* — drive native apps via accessibility: click, type, scroll, drag inside AppKit / SwiftUI / Catalyst / Electron / Office. Backed by the vendored OpenComputerUseKit Swift bridge (`libAxHelper.dylib`). The vendored Swift library targets `.macOS(.v14)`; OCCU upstream ships separate Windows (UI Automation) and Linux (AT-SPI2) implementations as part of its npm CLI, so cross-platform parity is achievable by spawning `open-computer-use mcp` as a child process — not yet wired in this build.
-3. **Browser Use** *(cross-platform)* — DOM-level automation of a managed headless browser session, separate from the user's real browser. Read/write web pages by selector instead of pixel coordinates.
+3. **Browser Use** *(cross-platform, requires the Everywhere browser extension)* — DOM-level automation of the **user's real browser** (Arc / Chrome / Edge / Brave / any Chromium-based browser running the companion extension). Operates on the same tabs the user can see, with their cookies, sessions, and audio output. The extension does the work in the background — the agent never needs to bring the browser to the foreground.
 
 Pick families ORTHOGONALLY:
 - Perception is "read input" — used before deciding which other family to invoke (or whether to invoke any).
@@ -29,8 +29,9 @@ question
   │      no  → skip
   │
   └─ Step B: where does the action live?
-       webpage in the managed browser → Browser Use (selectors, waits, extract)
+       inside a web page (DOM)        → Browser Use (selectors, dispatch_keys, CDP)
        native app on macOS            → Computer Use
+       browser chrome / window itself → Computer Use (palette / tab strip / settings UI)
        neither / read-only            → done after Perception
 ```
 
@@ -72,11 +73,20 @@ Core workflow:
 
 See [references/computer-use.md](references/computer-use.md) for advanced cases (drag, double-click, right-click, secondary actions).
 
-### Browser Use (operate web pages)
+### Browser Use (operate the user's real browser)
 
-Use when the work happens inside a webpage: filling a form, scraping a list, walking through a multi-page checkout, etc. The browser is a managed headless session — independent of the user's real browser.
+35+ `browser_*` tools that drive the user's actual browser through the Everywhere companion extension: tabs, navigation, DOM read/write, dispatched keys, screenshots, CDP, cookies, bookmarks, history. The user's session, cookies, and audio output are all in scope. The extension does its work in the background — it does NOT switch the user's frontmost app to the browser; the agent can act on a non-active tab while the user keeps working in another window.
 
-See [references/browser-use.md](references/browser-use.md) for tool list and patterns.
+Common entry points:
+
+- `browser_tab_list` — start here when you don't have a tab id yet.
+- `browser_page_analyze` / `browser_dom_query` — read the page.
+- `browser_element_click` / `browser_element_fill` / `browser_dispatch_keys` — act.
+- `browser_cdp_evaluate` — escape hatch for sites that block extension-side `evaluate_js` (most production pages with strict CSP).
+
+This is NOT a headless / sandbox browser. If you want a sandboxed browser separate from the user's session, that's a different skill.
+
+See [references/browser-use.md](references/browser-use.md) for the full tool list, MV3 CSP gotchas, and Browser-Use-vs-Computer-Use guidance on the same browser window.
 
 ## Operating rules
 

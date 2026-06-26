@@ -1,79 +1,130 @@
 # Browser Use Reference
 
-Use Browser Use when the task lives inside a webpage — anything you'd otherwise do by inspecting and manipulating the DOM. The browser session is **managed and headless**, separate from the user's real Chrome/Safari, so it doesn't disrupt their tabs.
+Browser Use drives **the user's real browser** (Arc / Chrome / Edge / Brave / any Chromium-based browser running the Everywhere companion extension). It is NOT a headless / sandbox browser — operations happen on the same tabs the user can see, with the user's cookies, sessions, logins, audio output, and visual rendering. Frontmost is preserved: tools work fully in the background, the user does not need to context-switch into the browser for the agent to act on it.
 
-If the page is rendered inside the user's real browser and the user explicitly wants to act there, use Computer Use (driving the browser as just another app) instead.
+Use Browser Use whenever a task involves **content inside a web page**, period. Computer Use can also click on a browser window, but Computer Use only sees the accessibility tree — Browser Use sees the live DOM, network responses, cookies, console, and the currently rendered video / audio element.
 
 ## When to choose Browser Use
 
-- Read structured data (search results, table rows, post lists)
-- Fill and submit forms
-- Wait for XHR / dynamic content
-- Walk through multi-page flows where DOM state matters
-- Cross-tab / cross-iframe inspection
+- Read or extract structured data from a webpage (search results, tables, posts)
+- Fill and submit web forms
+- Walk through a multi-page flow where DOM state matters
+- Interact with the user's logged-in services (Gmail, GitHub, Notion, ...) — cookies and session are the user's
+- Trigger media playback the user can actually hear (audio elements need a real browser)
+- Cross-tab navigation, tab management, bookmarks, history
+- Inspect cookies, localStorage, console messages, network requests
 
 ## When NOT to choose Browser Use
 
-- Interacting with the chrome of the browser itself (tab bar, address bar, settings) — that's Computer Use
-- Canvas / WebGL / PDF viewers / video players — DOM is opaque, fall back to Computer Use
-- The page is in the user's real browser and they expect to see actions happen there — Computer Use
+- The target is the **chrome of the browser itself** (tab strip, address bar, bookmark bar, browser settings UI). Use Computer Use; those are native AppKit widgets, not DOM.
+- The target is a **non-browser native app** (Notes, Calculator, Finder, IDE, Slack desktop app). Use Computer Use.
+- The user has not granted the Everywhere extension on this browser. Tools return a clear failure; surface it to the user instead of falling through to Computer Use.
 
-## Cheap → expensive page reads
+## Tool inventory
 
-Pick the lightest tool that answers the question:
+The exact MCP tools exposed by `Everywhere.Mcp` (35+ at last count). Group by purpose:
 
-| Tool | When |
-|------|------|
-| `tree(maxDepth?, backendNodeId?)` | Default: a semantic outline of role / name / value per node. Scope with `backendNodeId` when zooming in. |
-| `findElement(role, name)` | One-shot lookup for a button/link by role + visible name. |
-| `nodeDetails(backendNodeId)` | Turn a tree node into a CSS selector + attributes. |
-| `markdown(selector? \| backendNodeId? \| url?)` | Readable text of one subtree (or the whole page as last resort). |
-| `extract(schema)` | Structured pull: selectors → field values. The only read whose output replays as a recorded `extract(...)` call. |
-| `html(selector? \| backendNodeId? \| url?)` | Raw HTML when you need attributes that markdown drops. |
-
-## Acting on the page
-
+### Tabs and navigation
 | Tool | Purpose |
 |------|---------|
-| `goto(url)` | Navigate. |
-| `click(selector? \| backendNodeId)` | Click. CSS selector preferred for replay stability. |
-| `fill(selector \| backendNodeId, value)` | Type into an input. |
-| `fill_form(elements)` | Fill many inputs in one call — faster, fewer turns. |
-| `selectOption(selector, value)` | `<select>` choice. |
-| `setChecked(selector, checked)` | Checkbox / radio. |
-| `press(selector? \| backendNodeId, key)` | Keyboard event (`Enter`, `Tab`, ...). |
-| `hover(selector \| backendNodeId)` | Trigger hover-only menus. |
-| `drag(from_uid, to_uid)` | Drag one element onto another. |
-| `scroll(x?, y?, backendNodeId?)` | Scroll window or a specific element. |
-| `evaluate(script, save?)` | Page-side JS escape hatch. Use sparingly — prefer `extract`. |
-| `waitForSelector(selector)` / `waitForState("networkidle")` / `waitForScript(expr)` | Synchronisation. |
+| `browser_tab_list` | List every tab across windows: id, title, url, active, pinned, status. Start here when the agent doesn't know the tab id. |
+| `browser_tab_create(url?)` | Open a new tab. |
+| `browser_tab_close(tabId)` | Close a tab. |
+| `browser_tab_switch(tabId)` | Make a tab the active one (still no app activation; user's frontmost app is unchanged). |
+| `browser_page_navigate(tabId, url)` | Navigate the given tab. |
+| `browser_claim_tab(tabId)` | Mark a tab "owned" by the agent so concurrent tools don't collide. |
+| `browser_finalize_tabs` | Release claims when the task is done. |
+| `browser_name_session(name)` | Tag the current automation session for log clarity. |
 
-## Standard sequence
+### Reading the page
+| Tool | Purpose |
+|------|---------|
+| `browser_page_analyze(tabId)` | Quick semantic outline of the page (role / text / id). Default starting point. |
+| `browser_dom_query(tabId, selector, action?, attributes?)` | Single-element DOM lookup. `action` controls what to do with the match (read attrs, get text, ...). |
+| `browser_dom_query_all(tabId, selector)` | List form. |
+| `browser_page_extract_content(tabId)` | Readable-mode-style extraction of main content. |
+| `browser_get_page_links(tabId)` | All anchors, deduped. |
+| `browser_get_selected_text(tabId)` | What the user currently has highlighted. |
+| `browser_get_cookies(tabId, domain?)` | Read cookies. |
+| `browser_screenshot(tabId, fullPage?)` | PNG of the rendered page. |
+| `browser_page_style(tabId, selector)` | Computed CSS for an element. |
+| `browser_element_get_state(tabId, selector)` | Visibility, disabled, value, etc. |
+
+### Acting on the page
+| Tool | Purpose |
+|------|---------|
+| `browser_element_click(tabId, selector)` | Click. |
+| `browser_element_fill(tabId, selector, value)` | Fill an input. |
+| `browser_dispatch_keys(tabId, keys: [string])` | Send keyboard events directly to the page. **`keys` MUST be an array** (e.g. `["k"]` to toggle YouTube playback). Sending bare `"k"` returns "keys array required". |
+| `browser_page_scroll(tabId, x?, y?)` | Scroll the page or a container. |
+| `browser_wait_for_selector(tabId, selector, timeoutMs?)` | Sync barrier after a DOM-changing action. |
+| `browser_page_wait_for(tabId, condition)` | Wait for a load state / network idle / etc. |
+| `browser_clipboard_read_text` / `browser_clipboard_write_text` | Page-side clipboard (separate from system clipboard). |
+
+### Bookmarks / history
+| Tool | Purpose |
+|------|---------|
+| `browser_get_bookmarks` / `browser_add_bookmark(url, title?)` | Read or write the user's bookmark tree. |
+| `browser_get_history(query?)` | Search the browser history. |
+
+### CDP (Chrome DevTools Protocol) — power-user
+| Tool | Purpose |
+|------|---------|
+| `browser_cdp_input_mouse(tabId, x, y, type)` | Synthesise mouse events at coordinates. Use when a target intercepts CSS clicks (custom canvas / WebGL / shadow DOM). |
+| `browser_cdp_input_keys(tabId, ...)` | Lower-level than `dispatch_keys`. |
+| `browser_cdp_list_network_requests(tabId)` | Inspect XHR / fetch traffic. |
+| `browser_cdp_get_response_body(tabId, requestId)` | Pull a specific network response body. |
+| `browser_cdp_list_console_messages(tabId)` | Console output. |
+| `browser_cdp_upload_file(tabId, selector, path)` | File-input upload. |
+| `browser_cdp_evaluate(tabId, expression)` | Evaluate an expression via CDP — bypasses MV3 CSP that blocks `browser_evaluate_js` on most production pages. Prefer `browser_dom_query` / `browser_dispatch_keys` first; reach for this when nothing else works. |
+
+### Identity helpers
+| Tool | Purpose |
+|------|---------|
+| `get_browser_url` | URL of the user's frontmost tab in their REAL browser. **Not the agent's working tab** — keep them separate. |
+| `get_browser_tabs` | Same scope as above. |
+
+## Standard workflow
 
 ```
-goto(url)
+get_browser_url            ← (perception) what page is the user on?
+  ↓ if relevant, claim it
+browser_tab_list
+  ↓ pick tabId
+browser_page_analyze       ← orient
   ↓
-waitForState("networkidle")     ← when the page hydrates after load
-tree(maxDepth: 4)               ← orient
-  ↓ pick targets
-fill_form([...])                ← write
-click("...submit...")           ← act
-waitForSelector("...result...") ← sync after action
-extract({field: "selector"})    ← finish with structured data
+browser_dom_query / get_selected_text / extract_content   ← read
+  ↓
+browser_element_fill / click / dispatch_keys   ← act
+  ↓
+browser_wait_for_selector  ← sync after a state change
+  ↓
+browser_dom_query          ← verify the new state
 ```
 
-`extract` is what makes a Browser Use session replayable. Answers lifted from `markdown` text in chat are not — finish data tasks with `extract`.
+## Important constraints
 
-## Re-inspect after every state-changing action
+- **MV3 CSP blocks `Function`-from-string.** A naive `browser_evaluate_js` that wraps user code in `new Function(...)` is rejected by most production pages with `"evaluate_js requires Function-from-string, which MV3 + page CSP forbid"`. Use `browser_dom_query` / `browser_dom_query_all` / `browser_dispatch_keys` / `browser_wait_for_selector` for DOM operations. As a last resort use `browser_cdp_evaluate`, which goes through CDP rather than the extension content script and is not subject to that restriction.
+- **`browser_dispatch_keys` requires an array.** `keys: "k"` errors with `"keys array required"`; use `keys: ["k"]`. Multiple keys go in the array in order.
+- **Tab ids change** when the user closes / reopens a tab. Always `browser_tab_list` again after a navigation that might have spawned a new tab; don't assume the id you used five turns ago is still valid.
+- **Some sites need a user gesture to start audio/video.** YouTube auto-plays muted; sending `dispatch_keys ["k"]` un-pauses; sending `["m"]` toggles mute. Setting `video.muted = false` directly through CDP works after the first user gesture has been issued in that page session.
 
-A `click` or form submit can rewrite the whole DOM. Stale `backendNodeId`s from the old `tree` will silently miss. Re-run `tree` / `findElement` after any navigation or action.
+## Browser Use vs Computer Use on the same browser window
 
-## Search
+| Question | Choose |
+|----------|--------|
+| Click an element identified by a CSS selector | Browser Use |
+| Click a window control (close/minimise/zoom) | Computer Use |
+| Click an arbitrary `<button>` inside a webpage | Browser Use |
+| Click an item in the Arc command palette / sidebar | Computer Use (palette is native, not DOM) |
+| Read the visible text of an article | `browser_page_extract_content` |
+| Read the page title bar | `get_app_state(app)` from Computer Use |
+| Pause a YouTube video without pulling focus | `browser_dispatch_keys` with `["k"]` |
 
-`search(query)` runs a web search and returns `{title, url, snippet}` markdown. After a `search`, the browser DOM is in an unspecified state — use `goto(<result url>)` to interact, don't assume the DOM matches the SERP.
+If the page UI element really is in DOM, Browser Use beats Computer Use on every axis: precision (selector vs hit-test), background-safety (extension does not need the window foregrounded), and reproducibility (selectors survive screen layout changes that hit coordinates can't).
 
 ## Hand-off
 
-Files: write a local file via Computer Use (`set_value` / shell), upload via Browser Use (`upload_file` if exposed) or by typing the path into the file chooser.
-
-Text: `Cmd+C` in browser → `get_clipboard` from Computer Use side. Or `evaluate(\"document.title\")` directly.
+- **Real-browser context to agent**: `get_browser_url` + `get_browser_tabs` (perception, cross-platform) tell the agent which page the user is on. From there, switch to Browser Use to act on that page.
+- **Browser to system**: `browser_get_selected_text` for highlighted prose; or use system `get_clipboard` (perception) after a `Cmd+C` style copy.
+- **System to browser**: `browser_set_cookie` / `browser_clipboard_write_text` for one-shot pushes; or pass URLs to `browser_page_navigate`.
