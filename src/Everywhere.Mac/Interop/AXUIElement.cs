@@ -420,23 +420,38 @@ public partial class AXUIElement : NSObject, IVisualElement
         }
     }
 
+    // Parsed PixelRect cache. AXValue itself can't be cached (CFType
+    // retain-without-release leak), but the parsed Position+Size
+    // struct is value-typed and safe to memoize per element. Render
+    // hits BoundingRectangle once + dispatcher hit-test hits it again
+    // = 2× 2 IPC. With cache: 2 IPC first call, 0 after.
+    private PixelRect? _boundsCache;
+
     public PixelRect BoundingRectangle
     {
         get
         {
+            if (_boundsCache is { } cached) return cached;
             try
             {
                 var posVal = GetAttribute<AXValue>(AXAttributeConstants.Position);
                 var sizeVal = GetAttribute<AXValue>(AXAttributeConstants.Size);
 
-                if (posVal is null || sizeVal is null) return default;
+                if (posVal is null || sizeVal is null)
+                {
+                    _boundsCache = default(PixelRect);
+                    return default;
+                }
 
                 var pos = posVal.Point;
                 var size = sizeVal.Size;
-                return new PixelRect((int)pos.X, (int)pos.Y, (int)size.Width, (int)size.Height);
+                var rect = new PixelRect((int)pos.X, (int)pos.Y, (int)size.Width, (int)size.Height);
+                _boundsCache = rect;
+                return rect;
             }
             catch
             {
+                _boundsCache = default(PixelRect);
                 return default;
             }
         }
@@ -1293,7 +1308,17 @@ public partial class AXUIElement : NSObject, IVisualElement
     [LibraryImport(AppServices, EntryPoint = "AXUIElementCopyElementAtPosition")]
     private static partial AXError CopyElementAtPosition(nint application, float x, float y, out nint element);
 
+    // SuppressGCTransition: AXUIElementCopyAttributeValue → CoreCLR
+    // PAL_DispatchExceptionWrapper → __CF_IS_OBJC chain consumed ~100%
+    // of CPU during get_app_context Notes (sample showed 1417/1417
+    // frames stuck there). The wrapper exists to convert ObjC unhandled
+    // exceptions into managed ones; AX calls never throw ObjC
+    // exceptions in practice, so we suppress the GC transition and
+    // skip the SEH frame setup. Documented attribute, supported from
+    // .NET 6 LibraryImport. OCCU (Swift) avoids the issue because
+    // Swift has no equivalent runtime wrapper.
     [LibraryImport(AppServices, EntryPoint = "AXUIElementCopyAttributeValue")]
+    [System.Runtime.InteropServices.SuppressGCTransition]
     private static partial AXError CopyAttributeValue(nint element, nint attribute, out nint value);
 
     // PrefetchAttributes (v0.9.109/110 batch path) removed — caused
