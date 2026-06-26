@@ -434,6 +434,28 @@ public partial class AXUIElement : NSObject, IVisualElement
     }
 
     /// <summary>
+    /// Apply our 0.5s message timeout to a freshly-handed element.
+    /// SystemWide-level timeout (set in static ctor) only covers
+    /// SystemWide-derived elements; per-app elements (returned by
+    /// AXUIElementCreateApplication, AXFocusedWindow, AXChildren etc)
+    /// inherit AppleScript's 6s default. On Notes, single AX calls
+    /// were observed taking 6+ seconds × 47 nodes = several minutes.
+    /// 0.5s × N times out fast enough to keep render bounded.
+    /// </summary>
+    private static void ApplyShortTimeout(nint handle)
+    {
+        if (handle == 0) return;
+        try { AXUIElementSetMessagingTimeout(handle, 0.5f); } catch { /* best-effort */ }
+    }
+
+    private static AXUIElement? CreateWithTimeout(nint handle)
+    {
+        if (handle == 0) return null;
+        ApplyShortTimeout(handle);
+        return new AXUIElement(handle);
+    }
+
+    /// <summary>
     /// Create AXUIElement from NSArray at given index.
     /// </summary>
     /// <param name="array"></param>
@@ -445,7 +467,7 @@ public partial class AXUIElement : NSObject, IVisualElement
         if (pValue.Handle == 0) return null;
 
         CFInterop.CFRetain(pValue);
-        return new AXUIElement(pValue.Handle);
+        { ApplyShortTimeout(pValue.Handle); return new AXUIElement(pValue.Handle); }
     }
 
     private AXUIElement(NativeHandle handle) : base(handle, true)
@@ -1072,7 +1094,7 @@ public partial class AXUIElement : NSObject, IVisualElement
         var error = CopyAttributeValue(Handle, attributeName.Handle, out var value);
         if (error == AXError.Success && value != 0)
         {
-            return new AXUIElement(value);
+            { ApplyShortTimeout(value); return new AXUIElement(value); }
         }
 
         return null;
@@ -1094,19 +1116,19 @@ public partial class AXUIElement : NSObject, IVisualElement
     public AXUIElement? ElementAtPosition(float x, float y)
     {
         var error = CopyElementAtPosition(Handle, x, y, out var element);
-        return error == AXError.Success && element != 0 ? new AXUIElement(element) : null;
+        return error == AXError.Success && element != 0 ? CreateWithTimeout(element) : null;
     }
 
     public AXUIElement? ElementByAttributeValue(NSString attributeName)
     {
         var error = CopyAttributeValue(Handle, attributeName.Handle, out var value);
-        return error == AXError.Success && value != 0 ? new AXUIElement(value) : null;
+        return error == AXError.Success && value != 0 ? CreateWithTimeout(value) : null;
     }
 
     public static AXUIElement? ElementFromPid(int pid)
     {
         var handle = CreateApplication(pid);
-        return handle != 0 ? new AXUIElement(handle) : null;
+        { if (handle == 0) return null; ApplyShortTimeout(handle); return new AXUIElement(handle); }
     }
 
     /// <summary>
@@ -1131,7 +1153,7 @@ public partial class AXUIElement : NSObject, IVisualElement
             err = CopyAttributeValue((nint)app.Handle, (nint)mainWindowAttr.Handle, out focusedWindowPtr);
             if (err != AXError.Success || focusedWindowPtr == 0) return null;
         }
-        return new AXUIElement(focusedWindowPtr);
+        { ApplyShortTimeout(focusedWindowPtr); return new AXUIElement(focusedWindowPtr); }
     }
 
     /// <summary>
