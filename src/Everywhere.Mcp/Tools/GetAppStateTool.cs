@@ -29,13 +29,14 @@ public static class GetAppStateTool
         SessionStore sessions,
         FocusBorrow focusBorrow,
         CancellationToken cancellationToken,
+        IServiceProvider services,
         bool show_full_text = false,
         bool raise_if_needed = false,
         bool include_screenshot = false,
-        bool include_tree_json = false,
-        IAxBridgeBackend? backend = null)
+        bool include_tree_json = false)
     {
-        if (backend is not null)
+        var backend = services.GetService(typeof(IAxBridgeBackend)) as IAxBridgeBackend;
+                if (backend is not null)
         {
             var (text, isError) = backend.GetAppState(app, show_full_text);
             return isError

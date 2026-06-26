@@ -21,9 +21,10 @@ public static class DragTool
         FocusBorrow focusBorrow,
         IVisualElementContext context,
         Everywhere.Mcp.CursorOverlay.ITargetWindowHighlighter highlighter,
-        IAxBridgeBackend? backend = null)
+        IServiceProvider services)
     {
-        if (backend is not null)
+        var backend = services.GetService(typeof(IAxBridgeBackend)) as IAxBridgeBackend;
+                if (backend is not null)
         {
             var (text, isError) = backend.Drag(app, from_x, from_y, to_x, to_y);
             return isError

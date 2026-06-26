@@ -18,12 +18,13 @@ public static class TypeTextTool
         FocusBorrow focusBorrow,
         IVisualElementContext context,
         Everywhere.Mcp.CursorOverlay.ITargetWindowHighlighter highlighter,
-        IAxBridgeBackend? backend = null)
+        IServiceProvider services)
     {
         if (text is null) return ToolErrors.ParameterRequired("text");
         if (text.Length > 100_000) return ToolErrors.Error("text exceeds 100 000 character limit.");
 
-        if (backend is not null)
+        var backend = services.GetService(typeof(IAxBridgeBackend)) as IAxBridgeBackend;
+                if (backend is not null)
         {
             var (txt, isError) = backend.TypeText(app, text);
             return isError ? ToolErrors.Error(txt) : new CallToolResult { Content = [new TextContentBlock { Text = txt }] };

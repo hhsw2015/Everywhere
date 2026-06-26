@@ -23,8 +23,8 @@ public static class ScrollTool
         IInputSimulator input,
         FocusBorrow focusBorrow,
         IVisualElementContext context,
-        double? pages = null,
-        IAxBridgeBackend? backend = null)
+        IServiceProvider services,
+        double? pages = null)
     {
         if (string.IsNullOrEmpty(element_index)) return ToolErrors.ParameterRequired("element_index");
         if (string.IsNullOrEmpty(direction)) return ToolErrors.ParameterRequired("direction");
@@ -37,7 +37,8 @@ public static class ScrollTool
         if (double.IsNaN(amount) || amount <= 0 || amount > MaxPages)
             return ToolErrors.Error($"pages must be in (0, {MaxPages}].");
 
-        if (backend is not null)
+        var backend = services.GetService(typeof(IAxBridgeBackend)) as IAxBridgeBackend;
+                if (backend is not null)
         {
             var (txt, isError) = backend.Scroll(app, dir, element_index, amount);
             return isError ? ToolErrors.Error(txt) : new CallToolResult { Content = [new TextContentBlock { Text = txt }] };

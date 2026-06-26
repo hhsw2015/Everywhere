@@ -17,8 +17,9 @@ public static class ListAppsTool
         "parameter of other tools), \"title\" (the largest window's title), and \"process_id\". " +
         "PREFER get_app_context(app_hint) when the user names an app — it does list+match+snapshot " +
         "in one call.")]
-    public static CallToolResult ListApps(IVisualElementContext context, IAxBridgeBackend? backend = null)
+    public static CallToolResult ListApps(IVisualElementContext context, IServiceProvider services)
     {
+        var backend = services.GetService(typeof(IAxBridgeBackend)) as IAxBridgeBackend;
         if (backend is not null)
         {
             var (text, isError) = backend.ListApps();

@@ -21,12 +21,13 @@ public static class SetValueTool
         FocusBorrow focusBorrow,
         IVisualElementContext context,
         Everywhere.Mcp.CursorOverlay.ITargetWindowHighlighter highlighter,
-        IAxBridgeBackend? backend = null)
+        IServiceProvider services)
     {
         if (string.IsNullOrEmpty(element_index)) return ToolErrors.ParameterRequired("element_index");
         if (value is null) return ToolErrors.ParameterRequired("value");
 
-        if (backend is not null)
+        var backend = services.GetService(typeof(IAxBridgeBackend)) as IAxBridgeBackend;
+                if (backend is not null)
         {
             var (txt, isError) = backend.SetValue(app, element_index, value);
             if (!isError)

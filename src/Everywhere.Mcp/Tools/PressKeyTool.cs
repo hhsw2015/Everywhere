@@ -18,11 +18,12 @@ public static class PressKeyTool
         FocusBorrow focusBorrow,
         IVisualElementContext context,
         Everywhere.Mcp.CursorOverlay.ITargetWindowHighlighter highlighter,
-        IAxBridgeBackend? backend = null)
+        IServiceProvider services)
     {
         if (string.IsNullOrEmpty(key)) return ToolErrors.ParameterRequired("key");
 
-        if (backend is not null)
+        var backend = services.GetService(typeof(IAxBridgeBackend)) as IAxBridgeBackend;
+                if (backend is not null)
         {
             var (txt, isError) = backend.PressKey(app, key);
             return isError ? ToolErrors.Error(txt) : new CallToolResult { Content = [new TextContentBlock { Text = txt }] };

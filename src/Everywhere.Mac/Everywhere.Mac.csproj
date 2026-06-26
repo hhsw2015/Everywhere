@@ -196,22 +196,39 @@
        is absent the C# AX path keeps working so dev machines without
        Swift toolchain still build. -->
   <PropertyGroup>
-    <_AxHelperPackageDir>$(MSBuildThisFileDirectory)..\Everywhere.Mac.AxHelper\</_AxHelperPackageDir>
-    <_AxHelperDylibPath>$(_AxHelperPackageDir).build\arm64-apple-macosx\release\libAxHelper.dylib</_AxHelperDylibPath>
+    <_AxHelperPackageDir>$(MSBuildThisFileDirectory)../Everywhere.Mac.AxHelper/</_AxHelperPackageDir>
+    <_AxHelperDylibPath>$(_AxHelperPackageDir).build/arm64-apple-macosx/release/libAxHelper.dylib</_AxHelperDylibPath>
   </PropertyGroup>
-  <Target Name="BuildAxHelper" BeforeTargets="BeforeBuild"
+  <!-- Build the Swift AxHelper before .NET items are evaluated for
+       publish. Putting this in BeforeTargets="BeforeBuild" runs it
+       AFTER ItemGroup evaluation, so the <None Include> below was
+       evaluating Exists() before the dylib existed and quietly
+       skipping the bundle copy. Running before _ComputePublishLocation
+       and using DynamicItemGroup via Target lets the include happen
+       after the build. -->
+  <Target Name="BuildAxHelper"
+          BeforeTargets="BeforeBuild;_ComputeAxHelperPublishItems"
           Condition="Exists('$(_AxHelperPackageDir)Package.swift')">
+    <Message Text="[AxHelper] swift build -c release --arch arm64 in $(_AxHelperPackageDir)" Importance="high" />
     <Exec Command="swift build -c release --arch arm64"
           WorkingDirectory="$(_AxHelperPackageDir)"
           ContinueOnError="true"
           IgnoreExitCode="true" />
+    <Message Text="[AxHelper] dylib at $(_AxHelperDylibPath) exists=$([System.IO.File]::Exists('$(_AxHelperDylibPath)'))" Importance="high" />
   </Target>
-  <ItemGroup Condition="Exists('$(_AxHelperDylibPath)')">
-    <None Include="$(_AxHelperDylibPath)" PublishFolderType="RootDirectory">
-      <Link>Contents\Frameworks\libAxHelper.dylib</Link>
-      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-  </ItemGroup>
+  <Target Name="_ComputeAxHelperPublishItems"
+          BeforeTargets="_ComputePublishLocation;PrepareForPublish;Build"
+          DependsOnTargets="BuildAxHelper">
+    <ItemGroup Condition="Exists('$(_AxHelperDylibPath)')">
+      <None Include="$(_AxHelperDylibPath)" PublishFolderType="RootDirectory">
+        <Link>Contents/Frameworks/libAxHelper.dylib</Link>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      </None>
+    </ItemGroup>
+    <Message Text="[AxHelper] bundled libAxHelper.dylib → Contents/Frameworks/" Importance="high" Condition="Exists('$(_AxHelperDylibPath)')" />
+    <Warning Text="[AxHelper] libAxHelper.dylib NOT found at $(_AxHelperDylibPath) — OCCU backend will be unavailable at runtime"
+             Condition="!Exists('$(_AxHelperDylibPath)')" />
+  </Target>
 
 </Project>

@@ -19,14 +19,15 @@ public static class ClickTool
         FocusBorrow focusBorrow,
         IVisualElementContext context,
         Everywhere.Mcp.CursorOverlay.ITargetWindowHighlighter highlighter,
+        IServiceProvider services,
         string? element_index = null,
         double? x = null,
         double? y = null,
         int? click_count = null,
-        string? mouse_button = null,
-        IAxBridgeBackend? backend = null)
+        string? mouse_button = null)
     {
-        if (backend is not null)
+        var backend = services.GetService(typeof(IAxBridgeBackend)) as IAxBridgeBackend;
+                if (backend is not null)
         {
             var hasIdx = !string.IsNullOrEmpty(element_index);
             var hasXY = x.HasValue && y.HasValue;
