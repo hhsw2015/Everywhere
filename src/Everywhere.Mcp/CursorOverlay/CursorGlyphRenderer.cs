@@ -22,11 +22,20 @@ internal readonly record struct CursorGlyphRenderState(
     double ClickProgress)
 {
     /// <summary>
-    /// Top-left-origin equivalent of upstream `appKitDrawingState`.
-    /// AppKit flips Y but Skia/Avalonia don't — the Y-flip is already
-    /// implicit in our render axis, so we return the state unchanged.
+    /// 1:1 of OCCU's `appKitDrawingState` (SoftwareCursorGlyphRenderer.swift L29-38).
+    /// Motion brain emits state in y-up "screen state" coords. The render
+    /// surface (SkiaSharp / NSView with isFlipped=NO) is y-down. To reconcile,
+    /// invert rotation sign and dy on body + fog offsets — same recipe OCCU
+    /// uses on macOS.  Earlier port returned `this` unchanged, which is why
+    /// the cursor rendered upside-down regardless of RenderYAxisMultiplier.
     /// </summary>
-    public CursorGlyphRenderState ViewSpaceDrawingState => this;
+    public CursorGlyphRenderState ViewSpaceDrawingState => new(
+        Rotation: -Rotation,
+        CursorBodyOffset: new Vector(CursorBodyOffset.X, -CursorBodyOffset.Y),
+        FogOffset: new Vector(FogOffset.X, -FogOffset.Y),
+        FogOpacity: FogOpacity,
+        FogScale: FogScale,
+        ClickProgress: ClickProgress);
 }
 
 internal static class CursorGlyphMetrics

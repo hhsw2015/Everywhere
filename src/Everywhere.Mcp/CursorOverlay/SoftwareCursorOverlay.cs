@@ -36,14 +36,14 @@ public sealed class SoftwareCursorOverlay : IAsyncDisposable
     private const double WindowHeight = CursorGlyphMetrics.WindowHeight;
     private static readonly Point TipAnchor = CursorGlyphMetrics.TipAnchor;
     private static readonly double RenderBaseHeading = CursorGlyphMetrics.TargetNeutralHeading;
-    // OCCU upstream uses -1: AppKit globals are y-up but the motion brain
-    // is y-down, so render-side multiplies by -1 to put them back in sync.
-    // Earlier port assumed Avalonia being y-down meant we could leave this
-    // at 1; in practice the cursor rendered upside-down. The motion brain
-    // and the render output BOTH live in the same coordinate space here,
-    // and the artwork was authored against OCCU's flipped output, so we
-    // need the same -1 to face the right way.
-    private const double RenderYAxisMultiplier = -1;
+    // Avalonia/Skia is already y-down. OCCU sets this to -1 because its
+    // AppKit window placement uses y-up globals but its motion brain is
+    // y-down — the multiplier reconciles AppKit space back into the brain's
+    // space. We don't have that mismatch, so 1 is correct here. The
+    // upside-down rendering observed earlier was actually the missing
+    // appKitDrawingState transform inside CursorGlyphRenderState — fixed
+    // there, not by abusing this multiplier.
+    private const double RenderYAxisMultiplier = 1;
     private const double PostInteractionIdleTimeoutSeconds = 30;
     private const double IdleRotationAmplitude = 0.09;
 
