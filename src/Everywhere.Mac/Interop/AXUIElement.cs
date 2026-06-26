@@ -1308,17 +1308,13 @@ public partial class AXUIElement : NSObject, IVisualElement
     [LibraryImport(AppServices, EntryPoint = "AXUIElementCopyElementAtPosition")]
     private static partial AXError CopyElementAtPosition(nint application, float x, float y, out nint element);
 
-    // SuppressGCTransition: AXUIElementCopyAttributeValue → CoreCLR
-    // PAL_DispatchExceptionWrapper → __CF_IS_OBJC chain consumed ~100%
-    // of CPU during get_app_context Notes (sample showed 1417/1417
-    // frames stuck there). The wrapper exists to convert ObjC unhandled
-    // exceptions into managed ones; AX calls never throw ObjC
-    // exceptions in practice, so we suppress the GC transition and
-    // skip the SEH frame setup. Documented attribute, supported from
-    // .NET 6 LibraryImport. OCCU (Swift) avoids the issue because
-    // Swift has no equivalent runtime wrapper.
+    // v0.9.125 added [SuppressGCTransition] thinking the SEH wrapper
+    // was pure overhead. Re-sampled: an ObjC exception IS being thrown
+    // inside _AXUIElementValidate (PAL_DispatchException is on-cpu,
+    // and HIServices' `SOME_OTHER_THREAD_SWALLOWED_AT_LEAST_ONE_EXCEPTION`
+    // counter is incrementing) — without the wrapper the exception
+    // makes things WORSE, not better. Reverted.
     [LibraryImport(AppServices, EntryPoint = "AXUIElementCopyAttributeValue")]
-    [System.Runtime.InteropServices.SuppressGCTransition]
     private static partial AXError CopyAttributeValue(nint element, nint attribute, out nint value);
 
     // PrefetchAttributes (v0.9.109/110 batch path) removed — caused
