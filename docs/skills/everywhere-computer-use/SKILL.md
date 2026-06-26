@@ -27,19 +27,12 @@ Step 2: Where does the action live?
 
 Perception NEVER replaces Computer Use / Browser Use. It resolves "what" before deciding "how".
 
-## Boundary vs your own tools (Bash / Read / vision / ASR / etc)
+## Boundary vs your own tools
 
-You already have Bash, Read, Grep, web fetch, vision, ASR. Use those for:
+You already have Bash / Read / Grep / web fetch (and vision/ASR if your model is multimodal). Use those for system state, files, web content. Use Everywhere ONLY for:
 
-- Process / network / filesystem / system state — `Bash` (`ps`, `lsof`, `log show`, ...).
-- Read text files — `Read`. Don't `screenshot` + OCR a file you can `cat`.
-- Audio / video → text — fetch the media and run your own ASR (Whisper) or pull the page's caption track via `browser_dom_query`.
-- Image / canvas content — `screenshot` then read it yourself with vision; Everywhere does not OCR.
-
-Use Everywhere ONLY for what those can't reach:
-
-- What the user is pointing at right now (Pin / Whiteboard / focused window / selected text).
-- The user's real browser tabs and DOM (cookies, session, audio output included).
+- What the user is pointing at right now (pin / whiteboard / focused window / selected text).
+- The user's real browser tabs and DOM (cookies, session, audio output).
 - macOS GUI automation (the user's actual apps; not a sandbox).
 
 ## Signal priority (when "what" is ambiguous)
@@ -70,7 +63,6 @@ Pick one. Do not fan out.
 | Browser → System | `Cmd+C` then `get_clipboard` (perception); or `browser_get_selected_text` |
 | System → Browser | `browser_set_cookie` / `browser_clipboard_write_text` / `browser_page_navigate` |
 | Perception → Computer Use | `read_pick` returns `element_index` valid for current `get_app_state`; use it directly |
-| Browser → audio/video text | `browser_dom_query` for caption tracks; or `browser_cdp_get_response_body` to grab the stream URL, then your own ASR |
 
 ## Common failures
 

@@ -90,10 +90,3 @@ get_browser_url (perception) → browser_tab_list → browser_page_analyze
 
 DOM target → Browser Use beats Computer Use on precision, background-safety, reproducibility.
 
-## Multimedia → text
-
-Don't ASR yourself. Pull native captions first:
-
-- YouTube: `browser_dom_query` for `<track>` or `.captionTracks`.
-- Generic: `browser_cdp_list_network_requests` → find `.vtt` / `.m3u8` → `browser_cdp_get_response_body` → hand the text to your own LLM tools.
-- Last resort: `browser_screenshot` of the playing area + your own vision.
