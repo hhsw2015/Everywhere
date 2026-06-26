@@ -1,96 +1,59 @@
 # Perception Reference
 
-Perception tools tell you **what the user means** without firing any action. They are Everywhere's differentiator — most agents have to guess from the prompt and then fan out exploratory reads. Here, the user has *already* told you (with a Pin, a frame, a highlight, a focused window). Read that signal first; act second.
-
-Perception tools work on every platform, including the platforms where Computer Use isn't wired yet (Windows / Linux).
+Read what the user means before acting. Read-only. Cross-platform.
 
 ## Tools
 
-| Tool | What it returns | When |
-|------|-----------------|------|
-| `pick_element` | Opens an interactive picker. Returns the picked element's data. Cancellable: `{cancelled: true}`. | The user explicitly asks "pick this for me" *now*. Avoid spawning a picker uninvited — it's modal. |
-| `read_pick` | Reads the LATEST pinned element (no picker prompt). | The user already used the Pin hotkey; you want what they pinned. |
-| `read_whiteboard` | The latest user-drawn screen frame as text. | User just drew on screen and asked something. |
-| `read_whiteboard_image` | Same frame but as an image. | When OCR or visual cues matter. |
-| `get_selected_text` | OS-wide currently selected text. | "Translate this", "summarize this". |
-| `get_focused_context` | The currently focused element / window across the whole desktop. | "What am I looking at?", "Continue the email". |
-| `get_app_context(app_hint)` | Fuzzy-matches an app name + returns `get_app_state` of its largest window. | The user said an app name, you want to act on it. PREFER over `list_apps` + `get_app_state`. |
-| `get_finder_selection` | Selected files in the front Finder window. | "Open these files", "rename these". |
-| `get_terminal_output` | Visible scrollback in the front terminal. | "What did that command print?" |
-| `get_clipboard` | OS clipboard text. | Hand-off from another tool / the user's manual copy. |
-| `get_idle_time` | Seconds since last user input. | Decide whether to interrupt with a notification or wait. |
-| `get_browser_url` | URL of the user's frontmost browser tab. | Context for "this page". |
-| `get_browser_tabs` | Open tabs in the user's real browser. | "Switch to my GitHub tab". |
-| `screenshot` | A PNG of an indexed element OR window OR full screen. | Visual reasoning, fallback when a11y misses. |
-| `expand_element(element_index)` | Expand a tree node so its children appear in the next `get_app_state`. | Some collapsed disclosures, lazy-loaded outline rows. |
+| Tool | Returns | When |
+|------|---------|------|
+| `pick_element` | Picked element + tree slice. Cancellable: `{cancelled:true}`. | User explicitly asks to pick now. Modal — don't spawn uninvited. |
+| `read_pick` | Latest pinned element (no UI prompt). | User used Pin hotkey. |
+| `read_whiteboard` | Latest user-drawn frame as text. | User just drew on screen. |
+| `read_whiteboard_image` | Same as PNG. | When OCR/visual cues matter. |
+| `get_selected_text` | OS-wide selection. | "Translate this" / "Summarize this". |
+| `get_focused_context` | Currently focused element + window. | "What am I looking at?" |
+| `get_app_context(app_hint)` | Fuzzy-matches an app + returns its `get_app_state`. | User named an app inexactly. PREFER over `list_apps + get_app_state`. |
+| `get_finder_selection` | Selected files in front Finder window. | "Open these files". |
+| `get_terminal_output` | Visible scrollback of front terminal. | "What did that command print?" |
+| `get_clipboard` | OS clipboard text. | Hand-off from another tool / user copy. |
+| `get_idle_time` | Seconds since last input. | Decide whether to interrupt. |
+| `get_browser_url` / `get_browser_tabs` | User's REAL browser frontmost tab / tab list. | NOT the same as Browser Use's working tab. |
+| `screenshot` | PNG of element / window / screen. | Vision reasoning, fallback when a11y misses. |
+| `expand_element(element_index)` | Expand a collapsed tree node so children appear next snap. | Lazy outline rows. |
 
 ## Signal priority
 
-When the user's request is ambiguous about a target, read the strongest available signal *only*:
-
 ```
-1. read_pick              ← strongest: explicit pin, just for this task
-2. read_whiteboard*       ← user drew something, very recently
-3. get_selected_text      ← user highlighted text
-4. get_focused_context    ← user's current focus
-5. get_app_context(hint)  ← user named an app
-6. nothing                ← ask the user
+1. read_pick          — explicit pin, strongest
+2. read_whiteboard*   — user-drawn frame
+3. get_selected_text  — highlighted text
+4. get_focused_context— current focus
+5. get_app_context    — user named an app
+6. ask                — no signal
 ```
 
-Don't fan out across all five. One read, then act.
+One read. Then act. Don't fan out.
 
 ## Lifecycle
 
-- **Pin (read_pick)** survives until the user pins something else, dismisses, or restarts Everywhere. Stable across multiple tool turns. Read it once and reuse the index — it points to a specific element identity, not a tree slot.
-- **Whiteboard (read_whiteboard*)** is per-gesture. After the user closes the frame, the data is gone. Read it during the same conversation turn or summarize and store yourself.
-- **Selected text** is a live OS read — value at call time. Selections collapse the moment the user clicks elsewhere.
-- **Focused context** is also a live read; the moment the user activates another window it's stale.
-- **Browser url / tabs** read the user's REAL browser, not Browser Use's managed session. Don't conflate them.
+| Source | Persistence |
+|--------|-------------|
+| Pin (`read_pick`) | Stable across turns until user re-pins / dismisses / restart. Reuse safely. |
+| Whiteboard | Per-gesture. Read in same turn or stash yourself. |
+| Selected text | Live read at call time. Collapses on next click. |
+| Focused context | Live. Stale the moment user activates another window. |
+| `get_browser_url` / tabs | User's real browser, NOT Browser Use's working tab. Don't conflate. |
 
-## Combination patterns
+## Patterns
 
-### "Click the thing I pinned"
+| Intent | Sequence |
+|--------|----------|
+| "Click the thing I pinned" | `read_pick` → `click(app, element_index)` (index from pick is valid) |
+| "Translate this" | `get_selected_text` → LLM, no automation |
+| "Reply to email I'm writing" | `get_focused_context` → draft → `set_value(app, idx, draft)` |
+| "What did this region say?" | `read_whiteboard_image` → vision read |
+| "Open these Finder files in VSCode" | `get_finder_selection` → shell or VSCode CLI |
 
-```
-read_pick                         → returns element_index for the pinned element
-click(app, element_index)
-```
+## When NOT to use
 
-`read_pick` already implicitly snapshots the host app, so the index is valid for `click` immediately.
-
-### "Translate this"
-
-```
-get_selected_text                 → returns the highlighted string
-# pass to LLM, no Computer Use needed
-```
-
-### "Reply to the email I'm writing"
-
-```
-get_focused_context               → shows the currently focused text editor + selection
-# LLM drafts reply text
-set_value(app, element_index, draft)
-```
-
-### "What did this region say?" (text inside a Canvas/PDF/image)
-
-```
-read_whiteboard_image             → image
-# LLM reads the image directly, no AX path required
-```
-
-### "Open these Finder files in VS Code"
-
-```
-get_finder_selection              → array of file paths
-# pass paths to a shell tool or to VS Code's CLI; no clicking needed
-```
-
-## When NOT to use perception
-
-If the user has already given you the target verbally and unambiguously — "open Calculator and compute 7×8" — perception adds latency without information. Skip straight to `list_apps` / `get_app_context`.
-
-## Cross-platform
-
-All perception tools are cross-platform. Computer Use tools require macOS today (see [computer-use.md](computer-use.md)). On Windows/Linux, you can still: read clipboard, read selected text, read focused context, read browser url/tabs, screenshot — and then think about the task even if you can't yet drive the GUI directly.
+User already gave you the target verbally and unambiguously ("open Calculator and compute 7×8"). Skip perception, go straight to `list_apps` / `get_app_context`.

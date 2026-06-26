@@ -1,109 +1,65 @@
 # Computer Use Reference
 
-The nine MCP tools that drive native macOS apps. Powered by the OpenComputerUseKit Swift bridge, dynamically loaded as `libAxHelper.dylib`. All requests run on the AppKit main thread; multi-second hangs from the previous .NET-only path no longer occur.
+macOS native automation via OCCU Swift dylib. macOS only.
 
-## Tool surface
+## Tools
 
-| Tool | Purpose |
-|------|---------|
-| `list_apps` | Every running app with at least one top-level window. |
-| `get_app_state(app, show_full_text?)` | Snapshot the largest visible window: indexed a11y tree. |
-| `click(app, element_index? \| x?, y?, click_count?, mouse_button?)` | Click by element index (preferred) or screen coordinates. |
-| `perform_secondary_action(app, element_index, action)` | Invoke any AXAction the element exposes (`AXPress`, `AXShowMenu`, `AXIncrement`, `AXRaise`, ...). Aliases supported: `press`/`click`→`AXPress`, `context_menu`/`right_click`→`AXShowMenu`. |
-| `scroll(app, element_index, direction, pages?)` | Scroll an indexed scroll container. Direction: `up`/`down`/`left`/`right`. Default 1 page. |
-| `drag(app, from_x, from_y, to_x, to_y)` | Press → drag → release in screen coordinates. |
-| `type_text(app, text)` | Type literal text into the focused control. |
-| `press_key(app, key)` | xdotool-style key spec: `a`, `Return`, `Tab`, `Escape`, `super+c`, `super+shift+n`, `KP_0`. |
-| `set_value(app, element_index, value)` | Replace the text/value of an editable control via AX SetValue. |
+| Tool | Args | Returns |
+|------|------|---------|
+| `list_apps` | – | running apps with at least one top-level window |
+| `get_app_state` | `app`, `show_full_text?` | indexed a11y tree of the largest visible window |
+| `click` | `app`, `element_index?` OR `x,y`, `click_count?`, `mouse_button?` | post-action snapshot |
+| `perform_secondary_action` | `app`, `element_index`, `action` | post-action snapshot |
+| `scroll` | `app`, `element_index`, `direction` (up/down/left/right), `pages?` | snapshot |
+| `drag` | `app`, `from_x`, `from_y`, `to_x`, `to_y` | snapshot |
+| `type_text` | `app`, `text` | snapshot |
+| `press_key` | `app`, `key` (xdotool style: `Return`, `super+c`, `super+shift+n`, `KP_0`) | snapshot |
+| `set_value` | `app`, `element_index`, `value` | snapshot |
 
-## Core workflow
+## Workflow
 
 ```
-list_apps
-  ↓ pick app name or bundle id
-get_app_state(app)
-  ↓ inspect indexed tree
-click / set_value / scroll / press_key / type_text  (use the index)
-  ↓
-get_app_state(app)   ← re-snapshot after navigation or modal change
+list_apps → get_app_state(app) → use element_index in actions → re-snap if state changed
 ```
+
+Indices reissue on every `get_app_state`. Re-snap before reusing.
 
 ## Picking targets
 
-- Use the `app` field from `list_apps` output (process key) as the `app` argument everywhere else.
-- For ambiguity (`"Notes"` could mean Apple Notes vs another app), prefer the bundle identifier (`com.apple.Notes`).
-- `get_app_context(app_hint)` (perception) is the better one-shot when the user gives an inexact name — it does list + match + snapshot.
+- `app` arg = process key from `list_apps`. For ambiguity prefer bundle id (`com.apple.Notes`).
+- `get_app_context(app_hint)` (perception) does list+match+snapshot in one call when the name is fuzzy.
 
-## Element actions vs coordinate actions
+## Element vs coordinate
 
-Prefer element-targeted whenever the tree exposes the target:
-
-```
-click(app, element_index="14")            ← preferred
-click(app, x=520, y=380)                  ← only when no index works
-```
-
-Coordinate clicks are sent via targeted `CGEventPostToPid` and don't bring the window to the foreground. Set `EVERYWHERE_ALLOW_GLOBAL_POINTER_FALLBACKS=1` only when diagnosing why a targeted post is being dropped (e.g. a SwiftUI gesture rejecting non-foreground events). Don't ship that env flag in normal use.
-
-## Right-click and double-click
+Prefer element-targeted. Coordinate `click(x,y)` only when nothing in the tree matches the target.
 
 ```
-click(app, element_index="14", mouse_button="right")        ← context menu (uses AXShowMenu when available)
-click(app, element_index="14", click_count=2)               ← double click
+click(app, element_index="14")     # preferred
+click(app, x=520, y=380)           # last resort
 ```
 
-`mouse_button` defaults to `"left"`; `click_count` defaults to 1. Right-click on an element with no AXShowMenu falls back to a coordinate right-click at the element center.
+## Patterns
 
-## Secondary actions
+| Want | Do |
+|------|-----|
+| Right-click | `click(... mouse_button="right")` (uses AXShowMenu when exposed) |
+| Double-click | `click(... click_count=2)` |
+| Window action (raise / minimize) | `perform_secondary_action(app, element_index="0", action="AXRaise")` |
+| AX action listed in element's "Secondary Actions:" | `perform_secondary_action(action="AXIncrement"\|"AXShowMenu"\|...)`; aliases: press/click→AXPress, context_menu/right_click→AXShowMenu |
+| Replace text in editable | `set_value(app, element_index, value)` (do NOT type_text — selection state is fragile) |
+| set_value refused (Stripe / Cloudflare / Electron) | click element + `press_key("super+a")` + `press_key("BackSpace")` + `type_text(value)` |
+| Long body text | `get_app_state(app, show_full_text=true)` (default truncates 500 chars/node) |
 
-`get_app_state` lists each element's available AXActions in the `Secondary Actions:` field. Pass any of them through `perform_secondary_action`:
+## Foreground
 
-```
-perform_secondary_action(app, element_index="0", action="AXRaise")          ← bring window forward
-perform_secondary_action(app, element_index="14", action="AXShowMenu")      ← open context menu
-perform_secondary_action(app, element_index="9", action="AXIncrement")      ← step a slider/stepper
-```
-
-Common name aliases the bridge resolves: `press` / `click` → `AXPress`, `context_menu` / `right_click` → `AXShowMenu`.
-
-## Replace vs type
-
-`type_text` simulates keystrokes — selection state during typing is fragile and the new text often *appends* rather than *replaces* the highlighted range. For "clear and write fresh", use `set_value` on the editable element directly:
-
-```
-set_value(app, element_index="2", value="Replacement text")
-```
-
-Some web inputs (Stripe, Cloudflare, certain Electron password fields) reject scripted SetValue. There the fallback is: focus the element, then `press_key("super+a")`, then `press_key("BackSpace")`, then `type_text`. The bridge does not auto-fall-back — sequence those calls explicitly so the agent stays in control.
-
-## Show-full-text
-
-Tree text is truncated at 500 chars per node by default. Pass `show_full_text: true` when the task needs document body / email body / chat scrollback verbatim. The flag only relaxes per-node text; it does not change tree depth or include any screenshot.
+Element clicks via PostToPid don't need foreground. `press_key` for system shortcuts (Cmd+Shift+N etc) sometimes does — bring app forward via `perform_secondary_action(idx="0", action="AXRaise")` if a key combo no-ops.
 
 ## No screenshot in `get_app_state`
 
-OCCU upstream's `get_app_state` attaches a PNG of the snapshotted window. Everywhere strips this on purpose:
-
-- Many cloud LLMs Everywhere routes through don't accept image blocks; text is the universal shape.
-- A Calculator-sized PNG is already 30 KB+ base64; full-window snapshots inflate every tool turn 5-10x.
-- A separate `screenshot` perception tool exists for explicit screenshot needs.
-
-If you want a picture of the window, call `screenshot(app, element_index?)` after `get_app_state`. Don't expect `get_app_state` to deliver one.
-
-## Foreground vs background
-
-Element-index actions don't require the window to be foreground; they go through targeted events. Some operations still need the app frontmost — typically system-level shortcuts (`Cmd+Shift+N` in Finder) and keyboard-only menu items. If a `press_key` no-ops while the app is in the background, activate first:
-
-```
-press_key(app, "super+shift+n")   ← may be ignored when app is not frontmost
-# either bring the window forward via perform_secondary_action(... AXRaise)
-# or use AppleScript / system activation outside this skill
-```
+Stripped on purpose (LLM token cost, image-block compatibility). Use `screenshot` (perception) when you need a picture.
 
 ## Errors
 
-The bridge surfaces failures as `(text, isError=true)`. Common shapes:
-
-- `app not found` → run `list_apps`, retry with the exact name/bundle id.
-- `element_index <n> out of range` → re-snapshot, indices expire after each fresh `get_app_state`.
-- `OCCU AX backend not available` → the dylib didn't load. On macOS, ensure `EVERYWHERE_USE_OCCU` is not set to `0` and that `libAxHelper.dylib` is in `Contents/MonoBundle/`. There is no longer a C# fallback for these tools.
+- "app not found" → `list_apps`, retry with exact name/bundle id
+- "element_index N out of range" → indices expired, re-snap
+- "OCCU AX backend not available" → on macOS check `EVERYWHERE_USE_OCCU` ≠ 0 + `libAxHelper.dylib` in `Contents/MonoBundle/`. No C# fallback exists.
