@@ -30,16 +30,30 @@ internal static class ToolErrors
 
     /// <summary>
     /// Tool requires the OCCU AX backend (libAxHelper.dylib) but it is not
-    /// registered. Mac builds register it on launch; the env-var kill switch
-    /// EVERYWHERE_USE_OCCU=0 disables registration. Linux/Windows reach this
-    /// path because no backend exists on those platforms yet.
+    /// registered. macOS builds register it on launch; EVERYWHERE_USE_OCCU=0
+    /// disables registration as a kill switch. Windows/Linux currently have
+    /// NO equivalent backend — automation tools are macOS-only for now (the
+    /// vendored OpenComputerUseKit Swift library targets .macOS(.v14)).
     /// </summary>
-    public static CallToolResult OccuRequired(string toolName) =>
-        Error(
-            $"{toolName}: OCCU AX backend not available. On macOS, ensure " +
-            "EVERYWHERE_USE_OCCU is not set to 0 and that libAxHelper.dylib " +
-            "is bundled in Contents/MonoBundle. This tool no longer has a " +
-            "C# fallback path.");
+    public static CallToolResult OccuRequired(string toolName)
+    {
+        if (OperatingSystem.IsMacOS())
+        {
+            return Error(
+                $"{toolName}: OCCU AX backend not available. Ensure " +
+                "EVERYWHERE_USE_OCCU is not set to 0 and that libAxHelper.dylib " +
+                "is bundled in Contents/MonoBundle. This tool no longer has " +
+                "a C# fallback path.");
+        }
+
+        return Error(
+            $"{toolName}: native UI automation is only available on macOS " +
+            "in this build. The OpenComputerUseKit Swift backend that powers " +
+            "this tool family does not yet have a Windows/Linux equivalent. " +
+            "Perception tools (pick_element, get_selected_text, get_focused_context, " +
+            "get_clipboard, get_browser_url, get_browser_tabs, screenshot, ...) " +
+            "still work cross-platform.");
+    }
 
     /// <summary>
     /// Wraps an unexpected exception into a clean tool error, hiding internal types and

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Everywhere"
+  short_description: "Guide agents using Everywhere for native, browser, and perception automation"
+  default_prompt: "Use Everywhere to operate desktop apps (Computer Use), web pages (Browser Use), and read what the user is pointing at (Perception). Pick a single surface per task."
