@@ -20,10 +20,17 @@ public static class SetValueTool
         IInputSimulator input,
         FocusBorrow focusBorrow,
         IVisualElementContext context,
-        Everywhere.Mcp.CursorOverlay.ITargetWindowHighlighter highlighter)
+        Everywhere.Mcp.CursorOverlay.ITargetWindowHighlighter highlighter,
+        IAxBridgeBackend? backend = null)
     {
         if (string.IsNullOrEmpty(element_index)) return ToolErrors.ParameterRequired("element_index");
         if (value is null) return ToolErrors.ParameterRequired("value");
+
+        if (backend is not null)
+        {
+            var (txt, isError) = backend.SetValue(app, element_index, value);
+            return isError ? ToolErrors.Error(txt) : new CallToolResult { Content = [new TextContentBlock { Text = txt }] };
+        }
 
         var (error, element) = ElementResolver.Resolve(sessions, element_index, appHint: app);
         if (error is not null) return error;

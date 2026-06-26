@@ -17,10 +17,17 @@ public static class TypeTextTool
         IInputSimulator input,
         FocusBorrow focusBorrow,
         IVisualElementContext context,
-        Everywhere.Mcp.CursorOverlay.ITargetWindowHighlighter highlighter)
+        Everywhere.Mcp.CursorOverlay.ITargetWindowHighlighter highlighter,
+        IAxBridgeBackend? backend = null)
     {
         if (text is null) return ToolErrors.ParameterRequired("text");
         if (text.Length > 100_000) return ToolErrors.Error("text exceeds 100 000 character limit.");
+
+        if (backend is not null)
+        {
+            var (txt, isError) = backend.TypeText(app, text);
+            return isError ? ToolErrors.Error(txt) : new CallToolResult { Content = [new TextContentBlock { Text = txt }] };
+        }
 
         var resolved = AppResolver.Resolve(context, app);
         if (resolved is null) return ToolErrors.AppNotRunning(app);

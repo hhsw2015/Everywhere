@@ -20,8 +20,17 @@ public static class DragTool
         IInputSimulator input,
         FocusBorrow focusBorrow,
         IVisualElementContext context,
-        Everywhere.Mcp.CursorOverlay.ITargetWindowHighlighter highlighter)
+        Everywhere.Mcp.CursorOverlay.ITargetWindowHighlighter highlighter,
+        IAxBridgeBackend? backend = null)
     {
+        if (backend is not null)
+        {
+            var (text, isError) = backend.Drag(app, from_x, from_y, to_x, to_y);
+            return isError
+                ? ToolErrors.Error(text)
+                : new CallToolResult { Content = [new TextContentBlock { Text = text }] };
+        }
+
         var resolved = AppResolver.Resolve(context, app);
         if (resolved is null) return ToolErrors.AppNotRunning(app);
 

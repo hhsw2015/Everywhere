@@ -23,7 +23,8 @@ public static class ScrollTool
         IInputSimulator input,
         FocusBorrow focusBorrow,
         IVisualElementContext context,
-        double? pages = null)
+        double? pages = null,
+        IAxBridgeBackend? backend = null)
     {
         if (string.IsNullOrEmpty(element_index)) return ToolErrors.ParameterRequired("element_index");
         if (string.IsNullOrEmpty(direction)) return ToolErrors.ParameterRequired("direction");
@@ -31,6 +32,12 @@ public static class ScrollTool
         var dir = direction.ToLowerInvariant();
         if (dir is not ("up" or "down" or "left" or "right"))
             return ToolErrors.Error($"Invalid direction '{direction}'. Expected up|down|left|right.");
+
+        if (backend is not null)
+        {
+            var (txt, isError) = backend.Scroll(app, dir, element_index, pages ?? 1.0);
+            return isError ? ToolErrors.Error(txt) : new CallToolResult { Content = [new TextContentBlock { Text = txt }] };
+        }
 
         var (error, element) = ElementResolver.Resolve(sessions, element_index, appHint: app);
         if (error is not null) return error;

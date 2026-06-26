@@ -21,6 +21,30 @@ namespace Everywhere.Mac;
 
 public static class Program
 {
+    /// <summary>
+    /// Wire the optional OCCU AX backend if requested + available.
+    /// EVERYWHERE_USE_OCCU=1 + libAxHelper.dylib loadable + a11y
+    /// permission granted ⇒ snapshot/click/etc tools route through
+    /// the Swift bridge instead of the (slower / more brittle) C#
+    /// P/Invoke path. Default: no IAxBridgeBackend registered, MCP
+    /// tools fall back to the existing IVisualElementContext stack.
+    /// </summary>
+    private static IServiceCollection RegisterMacServices(IServiceCollection services)
+    {
+        if (Environment.GetEnvironmentVariable("EVERYWHERE_USE_OCCU") == "1")
+        {
+            try
+            {
+                if (Everywhere.Mac.AxBridge.LibAxHelper.IsAvailable())
+                {
+                    services.AddSingleton<IAxBridgeBackend, Everywhere.Mac.AxBridge.OccuAxBridgeBackend>();
+                }
+            }
+            catch { /* dylib missing / a11y denied — leave backend unregistered */ }
+        }
+        return services;
+    }
+
     [STAThread]
     public static async Task Main(string[] args)
     {
@@ -28,7 +52,7 @@ public static class Program
         {
             await Everywhere.Mcp.Server.EverywhereMcpServer.RunStdioAsync(
                 args,
-                services => services
+                services => RegisterMacServices(services)
                     .AddSingleton<IVisualElementContext, VisualElementContext>()
                     .AddSingleton<MacInputSimulator>()
                     .AddSingleton<IInputSimulator>(sp => new Everywhere.Mcp.Input.TracedInputSimulator(

@@ -17,8 +17,16 @@ public static class ListAppsTool
         "parameter of other tools), \"title\" (the largest window's title), and \"process_id\". " +
         "PREFER get_app_context(app_hint) when the user names an app — it does list+match+snapshot " +
         "in one call.")]
-    public static CallToolResult ListApps(IVisualElementContext context)
+    public static CallToolResult ListApps(IVisualElementContext context, IAxBridgeBackend? backend = null)
     {
+        if (backend is not null)
+        {
+            var (text, isError) = backend.ListApps();
+            return isError
+                ? ToolErrors.Error(text)
+                : new CallToolResult { Content = [new TextContentBlock { Text = text }] };
+        }
+
         try
         {
             var apps = AppResolver.ListApps(context)

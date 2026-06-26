@@ -17,9 +17,16 @@ public static class PressKeyTool
         IInputSimulator input,
         FocusBorrow focusBorrow,
         IVisualElementContext context,
-        Everywhere.Mcp.CursorOverlay.ITargetWindowHighlighter highlighter)
+        Everywhere.Mcp.CursorOverlay.ITargetWindowHighlighter highlighter,
+        IAxBridgeBackend? backend = null)
     {
         if (string.IsNullOrEmpty(key)) return ToolErrors.ParameterRequired("key");
+
+        if (backend is not null)
+        {
+            var (txt, isError) = backend.PressKey(app, key);
+            return isError ? ToolErrors.Error(txt) : new CallToolResult { Content = [new TextContentBlock { Text = txt }] };
+        }
 
         var resolved = AppResolver.Resolve(context, app);
         if (resolved is null) return ToolErrors.AppNotRunning(app);

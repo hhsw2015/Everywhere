@@ -116,6 +116,7 @@ public func ax_get_app_state(
     }
 }
 
+
 @_cdecl("ax_click")
 public func ax_click(
     _ app: UnsafePointer<CChar>?,

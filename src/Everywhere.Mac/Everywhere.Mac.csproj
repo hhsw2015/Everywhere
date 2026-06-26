@@ -191,4 +191,27 @@
     </ItemGroup>
   </Target>
 
+  <!-- Swift AxHelper dylib: built from src/Everywhere.Mac.AxHelper.
+       Optional — runtime-gated by EVERYWHERE_USE_OCCU. If the dylib
+       is absent the C# AX path keeps working so dev machines without
+       Swift toolchain still build. -->
+  <PropertyGroup>
+    <_AxHelperPackageDir>$(MSBuildThisFileDirectory)..\Everywhere.Mac.AxHelper\</_AxHelperPackageDir>
+    <_AxHelperDylibPath>$(_AxHelperPackageDir).build\arm64-apple-macosx\release\libAxHelper.dylib</_AxHelperDylibPath>
+  </PropertyGroup>
+  <Target Name="BuildAxHelper" BeforeTargets="BeforeBuild"
+          Condition="Exists('$(_AxHelperPackageDir)Package.swift')">
+    <Exec Command="swift build -c release --arch arm64"
+          WorkingDirectory="$(_AxHelperPackageDir)"
+          ContinueOnError="true"
+          IgnoreExitCode="true" />
+  </Target>
+  <ItemGroup Condition="Exists('$(_AxHelperDylibPath)')">
+    <None Include="$(_AxHelperDylibPath)" PublishFolderType="RootDirectory">
+      <Link>Contents\Frameworks\libAxHelper.dylib</Link>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
 </Project>

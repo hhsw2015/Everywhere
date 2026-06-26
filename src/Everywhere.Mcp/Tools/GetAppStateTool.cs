@@ -32,8 +32,17 @@ public static class GetAppStateTool
         bool show_full_text = false,
         bool raise_if_needed = false,
         bool include_screenshot = false,
-        bool include_tree_json = false)
+        bool include_tree_json = false,
+        IAxBridgeBackend? backend = null)
     {
+        if (backend is not null)
+        {
+            var (text, isError) = backend.GetAppState(app, show_full_text);
+            return isError
+                ? ToolErrors.Error(text)
+                : new CallToolResult { Content = [new TextContentBlock { Text = text }] };
+        }
+
         try
         {
             var resolved = AppResolver.Resolve(context, app);

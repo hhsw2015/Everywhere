@@ -23,8 +23,20 @@ public static class ClickTool
         double? x = null,
         double? y = null,
         int? click_count = null,
-        string? mouse_button = null)
+        string? mouse_button = null,
+        IAxBridgeBackend? backend = null)
     {
+        if (backend is not null)
+        {
+            var btn = mouse_button ?? "left";
+            var cc = click_count is { } cnt && cnt > 0 ? cnt : 1;
+            var useXY = x.HasValue && y.HasValue && string.IsNullOrEmpty(element_index);
+            var (text, isError) = backend.Click(app, element_index, x ?? 0, y ?? 0, useXY, cc, btn);
+            return isError
+                ? ToolErrors.Error(text)
+                : new CallToolResult { Content = [new TextContentBlock { Text = text }] };
+        }
+
         try
         {
             if (!string.IsNullOrEmpty(element_index))
