@@ -1,0 +1,77 @@
+diff --git a/packages/OpenComputerUseKit/Sources/OpenComputerUseKit/ComputerUseService.swift b/packages/OpenComputerUseKit/Sources/OpenComputerUseKit/ComputerUseService.swift
+index c892773..30cfe95 100644
+--- a/packages/OpenComputerUseKit/Sources/OpenComputerUseKit/ComputerUseService.swift
++++ b/packages/OpenComputerUseKit/Sources/OpenComputerUseKit/ComputerUseService.swift
+@@ -1515,7 +1515,11 @@ public final class ComputerUseService {
+     }
+ 
+     private func visualCursorTarget(for record: ElementRecord, snapshot: AppSnapshot) -> VisualCursorTarget? {
+-        makeVisualCursorTarget(
++        // Everywhere downstream diagnostic: log cached snapshot frame vs
++        // live AX frame side-by-side so we can see exactly how they drift
++        // when the user reports an off-target cursor.
++        everywhereLogCursorDiag(record: record, snapshot: snapshot)
++        return makeVisualCursorTarget(
+             localFrame: record.localFrame,
+             windowBounds: snapshot.windowBounds,
+             targetWindowID: snapshot.targetWindowID,
+@@ -1523,6 +1527,59 @@ public final class ComputerUseService {
+         )
+     }
+ 
++    private func everywhereLogCursorDiag(record: ElementRecord, snapshot: AppSnapshot) {
++        let localFrame = record.localFrame
++        let wb = snapshot.windowBounds
++        let cachedCenter: CGPoint?
++        if let lf = localFrame, let w = wb {
++            cachedCenter = CGPoint(x: w.minX + lf.midX, y: w.minY + lf.midY)
++        } else {
++            cachedCenter = nil
++        }
++        var livePos = CGPoint.zero
++        var liveSize = CGSize.zero
++        var liveCenter: CGPoint? = nil
++        if let element = record.element {
++            var pv: CFTypeRef?
++            var sv: CFTypeRef?
++            if AXUIElementCopyAttributeValue(element, kAXPositionAttribute as CFString, &pv) == .success,
++               AXUIElementCopyAttributeValue(element, kAXSizeAttribute as CFString, &sv) == .success,
++               let p = pv, let s = sv,
++               CFGetTypeID(p) == AXValueGetTypeID(),
++               CFGetTypeID(s) == AXValueGetTypeID() {
++                if AXValueGetValue(p as! AXValue, .cgPoint, &livePos),
++                   AXValueGetValue(s as! AXValue, .cgSize, &liveSize) {
++                    liveCenter = CGPoint(x: livePos.x + liveSize.width / 2,
++                                         y: livePos.y + liveSize.height / 2)
++                }
++            }
++        }
++        let mainScreen = NSScreen.main?.frame ?? .zero
++        let appKitMappings = NSScreen.screens.map { (s: NSScreen) -> String in
++            "\(s.frame)"
++        }.joined(separator: " | ")
++        var msg = "[ew-cursor-diag]"
++        msg += " idx=\(record.index)"
++        msg += " lf=\(localFrame.map { "\($0)" } ?? "nil")"
++        msg += " wb=\(wb.map { "\($0)" } ?? "nil")"
++        msg += " cached=\(cachedCenter.map { "(\($0.x),\($0.y))" } ?? "nil")"
++        msg += " ax_pos=\(livePos) ax_size=\(liveSize)"
++        msg += " live=\(liveCenter.map { "(\($0.x),\($0.y))" } ?? "nil")"
++        msg += " mainScreen=\(mainScreen)"
++        msg += " allScreens=[\(appKitMappings)]"
++        FileHandle.standardError.write((msg + "\n").data(using: .utf8) ?? Data())
++        if let data = (msg + "\n").data(using: .utf8) {
++            let path = "/tmp/everywhere-cursor.log"
++            if let fh = FileHandle(forWritingAtPath: path) {
++                fh.seekToEndOfFile()
++                fh.write(data)
++                try? fh.close()
++            } else {
++                try? data.write(to: URL(fileURLWithPath: path))
++            }
++        }
++    }
++
+     private func fixtureVisualCursorTarget(identifier: String, snapshot: AppSnapshot) -> VisualCursorTarget? {
+         let record = snapshot.elements.values.first { $0.identifier == identifier }
+         return record.flatMap { visualCursorTarget(for: $0, snapshot: snapshot) }
