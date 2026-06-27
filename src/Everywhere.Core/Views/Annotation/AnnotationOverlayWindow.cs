@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Everywhere.Common;
@@ -112,7 +113,11 @@ public class AnnotationOverlayWindow : Window
             BorderThickness = new Thickness(0),
             IsVisible = false,
         };
-        _textBox.KeyDown += OnTextBoxKeyDown;
+        // Tunnel-route KeyDown at the WINDOW level so Esc / Cmd+Enter fire
+        // BEFORE the TextBox bubble-stage handlers consume them (AcceptsReturn
+        // makes the TextBox eat plain Enter; on some Avalonia/macOS combos it
+        // also eats Cmd+Enter before our bubble-stage handler runs).
+        AddHandler(KeyDownEvent, OnTextBoxKeyDown, RoutingStrategies.Tunnel);
         _textBox.LostFocus += OnTextBoxLostFocus;
 
         _root = new Border
@@ -293,12 +298,12 @@ public class AnnotationOverlayWindow : Window
         }
     }
 
-    private void OnTextBoxLostFocus(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    private void OnTextBoxLostFocus(object? sender, RoutedEventArgs e)
     {
-        // Intentionally do NOT collapse on blur. Users frequently click
-        // a different window to look something up mid-thought and come
-        // back to finish typing. Esc / Cmd+Enter / clicking ➕ are the
-        // explicit dismiss paths; blur is not.
+        // Blur = commit-or-collapse. User feedback: 鼠标点击文本框之外, 应该
+        //自动收起. If there's text → commit (turns into ✓). If empty → just
+        // collapse back to ➕ (no stash insert).
+        if (_expanded) Collapse();
     }
 
 }

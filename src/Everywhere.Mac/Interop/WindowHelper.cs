@@ -84,8 +84,33 @@ public class WindowHelper : IWindowHelper
     /// <param name="visible">True to make it receive mouse events, false to let them pass through.</param>
     public void SetHitTestVisible(Window window, bool visible)
     {
-        if (GetNativeWindow(window) is not { } nativeWindow) return;
+        // NSWindow doesn't exist until the Avalonia window is opened.
+        // Callers typically invoke this from the .cs ctor (before Open),
+        // so GetNativeWindow returns null and the whole method used to be
+        // a silent no-op. Defer to Opened in that case, otherwise the
+        // overlay (e.g. annotation outline + ➕ badge) ends up without
+        // CanJoinAllSpaces / FullScreenAuxiliary — making it disappear
+        // whenever the user switches into a fullscreen Arc / browser
+        // space. Reported as "pick 元素后那个框会消失".
+        if (GetNativeWindow(window) is { } nativeWindow)
+        {
+            ApplyHitTestVisible(window, nativeWindow, visible);
+            return;
+        }
+        EventHandler? handler = null;
+        handler = (_, _) =>
+        {
+            window.Opened -= handler;
+            if (GetNativeWindow(window) is { } nsw)
+            {
+                ApplyHitTestVisible(window, nsw, visible);
+            }
+        };
+        window.Opened += handler;
+    }
 
+    private static void ApplyHitTestVisible(Window window, NSWindow nativeWindow, bool visible)
+    {
         // This is the direct equivalent of WS_EX_TRANSPARENT on Windows.
         nativeWindow.IgnoresMouseEvents = !visible;
 
