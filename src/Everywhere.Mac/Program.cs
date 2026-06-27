@@ -168,6 +168,8 @@ public static class Program
                 .AddTransient<IAsyncInitializer, LinkRectHotkeyInitializer>()
                 .AddTransient<IAsyncInitializer, Everywhere.Mcp.OpenDia.OpenDiaBridgeInitializer>()
                 .AddTransient<IAsyncInitializer>(sp => sp.GetRequiredService<Everywhere.Mcp.Snapshot.AutoCaptureService>())
+                .AddSingleton<Everywhere.Views.Annotation.AnnotationOverlayHost>()
+                .AddTransient<IAsyncInitializer>(sp => sp.GetRequiredService<Everywhere.Views.Annotation.AnnotationOverlayHost>())
 
             #endregion
 
