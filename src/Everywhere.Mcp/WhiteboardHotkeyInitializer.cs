@@ -385,6 +385,7 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
                 _logger.LogInformation(
                     "Whiteboard ann: kind={Kind} parserRect={Rect}",
                     ann.Kind, ann.BoundingRect);
+                _logger.LogInformation("Whiteboard snap starting...");
                 // Always snap against focusedRoot. v0.8.25 tried falling
                 // back to targetScreen when focusedRoot.BoundingRect was
                 // 0x0, but that traverses EVERY app's leaves on screen
@@ -406,12 +407,16 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
                 {
                     _logger.LogInformation("Whiteboard region rejected ({Kind}): {Reason}",
                         ann.Kind, string.IsNullOrEmpty(snap.RejectReason) ? "no leaves" : snap.RejectReason);
-                    // Fallback for Circle / X: when a11y exposes no
-                    // matching leaf inside the gesture (canvas-rendered
-                    // thumbnails, infinite-scroll cards, etc.), crop the
+                    // Fallback for Circle / X / Arrow: when a11y exposes
+                    // no matching leaf inside the gesture (canvas-rendered
+                    // thumbnails, infinite-scroll cards, Chromium webviews
+                    // that don't expose subtree structure), crop the
                     // gesture rect itself as a single fallback image so
-                    // the user's selection isn't lost.
-                    if (ann.Kind is AnnotationKind.Circle or AnnotationKind.X
+                    // the user's selection isn't lost. Arrow was added to
+                    // this list per v0.9.184 user report — Arc Hyperlink
+                    // ancestor returned no Arrow leaves and the gesture
+                    // silently produced no overlay/➕.
+                    if (ann.Kind is AnnotationKind.Circle or AnnotationKind.X or AnnotationKind.Arrow
                         && TryFallbackRegionImage(ann.BoundingRect, ocrBitmap, ocrBitmapBounds,
                                                     ref sessionImageCount, ref sessionImageBytes,
                                                     out var fallbackImage))
