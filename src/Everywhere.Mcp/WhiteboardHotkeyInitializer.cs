@@ -1329,31 +1329,51 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
         return best;
     }
 
-    private static bool IsLeafType(VisualElementType t)
-        => t is VisualElementType.Label
-              or VisualElementType.Hyperlink
-              or VisualElementType.Button
-              or VisualElementType.Image
-              or VisualElementType.TextEdit
-              or VisualElementType.MenuItem
-              or VisualElementType.CheckBox
-              or VisualElementType.RadioButton
-              or VisualElementType.ListViewItem
-              or VisualElementType.TreeViewItem
-              or VisualElementType.DataGridItem
-              or VisualElementType.TabItem
-              or VisualElementType.HeaderItem
-              or VisualElementType.TableRow;
+    /// <summary>
+    /// Score by how "leaf-like" a type is — lower is better (tighter to
+    /// the user's actual target). Hyperlink/Button/Image/MenuItem/etc.
+    /// are unambiguous leaves; Label is ambiguous on Chromium (often a
+    /// row-level wrapper around a paragraph), so we keep it last-resort.
+    /// Containers return -1 (rejected entirely).
+    /// </summary>
+    private static int LeafTypeScore(VisualElementType t) => t switch
+    {
+        VisualElementType.Hyperlink     => 0,
+        VisualElementType.Button        => 0,
+        VisualElementType.Image         => 0,
+        VisualElementType.MenuItem      => 0,
+        VisualElementType.CheckBox      => 0,
+        VisualElementType.RadioButton   => 0,
+        VisualElementType.ListViewItem  => 1,
+        VisualElementType.TreeViewItem  => 1,
+        VisualElementType.DataGridItem  => 1,
+        VisualElementType.TabItem       => 1,
+        VisualElementType.HeaderItem    => 1,
+        VisualElementType.TextEdit      => 1,
+        VisualElementType.TableRow      => 2,
+        VisualElementType.Label         => 3, // last resort — often row-level on Chromium
+        _ => -1,
+    };
+
+    private static bool IsLeafType(VisualElementType t) => LeafTypeScore(t) >= 0;
 
     private static IVisualElement? ClimbToLeafType(IVisualElement start, int maxHops)
     {
+        // Climb up to maxHops, picking the BEST (lowest-score) leaf-type
+        // ancestor we see. If a Hyperlink/Button is on the path, it
+        // beats a Label even if we hit Label first. Stops as soon as we
+        // exit leaf territory (a container with score < 0).
+        IVisualElement? best = null;
+        var bestScore = int.MaxValue;
         var cur = start;
         for (var i = 0; i < maxHops && cur is not null; i++)
         {
-            if (IsLeafType(cur.Type)) return cur;
-            try { cur = cur.Parent; } catch { return null; }
+            var score = LeafTypeScore(cur.Type);
+            if (score < 0) break; // hit a container, leaves don't nest beyond it
+            if (score < bestScore) { best = cur; bestScore = score; }
+            try { cur = cur.Parent; } catch { break; }
         }
-        return null;
+        return best;
     }
 
     private static bool RectsIntersect(PixelRect a, Rect b)

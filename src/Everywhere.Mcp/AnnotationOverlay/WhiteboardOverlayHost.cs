@@ -130,20 +130,17 @@ public sealed class WhiteboardOverlayHost : IAsyncInitializer, IAsyncDisposable
                 if (_disposed) return;
                 if (!_overlays.Contains(pair)) return;
                 if (union.Width <= 0 || union.Height <= 0) return;
-                // Reject moves that would teleport the outline. If the
-                // union jumps to a place far from where it started, the
-                // anchor element likely became invalid (Chromium leaf
-                // remap). Better to stay put than fly across the screen.
+                // Sanity: only refuse when the SIZE of the new union has
+                // ballooned compared to the initial outline (anchor
+                // element became a screen-sized container). Position
+                // can move arbitrarily far — that's the whole point of
+                // following scroll, no matter how far the user scrolled.
                 var initial = pair.OutlineRectInitial;
                 if (initial.Width > 0)
                 {
                     var initArea = Math.Max(1L, (long)initial.Width * initial.Height);
                     var uArea = (long)union.Width * union.Height;
-                    var overlaps = union.X < initial.Right + initial.Width
-                                && union.X + union.Width > initial.X - initial.Width
-                                && union.Y < initial.Bottom + initial.Height
-                                && union.Y + union.Height > initial.Y - initial.Height;
-                    if (!overlaps || uArea > initArea * 16) return;
+                    if (uArea > initArea * 16) return; // ballooned anchor
                 }
                 pair.Outline.MoveTo(union);
                 pair.Badge.MoveTo(union);
