@@ -125,7 +125,7 @@ public sealed class WhiteboardOverlayHost : IAsyncInitializer, IAsyncDisposable
                         else u = u.Union(b);
                     }
                     return u;
-                }).WaitAsync(TimeSpan.FromMilliseconds(150));
+                }).WaitAsync(TimeSpan.FromMilliseconds(50));
             }
             catch { return; }
 
@@ -133,18 +133,15 @@ public sealed class WhiteboardOverlayHost : IAsyncInitializer, IAsyncDisposable
             {
                 if (_disposed) return;
                 if (!_overlays.Contains(pair)) return;
-                if (union.Width <= 0 || union.Height <= 0) return;
-                // Sanity: only refuse when the SIZE of the new union has
-                // ballooned compared to the initial outline (anchor
-                // element became a screen-sized container). Position
-                // can move arbitrarily far — that's the whole point of
-                // following scroll, no matter how far the user scrolled.
-                var initial = pair.OutlineRectInitial;
-                if (initial.Width > 0)
+                // Pin-style: just trust the live bounds. Sanity caps
+                // were rejecting legitimate updates after the user
+                // scrolled past one screen height — outline got stuck.
+                // Hide on 0×0 (same as Pin), otherwise just MoveTo.
+                if (union.Width <= 0 || union.Height <= 0)
                 {
-                    var initArea = Math.Max(1L, (long)initial.Width * initial.Height);
-                    var uArea = (long)union.Width * union.Height;
-                    if (uArea > initArea * 16) return; // ballooned anchor
+                    pair.Outline.Hide();
+                    pair.Badge.HideIfCollapsed();
+                    return;
                 }
                 pair.Outline.MoveTo(union);
                 pair.Badge.MoveTo(union);

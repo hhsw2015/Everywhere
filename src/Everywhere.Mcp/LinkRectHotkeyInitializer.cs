@@ -20,7 +20,6 @@ public sealed class LinkRectHotkeyInitializer : IAsyncInitializer
     private readonly IShortcutListener _shortcutListener;
     private readonly IVisualElementContext _visualContext;
     private readonly ContextStashWriter _contextWriter;
-    private readonly LinkRectStash _linkRectStash;
     private readonly ILogger<LinkRectHotkeyInitializer> _logger;
     private readonly Lock _syncLock = new();
 
@@ -34,14 +33,12 @@ public sealed class LinkRectHotkeyInitializer : IAsyncInitializer
         IShortcutListener shortcutListener,
         IVisualElementContext visualContext,
         ContextStashWriter contextWriter,
-        LinkRectStash linkRectStash,
         ILogger<LinkRectHotkeyInitializer> logger)
     {
         _settings = settings;
         _shortcutListener = shortcutListener;
         _visualContext = visualContext;
         _contextWriter = contextWriter;
-        _linkRectStash = linkRectStash;
         _logger = logger;
     }
 
@@ -124,19 +121,13 @@ public sealed class LinkRectHotkeyInitializer : IAsyncInitializer
             try
             {
                 var sw = System.Diagnostics.Stopwatch.StartNew();
-                // Pin-style UX: paint the outline + ➕ the moment the
-                // user releases the drag. The harvest task continues
-                // populating links in the background; SnapshotContext
-                // sees both rect and links once both are ready.
-                Action<Avalonia.PixelRect> rectCommitted = rect =>
-                {
-                    _logger.LogInformation(
-                        "LinkRect rectCommitted callback fired: rect=({X},{Y},{W}x{H})",
-                        rect.X, rect.Y, rect.Width, rect.Height);
-                    try { _linkRectStash.SetRect(rect); }
-                    catch (Exception ex) { _logger.LogWarning(ex, "LinkRectStash.SetRect failed"); }
-                };
-                var result = await _visualContext.HarvestLinksAsync(rectCommitted, CancellationToken.None);
+                // Rolled back to pre-v0.9.183 flow: harvest → ship to
+                // agent immediately, no outline / ➕ / deferred stash.
+                // The annotation path on LinkRect introduced accuracy
+                // and timing regressions that the user couldn't accept;
+                // until the underlying AX limits on Chromium webviews
+                // can be solved, this channel stays "fire and forget".
+                var result = await _visualContext.HarvestLinksAsync(CancellationToken.None);
                 sw.Stop();
                 var links = result.Links ?? Array.Empty<HarvestedLink>();
                 _logger.LogInformation(
@@ -144,49 +135,18 @@ public sealed class LinkRectHotkeyInitializer : IAsyncInitializer
                     sw.ElapsedMilliseconds, links.Count, result.Canceled);
                 if (result.Canceled)
                 {
-                    // User pressed Esc / right-click — keep the user in
-                    // their current app, no agent activation.
                     return;
                 }
                 if (links.Count == 0)
                 {
                     _logger.LogInformation("LinkRect: rect produced no navigable hyperlinks");
-                    // Bring the agent app to front anyway so users get
-                    // visible feedback when their rect only covered
-                    // javascript: anchors (most row-click sites). Without
-                    // this the hotkey looks broken when AX simply had
-                    // nothing navigable to give.
                     _contextWriter.ActivateAgent();
                     return;
                 }
-                // Per-link Debug rows are gated on logger level — building
-                // the strings for hundreds of anchors is wasted work when
-                // logger is at Info and the message will be discarded.
-                if (_logger.IsEnabled(LogLevel.Debug))
-                {
-                    var cap = Math.Min(links.Count, 50);
-                    for (var i = 0; i < cap; i++)
-                    {
-                        var h = links[i];
-                        _logger.LogDebug("LinkRect[{I}] bbox=({X},{Y},{W}x{H}) title=\"{T}\" url={U}",
-                            i, h.Bounds.X, h.Bounds.Y, h.Bounds.Width, h.Bounds.Height,
-                            h.Title, h.Url);
-                    }
-                    if (links.Count > cap)
-                        _logger.LogDebug("LinkRect: {Extra} additional links omitted from debug log", links.Count - cap);
-                }
-                // Per the v0.9.183 UX-consistency pass, LinkRect harvests
-                // land in LinkRectStash and wait for SnapshotContext to
-                // ship — same model as Pin / Whiteboard. The user gets a
-                // ➕ overlay over the rect and can annotate before
-                // shipping. CaptureLinksAsync's old immediate-ship path
-                // is unused now but kept on the writer for the moment in
-                // case external callers depend on it.
-                // Append (not Set) — the SetRect call from rectCommitted
-                // already created the entry and showed the overlay; we
-                // just fill in the link list once harvest finishes.
-                _linkRectStash.AppendLinks(links);
-                _logger.LogInformation("LinkRect harvest done: {Count} links appended (deferred ship)", links.Count);
+                var pairs = new List<(string Title, string Url)>(links.Count);
+                foreach (var h in links) pairs.Add((h.Title, h.Url));
+                await _contextWriter.CaptureLinksAsync(pairs);
+                _logger.LogInformation("LinkRect stash filled with {Count} links (immediate ship)", links.Count);
             }
             catch (Exception ex)
             {

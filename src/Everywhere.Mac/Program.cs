@@ -172,8 +172,6 @@ public static class Program
                 .AddTransient<IAsyncInitializer>(sp => sp.GetRequiredService<Everywhere.Mcp.AnnotationOverlay.AnnotationOverlayHost>())
                 .AddSingleton<Everywhere.Mcp.AnnotationOverlay.WhiteboardOverlayHost>()
                 .AddTransient<IAsyncInitializer>(sp => sp.GetRequiredService<Everywhere.Mcp.AnnotationOverlay.WhiteboardOverlayHost>())
-                .AddSingleton<Everywhere.Mcp.AnnotationOverlay.LinkRectOverlayHost>()
-                .AddTransient<IAsyncInitializer>(sp => sp.GetRequiredService<Everywhere.Mcp.AnnotationOverlay.LinkRectOverlayHost>())
 
             #endregion
 
