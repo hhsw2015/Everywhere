@@ -329,13 +329,13 @@ public sealed class ContextStashWriter
                 {
                     foreach (var h in linkRectLinks)
                     {
-                        var url = (h.Url ?? string.Empty).Trim();
-                        if (url.Length == 0 || url.Length > MaxUrlLen) continue;
-                        if (!IsAllowedScheme(url)) continue;
-                        if (!seen.Add(url)) continue;
-                        var title = (h.Title ?? string.Empty).Trim();
-                        if (title.Length > MaxTitleLen) title = title[..MaxTitleLen];
-                        merged.Add(new PickedLink(url, title.Length > 0 ? title : url));
+                        var lrUrl = (h.Url ?? string.Empty).Trim();
+                        if (lrUrl.Length == 0 || lrUrl.Length > MaxUrlLen) continue;
+                        if (!IsAllowedScheme(lrUrl)) continue;
+                        if (!seen.Add(lrUrl)) continue;
+                        var lrTitle = (h.Title ?? string.Empty).Trim();
+                        if (lrTitle.Length > MaxTitleLen) lrTitle = lrTitle[..MaxTitleLen];
+                        merged.Add(new PickedLink(lrUrl, lrTitle.Length > 0 ? lrTitle : lrUrl));
                         if (merged.Count >= MaxLinks) break;
                     }
                 }
