@@ -25,6 +25,7 @@ public sealed class LinkRectOverlayHost : IAsyncInitializer, IAsyncDisposable
     private readonly AnnotationStash _annotationStash;
     private readonly ContextStashWriter _contextStashWriter;
     private readonly IWindowHelper _windowHelper;
+    private readonly IVisualElementContext _visualContext;
     private readonly ILogger<LinkRectOverlayHost> _logger;
 
     private HarvestOverlayPair? _current;
@@ -32,6 +33,7 @@ public sealed class LinkRectOverlayHost : IAsyncInitializer, IAsyncDisposable
     private Action<IReadOnlyList<HarvestedLink>>? _harvestedHandler;
     private Action? _captureCompletedHandler;
     private Action? _clearedHandler;
+    private DispatcherTimer? _followTimer;
     private volatile bool _disposed;
 
     public LinkRectOverlayHost(
@@ -39,12 +41,14 @@ public sealed class LinkRectOverlayHost : IAsyncInitializer, IAsyncDisposable
         AnnotationStash annotationStash,
         ContextStashWriter contextStashWriter,
         IWindowHelper windowHelper,
+        IVisualElementContext visualContext,
         ILogger<LinkRectOverlayHost> logger)
     {
         _linkRectStash = linkRectStash;
         _annotationStash = annotationStash;
         _contextStashWriter = contextStashWriter;
         _windowHelper = windowHelper;
+        _visualContext = visualContext;
         _logger = logger;
     }
 
@@ -64,12 +68,79 @@ public sealed class LinkRectOverlayHost : IAsyncInitializer, IAsyncDisposable
         _clearedHandler = OnCleared;
         _linkRectStash.Cleared += _clearedHandler;
 
+        if (Dispatcher.UIThread.CheckAccess())
+        {
+            StartFollowTimer();
+        }
+        else
+        {
+            Dispatcher.UIThread.Post(StartFollowTimer);
+        }
+
         _logger.LogInformation("LinkRectOverlayHost subscribed");
         return Task.CompletedTask;
     }
 
+    private void StartFollowTimer()
+    {
+        _followTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(50) };
+        _followTimer.Tick += OnFollowTick;
+        _followTimer.Start();
+    }
+
+    private void OnFollowTick(object? sender, EventArgs e)
+    {
+        if (_disposed) return;
+        var pair = _current;
+        if (pair?.Anchor is null) return;
+        _ = RefreshAsync(pair);
+    }
+
+    private async Task RefreshAsync(HarvestOverlayPair pair)
+    {
+        if (Interlocked.CompareExchange(ref pair.RefreshInFlight, 1, 0) != 0) return;
+        try
+        {
+            var anchor = pair.Anchor;
+            if (anchor is null) return;
+            PixelRect rect;
+            try
+            {
+                rect = await Task.Run(() => anchor.BoundingRectangleLive)
+                    .WaitAsync(TimeSpan.FromMilliseconds(50));
+            }
+            catch
+            {
+                return;
+            }
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                if (_disposed || _current != pair) return;
+                if (rect.Width <= 0 || rect.Height <= 0)
+                {
+                    pair.Outline.Hide();
+                    pair.Badge.HideIfCollapsed();
+                    return;
+                }
+                pair.Outline.MoveTo(rect);
+                pair.Badge.MoveTo(rect);
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "LinkRect follow refresh failed");
+        }
+        finally
+        {
+            Interlocked.Exchange(ref pair.RefreshInFlight, 0);
+        }
+    }
+
     private void OnRectCommitted(PixelRect rect)
     {
+        _logger.LogDebug(
+            "LinkRectOverlayHost.OnRectCommitted fired: rect=({X},{Y},{W}x{H})",
+            rect.X, rect.Y, rect.Width, rect.Height);
         Dispatcher.UIThread.Post(() =>
         {
             if (_disposed) return;
@@ -85,6 +156,44 @@ public sealed class LinkRectOverlayHost : IAsyncInitializer, IAsyncDisposable
                     return;
                 }
 
+                // Pick-style anchor: hit-test the rect's centre to grab
+                // the element under it. The follow timer then keeps the
+                // outline tracking that element (not the screen rect),
+                // so the outline scrolls with the page just like Pin.
+                IVisualElement? anchor = null;
+                try
+                {
+                    var cand = _visualContext.ElementFromPoint(
+                        new PixelPoint(rect.X + rect.Width / 2, rect.Y + rect.Height / 2));
+                    if (cand is not null)
+                    {
+                        // Sanity: candidate must overlap the drag rect AND
+                        // be no more than 4× its area. ElementFromPoint can
+                        // legitimately return a window container whose
+                        // BoundingRectangle would drag the outline far away
+                        // from where the user actually pointed.
+                        try
+                        {
+                            var b = cand.BoundingRectangle;
+                            var dragArea = (long)rect.Width * (long)rect.Height;
+                            var maxArea = Math.Max(dragArea * 4, 100_000);
+                            var area = (long)b.Width * (long)b.Height;
+                            var intersects = b.Width > 0 && b.Height > 0
+                                && b.X < rect.Right && b.X + b.Width > rect.X
+                                && b.Y < rect.Bottom && b.Y + b.Height > rect.Y;
+                            if (intersects && area <= maxArea) anchor = cand;
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogDebug(ex, "LinkRect anchor sanity check failed; using rect-only");
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogDebug(ex, "LinkRect ElementFromPoint failed at rect centre");
+                }
+
                 AnnotationOutlineWindow? outline = null;
                 AnnotationOverlayWindow? badge = null;
                 try
@@ -94,10 +203,10 @@ public sealed class LinkRectOverlayHost : IAsyncInitializer, IAsyncDisposable
                     _windowHelper.ConfigureAsCursorOverlay(outline);
 
                     badge = new AnnotationOverlayWindow();
-                    // Links are not yet harvested — start with an empty
-                    // list. OnHarvested upgrades the pair when AX scan
-                    // finishes.
-                    var pair = new HarvestOverlayPair(Array.Empty<HarvestedLink>(), outline, badge);
+                    var pair = new HarvestOverlayPair(Array.Empty<HarvestedLink>(), outline, badge)
+                    {
+                        Anchor = anchor,
+                    };
                     pair.CommittedHandler = (_, body) => OnCommitted(pair, body);
                     pair.ClearedHandler = (_, _) => OnBadgeCleared(pair);
                     badge.Committed += pair.CommittedHandler;
@@ -258,19 +367,24 @@ public sealed class LinkRectOverlayHost : IAsyncInitializer, IAsyncDisposable
         }
         // Process exiting; preserve any in-flight stash entry — let the
         // SnapshotContext drain logic decide whether to ship.
-        await Dispatcher.UIThread.InvokeAsync(() => TearDownCurrent(removeAnnotation: false));
+        await Dispatcher.UIThread.InvokeAsync(() =>
+        {
+            _followTimer?.Stop();
+            _followTimer = null;
+            TearDownCurrent(removeAnnotation: false);
+        });
     }
 
     private sealed class HarvestOverlayPair
     {
-        // Mutable: starts empty when the rect-only overlay appears,
-        // upgraded by OnHarvested once the AX scan finishes.
         public IReadOnlyList<HarvestedLink> Links { get; set; }
         public AnnotationOutlineWindow Outline { get; }
         public AnnotationOverlayWindow Badge { get; }
         public AnnotationItem? LastItem { get; set; }
         public EventHandler<string>? CommittedHandler { get; set; }
         public EventHandler? ClearedHandler { get; set; }
+        public IVisualElement? Anchor { get; set; }
+        public int RefreshInFlight; // 0 = idle, 1 = in flight
 
         public HarvestOverlayPair(
             IReadOnlyList<HarvestedLink> links,

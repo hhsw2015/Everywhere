@@ -130,8 +130,11 @@ public sealed class LinkRectHotkeyInitializer : IAsyncInitializer
                 // sees both rect and links once both are ready.
                 Action<Avalonia.PixelRect> rectCommitted = rect =>
                 {
+                    _logger.LogInformation(
+                        "LinkRect rectCommitted callback fired: rect=({X},{Y},{W}x{H})",
+                        rect.X, rect.Y, rect.Width, rect.Height);
                     try { _linkRectStash.SetRect(rect); }
-                    catch (Exception ex) { _logger.LogDebug(ex, "LinkRectStash.SetRect failed"); }
+                    catch (Exception ex) { _logger.LogWarning(ex, "LinkRectStash.SetRect failed"); }
                 };
                 var result = await _visualContext.HarvestLinksAsync(rectCommitted, CancellationToken.None);
                 sw.Stop();

@@ -489,19 +489,26 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
                                                     ref sessionImageCount, ref sessionImageBytes,
                                                     out var fallbackImage))
                     {
-                        // Run OCR on the gesture rect even on the rejected
-                        // path — the cropped image may contain rasterized
-                        // text the agent should be able to reason over.
                         var fallbackOcr = RunOcrForRegion(ocrBitmap, ocrBitmapBounds, ann.BoundingRect);
+                        // Pick-style anchor: hit-test a representative
+                        // point inside the gesture so the host overlay
+                        // can follow that element on scroll. Arrow uses
+                        // the tip (last stroke endpoint), Circle/X uses
+                        // the gesture rect's centre.
+                        var anchorElement = ResolveFallbackAnchor(ann, annStrokes);
+                        var leaves = anchorElement is null
+                            ? Array.Empty<IVisualElement>()
+                            : new[] { anchorElement };
                         _logger.LogInformation(
-                            "Whiteboard region fallback image: id={Id} bbox=({X},{Y},{W}x{H}) ocrLines={Ocr}",
+                            "Whiteboard region fallback image: id={Id} bbox=({X},{Y},{W}x{H}) ocrLines={Ocr} anchor={Anchor}",
                             fallbackImage.ImageId,
                             fallbackImage.Bbox.X, fallbackImage.Bbox.Y,
                             fallbackImage.Bbox.Width, fallbackImage.Bbox.Height,
-                            fallbackOcr.Count);
+                            fallbackOcr.Count,
+                            anchorElement?.Type.ToString() ?? "<none>");
                         regions.Add(new WhiteboardRegion(
                             ann.Kind, ann.BoundingRect,
-                            Array.Empty<IVisualElement>(), 0.3,
+                            leaves, 0.3,
                             fallbackOcr,
                             new[] { fallbackImage }));
                     }
@@ -1188,6 +1195,68 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
         if (string.IsNullOrEmpty(s)) return "";
         var t = s.Replace('\n', ' ').Replace('\r', ' ');
         return t.Length > max ? t.Substring(0, max) + "…" : t;
+    }
+
+    private IVisualElement? ResolveFallbackAnchor(Annotation ann, IReadOnlyList<Stroke> strokes)
+    {
+        // Arrow direction-agnostic: try BOTH endpoints (per AnnotationSnapper.SnapArrow's note —
+        // users draw arrows in either direction), plus the gesture centre as a last resort.
+        // Pick the candidate whose hit-test element is "best" — smallest sane bbox that
+        // intersects ann.BoundingRect. Anything bigger than 4× the gesture rect is likely a
+        // window/scrollview container and is rejected.
+        var probes = new List<(double X, double Y)>();
+        if (ann.Kind == AnnotationKind.Arrow && strokes.Count > 0)
+        {
+            foreach (var s in strokes)
+            {
+                if (s.Points.Count == 0) continue;
+                var first = s.Points[0];
+                var last = s.Points[^1];
+                probes.Add((first.X, first.Y));
+                if (s.Points.Count > 1) probes.Add((last.X, last.Y));
+            }
+        }
+        probes.Add((ann.BoundingRect.Center.X, ann.BoundingRect.Center.Y));
+
+        IVisualElement? best = null;
+        long bestArea = long.MaxValue;
+        var gestureArea = (long)ann.BoundingRect.Width * (long)ann.BoundingRect.Height;
+        var maxArea = Math.Max(gestureArea * 4, 100_000); // tolerate up-to-4× gesture, no smaller cap than ~100k px²
+        foreach (var (px, py) in probes)
+        {
+            IVisualElement? cand;
+            try
+            {
+                cand = _visualContext.ElementFromPoint(new PixelPoint((int)Math.Round(px), (int)Math.Round(py)));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "ResolveFallbackAnchor: ElementFromPoint failed at ({X},{Y})", px, py);
+                continue;
+            }
+            if (cand is null) continue;
+            PixelRect b;
+            try { b = cand.BoundingRectangle; }
+            catch { continue; }
+            if (b.Width <= 0 || b.Height <= 0) continue;
+            // Sanity: reject containers that don't actually overlap the gesture.
+            if (!RectsIntersect(b, ann.BoundingRect)) continue;
+            var area = (long)b.Width * (long)b.Height;
+            if (area > maxArea) continue;
+            if (area < bestArea)
+            {
+                best = cand;
+                bestArea = area;
+            }
+        }
+        return best;
+    }
+
+    private static bool RectsIntersect(PixelRect a, Rect b)
+    {
+        var ax2 = a.X + a.Width;
+        var ay2 = a.Y + a.Height;
+        return a.X < b.Right && ax2 > b.X && a.Y < b.Bottom && ay2 > b.Y;
     }
 
     private PixelRect SafeBounds(IVisualElement element)

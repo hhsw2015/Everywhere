@@ -11,12 +11,13 @@ namespace Everywhere.Mcp.AnnotationOverlay;
 
 /// <summary>
 /// Mirrors <see cref="AnnotationOverlayHost"/> but for the whiteboard
-/// channel. Each freshly-drawn region gets its own outline + ➕ pair,
-/// snapped to the screen rect of the user's gesture (or, for arrow
-/// gestures, the union bbox of the leaves the arrow points at). Regions
-/// don't move — gestures are static once drawn — so this host has no
-/// follow timer; outlines are shown once at Drawn-event time and torn
-/// down on SnapshotContext / ClearStash.
+/// channel. Each freshly-drawn region gets its own outline + ➕ pair.
+/// When the region carries at least one leaf element, the host runs the
+/// same 50ms follow loop as the Pin path: outline tracks the leaf's
+/// BoundingRectangleLive so it stays anchored as the user scrolls. When
+/// the region has no leaves (Chromium webview fallback path), the
+/// outline anchors to the gesture rect and is static — best we can do
+/// without an a11y handle.
 /// </summary>
 public sealed class WhiteboardOverlayHost : IAsyncInitializer, IAsyncDisposable
 {
@@ -30,6 +31,7 @@ public sealed class WhiteboardOverlayHost : IAsyncInitializer, IAsyncDisposable
     private Action<IReadOnlyList<WhiteboardRegion>>? _drawnHandler;
     private Action? _captureCompletedHandler;
     private Action? _clearedHandler;
+    private DispatcherTimer? _followTimer;
     private volatile bool _disposed;
 
     public WhiteboardOverlayHost(
@@ -59,8 +61,82 @@ public sealed class WhiteboardOverlayHost : IAsyncInitializer, IAsyncDisposable
         _clearedHandler = OnCleared;
         _whiteboardStash.Cleared += _clearedHandler;
 
+        // Synchronous timer init avoids a race where Drawn fires before
+        // the timer Post executes, leaving regions without follow-tracking
+        // until the dispatcher catches up.
+        if (Dispatcher.UIThread.CheckAccess())
+        {
+            StartFollowTimer();
+        }
+        else
+        {
+            Dispatcher.UIThread.Post(StartFollowTimer);
+        }
+
         _logger.LogInformation("WhiteboardOverlayHost subscribed");
         return Task.CompletedTask;
+    }
+
+    private void StartFollowTimer()
+    {
+        _followTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(50) };
+        _followTimer.Tick += OnFollowTick;
+        _followTimer.Start();
+    }
+
+    private void OnFollowTick(object? sender, EventArgs e)
+    {
+        if (_disposed) return;
+        if (_overlays.Count == 0) return;
+        foreach (var pair in _overlays)
+        {
+            if (pair.Region.Leaves.Count == 0) continue;
+            _ = RefreshPairAsync(pair);
+        }
+    }
+
+    private async Task RefreshPairAsync(RegionOverlayPair pair)
+    {
+        if (Interlocked.CompareExchange(ref pair.RefreshInFlight, 1, 0) != 0) return;
+        try
+        {
+            var leaf = pair.Region.Leaves[0];
+            PixelRect rect;
+            try
+            {
+                rect = await Task.Run(() => leaf.BoundingRectangleLive)
+                    .WaitAsync(TimeSpan.FromMilliseconds(50));
+            }
+            catch
+            {
+                return;
+            }
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                if (_disposed) return;
+                // Pair may have been torn down (ManualCaptureCompleted /
+                // Cleared) while the AX query was in flight. Skip if the
+                // pair is no longer in _overlays — Outline/Badge would
+                // have been Close()d and any further call throws.
+                if (!_overlays.Contains(pair)) return;
+                if (rect.Width <= 0 || rect.Height <= 0)
+                {
+                    pair.Outline.Hide();
+                    pair.Badge.HideIfCollapsed();
+                    return;
+                }
+                pair.Outline.MoveTo(rect);
+                pair.Badge.MoveTo(rect);
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Whiteboard follow refresh failed");
+        }
+        finally
+        {
+            Interlocked.Exchange(ref pair.RefreshInFlight, 0);
+        }
     }
 
     private void OnDrawn(IReadOnlyList<WhiteboardRegion> regions)
@@ -128,18 +204,17 @@ public sealed class WhiteboardOverlayHost : IAsyncInitializer, IAsyncDisposable
     }
 
     /// <summary>
-    /// Arrow gesture's ➕ should anchor on what the arrow POINTS AT — the
-    /// union bbox of its leaves — not the arrow stroke itself. Circle / X
-    /// use the gesture rect: that IS the highlighted region. Both leaves'
-    /// BoundingRectangle and the gesture rect live in the SAME coordinate
-    /// space (DIP/points on macOS, physical px on Windows — they match
-    /// because WhiteboardOverlay.Commit emits stroke points in
-    /// IVisualElement.BoundingRectangle's space; see WhiteboardOverlay.cs
-    /// L343-355). No scaling here.
+    /// Anchor rect resolution. When the region carries leaves, use their
+    /// union bbox — that's the actual element the user pointed at, and
+    /// the follow timer will keep it tracking. When there are no leaves
+    /// (extreme fallback path), use the gesture rect.
+    /// Both leaves' BoundingRectangle and the gesture rect live in the
+    /// SAME coordinate space (DIP/points on macOS, physical px on
+    /// Windows; see WhiteboardOverlay.Commit's coord-space note).
     /// </summary>
     private PixelRect ResolveAnchorRect(WhiteboardRegion region)
     {
-        if (region.Kind == AnnotationKind.Arrow && region.Leaves.Count > 0)
+        if (region.Leaves.Count > 0)
         {
             var union = default(PixelRect);
             var first = true;
@@ -288,7 +363,12 @@ public sealed class WhiteboardOverlayHost : IAsyncInitializer, IAsyncDisposable
             _whiteboardStash.Cleared -= _clearedHandler;
             _clearedHandler = null;
         }
-        await Dispatcher.UIThread.InvokeAsync(() => TearDown(removeAnnotations: false));
+        await Dispatcher.UIThread.InvokeAsync(() =>
+        {
+            _followTimer?.Stop();
+            _followTimer = null;
+            TearDown(removeAnnotations: false);
+        });
     }
 
     private sealed class RegionOverlayPair
@@ -299,6 +379,7 @@ public sealed class WhiteboardOverlayHost : IAsyncInitializer, IAsyncDisposable
         public AnnotationItem? LastItem { get; set; }
         public EventHandler<string>? CommittedHandler { get; set; }
         public EventHandler? ClearedHandler { get; set; }
+        public int RefreshInFlight; // 0 = idle, 1 = refresh in progress
 
         public RegionOverlayPair(
             WhiteboardRegion region,
