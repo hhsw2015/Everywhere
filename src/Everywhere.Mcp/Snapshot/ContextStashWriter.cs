@@ -35,6 +35,18 @@ public sealed class ContextStashWriter
     private readonly PickStash _pickStash;
     private readonly WhiteboardStash _whiteboardStash;
     private readonly AnnotationStash _annotationStash;
+
+    /// <summary>
+    /// Raised exactly once per successful manual capture (the user
+    /// pressed SnapshotContext / LinkRect harvest, the ctx file was
+    /// written, the agent app was activated). Lets UI overlays
+    /// (e.g. the annotation ➕ badge) know the user just shipped
+    /// their context and they should clean up their floating state.
+    ///
+    /// NOT raised on auto-captures driven by pin / whiteboard events —
+    /// those don't activate the agent, so the badge should stay put.
+    /// </summary>
+    public event Action? ManualCaptureCompleted;
     private readonly IAppActivator _appActivator;
     private readonly IInputSimulator _input;
     private readonly IClipboardReader _clipboard;
@@ -187,6 +199,7 @@ public sealed class ContextStashWriter
             _annotationStash.Consume(annoSource);
             _logger.LogInformation("Context stash captured {Count} links from {App}.", picked.Count, appKey);
             ActivateAgentApp();
+            ManualCaptureCompleted?.Invoke();
         }
         finally
         {
@@ -307,7 +320,11 @@ public sealed class ContextStashWriter
             // NOT raise the agent app — the user just pinned an element,
             // they are still working in the source app, switching their
             // window out from under them is a surprise.
-            if (drainAnnotations) ActivateAgentApp();
+            if (drainAnnotations)
+            {
+                ActivateAgentApp();
+                ManualCaptureCompleted?.Invoke();
+            }
         }
         catch (OperationCanceledException)
         {

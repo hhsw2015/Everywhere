@@ -267,13 +267,10 @@ public class AnnotationOverlayWindow : Window
 
     private void OnTextBoxLostFocus(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
     {
-        // Defer one tick so the user clicking the same window (e.g.
-        // re-focusing the textarea via mouse) doesn't immediately
-        // collapse.
-        Dispatcher.UIThread.Post(() =>
-        {
-            if (_expanded && !_textBox.IsFocused) Collapse();
-        });
+        // Intentionally do NOT collapse on blur. Users frequently click
+        // a different window to look something up mid-thought and come
+        // back to finish typing. Esc / Cmd+Enter / clicking ➕ are the
+        // explicit dismiss paths; blur is not.
     }
 
     private void RestartAutoHide()

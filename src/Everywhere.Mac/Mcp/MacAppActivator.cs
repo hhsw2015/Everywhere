@@ -128,6 +128,23 @@ public sealed class MacAppActivator : IAppActivator
         return false;
     }
 
+    public int FrontmostProcessId()
+    {
+        try
+        {
+            var ws = objc_msgSend_get(objc_getClass("NSWorkspace"),
+                                       sel_registerName("sharedWorkspace"));
+            if (ws == 0) return 0;
+            var frontmost = objc_msgSend_get(ws, sel_registerName("frontmostApplication"));
+            if (frontmost == 0) return 0;
+            return objc_msgSend_pid(frontmost, sel_registerName("processIdentifier"));
+        }
+        catch
+        {
+            return 0;
+        }
+    }
+
     public bool IsFrontmost(string appIdentifier)
     {
         if (string.IsNullOrWhiteSpace(appIdentifier)) return false;

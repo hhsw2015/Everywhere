@@ -21,6 +21,14 @@ public interface IAppActivator
     bool IsFrontmost(string appIdentifier) => false;
 
     /// <summary>
+    /// Returns the OS process id of the current frontmost application,
+    /// or 0 when the platform doesn't expose it. Used by overlays that
+    /// auto-hide when the user switches away from the app whose element
+    /// they were anchored to.
+    /// </summary>
+    int FrontmostProcessId() => 0;
+
+    /// <summary>
     /// True when this implementation can actually answer
     /// <see cref="IsFrontmost"/>. Callers that gate keyboard injection
     /// on frontmost-confirmation use this to skip the entire wait loop
