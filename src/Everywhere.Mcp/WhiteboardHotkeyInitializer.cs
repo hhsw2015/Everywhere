@@ -414,9 +414,20 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
             int sessionImageCount = 0;
             long sessionImageBytes = 0;
             var snapTrace = new List<(Annotation Ann, SnapResult Snap)>();
+            // Resolve focusedRoot bounds ONCE per commit. Each
+            // BoundingRectangle on Mac is a sync cross-process AX call;
+            // the empty-bbox decision doesn't change between annotations
+            // in the same batch.
+            var rootBounds = SafeBounds(focusedRoot);
+            var rootBoundsEmpty = rootBounds.Width <= 0 || rootBounds.Height <= 0;
             _logger.LogInformation(
                 "Whiteboard snap context: focusedRoot bbox={FrootBbox}, ocrBitmap bbox={OcrBbox}",
-                focusedRoot.BoundingRectangle, ocrBitmapBounds);
+                rootBounds, ocrBitmapBounds);
+            if (rootBoundsEmpty)
+            {
+                _logger.LogInformation(
+                    "Whiteboard snap will be skipped for all annotations in this batch — focusedRoot has empty bounds (chromium webview anchor)");
+            }
             for (var ai = 0; ai < annotations.Count; ai++)
             {
                 var ann = annotations[ai];
@@ -436,7 +447,26 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
                 // snapper, NOT all strokes — otherwise endpoints from
                 // unrelated gestures contaminate SnapArrow's "nearest
                 // text" lookup and SnapUnderline's strokeTop/Bottom.
-                var snap = AnnotationSnapper.Snap(ann, focusedRoot, annStrokes);
+                // Short-circuit when focusedRoot has degenerate bounds
+                // (hoisted check from outside the loop). Chromium webview
+                // anchors (Arc / Brave Hyperlink) give us a 0×0 root
+                // whose Descendants() walk does thousands of sync AX IPCs
+                // — 30+ seconds, looks like a freeze. Producing a
+                // pre-rejected SnapResult skips the walk; the Arrow /
+                // Circle / X fallback below turns ann.BoundingRect into
+                // an image region so the user still gets outline + ➕
+                // within ms.
+                SnapResult snap;
+                if (rootBoundsEmpty)
+                {
+                    snap = new SnapResult(ann.BoundingRect, [],
+                        Rejected: true,
+                        RejectReason: "focusedRoot has empty bounds (chromium webview anchor)");
+                }
+                else
+                {
+                    snap = AnnotationSnapper.Snap(ann, focusedRoot, annStrokes);
+                }
                 snapTrace.Add((ann, snap));
                 if (!string.IsNullOrEmpty(snap.Diagnostics))
                     _logger.LogInformation("Whiteboard snap diag ({Kind}): {Diag}",
@@ -1158,6 +1188,16 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
         if (string.IsNullOrEmpty(s)) return "";
         var t = s.Replace('\n', ' ').Replace('\r', ' ');
         return t.Length > max ? t.Substring(0, max) + "…" : t;
+    }
+
+    private PixelRect SafeBounds(IVisualElement element)
+    {
+        try { return element.BoundingRectangle; }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Whiteboard SafeBounds: BoundingRectangle threw, treating as empty");
+            return default;
+        }
     }
 }
 
