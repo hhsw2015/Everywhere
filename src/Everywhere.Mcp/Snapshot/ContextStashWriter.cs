@@ -34,6 +34,7 @@ public sealed class ContextStashWriter
     private readonly SelectionCache _selectionCache;
     private readonly PickStash _pickStash;
     private readonly WhiteboardStash _whiteboardStash;
+    private readonly LinkRectStash _linkRectStash;
     private readonly AnnotationStash _annotationStash;
 
     /// <summary>
@@ -60,6 +61,7 @@ public sealed class ContextStashWriter
         SelectionCache selectionCache,
         PickStash pickStash,
         WhiteboardStash whiteboardStash,
+        LinkRectStash linkRectStash,
         AnnotationStash annotationStash,
         IAppActivator appActivator,
         IInputSimulator input,
@@ -72,6 +74,7 @@ public sealed class ContextStashWriter
         _selectionCache = selectionCache;
         _pickStash = pickStash;
         _whiteboardStash = whiteboardStash;
+        _linkRectStash = linkRectStash;
         _annotationStash = annotationStash;
         _appActivator = appActivator;
         _input = input;
@@ -88,11 +91,13 @@ public sealed class ContextStashWriter
     /// </summary>
     public void ClearStash()
     {
-        // ClearWithEvent (not Clear) so AnnotationOverlayHost gets the
-        // Cleared signal and tears down its outline + badge fleet. With
-        // plain Clear() the visual artifacts would linger after the user
+        // ClearWithEvent (not Clear) so the overlay hosts get the Cleared
+        // signal and tear down their outline + badge fleets. With plain
+        // Clear() the visual artifacts would linger after the user
         // pressed the wipe hotkey.
         try { _pickStash.ClearWithEvent(); } catch { }
+        try { _whiteboardStash.ClearWithEvent(); } catch { }
+        try { _linkRectStash.ClearWithEvent(); } catch { }
         foreach (var path in new[] { StashPath, StashPath + ".tmp" })
         {
             try { if (File.Exists(path)) File.Delete(path); }
@@ -290,6 +295,52 @@ public sealed class ContextStashWriter
             // the user just collected. Sentinel guard ensures arbitrary
             // clipboard text is never harvested.
             var clipboardLinks = TryReadXlbMultiPick();
+
+            // LinkRect stash: harvested links waiting for SnapshotContext
+            // to ship. Peek (don't Take) — we only consume the slot AFTER
+            // WriteAtomicAsync succeeds, so a write failure doesn't
+            // silently lose the user's harvest. Same drain-on-success
+            // pattern AnnotationStash uses below. Merged into PickedLinks
+            // alongside any clipboard multi-pick batch with the same
+            // defense-in-depth caps the immediate-ship path used:
+            // scheme allow-list, URL/title length caps, 200-link cap,
+            // case-insensitive URL dedup.
+            var linkRectLinks = drainAnnotations ? _linkRectStash.Peek() : null;
+            if (linkRectLinks is { Count: > 0 })
+            {
+                const int MaxLinks    = 200;
+                const int MaxUrlLen   = 2048;
+                const int MaxTitleLen = 200;
+                var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                var merged = new List<PickedLink>(MaxLinks);
+                if (clipboardLinks is not null)
+                {
+                    foreach (var p in clipboardLinks)
+                    {
+                        var u = (p.Url ?? string.Empty).Trim();
+                        if (u.Length == 0 || u.Length > MaxUrlLen) continue;
+                        if (!IsAllowedScheme(u)) continue;
+                        if (!seen.Add(u)) continue;
+                        merged.Add(p);
+                        if (merged.Count >= MaxLinks) break;
+                    }
+                }
+                if (merged.Count < MaxLinks)
+                {
+                    foreach (var h in linkRectLinks)
+                    {
+                        var url = (h.Url ?? string.Empty).Trim();
+                        if (url.Length == 0 || url.Length > MaxUrlLen) continue;
+                        if (!IsAllowedScheme(url)) continue;
+                        if (!seen.Add(url)) continue;
+                        var title = (h.Title ?? string.Empty).Trim();
+                        if (title.Length > MaxTitleLen) title = title[..MaxTitleLen];
+                        merged.Add(new PickedLink(url, title.Length > 0 ? title : url));
+                        if (merged.Count >= MaxLinks) break;
+                    }
+                }
+                clipboardLinks = merged;
+            }
             // Peek annotations now so we can include them in the payload,
             // but defer the actual Consume until after the on-disk write
             // succeeds (see CaptureLinksAsync for the same pattern). Auto
@@ -316,7 +367,14 @@ public sealed class ContextStashWriter
                 Annotations: annoPayload);
 
             await WriteAtomicAsync(FormatForHook(payload), cancellationToken);
-            if (drainAnnotations) _annotationStash.Consume(annoSource);
+            if (drainAnnotations)
+            {
+                _annotationStash.Consume(annoSource);
+                // LinkRect: drain only AFTER the on-disk write succeeds —
+                // a write failure leaves the harvest in the stash for the
+                // next capture instead of silently losing it.
+                if (linkRectLinks is { Count: > 0 }) _linkRectStash.Take();
+            }
             _logger.LogInformation("Context stash captured for {App} ({Title}).", appKey, topLevel?.Name);
 
             // drainAnnotations doubles as the "this is a manual user-driven

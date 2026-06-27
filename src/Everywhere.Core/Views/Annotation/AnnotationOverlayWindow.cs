@@ -23,7 +23,9 @@ namespace Everywhere.Views.Annotation;
 /// </summary>
 public class AnnotationOverlayWindow : Window
 {
-    private const int BadgeSize = 32;
+    // Badge size: shrunk from 32 → 24 per user feedback ("加号按钮可以
+    // 更小一点点"). Outline + popover proportions unchanged.
+    private const int BadgeSize = 24;
     private const int ExpandedWidth = 320;
     private const int ExpandedHeight = 110;
 
@@ -100,7 +102,7 @@ public class AnnotationOverlayWindow : Window
             BorderBrush = new SolidColorBrush(Color.FromArgb(0x66, 0xFF, 0xFF, 0xFF)),
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(BadgeSize / 2.0),
-            FontSize = 18,
+            FontSize = 14,
             FontWeight = FontWeight.Medium,
             Padding = new Thickness(0),
             Content = "+",

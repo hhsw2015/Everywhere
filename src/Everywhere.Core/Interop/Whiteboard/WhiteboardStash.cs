@@ -36,6 +36,13 @@ public sealed class WhiteboardStash
     /// </summary>
     public event Action<IReadOnlyList<WhiteboardRegion>>? Drawn;
 
+    /// <summary>
+    /// Raised when the user wipes the stash via ClearContextStash hotkey.
+    /// Lets WhiteboardOverlayHost tear down outlines + ➕ badges so the
+    /// visual state matches "no whiteboard pending".
+    /// </summary>
+    public event Action? Cleared;
+
     public void Set(IReadOnlyList<WhiteboardRegion> regions, TimeSpan? ttl = null)
     {
         ArgumentNullException.ThrowIfNull(regions);
@@ -200,6 +207,23 @@ public sealed class WhiteboardStash
             _current = null;
             _imageBytesById = null;
         }
+    }
+
+    /// <summary>
+    /// Like <see cref="Clear"/> but fires <see cref="Cleared"/> when there
+    /// was something to clear. Used by ContextStashWriter.ClearStash so
+    /// WhiteboardOverlayHost can drop its overlays.
+    /// </summary>
+    public void ClearWithEvent()
+    {
+        bool fire;
+        lock (_gate)
+        {
+            fire = _current is not null;
+            _current = null;
+            _imageBytesById = null;
+        }
+        if (fire) Cleared?.Invoke();
     }
 
     private sealed record Entry(

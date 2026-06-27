@@ -539,19 +539,14 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
                 // avoids a TOCTOU window between HasFreshWhiteboard and
                 // the mutation.
                 _whiteboardStash.Append(regions);
-                // Final commit — drop the cached root so a brand-new
-                // session next time starts fresh.
                 _sessionFocusedRoot = null;
                 _logger.LogInformation("Whiteboard stash filled with {Count} new region(s)", regions.Count);
                 TryDumpDebugBundle(strokes, ocrBitmap, ocrBitmapBounds, focusedRoot, snapTrace);
-                try
-                {
-                    await _contextWriter.CaptureAsync();
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "Whiteboard: ContextStashWriter.CaptureAsync failed");
-                }
+                // No immediate CaptureAsync: per the v0.9.183 UX-consistency
+                // pass, Whiteboard now follows the same flow as Pin —
+                // regions land in the stash, the user optionally annotates
+                // via the ➕ overlay, then SnapshotContext drains and ships.
+                // Mirrors what users do for pinned elements.
             }
         }
         finally

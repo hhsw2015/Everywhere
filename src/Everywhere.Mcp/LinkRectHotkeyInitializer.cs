@@ -20,6 +20,7 @@ public sealed class LinkRectHotkeyInitializer : IAsyncInitializer
     private readonly IShortcutListener _shortcutListener;
     private readonly IVisualElementContext _visualContext;
     private readonly ContextStashWriter _contextWriter;
+    private readonly LinkRectStash _linkRectStash;
     private readonly ILogger<LinkRectHotkeyInitializer> _logger;
     private readonly Lock _syncLock = new();
 
@@ -33,12 +34,14 @@ public sealed class LinkRectHotkeyInitializer : IAsyncInitializer
         IShortcutListener shortcutListener,
         IVisualElementContext visualContext,
         ContextStashWriter contextWriter,
+        LinkRectStash linkRectStash,
         ILogger<LinkRectHotkeyInitializer> logger)
     {
         _settings = settings;
         _shortcutListener = shortcutListener;
         _visualContext = visualContext;
         _contextWriter = contextWriter;
+        _linkRectStash = linkRectStash;
         _logger = logger;
     }
 
@@ -160,10 +163,15 @@ public sealed class LinkRectHotkeyInitializer : IAsyncInitializer
                     if (links.Count > cap)
                         _logger.LogDebug("LinkRect: {Extra} additional links omitted from debug log", links.Count - cap);
                 }
-                var pairs = new List<(string Title, string Url)>(links.Count);
-                foreach (var h in links) pairs.Add((h.Title, h.Url));
-                await _contextWriter.CaptureLinksAsync(pairs);
-                _logger.LogInformation("LinkRect stash filled with {Count} links", links.Count);
+                // Per the v0.9.183 UX-consistency pass, LinkRect harvests
+                // land in LinkRectStash and wait for SnapshotContext to
+                // ship — same model as Pin / Whiteboard. The user gets a
+                // ➕ overlay over the rect and can annotate before
+                // shipping. CaptureLinksAsync's old immediate-ship path
+                // is unused now but kept on the writer for the moment in
+                // case external callers depend on it.
+                _linkRectStash.Set(links);
+                _logger.LogInformation("LinkRect stash filled with {Count} links (deferred ship)", links.Count);
             }
             catch (Exception ex)
             {
