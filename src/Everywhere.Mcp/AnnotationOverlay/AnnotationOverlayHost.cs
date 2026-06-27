@@ -121,7 +121,10 @@ public sealed class AnnotationOverlayHost : IAsyncInitializer, IAsyncDisposable
             PixelRect rect;
             try
             {
-                rect = await Task.Run(() => pair.Element.BoundingRectangle).WaitAsync(TimeSpan.FromMilliseconds(150));
+                // Live variant skips per-element cache so this reflects
+                // the current screen position — the cached BoundingRectangle
+                // froze at pin time and the badge never moved.
+                rect = await Task.Run(() => pair.Element.BoundingRectangleLive).WaitAsync(TimeSpan.FromMilliseconds(150));
             }
             catch
             {

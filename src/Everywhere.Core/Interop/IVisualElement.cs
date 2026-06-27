@@ -244,6 +244,14 @@ public interface IVisualElement
     PixelRect BoundingRectangle { get; }
 
     /// <summary>
+    /// Like <see cref="BoundingRectangle"/> but bypasses any per-element
+    /// cache so polling callers (annotation overlay follow timer)
+    /// reflect scroll / resize movements in real time. Default returns
+    /// the cached value for backends that don't need the distinction.
+    /// </summary>
+    PixelRect BoundingRectangleLive => BoundingRectangle;
+
+    /// <summary>
     /// Gets the process ID of the application that owns this visual element.
     /// If the element does not belong to any process, return -1.
     /// </summary>

@@ -432,28 +432,35 @@ public partial class AXUIElement : NSObject, IVisualElement
         get
         {
             if (_boundsCache is { } cached) return cached;
-            try
-            {
-                var posVal = GetAttribute<AXValue>(AXAttributeConstants.Position);
-                var sizeVal = GetAttribute<AXValue>(AXAttributeConstants.Size);
+            var rect = QueryBoundingRectangle();
+            _boundsCache = rect;
+            return rect;
+        }
+    }
 
-                if (posVal is null || sizeVal is null)
-                {
-                    _boundsCache = default(PixelRect);
-                    return default;
-                }
+    /// <summary>
+    /// Cache-bypass variant for poll-mode callers (annotation follow
+    /// timer). Renderer / hit-test paths keep using the cached version
+    /// — those expect a stable rect within one frame.
+    /// </summary>
+    public PixelRect BoundingRectangleLive => QueryBoundingRectangle();
 
-                var pos = posVal.Point;
-                var size = sizeVal.Size;
-                var rect = new PixelRect((int)pos.X, (int)pos.Y, (int)size.Width, (int)size.Height);
-                _boundsCache = rect;
-                return rect;
-            }
-            catch
-            {
-                _boundsCache = default(PixelRect);
-                return default;
-            }
+    private PixelRect QueryBoundingRectangle()
+    {
+        try
+        {
+            var posVal = GetAttribute<AXValue>(AXAttributeConstants.Position);
+            var sizeVal = GetAttribute<AXValue>(AXAttributeConstants.Size);
+
+            if (posVal is null || sizeVal is null) return default;
+
+            var pos = posVal.Point;
+            var size = sizeVal.Size;
+            return new PixelRect((int)pos.X, (int)pos.Y, (int)size.Width, (int)size.Height);
+        }
+        catch
+        {
+            return default;
         }
     }
 
