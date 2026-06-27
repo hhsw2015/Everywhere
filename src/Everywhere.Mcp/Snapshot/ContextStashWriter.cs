@@ -195,8 +195,6 @@ public sealed class ContextStashWriter
 
     private async Task CaptureCoreAsync(IVisualElement? seed, bool drainAnnotations, CancellationToken cancellationToken)
     {
-        _logger.LogInformation("[anno-diag] CaptureCoreAsync entry: seed_is_null={SeedNull} drainAnno={Drain} stashCount={Count}",
-            seed is null, drainAnnotations, _annotationStash.Count);
         // Single-flight: rapid hotkey double-presses must serialise on the file
         // write, otherwise both invocations race on the same .tmp path.
         if (!await _writeLock.WaitAsync(0, cancellationToken))
@@ -824,7 +822,6 @@ public sealed class ContextStashWriter
     private IReadOnlyList<PayloadAnnotation>? DrainAnnotationsForPayload()
     {
         var items = _annotationStash.Drain();
-        _logger.LogInformation("[anno-diag] DrainAnnotationsForPayload drained {Count}", items.Length);
         if (items.IsDefaultOrEmpty) return null;
         var result = new List<PayloadAnnotation>(items.Length);
         foreach (var item in items)
