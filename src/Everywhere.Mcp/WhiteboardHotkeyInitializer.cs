@@ -476,9 +476,25 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
                     if (hitProbe is not null)
                     {
                         var altRoot = hitProbe.Root();
+                        // Hard 1.5s timeout: alt-root in Arc's content
+                        // tab still walks ~thousands of nodes via sync
+                        // cross-process AX IPCs. If we miss the deadline
+                        // we fall through to the image fallback rather
+                        // than hang the user staring at "卡死".
                         try
                         {
-                            snap = AnnotationSnapper.Snap(ann, altRoot, annStrokes);
+                            var snapTask = Task.Run(() => AnnotationSnapper.Snap(ann, altRoot, annStrokes));
+                            if (snapTask.Wait(1500))
+                            {
+                                snap = snapTask.Result;
+                            }
+                            else
+                            {
+                                _logger.LogWarning("Whiteboard alt-root snap timed out (>1.5s); falling through to image fallback");
+                                snap = new SnapResult(ann.BoundingRect, [],
+                                    Rejected: true,
+                                    RejectReason: "alt-root snap timed out");
+                            }
                         }
                         catch (Exception ex)
                         {
