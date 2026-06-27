@@ -385,7 +385,6 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
                 _logger.LogInformation(
                     "Whiteboard ann: kind={Kind} parserRect={Rect}",
                     ann.Kind, ann.BoundingRect);
-                _logger.LogInformation("Whiteboard snap starting...");
                 // Always snap against focusedRoot. v0.8.25 tried falling
                 // back to targetScreen when focusedRoot.BoundingRect was
                 // 0x0, but that traverses EVERY app's leaves on screen

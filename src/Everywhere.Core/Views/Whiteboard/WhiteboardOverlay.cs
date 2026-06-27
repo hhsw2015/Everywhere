@@ -219,6 +219,9 @@ public sealed class WhiteboardOverlay : ScreenSelectionTransparentWindow
 
     private void OnCanvasPointerPressed(object? sender, PointerPressedEventArgs e)
     {
+        Serilog.Log.Logger.ForContext<WhiteboardOverlay>().Information(
+            "WhiteboardOverlay pointer pressed: left={Left}",
+            e.GetCurrentPoint(_drawingCanvas).Properties.IsLeftButtonPressed);
         if (!e.GetCurrentPoint(_drawingCanvas).Properties.IsLeftButtonPressed) return;
         // Defensive: a previous stroke may not have been released cleanly
         // (capture is intentionally not used, so PointerReleased is not
@@ -292,6 +295,9 @@ public sealed class WhiteboardOverlay : ScreenSelectionTransparentWindow
     private void OnCanvasPointerReleased(object? sender, PointerReleasedEventArgs e)
     {
         if (_activeStrokeRaw is null) return;
+        Serilog.Log.Logger.ForContext<WhiteboardOverlay>().Information(
+            "WhiteboardOverlay pointer released: rawPoints={Count}, _strokes.Count(before)={Before}",
+            _activeStrokeRaw.Count, _strokes.Count);
         if (_activeStrokeRaw.Count >= 2)
         {
             _strokes.Add(_activeStrokeRaw);
