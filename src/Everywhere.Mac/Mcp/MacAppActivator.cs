@@ -100,6 +100,22 @@ public sealed class MacAppActivator : IAppActivator
                 || MatchesExecutable(app, execSel, lastPathSel, pathSel, utf8Sel, appIdentifier))
             {
                 objc_msgSend_activate(app, activateSel, ActivateAllWindows | ActivateIgnoringOtherApps);
+
+                // NSRunningApplication.activate is "polite" — apps that
+                // continuously self-reactivate (Arc / some launchers) win
+                // the focus war within milliseconds, so LaunchPhrase
+                // routinely fails with "did not stay frontmost". Re-issue
+                // through Carbon's SetFrontProcessWithOptions, which goes
+                // through the older WindowServer code path and tends to
+                // beat the polite NSRunningApplication race. Best-effort:
+                // if SetFront fails (deprecated symbol, sandbox, ...) we
+                // still have the activate above as a baseline.
+                var pidSel = sel_registerName("processIdentifier");
+                var pid = (int)objc_msgSend_get(app, pidSel);
+                if (pid > 0)
+                {
+                    TryCarbonSetFront(pid);
+                }
                 return true;
             }
         }
@@ -180,6 +196,7 @@ public sealed class MacAppActivator : IAppActivator
     }
 
     private const string Objc = "/usr/lib/libobjc.A.dylib";
+    private const string ApplicationServices = "/System/Library/Frameworks/ApplicationServices.framework/ApplicationServices";
 
     [DllImport(Objc)] private static extern nint objc_getClass(string name);
     [DllImport(Objc)] private static extern nint sel_registerName(string name);
@@ -193,4 +210,44 @@ public sealed class MacAppActivator : IAppActivator
     // return value (success is observed via the next focus event), so
     // declare void to mirror MacFocusBackend.ActivateProcess.
     [DllImport(Objc, EntryPoint = "objc_msgSend")] private static extern void objc_msgSend_activate(nint receiver, nint selector, ulong options);
+
+    // Carbon process management — deprecated since 10.9 but still
+    // exported and still works on macOS 26. Goes through the older
+    // WindowServer focus path; in practice it beats apps (Arc, some
+    // launchers) that race to re-front themselves via
+    // NSRunningApplication.activate. We use it as a *follow-up* to
+    // NSRunningApplication.activate, not a replacement — when the
+    // polite API is enough nothing changes, when it loses the race we
+    // get a second, sharper hit.
+    [StructLayout(LayoutKind.Sequential)]
+    private struct ProcessSerialNumber
+    {
+        public uint highLongOfPSN;
+        public uint lowLongOfPSN;
+    }
+
+    [DllImport(ApplicationServices)]
+    private static extern int GetProcessForPID(int pid, ref ProcessSerialNumber psn);
+
+    // kSetFrontProcessFrontWindowOnly = 1, makes only the active window
+    // come forward (no Mission Control style "raise all windows" reflow).
+    private const uint SetFrontProcessFrontWindowOnly = 1;
+
+    [DllImport(ApplicationServices)]
+    private static extern int SetFrontProcessWithOptions(ref ProcessSerialNumber psn, uint options);
+
+    private static void TryCarbonSetFront(int pid)
+    {
+        try
+        {
+            var psn = default(ProcessSerialNumber);
+            if (GetProcessForPID(pid, ref psn) != 0) return;
+            SetFrontProcessWithOptions(ref psn, SetFrontProcessFrontWindowOnly);
+        }
+        catch
+        {
+            // Carbon symbol absent on a future macOS or sandbox; the
+            // NSRunningApplication.activate above is still in effect.
+        }
+    }
 }
