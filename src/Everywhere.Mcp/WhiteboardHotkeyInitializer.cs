@@ -459,77 +459,33 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
                 // an image region so the user still gets outline + ➕
                 // within ms.
                 SnapResult snap;
-                if (rootBoundsEmpty)
+                if (rootBoundsEmpty || focusedRoot is null)
                 {
-                    // Chromium webview Hyperlink anchor: focusedRoot's
-                    // own bounds are 0×0 but its Descendants() still walks
-                    // the whole DOM tree (~30s). Hit-test the gesture
-                    // centre below our own process to find the real
-                    // element under the user's mark, then use ITS Root()
-                    // as the snapping root — the snapper still walks a
-                    // subtree, but a small one (the chromium AX tree
-                    // for the actual focused tab content), not the
-                    // entire system. If hit-test also fails, fall through
-                    // to the static image fallback path.
-                    var hitProbe = _visualContext.ElementAtPointBelowOwnProcess(
-                        new PixelPoint(
-                            (int)Math.Round(ann.BoundingRect.Center.X),
-                            (int)Math.Round(ann.BoundingRect.Center.Y)));
-                    if (hitProbe is not null)
+                    // Chromium webview / no focus: skip alt-root Snap
+                    // entirely (it walks the whole DOM tree, often
+                    // exceeded the 5s timeout). Direct hit-test below
+                    // our own process — same call PickerSession uses,
+                    // gives back the AX leaf at the gesture's probe
+                    // point. Whatever element comes back is the anchor;
+                    // no climb, no rejection, no area cap. Pin path
+                    // does exactly this and works on Arc.
+                    var probe = ResolveProbePoint(ann, annStrokes);
+                    var hitElement = _visualContext.ElementAtPointBelowOwnProcess(probe);
+                    if (hitElement is not null)
                     {
-                        var altRoot = hitProbe.Root();
-                        // Hard 1.5s timeout: alt-root in Arc's content
-                        // tab still walks ~thousands of nodes via sync
-                        // cross-process AX IPCs. If we miss the deadline
-                        // we fall through to the image fallback rather
-                        // than hang the user staring at "卡死".
-                        try
-                        {
-                            // 5s budget: alt-root walks the Chromium tab's
-                            // AX tree on a background thread. 1.5s was
-                            // enough for small native subtrees but too
-                            // short for Arc's heavy DOM trees, so EVERY
-                            // gesture timed out and went anchor-less.
-                            // 5s is a worst-case-after-cold-IPC ceiling
-                            // — typical hot path is under 1s.
-                            var snapTask = Task.Run(() => AnnotationSnapper.Snap(ann, altRoot, annStrokes));
-                            if (snapTask.Wait(5000))
-                            {
-                                snap = snapTask.Result;
-                            }
-                            else
-                            {
-                                _logger.LogWarning("Whiteboard alt-root snap timed out (>5s); falling through to image fallback");
-                                snap = new SnapResult(ann.BoundingRect, [],
-                                    Rejected: true,
-                                    RejectReason: "alt-root snap timed out");
-                            }
-                        }
-                        catch (Exception ex)
-                        {
-                            _logger.LogWarning(ex, "Whiteboard alt-root snap failed; falling through to image fallback");
-                            snap = new SnapResult(ann.BoundingRect, [],
-                                Rejected: true,
-                                RejectReason: "alt-root snap threw");
-                        }
+                        snap = new SnapResult(ann.BoundingRect, new[] { hitElement },
+                            Rejected: false);
                     }
                     else
                     {
                         snap = new SnapResult(ann.BoundingRect, [],
                             Rejected: true,
-                            RejectReason: "focusedRoot empty + no hit-test candidate");
+                            RejectReason: "no AX element at gesture probe point");
                     }
-                }
-                else if (focusedRoot is not null)
-                {
-                    snap = AnnotationSnapper.Snap(ann, focusedRoot, annStrokes);
                 }
                 else
                 {
-                    // Unreachable in theory (rootBoundsEmpty=true when
-                    // focusedRoot is null) but the compiler doesn't know.
-                    snap = new SnapResult(ann.BoundingRect, [],
-                        Rejected: true, RejectReason: "focusedRoot null");
+                    snap = AnnotationSnapper.Snap(ann, focusedRoot, annStrokes);
                 }
                 snapTrace.Add((ann, snap));
                 if (!string.IsNullOrEmpty(snap.Diagnostics))
@@ -554,12 +510,12 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
                                                     out var fallbackImage))
                     {
                         var fallbackOcr = RunOcrForRegion(ocrBitmap, ocrBitmapBounds, ann.BoundingRect);
-                        // Pick-style anchor: hit-test a representative
-                        // point inside the gesture so the host overlay
-                        // can follow that element on scroll. Arrow uses
-                        // the tip (last stroke endpoint), Circle/X uses
-                        // the gesture rect's centre.
-                        var anchorElement = ResolveFallbackAnchor(ann, annStrokes);
+                        // Pick-style anchor: same hit-test logic the
+                        // empty-root path uses (single point below own
+                        // process). No climb / no rejection — accept
+                        // whatever element AX gives back.
+                        var probe = ResolveProbePoint(ann, annStrokes);
+                        var anchorElement = _visualContext.ElementAtPointBelowOwnProcess(probe);
                         var leaves = anchorElement is null
                             ? Array.Empty<IVisualElement>()
                             : new[] { anchorElement };
@@ -1388,6 +1344,29 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
         var ax2 = a.X + a.Width;
         var ay2 = a.Y + a.Height;
         return a.X < b.Right && ax2 > b.X && a.Y < b.Bottom && ay2 > b.Y;
+    }
+
+    /// <summary>
+    /// Where to hit-test for the gesture's anchor element. Arrow uses
+    /// the last stroke's last point (the tip), Circle/X uses the
+    /// gesture rect centre. Mirrors AnnotationSnapper's "stroke endpoint
+    /// closest to text" heuristic but cheaper — single point, single
+    /// IPC, no AX tree walk.
+    /// </summary>
+    private static PixelPoint ResolveProbePoint(Annotation ann, IReadOnlyList<Stroke> strokes)
+    {
+        if (ann.Kind == AnnotationKind.Arrow && strokes.Count > 0)
+        {
+            var last = strokes[^1];
+            if (last.Points.Count > 0)
+            {
+                var tip = last.Points[^1];
+                return new PixelPoint((int)Math.Round(tip.X), (int)Math.Round(tip.Y));
+            }
+        }
+        return new PixelPoint(
+            (int)Math.Round(ann.BoundingRect.Center.X),
+            (int)Math.Round(ann.BoundingRect.Center.Y));
     }
 
     private PixelRect SafeBounds(IVisualElement element)

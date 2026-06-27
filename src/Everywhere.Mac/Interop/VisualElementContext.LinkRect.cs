@@ -49,16 +49,27 @@ partial class VisualElementContext
                 await Dispatcher.UIThread.InvokeAsync(window!.Close);
                 return new HarvestResult(window._wasCanceled, []);
             }
-            // Pin-style UX: the moment the user releases the drag, hand
-            // the rect to the caller AND close the picker, so an outline
-            // + ➕ can land on screen immediately. The harvest continues
-            // on a background task and is awaited below — caller still
-            // gets the same HarvestResult shape, just after the visual
-            // is already up.
             try { onRectCommitted?.Invoke(rect.Value); }
             catch { /* best-effort — don't let a rogue subscriber kill the harvest */ }
-            await Dispatcher.UIThread.InvokeAsync(window!.Close);
+
             var harvested = await Task.Run(() => HarvestLinks(rect.Value), cancellationToken);
+
+            // Flash captured links on the mask before closing so the user
+            // sees what was actually harvested (pre-v0.9.183 behaviour).
+            // Skip when zero — no point sitting on a dim mask for nothing.
+            try
+            {
+                if (harvested.Count > 0)
+                {
+                    await Dispatcher.UIThread.InvokeAsync(() => window!.HighlightCapturedLinks(harvested));
+                    await Task.Delay(700, cancellationToken);
+                }
+            }
+            catch (OperationCanceledException) { /* cancel during flash is fine */ }
+            finally
+            {
+                await Dispatcher.UIThread.InvokeAsync(window!.Close);
+            }
             return new HarvestResult(false, harvested);
         }
 
