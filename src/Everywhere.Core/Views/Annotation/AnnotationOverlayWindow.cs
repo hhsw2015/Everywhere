@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Threading;
 using Everywhere.Common;
 using Everywhere.Interop;
 using Serilog;
@@ -24,6 +25,10 @@ public class AnnotationOverlayWindow : Window
     // sits slightly outside the right edge.
     private const int OffsetX = 6;
     private const int OffsetY = -6;
+
+    private static readonly TimeSpan AutoHideAfter = TimeSpan.FromSeconds(6);
+
+    private DispatcherTimer? _autoHideTimer;
 
     public AnnotationOverlayWindow()
     {
@@ -101,5 +106,28 @@ public class AnnotationOverlayWindow : Window
         Position = new PixelPoint(screenX, screenY);
 
         Show();
+        RestartAutoHide();
+    }
+
+    /// <summary>
+    /// (spike) the badge has no interactive content yet, so a stale
+    /// pin would leave it floating forever (the user reported "切了
+    /// 窗口红点还在"). Auto-hide after a few seconds — once we expand
+    /// to the ➕→textarea popover this gets cancelled the moment the
+    /// user hovers / clicks the badge.
+    /// </summary>
+    private void RestartAutoHide()
+    {
+        _autoHideTimer?.Stop();
+        _autoHideTimer ??= new DispatcherTimer { Interval = AutoHideAfter };
+        _autoHideTimer.Tick -= OnAutoHideTick;
+        _autoHideTimer.Tick += OnAutoHideTick;
+        _autoHideTimer.Start();
+    }
+
+    private void OnAutoHideTick(object? sender, EventArgs e)
+    {
+        _autoHideTimer?.Stop();
+        Hide();
     }
 }

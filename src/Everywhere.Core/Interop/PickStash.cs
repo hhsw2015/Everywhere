@@ -31,6 +31,14 @@ public sealed class PickStash
     /// </summary>
     public event Action<IVisualElement>? Pinned;
 
+    /// <summary>
+    /// Raised when the slot transitions from filled to empty (Take, Clear,
+    /// or a TTL-expired read). Used by the annotation overlay so the
+    /// floating ➕ badge can hide once the pin no longer applies.
+    /// Handlers run synchronously on the caller thread.
+    /// </summary>
+    public event Action? Cleared;
+
     public void Set(IVisualElement element, TimeSpan? ttl = null)
     {
         ArgumentNullException.ThrowIfNull(element);
@@ -47,13 +55,18 @@ public sealed class PickStash
     /// </summary>
     public IVisualElement? Take()
     {
+        IVisualElement? result;
+        bool fireCleared;
         lock (_gate)
         {
             var entry = _current;
+            fireCleared = entry is not null;
             _current = null;
-            if (entry is null) return null;
-            return entry.ExpiresAtUtc <= _clock.GetUtcNow() ? null : entry.Element;
+            if (entry is null) result = null;
+            else result = entry.ExpiresAtUtc <= _clock.GetUtcNow() ? null : entry.Element;
         }
+        if (fireCleared) Cleared?.Invoke();
+        return result;
     }
 
     /// <summary>
@@ -68,6 +81,17 @@ public sealed class PickStash
                 return _current is { } e && e.ExpiresAtUtc > _clock.GetUtcNow();
             }
         }
+    }
+
+    public void ClearWithEvent()
+    {
+        bool fire;
+        lock (_gate)
+        {
+            fire = _current is not null;
+            _current = null;
+        }
+        if (fire) Cleared?.Invoke();
     }
 
     public void Clear()
