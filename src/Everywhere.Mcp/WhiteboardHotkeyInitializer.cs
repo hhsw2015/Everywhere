@@ -1239,17 +1239,25 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
             PixelRect b;
             try { b = cand.BoundingRectangle; }
             catch { continue; }
-            // Chromium Hyperlink ancestors hand back 0×0 bounds — accept
-            // them anyway. The follow timer will repeatedly query
-            // BoundingRectangleLive and fall through hide-on-empty when
-            // those bounds stay degenerate. That's correct behaviour:
-            // when the anchor is unresolvable, the outline stays put at
-            // its original draw rect rather than jumping to nonsense.
-            if (b.Width > 0 && b.Height > 0 && !RectsIntersect(b, ann.BoundingRect)) continue;
+            // Reject the screen-sized "Panel" container that Arc / Brave
+            // hand back when the user's probe lands inside a Chromium
+            // webview but the AX tree only exposes the outer frame.
+            // Cap at 6× gesture area: enough for a Hyperlink that wraps
+            // a paragraph but small enough to refuse the whole webview.
+            // Empty bounds (0×0) are still accepted as a last resort —
+            // if that's all AX gives us, we keep the static draw rect.
+            var gestureArea = Math.Max(1L, (long)ann.BoundingRect.Width * (long)ann.BoundingRect.Height);
+            var maxArea = gestureArea * 6;
             var area = (long)b.Width * (long)b.Height;
-            // Treat 0×0 (degenerate) as the smallest possible — only
-            // wins if nothing real was found.
-            if (area == 0) area = long.MaxValue - 1;
+            if (b.Width > 0 && b.Height > 0)
+            {
+                if (!RectsIntersect(b, ann.BoundingRect)) continue;
+                if (area > maxArea) continue; // refuse webview-sized containers
+            }
+            else
+            {
+                area = long.MaxValue - 1; // 0×0 only wins if nothing real was found
+            }
             if (area < bestArea)
             {
                 best = cand;

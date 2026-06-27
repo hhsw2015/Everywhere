@@ -176,12 +176,13 @@ public sealed class LinkRectOverlayHost : IAsyncInitializer, IAsyncDisposable
                             var intersects = b.Width > 0 && b.Height > 0
                                 && b.X < rect.Right && b.X + b.Width > rect.X
                                 && b.Y < rect.Bottom && b.Y + b.Height > rect.Y;
-                            // Accept any non-empty intersecting candidate;
-                            // smaller is better but Chromium webviews
-                            // expose only the container so we take what we
-                            // can get. The follow timer will track its
-                            // BoundingRectangleLive even when it's large.
-                            if (intersects) anchor = cand;
+                            // Reject screen-sized webview containers
+                            // (Arc/Brave Panel) — area > 6× drag rect
+                            // means we hit the wrapper, not what the
+                            // user pointed at.
+                            var dragArea = Math.Max(1L, (long)rect.Width * (long)rect.Height);
+                            var area = (long)b.Width * (long)b.Height;
+                            if (intersects && area <= dragArea * 6) anchor = cand;
                         }
                         catch (Exception ex)
                         {
