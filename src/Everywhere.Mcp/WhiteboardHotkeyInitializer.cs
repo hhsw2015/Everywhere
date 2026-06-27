@@ -1293,35 +1293,67 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
                 continue;
             }
             if (cand is null) continue;
+
+            // Walk up from the hit element looking for a "leaf-ish" type
+            // — Label / Hyperlink / Button / Image / TextEdit / MenuItem
+            // / etc. — and reject pure containers (Panel / Document /
+            // TopLevel / Screen / list / grid frames). ElementFromPoint
+            // on Chromium often returns the Panel wrapper; without this
+            // climb we either pick the screen-sized container or, with
+            // an area cap, drop the candidate entirely. The walk caps
+            // at 8 hops to keep cross-process IPC bounded.
+            var leaf = ClimbToLeafType(cand, maxHops: 8);
+            if (leaf is null) continue;
+
             PixelRect b;
-            try { b = cand.BoundingRectangle; }
+            try { b = leaf.BoundingRectangle; }
             catch { continue; }
-            // Reject the screen-sized "Panel" container that Arc / Brave
-            // hand back when the user's probe lands inside a Chromium
-            // webview but the AX tree only exposes the outer frame.
-            // Cap at 6× gesture area: enough for a Hyperlink that wraps
-            // a paragraph but small enough to refuse the whole webview.
-            // Empty bounds (0×0) are still accepted as a last resort —
-            // if that's all AX gives us, we keep the static draw rect.
+            if (b.Width <= 0 || b.Height <= 0) continue;
+            // Must overlap the gesture; otherwise we walked into a
+            // sibling leaf that happens to be a leaf type but isn't
+            // what the user pointed at.
+            if (!RectsIntersect(b, ann.BoundingRect)) continue;
+            // Cap at 8× gesture area — Hyperlinks wrapping a paragraph
+            // can be 2-3× the gesture, but anything larger is almost
+            // always a misread (a row container marked as Button).
             var gestureArea = Math.Max(1L, (long)ann.BoundingRect.Width * (long)ann.BoundingRect.Height);
-            var maxArea = gestureArea * 6;
+            var maxArea = gestureArea * 8;
             var area = (long)b.Width * (long)b.Height;
-            if (b.Width > 0 && b.Height > 0)
-            {
-                if (!RectsIntersect(b, ann.BoundingRect)) continue;
-                if (area > maxArea) continue; // refuse webview-sized containers
-            }
-            else
-            {
-                area = long.MaxValue - 1; // 0×0 only wins if nothing real was found
-            }
+            if (area > maxArea) continue;
             if (area < bestArea)
             {
-                best = cand;
+                best = leaf;
                 bestArea = area;
             }
         }
         return best;
+    }
+
+    private static bool IsLeafType(VisualElementType t)
+        => t is VisualElementType.Label
+              or VisualElementType.Hyperlink
+              or VisualElementType.Button
+              or VisualElementType.Image
+              or VisualElementType.TextEdit
+              or VisualElementType.MenuItem
+              or VisualElementType.CheckBox
+              or VisualElementType.RadioButton
+              or VisualElementType.ListViewItem
+              or VisualElementType.TreeViewItem
+              or VisualElementType.DataGridItem
+              or VisualElementType.TabItem
+              or VisualElementType.HeaderItem
+              or VisualElementType.TableRow;
+
+    private static IVisualElement? ClimbToLeafType(IVisualElement start, int maxHops)
+    {
+        var cur = start;
+        for (var i = 0; i < maxHops && cur is not null; i++)
+        {
+            if (IsLeafType(cur.Type)) return cur;
+            try { cur = cur.Parent; } catch { return null; }
+        }
+        return null;
     }
 
     private static bool RectsIntersect(PixelRect a, Rect b)

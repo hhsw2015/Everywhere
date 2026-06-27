@@ -129,10 +129,22 @@ public sealed class WhiteboardOverlayHost : IAsyncInitializer, IAsyncDisposable
             {
                 if (_disposed) return;
                 if (!_overlays.Contains(pair)) return;
-                // Leaves gone AX-side: keep the overlay at its last known
-                // position. User retains a visual marker even when the
-                // anchor element vanished.
                 if (union.Width <= 0 || union.Height <= 0) return;
+                // Reject moves that would teleport the outline. If the
+                // union jumps to a place far from where it started, the
+                // anchor element likely became invalid (Chromium leaf
+                // remap). Better to stay put than fly across the screen.
+                var initial = pair.OutlineRectInitial;
+                if (initial.Width > 0)
+                {
+                    var initArea = Math.Max(1L, (long)initial.Width * initial.Height);
+                    var uArea = (long)union.Width * union.Height;
+                    var overlaps = union.X < initial.Right + initial.Width
+                                && union.X + union.Width > initial.X - initial.Width
+                                && union.Y < initial.Bottom + initial.Height
+                                && union.Y + union.Height > initial.Y - initial.Height;
+                    if (!overlaps || uArea > initArea * 16) return;
+                }
                 pair.Outline.MoveTo(union);
                 pair.Badge.MoveTo(union);
             });
@@ -163,18 +175,43 @@ public sealed class WhiteboardOverlayHost : IAsyncInitializer, IAsyncDisposable
                 foreach (var region in regions)
                 {
                     if (existing.Contains(region)) continue;
-                    // Outline rect = LEAF UNION (element-aligned). Matches
-                    // Pin's UX: outline frames the actual a11y leaf the
-                    // snapper picked, neat and tight. Falls back to the
-                    // user's gesture rect only when no leaves resolved
-                    // (Chromium webview where AX can't expose DOM nodes).
-                    var outlineRect = region.Leaves.Count > 0
-                        ? UnionLeafBounds(region.Leaves)
-                        : new PixelRect(
-                            (int)Math.Round(region.Rect.X),
-                            (int)Math.Round(region.Rect.Y),
-                            (int)Math.Round(region.Rect.Width),
-                            (int)Math.Round(region.Rect.Height));
+                    // Outline rect resolution:
+                    //   1. Leaves union — Pin-style accuracy (snapper
+                    //      picked real Label/Hyperlink/Button leaves).
+                    //   2. Sanity-check the union: must overlap the
+                    //      gesture rect AND be ≤ 8× its area. This
+                    //      kicks in for the Chromium-fallback path that
+                    //      grafted a Panel container onto Leaves.
+                    //   3. Fall back to the gesture rect when the union
+                    //      is degenerate or unsane. Better to frame
+                    //      what the user drew than a screen-sized box.
+                    var gestureRect = new PixelRect(
+                        (int)Math.Round(region.Rect.X),
+                        (int)Math.Round(region.Rect.Y),
+                        (int)Math.Round(region.Rect.Width),
+                        (int)Math.Round(region.Rect.Height));
+                    PixelRect outlineRect = gestureRect;
+                    if (region.Leaves.Count > 0)
+                    {
+                        var u = UnionLeafBounds(region.Leaves);
+                        if (u.Width > 0 && u.Height > 0)
+                        {
+                            var gestArea = Math.Max(1L, (long)gestureRect.Width * gestureRect.Height);
+                            var uArea = (long)u.Width * u.Height;
+                            var overlaps = u.X < gestureRect.Right && u.X + u.Width > gestureRect.X
+                                        && u.Y < gestureRect.Bottom && u.Y + u.Height > gestureRect.Y;
+                            if (overlaps && uArea <= gestArea * 8)
+                            {
+                                outlineRect = u;
+                            }
+                            else
+                            {
+                                _logger.LogInformation(
+                                    "WhiteboardOverlay: leaf union rejected (overlap={O}, area ratio={R:F1}); using gesture rect",
+                                    overlaps, (double)uArea / gestArea);
+                            }
+                        }
+                    }
                     if (outlineRect.Width <= 0 || outlineRect.Height <= 0)
                     {
                         _logger.LogWarning("WhiteboardOverlay: skipping region with empty rect");
@@ -194,7 +231,12 @@ public sealed class WhiteboardOverlayHost : IAsyncInitializer, IAsyncDisposable
                         _windowHelper.ConfigureAsCursorOverlay(outline);
 
                         badge = new AnnotationOverlayWindow();
-                        var pair = new RegionOverlayPair(region, outline, badge);
+                        var pair = new RegionOverlayPair(region, outline, badge)
+                        {
+                            // Cache the initial outline rect — follow tick
+                            // sanity-checks new union against it.
+                            OutlineRectInitial = outlineRect,
+                        };
                         pair.CommittedHandler = (_, body) => OnCommitted(pair, body);
                         pair.ClearedHandler = (_, _) => OnBadgeCleared(pair);
                         badge.Committed += pair.CommittedHandler;
