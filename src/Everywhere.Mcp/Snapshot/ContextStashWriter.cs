@@ -182,7 +182,7 @@ public sealed class ContextStashWriter
                 SelectedApp: null,
                 PinPending: null,
                 PickedLinks: picked,
-                Annotations: drainAnnotations ? DrainAnnotationsForPayload() : null);
+                Annotations: DrainAnnotationsForPayload());
             await WriteAtomicAsync(FormatForHook(payload), cancellationToken);
             _logger.LogInformation("Context stash captured {Count} links from {App}.", picked.Count, appKey);
             ActivateAgentApp();
