@@ -106,15 +106,18 @@ public sealed class CGEventShortcutListener : IShortcutListener, IDisposable
     {
         var currentModifiers = cgEvent.Flags.ToAvaloniaKeyModifiers();
 
-        if (_swallowedModifiers != KeyModifiers.None)
-        {
-            // If the user has completely released all modifiers that were part of the shortcut
-            if ((currentModifiers & _swallowedModifiers) == KeyModifiers.None)
-            {
-                _swallowedModifiers = KeyModifiers.None; // Reset state
-            }
-            cgEventRef = 0; // Swallow the modifier change
-        }
+        // Previously this branch swallowed EVERY modifier-flag change while a
+        // shortcut's modifier was still held, on the theory that we needed
+        // to suppress the orphan-modifier KeyUp after consuming a hotkey.
+        // That suppression was global: any other app that relied on seeing
+        // the same modifier (e.g. Typeless's Fn shortcut, or any third-party
+        // tool watching CGEventFlagsChanged) lost events for as long as the
+        // user held the modifier — often "until app restart" from the user's
+        // perspective. macOS already balances the KeyDown / KeyUp pair when
+        // we swallow the original KeyDown; no extra suppression is needed.
+        // Tracked because reintroducing this without scoping to OUR window
+        // is regression-prone.
+        _ = currentModifiers;
 
         using var _ = _syncLock.EnterScope();
         if (_currentCaptureScope is null) return;
