@@ -3,7 +3,6 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
-using Avalonia.Threading;
 using Everywhere.Common;
 using Everywhere.Interop;
 using Serilog;
@@ -33,12 +32,13 @@ public class AnnotationOverlayWindow : Window
     private const int OffsetX = 6;
     private const int OffsetY = -6;
 
-    private static readonly TimeSpan CollapsedAutoHide = TimeSpan.FromSeconds(8);
+    // ponytail: no auto-hide. Pin-induced ➕ stays until user dismisses
+    // (Esc), commits (Cmd+Enter), or fires SnapshotContext. Disappearing
+    // mid-thought was the user's #1 complaint — "我写了文字就不能消失".
 
     private readonly Border _root;
     private readonly Button _plusButton;
     private readonly TextBox _textBox;
-    private readonly DispatcherTimer _autoHideTimer;
 
     private bool _expanded;
     private PixelPoint _collapsedOrigin;
@@ -133,9 +133,6 @@ public class AnnotationOverlayWindow : Window
         };
 
         Content = _root;
-
-        _autoHideTimer = new DispatcherTimer { Interval = CollapsedAutoHide };
-        _autoHideTimer.Tick += OnAutoHideTick;
     }
 
     protected override void OnClosing(WindowClosingEventArgs e)
@@ -175,6 +172,7 @@ public class AnnotationOverlayWindow : Window
         Collapse();
         CommittedText = null;
         _textBox.Text = string.Empty;
+        ResetBadgeVisual();
 
         var screenX = rect.Right + OffsetX;
         var screenY = rect.Y + OffsetY;
@@ -182,11 +180,17 @@ public class AnnotationOverlayWindow : Window
         Position = _collapsedOrigin;
 
         Show();
-        RestartAutoHide();
     }
 
     private void OnPlusClicked(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
     {
+        // Committed (✓) is a terminal state — click is a no-op. The body
+        // is already visible via tooltip on hover. Re-edit is intentionally
+        // unavailable: the only way to revise a note is to clear the batch
+        // (SnapshotContext) and re-pin. Keeps the state machine simple and
+        // avoids stash-mutation paths that don't exist yet.
+        if (CommittedText is not null) return;
+
         if (_expanded) Collapse();
         else Expand();
     }
@@ -195,8 +199,6 @@ public class AnnotationOverlayWindow : Window
     {
         if (_expanded) return;
         _expanded = true;
-
-        _autoHideTimer.Stop();
 
         // Resize and re-anchor so the badge stays where it was; the
         // popover grows down-and-left from that corner.
@@ -235,6 +237,10 @@ public class AnnotationOverlayWindow : Window
         {
             CommittedText = text;
             Committed?.Invoke(this, text);
+            // Annotated state: badge turns into a green ✓ so the user
+            // can see WHERE they annotated (the whole point per the
+            // user's "得知道我是在哪里标注的" feedback).
+            MarkAnnotated();
         }
 
         _textBox.IsVisible = false;
@@ -244,8 +250,30 @@ public class AnnotationOverlayWindow : Window
 
         var windowHelper = ServiceLocator.Resolve<IWindowHelper>();
         windowHelper.SetFocusable(this, false);
+    }
 
-        RestartAutoHide();
+    private void MarkAnnotated()
+    {
+        _plusButton.Content = "✓";
+        _plusButton.Background = new SolidColorBrush(Color.Parse("#3DC68C"));
+        ToolTip.SetTip(_plusButton, CommittedText);
+    }
+
+    private void ResetBadgeVisual()
+    {
+        _plusButton.Content = "+";
+        _plusButton.Background = new LinearGradientBrush
+        {
+            StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
+            EndPoint = new RelativePoint(1, 1, RelativeUnit.Relative),
+            GradientStops =
+            {
+                new GradientStop(Color.Parse("#AC45F1"), 0),
+                new GradientStop(Color.Parse("#7A7EF4"), 0.5),
+                new GradientStop(Color.Parse("#3DC6F8"), 1),
+            },
+        };
+        ToolTip.SetTip(_plusButton, null);
     }
 
     private void OnTextBoxKeyDown(object? sender, KeyEventArgs e)
@@ -273,16 +301,4 @@ public class AnnotationOverlayWindow : Window
         // explicit dismiss paths; blur is not.
     }
 
-    private void RestartAutoHide()
-    {
-        if (_expanded) return; // expanded state stays until user dismisses
-        _autoHideTimer.Stop();
-        _autoHideTimer.Start();
-    }
-
-    private void OnAutoHideTick(object? sender, EventArgs e)
-    {
-        _autoHideTimer.Stop();
-        if (!_expanded) Hide();
-    }
 }

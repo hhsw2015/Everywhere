@@ -10,12 +10,10 @@ namespace Everywhere.Mcp.AnnotationOverlay;
 
 /// <summary>
 /// Bridges <see cref="PickStash"/> events and the floating annotation
-/// overlay. When the user pins an element this surfaces the ➕ badge
-/// and an outline rectangle on the element; when the user commits a
-/// note the body is forwarded to <see cref="AnnotationStash"/>; when
-/// the user fires SnapshotContext (manual capture) we tear the
-/// overlay down — the annotation has shipped and the badge no longer
-/// belongs on screen.
+/// overlays. Each pin gets its own ➕ badge + outline pair so the user
+/// can see WHERE every annotation lives (per "我得知道我是在哪里标注的").
+/// On SnapshotContext the whole fleet is torn down — the annotations
+/// have shipped to the agent and the badges no longer belong on screen.
 /// </summary>
 public sealed class AnnotationOverlayHost : IAsyncInitializer, IAsyncDisposable
 {
@@ -24,12 +22,9 @@ public sealed class AnnotationOverlayHost : IAsyncInitializer, IAsyncDisposable
     private readonly ContextStashWriter _contextStashWriter;
     private readonly ILogger<AnnotationOverlayHost> _logger;
 
-    private AnnotationOverlayWindow? _overlay;
-    private VisualElementOverlayWindow? _outlineOverlay;
+    private readonly List<PinOverlayPair> _overlays = new();
     private Action<IVisualElement>? _pinnedHandler;
     private Action? _captureCompletedHandler;
-    private EventHandler<string>? _committedHandler;
-    private IVisualElement? _currentPinnedElement;
 
     public AnnotationOverlayHost(
         PickStash pickStash,
@@ -63,19 +58,15 @@ public sealed class AnnotationOverlayHost : IAsyncInitializer, IAsyncDisposable
         {
             try
             {
-                _currentPinnedElement = element;
+                var outline = new VisualElementOverlayWindow();
+                outline.UpdateForVisualElement(element);
 
-                // Outline first so the user sees what they just picked.
-                _outlineOverlay ??= new VisualElementOverlayWindow();
-                _outlineOverlay.UpdateForVisualElement(element);
+                var badge = new AnnotationOverlayWindow();
+                var pair = new PinOverlayPair(element, outline, badge);
+                badge.Committed += (_, body) => OnCommitted(pair, body);
+                _overlays.Add(pair);
 
-                if (_overlay is null)
-                {
-                    _overlay = new AnnotationOverlayWindow();
-                    _committedHandler = OnCommitted;
-                    _overlay.Committed += _committedHandler;
-                }
-                _overlay.ShowFor(element);
+                badge.ShowFor(element);
             }
             catch (Exception ex)
             {
@@ -86,32 +77,29 @@ public sealed class AnnotationOverlayHost : IAsyncInitializer, IAsyncDisposable
 
     private void OnManualCaptureCompleted()
     {
-        // The user just pressed SnapshotContext, the agent app raised,
-        // the annotations queued for the next send have shipped. Hide
-        // both overlays so a stale badge doesn't keep floating over a
-        // window the user is no longer pointed at.
+        // SnapshotContext fired → annotations shipped → tear down the
+        // fleet so stale badges don't float over windows the user has
+        // moved past.
         Dispatcher.UIThread.Post(() =>
         {
-            _overlay?.Hide();
-            _outlineOverlay?.UpdateForVisualElement(null);
-            _currentPinnedElement = null;
+            foreach (var pair in _overlays)
+            {
+                pair.Badge.Hide();
+                pair.Outline.UpdateForVisualElement(null);
+                pair.Outline.Close();
+                pair.Badge.Close();
+            }
+            _overlays.Clear();
         });
     }
 
-    private void OnCommitted(object? sender, string body)
+    private void OnCommitted(PinOverlayPair pair, string body)
     {
-        var element = _currentPinnedElement;
-        if (element is null)
-        {
-            _logger.LogWarning("Annotation committed but no pinned element captured; dropping");
-            return;
-        }
-
         string anchorLabel;
         try
         {
-            var name = element.Name;
-            var type = element.Type.ToString();
+            var name = pair.Element.Name;
+            var type = pair.Element.Type.ToString();
             anchorLabel = string.IsNullOrWhiteSpace(name)
                 ? type
                 : $"{type} \"{name}\"";
@@ -152,15 +140,17 @@ public sealed class AnnotationOverlayHost : IAsyncInitializer, IAsyncDisposable
 
         await Dispatcher.UIThread.InvokeAsync(() =>
         {
-            if (_overlay is not null && _committedHandler is not null)
+            foreach (var pair in _overlays)
             {
-                _overlay.Committed -= _committedHandler;
-                _committedHandler = null;
+                pair.Badge.Close();
+                pair.Outline.Close();
             }
-            _overlay?.Close();
-            _overlay = null;
-            _outlineOverlay?.Close();
-            _outlineOverlay = null;
+            _overlays.Clear();
         });
     }
+
+    private sealed record PinOverlayPair(
+        IVisualElement Element,
+        VisualElementOverlayWindow Outline,
+        AnnotationOverlayWindow Badge);
 }
