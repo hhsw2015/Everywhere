@@ -513,9 +513,16 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
                             RejectReason: "focusedRoot empty + no hit-test candidate");
                     }
                 }
-                else
+                else if (focusedRoot is not null)
                 {
                     snap = AnnotationSnapper.Snap(ann, focusedRoot, annStrokes);
+                }
+                else
+                {
+                    // Unreachable in theory (rootBoundsEmpty=true when
+                    // focusedRoot is null) but the compiler doesn't know.
+                    snap = new SnapResult(ann.BoundingRect, [],
+                        Rejected: true, RejectReason: "focusedRoot null");
                 }
                 snapTrace.Add((ann, snap));
                 if (!string.IsNullOrEmpty(snap.Diagnostics))
@@ -601,7 +608,7 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
                     .Where(l => l.Type == VisualElementType.Image)
                     .ToList();
                 var (imageLeaves, imageDiag) = CollectImageLeavesWithDiag(
-                    focusedRoot, ann.BoundingRect, ocrBitmap, ocrBitmapBounds,
+                    focusedRoot!, ann.BoundingRect, ocrBitmap, ocrBitmapBounds,
                     ref sessionImageCount, ref sessionImageBytes);
                 _logger.LogInformation(
                     "Whiteboard image collect: {Diag} -> {Count} ids=[{Ids}] bboxes=[{Bboxes}]",
@@ -1007,7 +1014,7 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
         IReadOnlyList<Stroke> strokes,
         Avalonia.Media.Imaging.Bitmap? ocrBitmap,
         PixelRect ocrBounds,
-        IVisualElement focusedRoot,
+        IVisualElement? focusedRoot,
         IReadOnlyList<(Annotation Ann, SnapResult Snap)> snapTrace)
     {
         // Gated on an explicit env var. The DiagnosticData setting
@@ -1045,7 +1052,7 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
 
             // 2. Trace JSON.
             var leaves = new List<object>();
-            foreach (var e in DescendantsOf(focusedRoot))
+            if (focusedRoot is not null) foreach (var e in DescendantsOf(focusedRoot))
             {
                 var bb = e.BoundingRectangle;
                 if (bb.Width <= 0 || bb.Height <= 0) continue;
