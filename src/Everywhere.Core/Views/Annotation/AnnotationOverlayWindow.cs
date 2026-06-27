@@ -234,12 +234,20 @@ public class AnnotationOverlayWindow : Window
             // Re-check after the await: user may have expanded the popover
             // during the AX query and we must not teleport the textarea.
             if (_expanded) return;
-            if (rect.Width <= 0 || rect.Height <= 0) return;
+
+            if (rect.Width <= 0 || rect.Height <= 0)
+            {
+                // Element off-screen / host window hidden. Hide the badge
+                // so it doesn't sit at a stale screen coordinate. The next
+                // tick re-queries and Show()s when the element is back.
+                Hide();
+                return;
+            }
 
             var newOrigin = new PixelPoint(rect.Right + OffsetX, rect.Y + OffsetY);
-            if (newOrigin == _collapsedOrigin) return;
             _collapsedOrigin = newOrigin;
             Position = _collapsedOrigin;
+            if (!IsVisible) Show();
         }
         catch (Exception ex)
         {

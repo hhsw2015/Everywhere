@@ -327,29 +327,36 @@ public class WindowHelper : IWindowHelper
     private static void ApplyInteractiveOverlay(NSWindow nw)
     {
         // Same Space / fullscreen survival as ApplyCursorOverlay, minus
-        // IgnoresMouseEvents (the badge needs clicks).
-        nw.CollectionBehavior =
+        // IgnoresMouseEvents (the badge needs clicks). |= rather than =
+        // so we don't trample Avalonia-set bits (e.g. ParticipatesInCycle
+        // negatives).
+        nw.CollectionBehavior |=
             NSWindowCollectionBehavior.CanJoinAllSpaces |
             NSWindowCollectionBehavior.FullScreenAuxiliary |
             NSWindowCollectionBehavior.Stationary |
             NSWindowCollectionBehavior.IgnoresCycle;
-        nw.Level = NSWindowLevel.Floating;
+        nw.CollectionBehavior &=
+            ~(NSWindowCollectionBehavior.FullScreenPrimary |
+                NSWindowCollectionBehavior.Managed);
+        // StatusBar > Floating: Floating is what Avalonia's Topmost=true
+        // already gives us, and we've seen it lose to apps that also use
+        // Floating. StatusBar sits above any normal-app floating window.
+        nw.Level = NSWindowLevel.StatusBar;
     }
 
     private static void ApplyCursorOverlay(NSWindow nw)
     {
-        // 1:1 OCCU CursorPanel (SoftwareCursorOverlay.swift L294-306):
-        // borderless + nonactivating already implied by Avalonia
-        // Topmost+SystemDecorations.None+ShowActivated=false. We add
-        // the AppKit-only bits Avalonia does not surface.
         nw.IgnoresMouseEvents = true;
         nw.HasShadow = false;
         nw.IsOpaque = false;
-        nw.CollectionBehavior =
+        nw.CollectionBehavior |=
             NSWindowCollectionBehavior.CanJoinAllSpaces |
             NSWindowCollectionBehavior.FullScreenAuxiliary |
             NSWindowCollectionBehavior.Stationary |
             NSWindowCollectionBehavior.IgnoresCycle;
-        nw.Level = NSWindowLevel.Floating;
+        nw.CollectionBehavior &=
+            ~(NSWindowCollectionBehavior.FullScreenPrimary |
+                NSWindowCollectionBehavior.Managed);
+        nw.Level = NSWindowLevel.StatusBar;
     }
 }

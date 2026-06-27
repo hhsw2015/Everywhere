@@ -101,16 +101,12 @@ public class VisualElementOverlayWindow : Window
 
             if (boundingRectangle.Width <= 0 || boundingRectangle.Height <= 0)
             {
-                // AlwaysRefresh callers (annotation outline) want to keep
-                // the last-known frame visible when the element scrolls
-                // off-screen — losing the anchor visual is worse than a
-                // stale rect. Default callers (chat input, picker
-                // debugger) still hide so they don't paint over nothing.
-                if (!AlwaysRefresh)
-                {
-                    _visualElement = null;
-                    Hide();
-                }
+                // Element not currently on screen (scrolled out, host window
+                // hidden, AX returning a stale 0×0). Hide so we don't paint
+                // a zombie outline over unrelated content. AlwaysRefresh
+                // callers re-query 4×/s, so the outline reappears as soon as
+                // the element comes back.
+                Hide();
                 return;
             }
 
@@ -128,11 +124,7 @@ public class VisualElementOverlayWindow : Window
 
             if (width <= 0 || height <= 0)
             {
-                if (!AlwaysRefresh)
-                {
-                    _visualElement = null;
-                    Hide();
-                }
+                Hide();
                 return;
             }
 
