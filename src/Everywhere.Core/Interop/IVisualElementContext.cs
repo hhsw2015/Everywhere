@@ -206,4 +206,5 @@ public readonly record struct HarvestResult(
 public readonly record struct HarvestedLink(
     string Title,
     string Url,
-    PixelRect Bounds);
+    PixelRect Bounds,
+    IVisualElement? Element = null);

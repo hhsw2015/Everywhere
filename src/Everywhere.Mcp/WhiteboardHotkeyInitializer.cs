@@ -459,9 +459,41 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
                 SnapResult snap;
                 if (rootBoundsEmpty)
                 {
-                    snap = new SnapResult(ann.BoundingRect, [],
-                        Rejected: true,
-                        RejectReason: "focusedRoot has empty bounds (chromium webview anchor)");
+                    // Chromium webview Hyperlink anchor: focusedRoot's
+                    // own bounds are 0×0 but its Descendants() still walks
+                    // the whole DOM tree (~30s). Hit-test the gesture
+                    // centre below our own process to find the real
+                    // element under the user's mark, then use ITS Root()
+                    // as the snapping root — the snapper still walks a
+                    // subtree, but a small one (the chromium AX tree
+                    // for the actual focused tab content), not the
+                    // entire system. If hit-test also fails, fall through
+                    // to the static image fallback path.
+                    var hitProbe = _visualContext.ElementAtPointBelowOwnProcess(
+                        new PixelPoint(
+                            (int)Math.Round(ann.BoundingRect.Center.X),
+                            (int)Math.Round(ann.BoundingRect.Center.Y)));
+                    if (hitProbe is not null)
+                    {
+                        var altRoot = hitProbe.Root();
+                        try
+                        {
+                            snap = AnnotationSnapper.Snap(ann, altRoot, annStrokes);
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogWarning(ex, "Whiteboard alt-root snap failed; falling through to image fallback");
+                            snap = new SnapResult(ann.BoundingRect, [],
+                                Rejected: true,
+                                RejectReason: "alt-root snap threw");
+                        }
+                    }
+                    else
+                    {
+                        snap = new SnapResult(ann.BoundingRect, [],
+                            Rejected: true,
+                            RejectReason: "focusedRoot empty + no hit-test candidate");
+                    }
                 }
                 else
                 {

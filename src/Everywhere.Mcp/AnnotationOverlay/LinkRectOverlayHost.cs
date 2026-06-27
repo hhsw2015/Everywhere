@@ -237,15 +237,26 @@ public sealed class LinkRectOverlayHost : IAsyncInitializer, IAsyncDisposable
         Dispatcher.UIThread.Post(() =>
         {
             if (_disposed) return;
-            // Harvest finished after the rect-only overlay was shown.
-            // Just update the pair's link list; the visual is already
-            // up so we don't recreate the windows.
             if (_current is null)
             {
                 _logger.LogDebug("OnHarvested but no current pair — overlay was torn down before harvest finished");
                 return;
             }
             _current.Links = links;
+            // Upgrade anchor to a real link element from the harvest if
+            // we have one. The rect-time hit-test pulls back the
+            // webview container (Panel) — capped at 6× the drag rect
+            // but still imprecise. A real HarvestedLink.Element points
+            // at the actual anchor leaf the harvester walked to, so
+            // follow tracking lands on the link, not the wrapper.
+            var bestElement = links
+                .Select(l => l.Element)
+                .FirstOrDefault(e => e is not null);
+            if (bestElement is not null)
+            {
+                _current.Anchor = bestElement;
+                _logger.LogDebug("LinkRect anchor upgraded to harvested link element");
+            }
             _logger.LogInformation("LinkRect overlay link list updated: {Count} link(s)", links.Count);
         });
     }

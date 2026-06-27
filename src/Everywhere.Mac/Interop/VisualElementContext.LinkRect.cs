@@ -362,7 +362,7 @@ partial class VisualElementContext
                             && bounds.Width <= 32 && bounds.Height <= 32;
                         if (!isUntitledIcon)
                         {
-                            AddOrUpgrade(byUrl, new HarvestedLink(title ?? string.Empty, url, bounds));
+                            AddOrUpgrade(byUrl, new HarvestedLink(title ?? string.Empty, url, bounds, node));
                         }
                         // Additional URLs packed into the same aria-label
                         // (xlinkBook "url1*url2*url3" pattern) get their own
@@ -374,7 +374,7 @@ partial class VisualElementContext
                             {
                                 if (string.IsNullOrEmpty(extra) || extra.Length > 2048) continue;
                                 if (!IsAllowedScheme(extra)) continue;
-                                AddOrUpgrade(byUrl, new HarvestedLink(extra, extra, bounds));
+                                AddOrUpgrade(byUrl, new HarvestedLink(extra, extra, bounds, node));
                             }
                         }
                     }
