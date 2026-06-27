@@ -37,13 +37,17 @@ public sealed class AnnotationOverlayHost : IAsyncInitializer, IAsyncDisposable
 
     private void OnPinned(IVisualElement element)
     {
+        // Log at Information so we can see it in the user-facing log
+        // without a debug filter. We can drop back to Debug once the
+        // overlay UI is finalised.
+        _logger.LogInformation("AnnotationOverlayHost.OnPinned: element received, dispatching to UI thread");
         Dispatcher.UIThread.Post(() =>
         {
             try
             {
                 _overlay ??= new AnnotationOverlayWindow();
                 _overlay.ShowFor(element);
-                _logger.LogDebug("Annotation overlay shown for pinned element");
+                _logger.LogInformation("AnnotationOverlayHost: ShowFor invoked");
             }
             catch (Exception ex)
             {
