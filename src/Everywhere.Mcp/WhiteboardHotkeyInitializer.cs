@@ -398,11 +398,13 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
             // before pre-capture succeeded — rare).
             focusedRoot ??= _visualContext.FocusedElement?.Root()
                             ?? _visualContext.FocusedElement;
-            if (focusedRoot is null)
-            {
-                _logger.LogWarning("Whiteboard committed but no focused root for snap");
-                return;
-            }
+            // focusedRoot can still be null — when focus didn't recover
+            // between rapid hotkey presses on Arc. We no longer bail
+            // here; the per-annotation loop treats null focusedRoot the
+            // same as Chromium-webview empty-bounds (skip snap, take the
+            // image-only fallback with multi-point hit-test anchor).
+            // Without this, repeated whiteboard sessions on the same
+            // webview silently produced zero regions ("没触发").
 
             var (annotations, strokeGroups) = WhiteboardParser.ParseGrouped(strokes);
             System.Diagnostics.Debug.Assert(annotations.Count == strokeGroups.Count,
@@ -418,11 +420,11 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
             // BoundingRectangle on Mac is a sync cross-process AX call;
             // the empty-bbox decision doesn't change between annotations
             // in the same batch.
-            var rootBounds = SafeBounds(focusedRoot);
+            var rootBounds = focusedRoot is null ? default : SafeBounds(focusedRoot);
             var rootBoundsEmpty = rootBounds.Width <= 0 || rootBounds.Height <= 0;
             _logger.LogInformation(
-                "Whiteboard snap context: focusedRoot bbox={FrootBbox}, ocrBitmap bbox={OcrBbox}",
-                rootBounds, ocrBitmapBounds);
+                "Whiteboard snap context: focusedRoot={Root} bbox={FrootBbox}, ocrBitmap bbox={OcrBbox}",
+                focusedRoot?.GetType().Name ?? "null", rootBounds, ocrBitmapBounds);
             if (rootBoundsEmpty)
             {
                 _logger.LogInformation(

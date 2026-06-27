@@ -103,27 +103,32 @@ public sealed class LinkRectOverlayHost : IAsyncInitializer, IAsyncDisposable
         {
             var anchor = pair.Anchor;
             if (anchor is null) return;
-            PixelRect rect;
+            if (pair.AnchorInitialBounds is null) return;
+            var anchorInitial = pair.AnchorInitialBounds.Value;
+            PixelRect anchorNow;
             try
             {
-                rect = await Task.Run(() => anchor.BoundingRectangleLive)
+                anchorNow = await Task.Run(() => anchor.BoundingRectangleLive)
                     .WaitAsync(TimeSpan.FromMilliseconds(50));
             }
-            catch
-            {
-                return;
-            }
+            catch { return; }
+
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
                 if (_disposed || _current != pair) return;
-                if (rect.Width <= 0 || rect.Height <= 0)
-                {
-                    pair.Outline.Hide();
-                    pair.Badge.HideIfCollapsed();
-                    return;
-                }
-                pair.Outline.MoveTo(rect);
-                pair.Badge.MoveTo(rect);
+                if (anchorNow.Width <= 0 || anchorNow.Height <= 0) return;
+                // Delta-follow: shift the user's drag rect by the same
+                // amount the anchor element moved. Outline keeps the
+                // user's framing, doesn't snap to anchor bounds.
+                var dx = anchorNow.X - anchorInitial.X;
+                var dy = anchorNow.Y - anchorInitial.Y;
+                var moved = new PixelRect(
+                    pair.DragRect.X + dx,
+                    pair.DragRect.Y + dy,
+                    pair.DragRect.Width,
+                    pair.DragRect.Height);
+                pair.Outline.MoveTo(moved);
+                pair.Badge.MoveTo(moved);
             });
         }
         catch (Exception ex)
@@ -134,6 +139,17 @@ public sealed class LinkRectOverlayHost : IAsyncInitializer, IAsyncDisposable
         {
             Interlocked.Exchange(ref pair.RefreshInFlight, 0);
         }
+    }
+
+    private static PixelRect? TryGetBounds(IVisualElement element)
+    {
+        try
+        {
+            var b = element.BoundingRectangle;
+            if (b.Width <= 0 || b.Height <= 0) return null;
+            return b;
+        }
+        catch { return null; }
     }
 
     private void OnRectCommitted(PixelRect rect)
@@ -204,9 +220,12 @@ public sealed class LinkRectOverlayHost : IAsyncInitializer, IAsyncDisposable
                     _windowHelper.ConfigureAsCursorOverlay(outline);
 
                     badge = new AnnotationOverlayWindow();
+                    var anchorInitial = anchor is not null ? TryGetBounds(anchor) : null;
                     var pair = new HarvestOverlayPair(Array.Empty<HarvestedLink>(), outline, badge)
                     {
                         Anchor = anchor,
+                        DragRect = rect,
+                        AnchorInitialBounds = anchorInitial,
                     };
                     pair.CommittedHandler = (_, body) => OnCommitted(pair, body);
                     pair.ClearedHandler = (_, _) => OnBadgeCleared(pair);
@@ -255,6 +274,13 @@ public sealed class LinkRectOverlayHost : IAsyncInitializer, IAsyncDisposable
             if (bestElement is not null)
             {
                 _current.Anchor = bestElement;
+                // Re-baseline the delta-follow zero point. Anchor just
+                // changed, so the next follow tick computes movement
+                // relative to where the link is RIGHT NOW (likely the
+                // same spot as the user's drag rect on Mac, where the
+                // link's BoundingRectangle resolves to its rendered
+                // position).
+                _current.AnchorInitialBounds = TryGetBounds(bestElement);
                 _logger.LogDebug("LinkRect anchor upgraded to harvested link element");
             }
             _logger.LogInformation("LinkRect overlay link list updated: {Count} link(s)", links.Count);
@@ -396,6 +422,12 @@ public sealed class LinkRectOverlayHost : IAsyncInitializer, IAsyncDisposable
         public EventHandler<string>? CommittedHandler { get; set; }
         public EventHandler? ClearedHandler { get; set; }
         public IVisualElement? Anchor { get; set; }
+        // Delta-follow state: outline keeps the user's drag rect as
+        // its visible frame and slides by (anchor.now - anchorInitial).
+        // Anchor element provides the scroll offset, never the frame
+        // size — that fixes "outline didn't actually frame the link".
+        public PixelRect DragRect { get; set; }
+        public PixelRect? AnchorInitialBounds { get; set; }
         public int RefreshInFlight; // 0 = idle, 1 = in flight
 
         public HarvestOverlayPair(

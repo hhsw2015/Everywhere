@@ -100,29 +100,39 @@ public sealed class WhiteboardOverlayHost : IAsyncInitializer, IAsyncDisposable
         if (Interlocked.CompareExchange(ref pair.RefreshInFlight, 1, 0) != 0) return;
         try
         {
+            if (pair.AnchorInitialBounds is null) return;
+            var anchorInitial = pair.AnchorInitialBounds.Value;
             var leaf = pair.Region.Leaves[0];
-            PixelRect rect;
+            PixelRect anchorNow;
             try
             {
-                rect = await Task.Run(() => leaf.BoundingRectangleLive)
+                anchorNow = await Task.Run(() => leaf.BoundingRectangleLive)
                     .WaitAsync(TimeSpan.FromMilliseconds(50));
             }
-            catch
-            {
-                return;
-            }
+            catch { return; }
+
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
                 if (_disposed) return;
                 if (!_overlays.Contains(pair)) return;
-                // Empty bounds = anchor element doesn't expose live geometry
-                // (Chromium Hyperlink ancestor, etc). Don't hide — keep the
-                // overlay at its original draw rect so the user retains a
-                // visual marker. Better-than-nothing fallback when AX is
-                // useless for follow tracking.
-                if (rect.Width <= 0 || rect.Height <= 0) return;
-                pair.Outline.MoveTo(rect);
-                pair.Badge.MoveTo(rect);
+                // Anchor lost AX geometry (e.g. Chromium Hyperlink
+                // container vanished). Leave the outline where it is —
+                // user keeps a stale-but-visible marker.
+                if (anchorNow.Width <= 0 || anchorNow.Height <= 0) return;
+                // Delta-follow: shift the user's drawn frame by how
+                // far the anchor element moved. Outline never resizes
+                // to match anchor bounds — the user-drawn rect stays
+                // as the visible frame, anchor just provides the
+                // scroll offset.
+                var dx = anchorNow.X - anchorInitial.X;
+                var dy = anchorNow.Y - anchorInitial.Y;
+                var moved = new PixelRect(
+                    pair.OutlineRectInitial.X + dx,
+                    pair.OutlineRectInitial.Y + dy,
+                    pair.OutlineRectInitial.Width,
+                    pair.OutlineRectInitial.Height);
+                pair.Outline.MoveTo(moved);
+                pair.Badge.MoveTo(moved);
             });
         }
         catch (Exception ex)
@@ -151,27 +161,42 @@ public sealed class WhiteboardOverlayHost : IAsyncInitializer, IAsyncDisposable
                 foreach (var region in regions)
                 {
                     if (existing.Contains(region)) continue;
-                    var rect = ResolveAnchorRect(region);
-                    _logger.LogInformation(
-                        "WhiteboardOverlay region: kind={Kind} regionRect=({X},{Y},{W}x{H}) leaves={Leaves} anchorRect=({Ax},{Ay},{Aw}x{Ah})",
-                        region.Kind, region.Rect.X, region.Rect.Y, region.Rect.Width, region.Rect.Height,
-                        region.Leaves.Count, rect.X, rect.Y, rect.Width, rect.Height);
-                    if (rect.Width <= 0 || rect.Height <= 0)
+                    // Outline rect = USER GESTURE rect (what they drew),
+                    // not leaf bounds. Leaf gives us the anchor element
+                    // for follow tracking; the user's frame is what they
+                    // see and expect to see.
+                    var outlineRect = new PixelRect(
+                        (int)Math.Round(region.Rect.X),
+                        (int)Math.Round(region.Rect.Y),
+                        (int)Math.Round(region.Rect.Width),
+                        (int)Math.Round(region.Rect.Height));
+                    if (outlineRect.Width <= 0 || outlineRect.Height <= 0)
                     {
                         _logger.LogWarning("WhiteboardOverlay: skipping region with empty rect");
                         continue;
                     }
+                    var anchorInitial = region.Leaves.Count > 0
+                        ? TryGetBounds(region.Leaves[0])
+                        : (PixelRect?)null;
+                    _logger.LogInformation(
+                        "WhiteboardOverlay region: kind={Kind} outlineRect=({X},{Y},{W}x{H}) leaves={Leaves} anchorInitial={Anchor}",
+                        region.Kind, outlineRect.X, outlineRect.Y, outlineRect.Width, outlineRect.Height,
+                        region.Leaves.Count, anchorInitial?.ToString() ?? "<none>");
 
                     AnnotationOutlineWindow? outline = null;
                     AnnotationOverlayWindow? badge = null;
                     try
                     {
                         outline = new AnnotationOutlineWindow();
-                        outline.ShowAt(rect);
+                        outline.ShowAt(outlineRect);
                         _windowHelper.ConfigureAsCursorOverlay(outline);
 
                         badge = new AnnotationOverlayWindow();
-                        var pair = new RegionOverlayPair(region, outline, badge);
+                        var pair = new RegionOverlayPair(region, outline, badge)
+                        {
+                            OutlineRectInitial = outlineRect,
+                            AnchorInitialBounds = anchorInitial,
+                        };
                         pair.CommittedHandler = (_, body) => OnCommitted(pair, body);
                         pair.ClearedHandler = (_, _) => OnBadgeCleared(pair);
                         badge.Committed += pair.CommittedHandler;
@@ -180,7 +205,7 @@ public sealed class WhiteboardOverlayHost : IAsyncInitializer, IAsyncDisposable
                         // Show & configure BEFORE adding to _overlays, so
                         // a failure here doesn't leave a half-initialized
                         // pair behind for TearDown to swing at.
-                        badge.ShowAt(rect);
+                        badge.ShowAt(outlineRect);
                         _windowHelper.ConfigureAsInteractiveOverlay(badge);
                         _overlays.Add(pair);
                     }
@@ -208,6 +233,17 @@ public sealed class WhiteboardOverlayHost : IAsyncInitializer, IAsyncDisposable
     /// SAME coordinate space (DIP/points on macOS, physical px on
     /// Windows; see WhiteboardOverlay.Commit's coord-space note).
     /// </summary>
+    private static PixelRect? TryGetBounds(IVisualElement element)
+    {
+        try
+        {
+            var b = element.BoundingRectangle;
+            if (b.Width <= 0 || b.Height <= 0) return null;
+            return b;
+        }
+        catch { return null; }
+    }
+
     private PixelRect ResolveAnchorRect(WhiteboardRegion region)
     {
         if (region.Leaves.Count > 0)
@@ -376,6 +412,13 @@ public sealed class WhiteboardOverlayHost : IAsyncInitializer, IAsyncDisposable
         public EventHandler<string>? CommittedHandler { get; set; }
         public EventHandler? ClearedHandler { get; set; }
         public int RefreshInFlight; // 0 = idle, 1 = refresh in progress
+        // Delta-follow state: outline keeps the user's drawn frame
+        // (OutlineRectInitial) and slides by (anchor.now - AnchorInitial).
+        // Outline never resizes to match anchor bounds — that's why
+        // LinkRect "没框住链接" before: anchor is bigger/smaller than
+        // what the user actually framed.
+        public PixelRect OutlineRectInitial { get; set; }
+        public PixelRect? AnchorInitialBounds { get; set; }
 
         public RegionOverlayPair(
             WhiteboardRegion region,
