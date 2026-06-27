@@ -101,41 +101,51 @@ public sealed class LinkRectOverlayHost : IAsyncInitializer, IAsyncDisposable
         if (Interlocked.CompareExchange(ref pair.RefreshInFlight, 1, 0) != 0) return;
         try
         {
-            // Prefer the harvested links' union bbox: tight to actual link
-            // elements (Pin-style accuracy). Fall back to the rect-time
-            // anchor element when no links have arrived yet, else nothing.
-            PixelRect union;
+            // Per-link follow: query each link's element bounds in one
+            // background pass, then on the UI thread move each outline
+            // to its current bounds. Empty bounds → keep the outline at
+            // last known position (better stale than gone).
+            List<(int Index, PixelRect Rect)> updates;
             try
             {
-                union = await Task.Run(() =>
+                updates = await Task.Run(() =>
                 {
-                    var u = default(PixelRect);
-                    var first = true;
-                    foreach (var link in pair.Links)
+                    var ups = new List<(int, PixelRect)>(pair.LinkOutlines.Count);
+                    for (var i = 0; i < pair.LinkOutlines.Count; i++)
                     {
-                        var el = link.Element;
-                        if (el is null) continue;
+                        var entry = pair.LinkOutlines[i];
+                        if (entry.Element is null) continue;
                         PixelRect b;
-                        try { b = el.BoundingRectangleLive; } catch { continue; }
+                        try { b = entry.Element.BoundingRectangleLive; }
+                        catch { continue; }
                         if (b.Width <= 0 || b.Height <= 0) continue;
-                        if (first) { u = b; first = false; }
-                        else u = u.Union(b);
+                        ups.Add((i, b));
                     }
-                    if (first && pair.Anchor is not null)
-                    {
-                        try { u = pair.Anchor.BoundingRectangleLive; first = false; } catch { }
-                    }
-                    return first ? default : u;
-                }).WaitAsync(TimeSpan.FromMilliseconds(150));
+                    return ups;
+                }).WaitAsync(TimeSpan.FromMilliseconds(200));
             }
             catch { return; }
 
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
                 if (_disposed || _current != pair) return;
-                if (union.Width <= 0 || union.Height <= 0) return;
-                pair.Outline.MoveTo(union);
-                pair.Badge.MoveTo(union);
+                if (pair.LinkOutlines.Count == 0)
+                {
+                    // Pre-harvest fallback: still using the single drag-
+                    // rect outline. Track the rect-time anchor so it
+                    // scrolls with the page until harvest fills in
+                    // per-link outlines.
+                    return;
+                }
+                var union = default(PixelRect);
+                var firstU = true;
+                foreach (var (i, rect) in updates)
+                {
+                    pair.LinkOutlines[i].Outline.MoveTo(rect);
+                    if (firstU) { union = rect; firstU = false; }
+                    else union = union.Union(rect);
+                }
+                if (!firstU) pair.Badge.MoveTo(union);
             });
         }
         catch (Exception ex)
@@ -269,50 +279,62 @@ public sealed class LinkRectOverlayHost : IAsyncInitializer, IAsyncDisposable
                 return;
             }
             _current.Links = links;
-            // Upgrade anchor to a real link element from the harvest if
-            // we have one. The rect-time hit-test pulls back the
-            // webview container (Panel) — capped at 6× the drag rect
-            // but still imprecise. A real HarvestedLink.Element points
-            // at the actual anchor leaf the harvester walked to, so
-            // follow tracking lands on the link, not the wrapper.
-            var bestElement = links
-                .Select(l => l.Element)
-                .FirstOrDefault(e => e is not null);
-            if (bestElement is not null)
-            {
-                _current.Anchor = bestElement;
-                _logger.LogDebug("LinkRect anchor upgraded to harvested link element");
-            }
-            // Snap the outline to the harvested links' actual bounding
-            // box immediately. Try element.BoundingRectangle first (more
-            // accurate than the harvest-time snapshot Bounds field), fall
-            // back to Bounds when the element is null.
+
+            // Per-link outlines (matches the pre-annotation v0.9.182 flash):
+            // close the single drag-rect outline, then spawn one
+            // AnnotationOutlineWindow per harvested link. Each outline
+            // tracks its own link.Element via the per-link follow timer
+            // below. The single ➕ badge anchors at the rightmost link's
+            // top-right so the user can write a comment that ships with
+            // the whole batch.
+            try { _current.Outline.Close(); } catch { }
+
+            var perLinkOutlines = new List<(IVisualElement? Element, AnnotationOutlineWindow Outline, PixelRect Initial)>();
             var union = default(PixelRect);
             var firstU = true;
             foreach (var l in links)
             {
                 PixelRect b;
-                try
-                {
-                    b = l.Element?.BoundingRectangle ?? l.Bounds;
-                }
+                try { b = l.Element?.BoundingRectangle ?? l.Bounds; }
                 catch { b = l.Bounds; }
                 if (b.Width <= 0 || b.Height <= 0) continue;
+
+                AnnotationOutlineWindow? linkOutline = null;
+                try
+                {
+                    linkOutline = new AnnotationOutlineWindow();
+                    linkOutline.ShowAt(b);
+                    _windowHelper.ConfigureAsCursorOverlay(linkOutline);
+                    perLinkOutlines.Add((l.Element, linkOutline, b));
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogDebug(ex, "LinkRect per-link outline create failed");
+                    try { linkOutline?.Close(); } catch { }
+                }
                 if (firstU) { union = b; firstU = false; }
                 else union = union.Union(b);
             }
+
+            _current.LinkOutlines = perLinkOutlines;
+
             if (!firstU)
             {
-                _current.Outline.MoveTo(union);
+                // Badge anchors at the union's top-right so it's near
+                // the harvest visually but doesn't overlap any single
+                // link outline.
                 _current.Badge.MoveTo(union);
+                // Upgrade primary anchor for follow-anchor on the badge.
+                var bestElement = links.Select(l => l.Element).FirstOrDefault(e => e is not null);
+                if (bestElement is not null) _current.Anchor = bestElement;
                 _logger.LogInformation(
-                    "LinkRect outline snapped to harvested union: ({X},{Y},{W}x{H}) from {Count} link(s)",
-                    union.X, union.Y, union.Width, union.Height, links.Count);
+                    "LinkRect spawned {Count} per-link outline(s); union=({X},{Y},{W}x{H})",
+                    perLinkOutlines.Count, union.X, union.Y, union.Width, union.Height);
             }
             else
             {
                 _logger.LogWarning(
-                    "LinkRect harvest returned {Count} link(s) but all bounds empty; outline stays at drag rect",
+                    "LinkRect harvest returned {Count} link(s) but all bounds empty; no per-link outlines",
                     links.Count);
             }
         });
@@ -406,8 +428,14 @@ public sealed class LinkRectOverlayHost : IAsyncInitializer, IAsyncDisposable
         }
         pair.LastItem = null;
         pair.Badge.Hide();
-        pair.Outline.Hide();
-        pair.Outline.Close();
+        try { pair.Outline.Hide(); } catch { }
+        try { pair.Outline.Close(); } catch { }
+        foreach (var entry in pair.LinkOutlines)
+        {
+            try { entry.Outline.Hide(); } catch { }
+            try { entry.Outline.Close(); } catch { }
+        }
+        pair.LinkOutlines.Clear();
         pair.Badge.Close();
     }
 
@@ -453,13 +481,15 @@ public sealed class LinkRectOverlayHost : IAsyncInitializer, IAsyncDisposable
         public EventHandler<string>? CommittedHandler { get; set; }
         public EventHandler? ClearedHandler { get; set; }
         public IVisualElement? Anchor { get; set; }
-        // Delta-follow state: outline keeps the user's drag rect as
-        // its visible frame and slides by (anchor.now - anchorInitial).
-        // Anchor element provides the scroll offset, never the frame
-        // size — that fixes "outline didn't actually frame the link".
         public PixelRect DragRect { get; set; }
         public PixelRect? AnchorInitialBounds { get; set; }
         public int RefreshInFlight; // 0 = idle, 1 = in flight
+        // After harvest finishes we replace the single drag-rect outline
+        // with one outline per link, matching the pre-annotation flash
+        // visual. Outline (above) is the placeholder during harvest; once
+        // populated, that one is closed and these take over.
+        public List<(IVisualElement? Element, AnnotationOutlineWindow Outline, PixelRect Initial)> LinkOutlines { get; set; }
+            = new();
 
         public HarvestOverlayPair(
             IReadOnlyList<HarvestedLink> links,
