@@ -302,7 +302,12 @@ public sealed class ContextStashWriter
             if (drainAnnotations) _annotationStash.Consume(annoSource);
             _logger.LogInformation("Context stash captured for {App} ({Title}).", appKey, topLevel?.Name);
 
-            ActivateAgentApp();
+            // drainAnnotations doubles as the "this is a manual user-driven
+            // capture" flag. Auto-captures (pin / whiteboard finish) MUST
+            // NOT raise the agent app — the user just pinned an element,
+            // they are still working in the source app, switching their
+            // window out from under them is a surprise.
+            if (drainAnnotations) ActivateAgentApp();
         }
         catch (OperationCanceledException)
         {
