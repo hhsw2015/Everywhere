@@ -98,7 +98,7 @@ public sealed class LinkRectOverlayHost : IAsyncInitializer, IAsyncDisposable
 
     private async Task RefreshAsync(HarvestOverlayPair pair)
     {
-        // No in-flight gate (see Whiteboard host for rationale).
+        if (Interlocked.CompareExchange(ref pair.RefreshInFlight, 1, 0) != 0) return;
         try
         {
             // Per-link follow: query each link's element bounds in one
@@ -151,6 +151,10 @@ public sealed class LinkRectOverlayHost : IAsyncInitializer, IAsyncDisposable
         catch (Exception ex)
         {
             _logger.LogDebug(ex, "LinkRect follow refresh failed");
+        }
+        finally
+        {
+            Interlocked.Exchange(ref pair.RefreshInFlight, 0);
         }
     }
 

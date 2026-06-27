@@ -101,12 +101,7 @@ public sealed class WhiteboardOverlayHost : IAsyncInitializer, IAsyncDisposable
 
     private async Task RefreshPairAsync(RegionOverlayPair pair)
     {
-        // No in-flight gate. Earlier versions used Interlocked CAS to
-        // avoid overlapping AX queries, but a single slow query (which
-        // happens occasionally on Chromium) would block every tick for
-        // its duration, freezing the follow visuals. AX
-        // BoundingRectangleLive is idempotent — at worst we waste an
-        // IPC, never produce wrong state.
+        if (Interlocked.CompareExchange(ref pair.RefreshInFlight, 1, 0) != 0) return;
         try
         {
             var leaves = pair.Region.Leaves;
@@ -117,13 +112,6 @@ public sealed class WhiteboardOverlayHost : IAsyncInitializer, IAsyncDisposable
                 // Re-compute the leaves' union with cache-bypass live
                 // bounds — same Pin trick (BoundingRectangleLive). One
                 // sync IPC per leaf; usually 1-3 leaves per gesture.
-                // 50ms timeout matches the tick interval — if a query
-                // takes longer than that, abandon it and let the next
-                // tick try fresh. Otherwise a slow Chromium AX query
-                // would hold RefreshInFlight=1 for 150ms+, and every
-                // tick during that window would CAS-fail and skip,
-                // making the outline visibly stop tracking on fast
-                // scrolls (user report: "有时候不自动调整").
                 union = await Task.Run(() =>
                 {
                     var u = default(PixelRect);
@@ -137,7 +125,7 @@ public sealed class WhiteboardOverlayHost : IAsyncInitializer, IAsyncDisposable
                         else u = u.Union(b);
                     }
                     return u;
-                }).WaitAsync(TimeSpan.FromMilliseconds(50));
+                }).WaitAsync(TimeSpan.FromMilliseconds(150));
             }
             catch { return; }
 
@@ -165,6 +153,10 @@ public sealed class WhiteboardOverlayHost : IAsyncInitializer, IAsyncDisposable
         catch (Exception ex)
         {
             _logger.LogDebug(ex, "Whiteboard follow refresh failed");
+        }
+        finally
+        {
+            Interlocked.Exchange(ref pair.RefreshInFlight, 0);
         }
     }
 
