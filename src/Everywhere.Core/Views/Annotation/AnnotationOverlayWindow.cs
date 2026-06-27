@@ -106,6 +106,13 @@ public class AnnotationOverlayWindow : Window
             FontWeight = FontWeight.Medium,
             Padding = new Thickness(0),
             Content = "+",
+            // Keep Tab traversal away from the badge entirely. With
+            // multiple ➕'s on screen (whiteboard / linkrect channels),
+            // a Tab press would otherwise cycle focus through every
+            // badge — and one user-reported lockup involved Tab into a
+            // collapsed badge that has nothing else focusable, causing
+            // Avalonia's traversal engine to spin.
+            IsTabStop = false,
         };
         _plusButton.Click += OnPlusClicked;
 
@@ -120,6 +127,9 @@ public class AnnotationOverlayWindow : Window
             Background = Brushes.Transparent,
             BorderThickness = new Thickness(0),
             IsVisible = false,
+            // Same rationale as the plusButton: keep Tab out of the badge.
+            // Focus comes via Expand() calling _textBox.Focus() explicitly.
+            IsTabStop = false,
         };
         // Tunnel-route KeyDown at the WINDOW level so Esc / Cmd+Enter fire
         // BEFORE the TextBox bubble-stage handlers consume them (AcceptsReturn

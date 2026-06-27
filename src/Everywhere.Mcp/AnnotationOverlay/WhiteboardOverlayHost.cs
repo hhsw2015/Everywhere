@@ -65,6 +65,7 @@ public sealed class WhiteboardOverlayHost : IAsyncInitializer, IAsyncDisposable
 
     private void OnDrawn(IReadOnlyList<WhiteboardRegion> regions)
     {
+        _logger.LogInformation("WhiteboardOverlayHost.OnDrawn fired with {Count} region(s)", regions.Count);
         Dispatcher.UIThread.Post(() =>
         {
             if (_disposed) return;
@@ -73,15 +74,21 @@ public sealed class WhiteboardOverlayHost : IAsyncInitializer, IAsyncDisposable
                 // Defensive dedup: keyed on region instance so a future
                 // change that re-emits the same WhiteboardRegion doesn't
                 // produce stacked overlays. Distinct regions that resolve
-                // to the same anchor rect (e.g. two Arrows pointing at
-                // the same leaf union) each get their own ➕ — the
-                // earlier rect-key version silently dropped them.
+                // to the same anchor rect each get their own ➕.
                 var existing = _overlays.Select(p => p.Region).ToHashSet(ReferenceEqualityComparer.Instance);
                 foreach (var region in regions)
                 {
                     if (existing.Contains(region)) continue;
                     var rect = ResolveAnchorRect(region);
-                    if (rect.Width <= 0 || rect.Height <= 0) continue;
+                    _logger.LogInformation(
+                        "WhiteboardOverlay region: kind={Kind} regionRect=({X},{Y},{W}x{H}) leaves={Leaves} anchorRect=({Ax},{Ay},{Aw}x{Ah})",
+                        region.Kind, region.Rect.X, region.Rect.Y, region.Rect.Width, region.Rect.Height,
+                        region.Leaves.Count, rect.X, rect.Y, rect.Width, rect.Height);
+                    if (rect.Width <= 0 || rect.Height <= 0)
+                    {
+                        _logger.LogWarning("WhiteboardOverlay: skipping region with empty rect");
+                        continue;
+                    }
 
                     AnnotationOutlineWindow? outline = null;
                     AnnotationOverlayWindow? badge = null;
@@ -123,7 +130,12 @@ public sealed class WhiteboardOverlayHost : IAsyncInitializer, IAsyncDisposable
     /// <summary>
     /// Arrow gesture's ➕ should anchor on what the arrow POINTS AT — the
     /// union bbox of its leaves — not the arrow stroke itself. Circle / X
-    /// use the gesture rect: that IS the highlighted region.
+    /// use the gesture rect: that IS the highlighted region. Both leaves'
+    /// BoundingRectangle and the gesture rect live in the SAME coordinate
+    /// space (DIP/points on macOS, physical px on Windows — they match
+    /// because WhiteboardOverlay.Commit emits stroke points in
+    /// IVisualElement.BoundingRectangle's space; see WhiteboardOverlay.cs
+    /// L343-355). No scaling here.
     /// </summary>
     private PixelRect ResolveAnchorRect(WhiteboardRegion region)
     {
@@ -137,8 +149,6 @@ public sealed class WhiteboardOverlayHost : IAsyncInitializer, IAsyncDisposable
                 try { b = leaf.BoundingRectangle; }
                 catch (Exception ex)
                 {
-                    // AX/UIA can throw on stale or detached elements.
-                    // Skip the leaf, keep the others.
                     _logger.LogDebug(ex, "Whiteboard leaf BoundingRectangle threw; skipping");
                     continue;
                 }
@@ -147,15 +157,14 @@ public sealed class WhiteboardOverlayHost : IAsyncInitializer, IAsyncDisposable
                 else union = union.Union(b);
             }
             if (!first) return union;
-            // Fall through to the gesture rect when leaves resolve empty.
         }
 
-        return ToPixelRect(region.Rect);
+        return new PixelRect(
+            (int)Math.Round(region.Rect.X),
+            (int)Math.Round(region.Rect.Y),
+            (int)Math.Round(region.Rect.Width),
+            (int)Math.Round(region.Rect.Height));
     }
-
-    private static PixelRect ToPixelRect(Rect rect)
-        => new((int)Math.Round(rect.X), (int)Math.Round(rect.Y),
-               (int)Math.Round(rect.Width), (int)Math.Round(rect.Height));
 
     private void OnCommitted(RegionOverlayPair pair, string body)
     {
