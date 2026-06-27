@@ -485,14 +485,21 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
                         // than hang the user staring at "卡死".
                         try
                         {
+                            // 5s budget: alt-root walks the Chromium tab's
+                            // AX tree on a background thread. 1.5s was
+                            // enough for small native subtrees but too
+                            // short for Arc's heavy DOM trees, so EVERY
+                            // gesture timed out and went anchor-less.
+                            // 5s is a worst-case-after-cold-IPC ceiling
+                            // — typical hot path is under 1s.
                             var snapTask = Task.Run(() => AnnotationSnapper.Snap(ann, altRoot, annStrokes));
-                            if (snapTask.Wait(1500))
+                            if (snapTask.Wait(5000))
                             {
                                 snap = snapTask.Result;
                             }
                             else
                             {
-                                _logger.LogWarning("Whiteboard alt-root snap timed out (>1.5s); falling through to image fallback");
+                                _logger.LogWarning("Whiteboard alt-root snap timed out (>5s); falling through to image fallback");
                                 snap = new SnapResult(ann.BoundingRect, [],
                                     Rejected: true,
                                     RejectReason: "alt-root snap timed out");
