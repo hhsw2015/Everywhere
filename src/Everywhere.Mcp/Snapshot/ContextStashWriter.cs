@@ -46,6 +46,7 @@ public sealed class ContextStashWriter
         SelectionCache selectionCache,
         PickStash pickStash,
         WhiteboardStash whiteboardStash,
+        AnnotationStash annotationStash,
         IAppActivator appActivator,
         IInputSimulator input,
         IClipboardReader clipboard,
@@ -57,12 +58,15 @@ public sealed class ContextStashWriter
         _selectionCache = selectionCache;
         _pickStash = pickStash;
         _whiteboardStash = whiteboardStash;
+        _annotationStash = annotationStash;
         _appActivator = appActivator;
         _input = input;
         _clipboard = clipboard;
         _settings = settings;
         _logger = logger;
     }
+
+    private readonly AnnotationStash _annotationStash;
 
     /// <summary>
     /// Manual escape hatch bound to the ClearContextStash hotkey. Wipes the
@@ -172,7 +176,8 @@ public sealed class ContextStashWriter
                 SelectedText: null,
                 SelectedApp: null,
                 PinPending: null,
-                PickedLinks: picked);
+                PickedLinks: picked,
+                Annotations: DrainAnnotationsForPayload());
             await WriteAtomicAsync(FormatForHook(payload), cancellationToken);
             _logger.LogInformation("Context stash captured {Count} links from {App}.", picked.Count, appKey);
             ActivateAgentApp();
@@ -274,7 +279,8 @@ public sealed class ContextStashWriter
                 PinPending: pinPending ? true : null,
                 WhiteboardPending: whiteboardPending ? true : null,
                 WhiteboardRegionCount: whiteboardPending ? whiteboardRegions!.Count : null,
-                PickedLinks: clipboardLinks);
+                PickedLinks: clipboardLinks,
+                Annotations: DrainAnnotationsForPayload());
 
             await WriteAtomicAsync(FormatForHook(payload), cancellationToken);
             _logger.LogInformation("Context stash captured for {App} ({Title}).", appKey, topLevel?.Name);
@@ -575,6 +581,8 @@ public sealed class ContextStashWriter
             sb.Append("whiteboard_pending=true regions=").Append(p.WhiteboardRegionCount ?? 0);
         if (p.PickedLinks is { Count: > 0 } pickedLinks)
             sb.Append("picked_links=").Append(pickedLinks.Count).Append(' ');
+        if (p.Annotations is { Count: > 0 } annoSummary)
+            sb.Append("annotations=").Append(annoSummary.Count).Append(' ');
         sb.Append('\n');
 
         if (p.PickedLinks is { Count: > 0 } linkRows)
@@ -588,6 +596,24 @@ public sealed class ContextStashWriter
                 sb.Append("url=").Append(SanitiseTokenValue(l.Url, 512)).Append(' ');
                 if (l.Title is { Length: > 0 })
                     sb.Append("title=\"").Append(SanitiseUserText(l.Title, 120)).Append('"');
+                sb.Append('\n');
+            }
+        }
+
+        if (p.Annotations is { Count: > 0 } annoRows)
+        {
+            // Each annotation gets its own line. Anchor label is the only
+            // way the LLM knows what the body refers to, so it never gets
+            // truncated as aggressively as link titles.
+            for (var i = 0; i < annoRows.Count; i++)
+            {
+                var a = annoRows[i];
+                sb.Append("[everywhere-ctx-annotation] #").Append(i).Append(' ');
+                sb.Append("source=").Append(SanitiseTokenValue(a.Source, 32)).Append(' ');
+                sb.Append("anchor=\"").Append(SanitiseUserText(a.AnchorLabel, 200)).Append("\" ");
+                if (a.AnchorRef is { Length: > 0 })
+                    sb.Append("ref=").Append(SanitiseTokenValue(a.AnchorRef, 96)).Append(' ');
+                sb.Append("body=\"").Append(SanitiseUserText(a.Body, 800)).Append('"');
                 sb.Append('\n');
             }
         }
@@ -781,6 +807,30 @@ public sealed class ContextStashWriter
         return sb.ToString();
     }
 
+    /// <summary>
+    /// Pulls all queued annotations off the stash and maps them into the
+    /// wire-format record. Called once per CaptureCoreAsync so one user
+    /// hotkey press consumes everything they accumulated since the last
+    /// send. Returns null (not an empty list) when there's nothing
+    /// pending, so the JSON serializer omits the field entirely.
+    /// </summary>
+    private IReadOnlyList<PayloadAnnotation>? DrainAnnotationsForPayload()
+    {
+        var items = _annotationStash.Drain();
+        if (items.IsDefaultOrEmpty) return null;
+        var result = new List<PayloadAnnotation>(items.Length);
+        foreach (var item in items)
+        {
+            result.Add(new PayloadAnnotation(
+                Source: item.Source.ToString().ToLowerInvariant(),
+                Body: item.Body,
+                AnchorLabel: item.AnchorLabel,
+                AnchorRef: item.AnchorRef,
+                CapturedAtUtc: item.CapturedAtUtc));
+        }
+        return result;
+    }
+
     private static async Task WriteAtomicAsync(string content, CancellationToken cancellationToken)
     {
         var dir = Path.GetDirectoryName(StashPath);
@@ -858,7 +908,13 @@ internal sealed record ContextSnapshotPayload(
     // linkclump-plus style harvest: rect-selected hyperlinks. Same delivery
     // channel as everything else — agent reads agent-state, decides what to
     // do with them. Everywhere does not POST anywhere on the user's behalf.
-    [property: JsonPropertyName("picked_links")] IReadOnlyList<PickedLink>? PickedLinks = null)
+    [property: JsonPropertyName("picked_links")] IReadOnlyList<PickedLink>? PickedLinks = null,
+    // User-authored notes queued against the perception anchors above.
+    // Empty / null when the user hasn't accumulated any annotations
+    // this session. Each entry is independent of pin_pending /
+    // whiteboard_pending — the LLM reads `body` + `anchor_label` to
+    // decide what to act on.
+    [property: JsonPropertyName("annotations")] IReadOnlyList<PayloadAnnotation>? Annotations = null)
 {
     public static readonly JsonSerializerOptions SerializerOptions = new()
     {
@@ -869,3 +925,10 @@ internal sealed record ContextSnapshotPayload(
 internal sealed record PickedLink(
     [property: JsonPropertyName("url")]    string Url,
     [property: JsonPropertyName("title")]  string? Title);
+
+internal sealed record PayloadAnnotation(
+    [property: JsonPropertyName("source")]        string Source,
+    [property: JsonPropertyName("body")]          string Body,
+    [property: JsonPropertyName("anchor_label")]  string AnchorLabel,
+    [property: JsonPropertyName("anchor_ref")]    string? AnchorRef,
+    [property: JsonPropertyName("captured_at")]   DateTimeOffset CapturedAtUtc);
