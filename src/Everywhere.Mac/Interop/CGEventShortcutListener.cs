@@ -117,8 +117,6 @@ public sealed class CGEventShortcutListener : IShortcutListener, IDisposable
         // we swallow the original KeyDown; no extra suppression is needed.
         // Tracked because reintroducing this without scoping to OUR window
         // is regression-prone.
-        _ = currentModifiers;
-
         using var _ = _syncLock.EnterScope();
         if (_currentCaptureScope is null) return;
 
