@@ -15,13 +15,14 @@ namespace Everywhere.Mcp.AnnotationOverlay;
 /// fleet is torn down — the annotations have shipped to the agent and
 /// the badges no longer belong on screen.
 ///
-/// Anchor is FIXED at pin time (screen-coordinate snapshot, Figma-comment
-/// style). No follow-up timer — AX BoundingRectangle on Chromium-based
-/// hosts (Arc, Brave) returns stale or 0×0 bounds during scroll, which
-/// produced "✓ in wrong place" reports. A static screen coordinate is
-/// less fancy but always correct: when the user scrolls the element away
-/// the ✓ stays put — the visual reminder "you have a note in this region"
-/// outranks tracking the now-off-screen element.
+/// Outline + badge follow the element. A 150ms DispatcherTimer re-queries
+/// each pair's BoundingRectangle and slides Outline/Badge to the new
+/// screen coords; if the rect goes empty (element scrolled out of view,
+/// host window hidden) both hide and reappear when bounds are good again.
+/// User feedback rejected the static-screen-coord variant: "之前标注的框
+/// 停在原处, 视觉上看起来变成框选下方新元素, 语义不对".
+/// The badge skips MoveTo while expanded so we don't yank the popover
+/// under a typing user.
 /// </summary>
 public sealed class AnnotationOverlayHost : IAsyncInitializer, IAsyncDisposable
 {
@@ -34,6 +35,8 @@ public sealed class AnnotationOverlayHost : IAsyncInitializer, IAsyncDisposable
     private readonly List<PinOverlayPair> _overlays = new();
     private Action<IVisualElement>? _pinnedHandler;
     private Action? _captureCompletedHandler;
+    private Action? _pickStashClearedHandler;
+    private DispatcherTimer? _followTimer;
     private volatile bool _disposed;
 
     public AnnotationOverlayHost(
@@ -60,8 +63,92 @@ public sealed class AnnotationOverlayHost : IAsyncInitializer, IAsyncDisposable
         _captureCompletedHandler = OnManualCaptureCompleted;
         _contextStashWriter.ManualCaptureCompleted += _captureCompletedHandler;
 
-        _logger.LogInformation("AnnotationOverlayHost subscribed (Pinned + ManualCaptureCompleted)");
+        _pickStashClearedHandler = OnPickStashCleared;
+        _pickStash.Cleared += _pickStashClearedHandler;
+
+        Dispatcher.UIThread.Post(() =>
+        {
+            _followTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(150) };
+            _followTimer.Tick += OnFollowTick;
+            _followTimer.Start();
+        });
+
+        _logger.LogInformation("AnnotationOverlayHost subscribed");
         return Task.CompletedTask;
+    }
+
+    private void OnPickStashCleared()
+    {
+        // User pressed ClearContextStash hotkey. Wipe outlines + badges
+        // and drop any in-flight stash entries so the next prompt is
+        // genuinely clean.
+        Dispatcher.UIThread.Post(() =>
+        {
+            foreach (var pair in _overlays)
+            {
+                if (pair.CommittedHandler is not null) pair.Badge.Committed -= pair.CommittedHandler;
+                if (pair.ClearedHandler is not null) pair.Badge.Cleared -= pair.ClearedHandler;
+                if (pair.LastItem is not null)
+                {
+                    try { _annotationStash.RemoveItem(pair.LastItem); }
+                    catch (Exception ex) { _logger.LogDebug(ex, "ClearStash: RemoveItem failed"); }
+                }
+                pair.LastItem = null;
+                pair.Badge.Hide();
+                pair.Outline.Hide();
+                pair.Outline.Close();
+                pair.Badge.Close();
+            }
+            _overlays.Clear();
+        });
+    }
+
+    private void OnFollowTick(object? sender, EventArgs e)
+    {
+        if (_overlays.Count == 0) return;
+        foreach (var pair in _overlays)
+        {
+            // Single shared rect query so outline + badge can't disagree.
+            _ = RefreshPairAsync(pair);
+        }
+    }
+
+    private async Task RefreshPairAsync(PinOverlayPair pair)
+    {
+        if (Interlocked.CompareExchange(ref pair.RefreshInFlight, 1, 0) != 0) return;
+        try
+        {
+            PixelRect rect;
+            try
+            {
+                rect = await Task.Run(() => pair.Element.BoundingRectangle).WaitAsync(TimeSpan.FromMilliseconds(150));
+            }
+            catch
+            {
+                return;
+            }
+
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                if (_disposed) return;
+                if (rect.Width <= 0 || rect.Height <= 0)
+                {
+                    pair.Outline.Hide();
+                    pair.Badge.HideIfCollapsed();
+                    return;
+                }
+                pair.Outline.MoveTo(rect);
+                pair.Badge.MoveTo(rect);
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "RefreshPair failed");
+        }
+        finally
+        {
+            Interlocked.Exchange(ref pair.RefreshInFlight, 0);
+        }
     }
 
     private void OnPinned(IVisualElement element)
@@ -220,9 +307,16 @@ public sealed class AnnotationOverlayHost : IAsyncInitializer, IAsyncDisposable
             _contextStashWriter.ManualCaptureCompleted -= _captureCompletedHandler;
             _captureCompletedHandler = null;
         }
+        if (_pickStashClearedHandler is not null)
+        {
+            _pickStash.Cleared -= _pickStashClearedHandler;
+            _pickStashClearedHandler = null;
+        }
 
         await Dispatcher.UIThread.InvokeAsync(() =>
         {
+            _followTimer?.Stop();
+            _followTimer = null;
             foreach (var pair in _overlays)
             {
                 pair.Badge.Close();
@@ -240,6 +334,7 @@ public sealed class AnnotationOverlayHost : IAsyncInitializer, IAsyncDisposable
         public AnnotationItem? LastItem { get; set; }
         public EventHandler<string>? CommittedHandler { get; set; }
         public EventHandler? ClearedHandler { get; set; }
+        public int RefreshInFlight; // 0 = idle, 1 = refresh in progress
 
         public PinOverlayPair(
             IVisualElement element,

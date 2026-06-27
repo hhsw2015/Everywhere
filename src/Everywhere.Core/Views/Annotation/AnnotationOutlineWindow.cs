@@ -54,18 +54,36 @@ public sealed class AnnotationOutlineWindow : Window
     public void ShowAt(PixelRect rect)
     {
         if (rect.Width <= 0 || rect.Height <= 0) return;
-
         try
         {
-            Position = new PixelPoint(rect.X, rect.Y);
-            var scaling = DesktopScaling > 0 ? DesktopScaling : 1.0;
-            Width = rect.Width / scaling;
-            Height = rect.Height / scaling;
+            ApplyRect(rect);
             Show();
         }
         catch (Exception ex)
         {
             Log.Logger.ForContext<AnnotationOutlineWindow>().Warning(ex, "AnnotationOutlineWindow.ShowAt failed");
         }
+    }
+
+    public void MoveTo(PixelRect rect)
+    {
+        if (rect.Width <= 0 || rect.Height <= 0) return;
+        try
+        {
+            ApplyRect(rect);
+            if (!IsVisible) Show();
+        }
+        catch (Exception ex)
+        {
+            Log.Logger.ForContext<AnnotationOutlineWindow>().Debug(ex, "AnnotationOutlineWindow.MoveTo failed");
+        }
+    }
+
+    private void ApplyRect(PixelRect rect)
+    {
+        Position = new PixelPoint(rect.X, rect.Y);
+        var scaling = DesktopScaling > 0 ? DesktopScaling : 1.0;
+        Width = rect.Width / scaling;
+        Height = rect.Height / scaling;
     }
 }

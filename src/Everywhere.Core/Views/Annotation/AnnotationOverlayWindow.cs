@@ -156,6 +156,33 @@ public class AnnotationOverlayWindow : Window
     }
 
     /// <summary>
+    /// Slide the badge to the top-right of <paramref name="rect"/> without
+    /// resetting state. Called by the follow timer when the user scrolls
+    /// the host window. Skipped while expanded so we don't yank the
+    /// popover under a typing user.
+    /// </summary>
+    public void MoveTo(PixelRect rect)
+    {
+        if (_expanded) return;
+        if (rect.Width <= 0 || rect.Height <= 0) return;
+        var screenX = rect.Right + OffsetX;
+        var screenY = rect.Y + OffsetY;
+        _collapsedOrigin = new PixelPoint(screenX, screenY);
+        Position = _collapsedOrigin;
+        if (!IsVisible) Show();
+    }
+
+    /// <summary>
+    /// Hide the badge ONLY if it's currently in the collapsed (➕/✓)
+    /// state. While expanded the user is typing — never disappear under
+    /// them. The next MoveTo brings the badge back when bounds are good.
+    /// </summary>
+    public void HideIfCollapsed()
+    {
+        if (!_expanded) Hide();
+    }
+
+    /// <summary>
     /// Place the badge at the top-right of the supplied screen rect and
     /// show it. The caller (AnnotationOverlayHost) resolves the rect
     /// once at pin time so badge + outline can't disagree on the anchor.

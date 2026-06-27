@@ -88,7 +88,11 @@ public sealed class ContextStashWriter
     /// </summary>
     public void ClearStash()
     {
-        try { _pickStash.Clear(); } catch { }
+        // ClearWithEvent (not Clear) so AnnotationOverlayHost gets the
+        // Cleared signal and tears down its outline + badge fleet. With
+        // plain Clear() the visual artifacts would linger after the user
+        // pressed the wipe hotkey.
+        try { _pickStash.ClearWithEvent(); } catch { }
         foreach (var path in new[] { StashPath, StashPath + ".tmp" })
         {
             try { if (File.Exists(path)) File.Delete(path); }
