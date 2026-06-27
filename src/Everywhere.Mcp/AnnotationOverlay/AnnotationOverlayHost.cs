@@ -1,8 +1,8 @@
+using Avalonia;
 using Avalonia.Threading;
 using Everywhere.Common;
 using Everywhere.Interop;
 using Everywhere.Mcp.Snapshot;
-using Everywhere.Views;
 using Everywhere.Views.Annotation;
 using Microsoft.Extensions.Logging;
 
@@ -66,39 +66,57 @@ public sealed class AnnotationOverlayHost : IAsyncInitializer, IAsyncDisposable
 
     private void OnPinned(IVisualElement element)
     {
-        Dispatcher.UIThread.Post(() =>
+        // Resolve AX bounds OFF the UI thread, then jump onto it to create
+        // the windows. One resolve covers both outline and badge so they
+        // can't disagree about the anchor rect, and there's no concurrent
+        // AX query racing with itself.
+        _ = Task.Run(async () =>
         {
-            if (_disposed) return; // host torn down between event and UI dispatch
+            PixelRect rect;
             try
             {
-                var outline = new VisualElementOverlayWindow();
-                // Outline needs to (a) survive switching into a fullscreen
-                // Arc/Safari space, (b) stay above ordinary app windows.
-                // ConfigureAsCursorOverlay nails both via
-                // CanJoinAllSpaces|FullScreenAuxiliary + Floating level,
-                // and outline is already click-through (IsHitTestVisible=
-                // false), so IgnoresMouseEvents is a no-op here.
-                _windowHelper.ConfigureAsCursorOverlay(outline);
-                outline.UpdateForVisualElement(element);
-
-                var badge = new AnnotationOverlayWindow();
-                // Badge needs the same space/level survival but must
-                // remain clickable / typable. ConfigureAsInteractiveOverlay
-                // sets CollectionBehavior + Level without disabling input.
-                _windowHelper.ConfigureAsInteractiveOverlay(badge);
-                var pair = new PinOverlayPair(element, outline, badge);
-                pair.CommittedHandler = (_, body) => OnCommitted(pair, body);
-                pair.ClearedHandler = (_, _) => OnCleared(pair);
-                badge.Committed += pair.CommittedHandler;
-                badge.Cleared += pair.ClearedHandler;
-                _overlays.Add(pair);
-
-                badge.ShowFor(element);
+                rect = await Task.Run(() => element.BoundingRectangle).WaitAsync(TimeSpan.FromSeconds(1));
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "Failed to show annotation overlay");
+                _logger.LogWarning(ex, "Failed to resolve AX bounds for annotation overlay");
+                return;
             }
+
+            if (rect.Width <= 0 || rect.Height <= 0)
+            {
+                _logger.LogDebug("Pinned element has empty AX bounds; skipping overlay");
+                return;
+            }
+
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                if (_disposed) return;
+                try
+                {
+                    var outline = new AnnotationOutlineWindow();
+                    outline.ShowAt(rect);
+                    // Configure AFTER Show so the NSWindow exists and the
+                    // native-level apply runs synchronously instead of via
+                    // deferred Opened. Avoids a 1-frame default-level flash.
+                    _windowHelper.ConfigureAsCursorOverlay(outline);
+
+                    var badge = new AnnotationOverlayWindow();
+                    var pair = new PinOverlayPair(element, outline, badge);
+                    pair.CommittedHandler = (_, body) => OnCommitted(pair, body);
+                    pair.ClearedHandler = (_, _) => OnCleared(pair);
+                    badge.Committed += pair.CommittedHandler;
+                    badge.Cleared += pair.ClearedHandler;
+                    _overlays.Add(pair);
+
+                    badge.ShowAt(rect);
+                    _windowHelper.ConfigureAsInteractiveOverlay(badge);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to show annotation overlay");
+                }
+            });
         });
     }
 
@@ -115,7 +133,7 @@ public sealed class AnnotationOverlayHost : IAsyncInitializer, IAsyncDisposable
                 if (pair.ClearedHandler is not null) pair.Badge.Cleared -= pair.ClearedHandler;
                 pair.LastItem = null;
                 pair.Badge.Hide();
-                pair.Outline.UpdateForVisualElement(null);
+                pair.Outline.Hide();
                 pair.Outline.Close();
                 pair.Badge.Close();
             }
@@ -217,7 +235,7 @@ public sealed class AnnotationOverlayHost : IAsyncInitializer, IAsyncDisposable
     private sealed class PinOverlayPair
     {
         public IVisualElement Element { get; }
-        public VisualElementOverlayWindow Outline { get; }
+        public AnnotationOutlineWindow Outline { get; }
         public AnnotationOverlayWindow Badge { get; }
         public AnnotationItem? LastItem { get; set; }
         public EventHandler<string>? CommittedHandler { get; set; }
@@ -225,7 +243,7 @@ public sealed class AnnotationOverlayHost : IAsyncInitializer, IAsyncDisposable
 
         public PinOverlayPair(
             IVisualElement element,
-            VisualElementOverlayWindow outline,
+            AnnotationOutlineWindow outline,
             AnnotationOverlayWindow badge)
         {
             Element = element;

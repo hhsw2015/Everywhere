@@ -6,7 +6,6 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Everywhere.Common;
 using Everywhere.Interop;
-using Serilog;
 
 namespace Everywhere.Views.Annotation;
 
@@ -157,35 +156,18 @@ public class AnnotationOverlayWindow : Window
     }
 
     /// <summary>
-    /// Position the overlay at the top-right of the given AX element
-    /// bounding rect, expressed in screen pixels. Resets to collapsed
-    /// state on each call.
+    /// Place the badge at the top-right of the supplied screen rect and
+    /// show it. The caller (AnnotationOverlayHost) resolves the rect
+    /// once at pin time so badge + outline can't disagree on the anchor.
     /// </summary>
-    public async void ShowFor(IVisualElement element)
+    public void ShowAt(PixelRect rect)
     {
-        PixelRect rect;
-        try
-        {
-            rect = await Task.Run(() => element.BoundingRectangle).WaitAsync(TimeSpan.FromSeconds(1));
-        }
-        catch (Exception ex)
-        {
-            Log.Logger.ForContext<AnnotationOverlayWindow>().Warning(ex, "Failed to resolve AX bounds for annotation overlay");
-            Hide();
-            return;
-        }
-
         if (rect.Width <= 0 || rect.Height <= 0)
         {
             Hide();
             return;
         }
 
-        // Clear state BEFORE Collapse — otherwise, if this window were
-        // somehow expanded with a committed body when ShowFor was called
-        // a second time, Collapse() would fire `Committed` with the stale
-        // body before our reset ran. (Host currently creates a fresh
-        // window per pin, so this is defensive.)
         CommittedText = null;
         _textBox.Text = string.Empty;
         Collapse();
