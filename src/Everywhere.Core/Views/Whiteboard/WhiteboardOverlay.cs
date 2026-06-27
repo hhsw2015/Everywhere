@@ -381,6 +381,9 @@ public sealed class WhiteboardOverlay : ScreenSelectionTransparentWindow
             }
             converted.Add(screenPts);
         }
+        Serilog.Log.Logger.ForContext<WhiteboardOverlay>().Information(
+            "WhiteboardOverlay Commit: continueSession={Continue} _strokes.Count={SC} converted.Count={CC}",
+            continueSession, _strokes.Count, converted.Count);
         CompleteIfPending(canceled: false, strokes: converted,
                           windowPos: Position, screenBounds: _screenBounds,
                           continueSession: continueSession);
