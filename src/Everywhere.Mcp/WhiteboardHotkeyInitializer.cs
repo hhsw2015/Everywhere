@@ -1359,18 +1359,18 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
 
     private static IVisualElement? ClimbToLeafType(IVisualElement start, int maxHops)
     {
-        // Climb up to maxHops, picking the BEST (lowest-score) leaf-type
-        // ancestor we see. If a Hyperlink/Button is on the path, it
-        // beats a Label even if we hit Label first. Stops as soon as we
-        // exit leaf territory (a container with score < 0).
+        // Climb up to maxHops, picking the best (lowest-score) leaf-type
+        // ancestor along the way. Containers (score < 0) are skipped,
+        // not stoppers — Chromium puts Label / Hyperlink elements
+        // *inside* Panel/Document subtrees, so the first hop into a
+        // container doesn't mean leaves are exhausted.
         IVisualElement? best = null;
         var bestScore = int.MaxValue;
         var cur = start;
         for (var i = 0; i < maxHops && cur is not null; i++)
         {
             var score = LeafTypeScore(cur.Type);
-            if (score < 0) break; // hit a container, leaves don't nest beyond it
-            if (score < bestScore) { best = cur; bestScore = score; }
+            if (score >= 0 && score < bestScore) { best = cur; bestScore = score; }
             try { cur = cur.Parent; } catch { break; }
         }
         return best;

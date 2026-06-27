@@ -90,6 +90,10 @@ public sealed class WhiteboardOverlayHost : IAsyncInitializer, IAsyncDisposable
         if (_overlays.Count == 0) return;
         foreach (var pair in _overlays)
         {
+            // No leaves at all = nothing to follow. The outline stays at
+            // its initial position (gesture rect). User scrolls past it
+            // → outline doesn't move (no anchor to track). This is the
+            // hard limit of macOS AX on Chromium webviews.
             if (pair.Region.Leaves.Count == 0) continue;
             _ = RefreshPairAsync(pair);
         }

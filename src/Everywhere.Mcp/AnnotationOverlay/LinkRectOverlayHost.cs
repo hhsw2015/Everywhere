@@ -284,12 +284,19 @@ public sealed class LinkRectOverlayHost : IAsyncInitializer, IAsyncDisposable
                 _logger.LogDebug("LinkRect anchor upgraded to harvested link element");
             }
             // Snap the outline to the harvested links' actual bounding
-            // box immediately. Don't wait for the next 50ms follow tick.
+            // box immediately. Try element.BoundingRectangle first (more
+            // accurate than the harvest-time snapshot Bounds field), fall
+            // back to Bounds when the element is null.
             var union = default(PixelRect);
             var firstU = true;
             foreach (var l in links)
             {
-                var b = l.Bounds;
+                PixelRect b;
+                try
+                {
+                    b = l.Element?.BoundingRectangle ?? l.Bounds;
+                }
+                catch { b = l.Bounds; }
                 if (b.Width <= 0 || b.Height <= 0) continue;
                 if (firstU) { union = b; firstU = false; }
                 else union = union.Union(b);
@@ -298,9 +305,16 @@ public sealed class LinkRectOverlayHost : IAsyncInitializer, IAsyncDisposable
             {
                 _current.Outline.MoveTo(union);
                 _current.Badge.MoveTo(union);
-                _logger.LogDebug("LinkRect outline snapped to harvested union: {Rect}", union);
+                _logger.LogInformation(
+                    "LinkRect outline snapped to harvested union: ({X},{Y},{W}x{H}) from {Count} link(s)",
+                    union.X, union.Y, union.Width, union.Height, links.Count);
             }
-            _logger.LogInformation("LinkRect overlay link list updated: {Count} link(s)", links.Count);
+            else
+            {
+                _logger.LogWarning(
+                    "LinkRect harvest returned {Count} link(s) but all bounds empty; outline stays at drag rect",
+                    links.Count);
+            }
         });
     }
 
