@@ -6,7 +6,7 @@ using Everywhere.Views;
 using Everywhere.Views.Annotation;
 using Microsoft.Extensions.Logging;
 
-namespace Everywhere.Mcp.Annotation;
+namespace Everywhere.Mcp.AnnotationOverlay;
 
 /// <summary>
 /// Bridges <see cref="PickStash"/> events and the floating annotation
