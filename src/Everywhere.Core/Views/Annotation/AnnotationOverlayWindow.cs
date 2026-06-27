@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
@@ -10,25 +11,43 @@ using Serilog;
 namespace Everywhere.Views.Annotation;
 
 /// <summary>
-/// Visual spike (v0.9.167): a 28×28 red square pinned to the top-right
-/// of the just-pinned element. Verifies that we can correctly resolve
-/// AX bounds, position an Avalonia transparent overlay there, and
-/// keep it visible without stealing focus. Once the position math is
-/// confirmed it'll be expanded into the real ➕ + textarea popover.
+/// Annotation overlay (B1, v0.9.170):
+/// - Collapsed state: a ➕ badge at the top-right of the pinned element.
+/// - Expanded state: a 320×100 popover with the same ➕ in the corner
+///   and a textarea filling the rest. Clicking ➕ toggles between the
+///   two; blur or Esc collapses back; the saved body is exposed via
+///   <see cref="CommittedText"/> for the host to forward to AnnotationStash.
+///
+/// The expanded state widens the window and lengthens AutoHideAfter, so
+/// once the user clicks ➕ the badge stops fighting them by disappearing
+/// mid-thought. Save semantics (commit-to-stash, close) ship in B2.
 /// </summary>
 public class AnnotationOverlayWindow : Window
 {
-    // Small badge size — same idea as the mockup's 28×28 plus button.
-    private const int BadgeSize = 28;
-    // Inset from the anchor element's top-right so the badge doesn't
-    // occlude the anchor itself. Negative X offset means the badge
-    // sits slightly outside the right edge.
+    private const int BadgeSize = 32;
+    private const int ExpandedWidth = 320;
+    private const int ExpandedHeight = 110;
+
+    // Offset from the anchor element's top-right corner so the badge
+    // sits just outside the highlight, not on top of it.
     private const int OffsetX = 6;
     private const int OffsetY = -6;
 
-    private static readonly TimeSpan AutoHideAfter = TimeSpan.FromSeconds(6);
+    private static readonly TimeSpan CollapsedAutoHide = TimeSpan.FromSeconds(8);
 
-    private DispatcherTimer? _autoHideTimer;
+    private readonly Border _root;
+    private readonly Button _plusButton;
+    private readonly TextBox _textBox;
+    private readonly DispatcherTimer _autoHideTimer;
+
+    private bool _expanded;
+    private PixelPoint _collapsedOrigin;
+
+    /// <summary>The body the user committed when the popover collapses.
+    /// Cleared on each ShowFor so a fresh pin doesn't inherit stale text.</summary>
+    public string? CommittedText { get; private set; }
+
+    public event EventHandler<string>? Committed;
 
     public AnnotationOverlayWindow()
     {
@@ -41,28 +60,82 @@ public class AnnotationOverlayWindow : Window
         TransparencyLevelHint = [WindowTransparencyLevel.Transparent];
         Background = null;
         Topmost = true;
-        Focusable = false;
-
-        // Hit-testable so the user can click the badge. The
-        // VisualElementOverlayWindow used for outlines deliberately
-        // sets this false — we are NOT that, we are interactive.
-        IsHitTestVisible = true;
+        // Focusable=true so the textarea can receive keyboard / IME
+        // input once expanded. The collapsed badge still doesn't steal
+        // focus because ShowActivated=false and the window helper marks
+        // it non-focusable at the AppKit level until we open the popover.
+        Focusable = true;
 
         var windowHelper = ServiceLocator.Resolve<IWindowHelper>();
         windowHelper.SetFocusable(this, false);
         windowHelper.SetHitTestVisible(this, true);
 
-        Content = new Border
+        // ➕ button — gradient fill matching the mockup, gradient
+        // resource lives in App.axaml as AssistantBackgroundBrush.
+        _plusButton = new Button
         {
             Width = BadgeSize,
             Height = BadgeSize,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            VerticalAlignment = VerticalAlignment.Top,
+            Background = new LinearGradientBrush
+            {
+                StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
+                EndPoint = new RelativePoint(1, 1, RelativeUnit.Relative),
+                GradientStops =
+                {
+                    new GradientStop(Color.Parse("#AC45F1"), 0),
+                    new GradientStop(Color.Parse("#7A7EF4"), 0.5),
+                    new GradientStop(Color.Parse("#3DC6F8"), 1),
+                },
+            },
+            Foreground = Brushes.White,
+            BorderBrush = new SolidColorBrush(Color.FromArgb(0x66, 0xFF, 0xFF, 0xFF)),
+            BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(BadgeSize / 2.0),
-            Background = new SolidColorBrush(Color.FromArgb(0xE6, 0xFF, 0x38, 0x5C)), // Airbnb rausch, debug fill
-            BorderBrush = new SolidColorBrush(Color.FromArgb(0xFF, 0xFF, 0xFF, 0xFF)),
-            BorderThickness = new Thickness(1.5),
-            HorizontalAlignment = HorizontalAlignment.Center,
-            VerticalAlignment = VerticalAlignment.Center,
+            FontSize = 18,
+            FontWeight = FontWeight.Medium,
+            Padding = new Thickness(0),
+            Content = "+",
         };
+        _plusButton.Click += OnPlusClicked;
+
+        _textBox = new TextBox
+        {
+            Watermark = "写点注释… (Esc 收起)",
+            AcceptsReturn = true,
+            TextWrapping = TextWrapping.Wrap,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            VerticalAlignment = VerticalAlignment.Stretch,
+            Margin = new Thickness(10, 10, BadgeSize + 14, 10),
+            Background = Brushes.Transparent,
+            BorderThickness = new Thickness(0),
+            IsVisible = false,
+        };
+        _textBox.KeyDown += OnTextBoxKeyDown;
+        _textBox.LostFocus += OnTextBoxLostFocus;
+
+        _root = new Border
+        {
+            CornerRadius = new CornerRadius(14),
+            Background = new SolidColorBrush(Color.FromArgb(0xF2, 0x1B, 0x1B, 0x22)),
+            BorderBrush = new SolidColorBrush(Color.FromArgb(0x55, 0xFF, 0xFF, 0xFF)),
+            BorderThickness = new Thickness(1),
+            BoxShadow = new BoxShadows(new BoxShadow
+            {
+                OffsetX = 0, OffsetY = 4, Blur = 14, Spread = 0,
+                Color = Color.FromArgb(0x55, 0, 0, 0),
+            }),
+            Child = new Panel
+            {
+                Children = { _textBox, _plusButton },
+            },
+        };
+
+        Content = _root;
+
+        _autoHideTimer = new DispatcherTimer { Interval = CollapsedAutoHide };
+        _autoHideTimer.Tick += OnAutoHideTick;
     }
 
     protected override void OnClosing(WindowClosingEventArgs e)
@@ -76,8 +149,8 @@ public class AnnotationOverlayWindow : Window
 
     /// <summary>
     /// Position the overlay at the top-right of the given AX element
-    /// bounding rect, expressed in screen pixels. Hides the window if
-    /// the rect is empty or off-screen.
+    /// bounding rect, expressed in screen pixels. Resets to collapsed
+    /// state on each call.
     /// </summary>
     public async void ShowFor(IVisualElement element)
     {
@@ -99,35 +172,120 @@ public class AnnotationOverlayWindow : Window
             return;
         }
 
-        // Anchor top-right of the element rect, with a small outward
-        // offset so the badge sits at the corner of the highlight.
+        Collapse();
+        CommittedText = null;
+        _textBox.Text = string.Empty;
+
         var screenX = rect.Right + OffsetX;
         var screenY = rect.Y + OffsetY;
-        Position = new PixelPoint(screenX, screenY);
+        _collapsedOrigin = new PixelPoint(screenX, screenY);
+        Position = _collapsedOrigin;
 
         Show();
         RestartAutoHide();
     }
 
-    /// <summary>
-    /// (spike) the badge has no interactive content yet, so a stale
-    /// pin would leave it floating forever (the user reported "切了
-    /// 窗口红点还在"). Auto-hide after a few seconds — once we expand
-    /// to the ➕→textarea popover this gets cancelled the moment the
-    /// user hovers / clicks the badge.
-    /// </summary>
+    private void OnPlusClicked(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        if (_expanded) Collapse();
+        else Expand();
+    }
+
+    private void Expand()
+    {
+        if (_expanded) return;
+        _expanded = true;
+
+        _autoHideTimer.Stop();
+
+        // Resize and re-anchor so the badge stays where it was; the
+        // popover grows down-and-left from that corner.
+        Width = ExpandedWidth;
+        Height = ExpandedHeight;
+        Position = new PixelPoint(
+            _collapsedOrigin.X - (ExpandedWidth - BadgeSize),
+            _collapsedOrigin.Y);
+
+        _textBox.IsVisible = true;
+
+        // Take keyboard focus so the textarea can receive typing & IME
+        // input. Activate the app (briefly) so macOS routes IME / 语音
+        // input to us — same trick the chat window already uses.
+        var windowHelper = ServiceLocator.Resolve<IWindowHelper>();
+        windowHelper.SetFocusable(this, true);
+        Activate();
+        _textBox.Focus();
+    }
+
+    private void Collapse()
+    {
+        if (!_expanded)
+        {
+            // Even when starting collapsed we reset visibility so a
+            // freshly-shown overlay never inherits the expanded layout.
+            _textBox.IsVisible = false;
+            Width = BadgeSize;
+            Height = BadgeSize;
+            return;
+        }
+        _expanded = false;
+
+        var text = (_textBox.Text ?? string.Empty).Trim();
+        if (text.Length > 0)
+        {
+            CommittedText = text;
+            Committed?.Invoke(this, text);
+        }
+
+        _textBox.IsVisible = false;
+        Width = BadgeSize;
+        Height = BadgeSize;
+        Position = _collapsedOrigin;
+
+        var windowHelper = ServiceLocator.Resolve<IWindowHelper>();
+        windowHelper.SetFocusable(this, false);
+
+        RestartAutoHide();
+    }
+
+    private void OnTextBoxKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Escape)
+        {
+            e.Handled = true;
+            Collapse();
+        }
+        // Cmd+Enter also collapses (commits) — same gesture as ChatGPT /
+        // Slack / iMessage send-current-message.
+        else if (e.Key == Key.Enter
+                 && (e.KeyModifiers & KeyModifiers.Meta) != 0)
+        {
+            e.Handled = true;
+            Collapse();
+        }
+    }
+
+    private void OnTextBoxLostFocus(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        // Defer one tick so the user clicking the same window (e.g.
+        // re-focusing the textarea via mouse) doesn't immediately
+        // collapse.
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (_expanded && !_textBox.IsFocused) Collapse();
+        });
+    }
+
     private void RestartAutoHide()
     {
-        _autoHideTimer?.Stop();
-        _autoHideTimer ??= new DispatcherTimer { Interval = AutoHideAfter };
-        _autoHideTimer.Tick -= OnAutoHideTick;
-        _autoHideTimer.Tick += OnAutoHideTick;
+        if (_expanded) return; // expanded state stays until user dismisses
+        _autoHideTimer.Stop();
         _autoHideTimer.Start();
     }
 
     private void OnAutoHideTick(object? sender, EventArgs e)
     {
-        _autoHideTimer?.Stop();
-        Hide();
+        _autoHideTimer.Stop();
+        if (!_expanded) Hide();
     }
 }
