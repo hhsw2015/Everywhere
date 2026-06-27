@@ -106,8 +106,25 @@ public sealed class SnapshotContextHotkeyInitializer : IAsyncInitializer
     // this race in practice — the cost is paid only where it matters.
     private const int MacosModifierReleaseDelayMs = 180;
 
+    // Last successful capture timestamp; coalesces rapid repeats from a
+    // single hotkey press. Without this, the OS sometimes delivers the
+    // shortcut twice (KeyDown + modifier-release re-fire) and the second
+    // capture overwrites the on-disk ctx file with a fresh snapshot that
+    // has already drained whatever the user queued — annotations vanish.
+    private long _lastCaptureTicks;
+    private const int RepeatSuppressionMs = 600;
+
     private void OnSnapshotPressed()
     {
+        var nowTicks = Environment.TickCount64;
+        var prev = Interlocked.Read(ref _lastCaptureTicks);
+        if (prev != 0 && (nowTicks - prev) < RepeatSuppressionMs)
+        {
+            _logger.LogDebug("Snapshot hotkey re-fired within {Ms}ms; ignoring", nowTicks - prev);
+            return;
+        }
+        Interlocked.Exchange(ref _lastCaptureTicks, nowTicks);
+
         // Capture must happen on the UI thread because IVisualElement.CaptureAsync
         // may bounce through Avalonia rendering. Fire-and-forget; user just wants
         // the hotkey to feel instant. The writer logs failures itself.
