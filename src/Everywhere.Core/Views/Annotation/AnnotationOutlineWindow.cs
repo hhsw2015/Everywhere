@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
 using Everywhere.Common;
+using Everywhere.Interop;
 using Serilog;
 
 namespace Everywhere.Views.Annotation;
