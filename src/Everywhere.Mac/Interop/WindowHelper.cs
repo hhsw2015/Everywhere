@@ -341,7 +341,10 @@ public class WindowHelper : IWindowHelper
         // StatusBar > Floating: Floating is what Avalonia's Topmost=true
         // already gives us, and we've seen it lose to apps that also use
         // Floating. StatusBar sits above any normal-app floating window.
-        nw.Level = NSWindowLevel.StatusBar;
+        // NSStatusWindowLevel = 25. Avalonia's NSWindowLevel enum binding
+// doesn't expose StatusBar by name, so cast the raw value. Lifts the
+// overlay above any normal-app floating window.
+nw.Level = (NSWindowLevel)25;
     }
 
     private static void ApplyCursorOverlay(NSWindow nw)
@@ -357,6 +360,9 @@ public class WindowHelper : IWindowHelper
         nw.CollectionBehavior &=
             ~(NSWindowCollectionBehavior.FullScreenPrimary |
                 NSWindowCollectionBehavior.Managed);
-        nw.Level = NSWindowLevel.StatusBar;
+        // NSStatusWindowLevel = 25. Avalonia's NSWindowLevel enum binding
+// doesn't expose StatusBar by name, so cast the raw value. Lifts the
+// overlay above any normal-app floating window.
+nw.Level = (NSWindowLevel)25;
     }
 }
