@@ -414,6 +414,12 @@ public sealed class WhiteboardOverlay : ScreenSelectionTransparentWindow
             }
             converted.Add(screenPts);
         }
+        // Close BEFORE TrySetResult: the hotkey initializer's await on
+        // ResultTask runs ElementFromPoint to anchor the gesture to a
+        // real AX leaf. While this overlay is still on screen, hit-test
+        // lands on the mask itself, not the underlying app. Closing
+        // first means the next hop sees the actual content.
+        Hide();
         CompleteIfPending(canceled: false, strokes: converted,
                           windowPos: Position, screenBounds: _screenBounds,
                           continueSession: continueSession);

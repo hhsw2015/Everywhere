@@ -167,25 +167,22 @@ public sealed class LinkRectOverlayHost : IAsyncInitializer, IAsyncDisposable
                         new PixelPoint(rect.X + rect.Width / 2, rect.Y + rect.Height / 2));
                     if (cand is not null)
                     {
-                        // Sanity: candidate must overlap the drag rect AND
-                        // be no more than 4× its area. ElementFromPoint can
-                        // legitimately return a window container whose
-                        // BoundingRectangle would drag the outline far away
-                        // from where the user actually pointed.
                         try
                         {
                             var b = cand.BoundingRectangle;
-                            var dragArea = (long)rect.Width * (long)rect.Height;
-                            var maxArea = Math.Max(dragArea * 4, 100_000);
-                            var area = (long)b.Width * (long)b.Height;
                             var intersects = b.Width > 0 && b.Height > 0
                                 && b.X < rect.Right && b.X + b.Width > rect.X
                                 && b.Y < rect.Bottom && b.Y + b.Height > rect.Y;
-                            if (intersects && area <= maxArea) anchor = cand;
+                            // Accept any non-empty intersecting candidate;
+                            // smaller is better but Chromium webviews
+                            // expose only the container so we take what we
+                            // can get. The follow timer will track its
+                            // BoundingRectangleLive even when it's large.
+                            if (intersects) anchor = cand;
                         }
                         catch (Exception ex)
                         {
-                            _logger.LogDebug(ex, "LinkRect anchor sanity check failed; using rect-only");
+                            _logger.LogDebug(ex, "LinkRect anchor bounds check failed; using rect-only");
                         }
                     }
                 }

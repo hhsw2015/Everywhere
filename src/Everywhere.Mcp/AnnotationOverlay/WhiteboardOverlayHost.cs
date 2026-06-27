@@ -114,17 +114,13 @@ public sealed class WhiteboardOverlayHost : IAsyncInitializer, IAsyncDisposable
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
                 if (_disposed) return;
-                // Pair may have been torn down (ManualCaptureCompleted /
-                // Cleared) while the AX query was in flight. Skip if the
-                // pair is no longer in _overlays — Outline/Badge would
-                // have been Close()d and any further call throws.
                 if (!_overlays.Contains(pair)) return;
-                if (rect.Width <= 0 || rect.Height <= 0)
-                {
-                    pair.Outline.Hide();
-                    pair.Badge.HideIfCollapsed();
-                    return;
-                }
+                // Empty bounds = anchor element doesn't expose live geometry
+                // (Chromium Hyperlink ancestor, etc). Don't hide — keep the
+                // overlay at its original draw rect so the user retains a
+                // visual marker. Better-than-nothing fallback when AX is
+                // useless for follow tracking.
+                if (rect.Width <= 0 || rect.Height <= 0) return;
                 pair.Outline.MoveTo(rect);
                 pair.Badge.MoveTo(rect);
             });

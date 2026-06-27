@@ -1220,8 +1220,6 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
 
         IVisualElement? best = null;
         long bestArea = long.MaxValue;
-        var gestureArea = (long)ann.BoundingRect.Width * (long)ann.BoundingRect.Height;
-        var maxArea = Math.Max(gestureArea * 4, 100_000); // tolerate up-to-4× gesture, no smaller cap than ~100k px²
         foreach (var (px, py) in probes)
         {
             IVisualElement? cand;
@@ -1238,11 +1236,17 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
             PixelRect b;
             try { b = cand.BoundingRectangle; }
             catch { continue; }
-            if (b.Width <= 0 || b.Height <= 0) continue;
-            // Sanity: reject containers that don't actually overlap the gesture.
-            if (!RectsIntersect(b, ann.BoundingRect)) continue;
+            // Chromium Hyperlink ancestors hand back 0×0 bounds — accept
+            // them anyway. The follow timer will repeatedly query
+            // BoundingRectangleLive and fall through hide-on-empty when
+            // those bounds stay degenerate. That's correct behaviour:
+            // when the anchor is unresolvable, the outline stays put at
+            // its original draw rect rather than jumping to nonsense.
+            if (b.Width > 0 && b.Height > 0 && !RectsIntersect(b, ann.BoundingRect)) continue;
             var area = (long)b.Width * (long)b.Height;
-            if (area > maxArea) continue;
+            // Treat 0×0 (degenerate) as the smallest possible — only
+            // wins if nothing real was found.
+            if (area == 0) area = long.MaxValue - 1;
             if (area < bestArea)
             {
                 best = cand;
