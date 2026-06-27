@@ -68,7 +68,12 @@ public sealed class AnnotationOverlayHost : IAsyncInitializer, IAsyncDisposable
 
         Dispatcher.UIThread.Post(() =>
         {
-            _followTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(150) };
+            // 50ms = 20fps follow. User reported 150ms was perceptibly
+            // laggy ("能不能更快一点让用户感知不到"). AX query overhead is
+            // ~10-30ms cross-process, so 50ms keeps the timer mostly idle
+            // between queries — RefreshInFlight still skips ticks that
+            // would overlap an outstanding query, so we don't pile up.
+            _followTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(50) };
             _followTimer.Tick += OnFollowTick;
             _followTimer.Start();
         });
@@ -124,7 +129,7 @@ public sealed class AnnotationOverlayHost : IAsyncInitializer, IAsyncDisposable
                 // Live variant skips per-element cache so this reflects
                 // the current screen position — the cached BoundingRectangle
                 // froze at pin time and the badge never moved.
-                rect = await Task.Run(() => pair.Element.BoundingRectangleLive).WaitAsync(TimeSpan.FromMilliseconds(150));
+                rect = await Task.Run(() => pair.Element.BoundingRectangleLive).WaitAsync(TimeSpan.FromMilliseconds(50));
             }
             catch
             {
