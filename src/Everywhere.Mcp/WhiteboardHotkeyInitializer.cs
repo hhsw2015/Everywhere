@@ -245,6 +245,45 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
                                               stashedSummaries: stashedSummaries);
         _activeOverlay = overlay;
 
+        // Auto-commit on recognised gesture: stroke release → parse all
+        // current strokes → if at least one parsed annotation has a
+        // recognised kind (Arrow/Circle/X), commit the session so the
+        // user gets immediate outline + ➕ feedback (Pin path's UX).
+        // No-op while the user is still mid-gesture (Line / unclassified
+        // shapes don't trigger commit; the user can keep drawing).
+        // Subscribed before overlay.Show() to catch the very first
+        // release.
+        var autoCommitFired = 0;
+        overlay.StrokeReleased += converted =>
+        {
+            if (Interlocked.CompareExchange(ref autoCommitFired, 1, 0) != 0) return;
+            try
+            {
+                var strokesForParse = converted
+                    .Select(pts => new Stroke(pts
+                        .Select(p => new StrokePoint(p.X, p.Y, p.T)).ToList()))
+                    .ToList();
+                var (annotations, _) = WhiteboardParser.ParseGrouped(strokesForParse);
+                var hasShape = annotations.Any(a =>
+                    a.Kind is AnnotationKind.Arrow
+                          or AnnotationKind.Circle
+                          or AnnotationKind.X);
+                if (hasShape)
+                {
+                    Dispatcher.UIThread.Post(() => overlay.Commit(continueSession: false));
+                }
+                else
+                {
+                    Interlocked.Exchange(ref autoCommitFired, 0); // allow next stroke to retry
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Auto-commit parse failed");
+                Interlocked.Exchange(ref autoCommitFired, 0);
+            }
+        };
+
         // OCR-only screenshot, taken in the background while user draws.
         // Doesn't affect the overlay visually.
         var captureSources = new List<(string Name, IVisualElement Element)>();

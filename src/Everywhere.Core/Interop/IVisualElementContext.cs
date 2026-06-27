@@ -170,6 +170,17 @@ public interface IVisualElementContext : IObservable<TextSelectionData>
     /// anchors) — usually still worth surfacing to the agent.
     /// </summary>
     Task<HarvestResult> HarvestLinksAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Same as <see cref="HarvestLinksAsync(CancellationToken)"/> but raises
+    /// <paramref name="onRectCommitted"/> the moment the user releases the
+    /// drag — so a caller can paint an outline + ➕ overlay immediately
+    /// (Pin-style UX) while the link harvest continues in the background.
+    /// The Task still completes when harvesting finishes. onRectCommitted
+    /// is invoked at most once; not invoked on cancellation.
+    /// </summary>
+    Task<HarvestResult> HarvestLinksAsync(Action<PixelRect> onRectCommitted, CancellationToken cancellationToken = default)
+        => HarvestLinksAsync(cancellationToken);
 }
 
 public readonly record struct HarvestResult(

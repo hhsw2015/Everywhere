@@ -141,6 +141,11 @@ public partial class VisualElementContext(IWindowHelper windowHelper) : IVisualE
 
     public Task<HarvestResult> HarvestLinksAsync(CancellationToken cancellationToken = default)
     {
-        return LinkRectSession.HarvestAsync(windowHelper, cancellationToken);
+        return LinkRectSession.HarvestAsync(windowHelper, onRectCommitted: null, cancellationToken);
+    }
+
+    public Task<HarvestResult> HarvestLinksAsync(Action<PixelRect> onRectCommitted, CancellationToken cancellationToken = default)
+    {
+        return LinkRectSession.HarvestAsync(windowHelper, onRectCommitted, cancellationToken);
     }
 }

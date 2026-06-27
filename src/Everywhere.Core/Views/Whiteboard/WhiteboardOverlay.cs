@@ -195,6 +195,15 @@ public sealed class WhiteboardOverlay : ScreenSelectionTransparentWindow
     public Task<WhiteboardCaptureResult> ResultTask => _result.Task;
 
     /// <summary>
+    /// Raised on every stroke release with the current screen-coord
+    /// stroke list. Lets the hotkey initializer parse-as-you-draw and
+    /// auto-commit when the user has drawn a recognised gesture
+    /// (Arrow / Circle / X), so the user gets immediate visual feedback
+    /// (outline + ➕) without having to press Enter.
+    /// </summary>
+    public event Action<IReadOnlyList<IReadOnlyList<(double X, double Y, double T)>>>? StrokeReleased;
+
+    /// <summary>
     /// Replace the dim background with the captured screenshot AFTER the
     /// overlay has opened. Caller passes the bitmap once their async
     /// capture pipeline returns; ownership transfers to the overlay (it
@@ -217,11 +226,32 @@ public sealed class WhiteboardOverlay : ScreenSelectionTransparentWindow
         });
     }
 
+    private void FireStrokeReleased()
+    {
+        if (StrokeReleased is null) return;
+        var origin = Position;
+        var converted = new List<IReadOnlyList<(double X, double Y, double T)>>(_strokes.Count);
+        for (var i = 0; i < _strokes.Count; i++)
+        {
+            var pts = _strokes[i];
+            var ts = _strokeTimestamps[i];
+            var screenPts = new (double X, double Y, double T)[pts.Count];
+            for (var j = 0; j < pts.Count; j++)
+            {
+                screenPts[j] = (origin.X + pts[j].X, origin.Y + pts[j].Y, ts[j]);
+            }
+            converted.Add(screenPts);
+        }
+        try { StrokeReleased.Invoke(converted); }
+        catch (Exception ex)
+        {
+            Serilog.Log.Logger.ForContext<WhiteboardOverlay>()
+                .Warning(ex, "StrokeReleased subscriber threw");
+        }
+    }
+
     private void OnCanvasPointerPressed(object? sender, PointerPressedEventArgs e)
     {
-        Serilog.Log.Logger.ForContext<WhiteboardOverlay>().Information(
-            "WhiteboardOverlay pointer pressed: left={Left}",
-            e.GetCurrentPoint(_drawingCanvas).Properties.IsLeftButtonPressed);
         if (!e.GetCurrentPoint(_drawingCanvas).Properties.IsLeftButtonPressed) return;
         // Defensive: a previous stroke may not have been released cleanly
         // (capture is intentionally not used, so PointerReleased is not
@@ -295,13 +325,16 @@ public sealed class WhiteboardOverlay : ScreenSelectionTransparentWindow
     private void OnCanvasPointerReleased(object? sender, PointerReleasedEventArgs e)
     {
         if (_activeStrokeRaw is null) return;
-        Serilog.Log.Logger.ForContext<WhiteboardOverlay>().Information(
-            "WhiteboardOverlay pointer released: rawPoints={Count}, _strokes.Count(before)={Before}",
-            _activeStrokeRaw.Count, _strokes.Count);
         if (_activeStrokeRaw.Count >= 2)
         {
             _strokes.Add(_activeStrokeRaw);
             _strokeTimestamps.Add(_activeStrokeTs!);
+            // Fire AFTER the stroke is appended so the listener sees the
+            // full set including this new one. Project to screen coords
+            // (window position + menu-bar offset) the same way Commit
+            // does, otherwise the parser sees window-local coords that
+            // don't match BoundingRectangle space.
+            FireStrokeReleased();
         }
         else if (_activePath is not null)
         {
@@ -381,9 +414,6 @@ public sealed class WhiteboardOverlay : ScreenSelectionTransparentWindow
             }
             converted.Add(screenPts);
         }
-        Serilog.Log.Logger.ForContext<WhiteboardOverlay>().Information(
-            "WhiteboardOverlay Commit: continueSession={Continue} _strokes.Count={SC} converted.Count={CC}",
-            continueSession, _strokes.Count, converted.Count);
         CompleteIfPending(canceled: false, strokes: converted,
                           windowPos: Position, screenBounds: _screenBounds,
                           continueSession: continueSession);

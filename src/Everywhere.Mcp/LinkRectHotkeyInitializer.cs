@@ -124,7 +124,16 @@ public sealed class LinkRectHotkeyInitializer : IAsyncInitializer
             try
             {
                 var sw = System.Diagnostics.Stopwatch.StartNew();
-                var result = await _visualContext.HarvestLinksAsync(CancellationToken.None);
+                // Pin-style UX: paint the outline + ➕ the moment the
+                // user releases the drag. The harvest task continues
+                // populating links in the background; SnapshotContext
+                // sees both rect and links once both are ready.
+                Action<Avalonia.PixelRect> rectCommitted = rect =>
+                {
+                    try { _linkRectStash.SetRect(rect); }
+                    catch (Exception ex) { _logger.LogDebug(ex, "LinkRectStash.SetRect failed"); }
+                };
+                var result = await _visualContext.HarvestLinksAsync(rectCommitted, CancellationToken.None);
                 sw.Stop();
                 var links = result.Links ?? Array.Empty<HarvestedLink>();
                 _logger.LogInformation(
@@ -170,8 +179,11 @@ public sealed class LinkRectHotkeyInitializer : IAsyncInitializer
                 // shipping. CaptureLinksAsync's old immediate-ship path
                 // is unused now but kept on the writer for the moment in
                 // case external callers depend on it.
-                _linkRectStash.Set(links);
-                _logger.LogInformation("LinkRect stash filled with {Count} links (deferred ship)", links.Count);
+                // Append (not Set) — the SetRect call from rectCommitted
+                // already created the entry and showed the overlay; we
+                // just fill in the link list once harvest finishes.
+                _linkRectStash.AppendLinks(links);
+                _logger.LogInformation("LinkRect harvest done: {Count} links appended (deferred ship)", links.Count);
             }
             catch (Exception ex)
             {

@@ -28,6 +28,7 @@ public sealed class LinkRectOverlayHost : IAsyncInitializer, IAsyncDisposable
     private readonly ILogger<LinkRectOverlayHost> _logger;
 
     private HarvestOverlayPair? _current;
+    private Action<PixelRect>? _rectCommittedHandler;
     private Action<IReadOnlyList<HarvestedLink>>? _harvestedHandler;
     private Action? _captureCompletedHandler;
     private Action? _clearedHandler;
@@ -51,6 +52,9 @@ public sealed class LinkRectOverlayHost : IAsyncInitializer, IAsyncDisposable
 
     public Task InitializeAsync()
     {
+        _rectCommittedHandler = OnRectCommitted;
+        _linkRectStash.RectCommitted += _rectCommittedHandler;
+
         _harvestedHandler = OnHarvested;
         _linkRectStash.Harvested += _harvestedHandler;
 
@@ -64,24 +68,20 @@ public sealed class LinkRectOverlayHost : IAsyncInitializer, IAsyncDisposable
         return Task.CompletedTask;
     }
 
-    private void OnHarvested(IReadOnlyList<HarvestedLink> links)
+    private void OnRectCommitted(PixelRect rect)
     {
         Dispatcher.UIThread.Post(() =>
         {
             if (_disposed) return;
             try
             {
-                // Replace any prior overlay — LinkRectStash is single-slot,
-                // a fresh harvest supersedes the last one. The previous
-                // annotation (if any) is now orphaned: its anchor is gone,
-                // so drop it from the stash too. Otherwise it would ship
-                // with no badge for the user to revise.
+                // New harvest in flight — drop any prior pair (its
+                // annotation is orphaned).
                 TearDownCurrent(removeAnnotation: true);
 
-                var union = ComputeUnion(links);
-                if (union.Width <= 0 || union.Height <= 0)
+                if (rect.Width <= 0 || rect.Height <= 0)
                 {
-                    _logger.LogDebug("LinkRect harvest produced empty union; skipping overlay");
+                    _logger.LogDebug("LinkRect rect committed with empty bounds; skipping");
                     return;
                 }
 
@@ -90,27 +90,26 @@ public sealed class LinkRectOverlayHost : IAsyncInitializer, IAsyncDisposable
                 try
                 {
                     outline = new AnnotationOutlineWindow();
-                    outline.ShowAt(union);
+                    outline.ShowAt(rect);
                     _windowHelper.ConfigureAsCursorOverlay(outline);
 
                     badge = new AnnotationOverlayWindow();
-                    var pair = new HarvestOverlayPair(links, outline, badge);
+                    // Links are not yet harvested — start with an empty
+                    // list. OnHarvested upgrades the pair when AX scan
+                    // finishes.
+                    var pair = new HarvestOverlayPair(Array.Empty<HarvestedLink>(), outline, badge);
                     pair.CommittedHandler = (_, body) => OnCommitted(pair, body);
                     pair.ClearedHandler = (_, _) => OnBadgeCleared(pair);
                     badge.Committed += pair.CommittedHandler;
                     badge.Cleared += pair.ClearedHandler;
 
-                    badge.ShowAt(union);
+                    badge.ShowAt(rect);
                     _windowHelper.ConfigureAsInteractiveOverlay(badge);
 
                     _current = pair;
                 }
                 catch
                 {
-                    // Partial-failure cleanup: if outline/badge construction
-                    // throws after a window is on screen, close it before
-                    // letting the outer catch log. Otherwise translucent
-                    // outlines accumulate across failed harvests.
                     try { badge?.Close(); } catch { }
                     try { outline?.Close(); } catch { }
                     throw;
@@ -118,8 +117,26 @@ public sealed class LinkRectOverlayHost : IAsyncInitializer, IAsyncDisposable
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "Failed to show linkrect overlay");
+                _logger.LogWarning(ex, "Failed to show linkrect overlay (rect-only)");
             }
+        });
+    }
+
+    private void OnHarvested(IReadOnlyList<HarvestedLink> links)
+    {
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (_disposed) return;
+            // Harvest finished after the rect-only overlay was shown.
+            // Just update the pair's link list; the visual is already
+            // up so we don't recreate the windows.
+            if (_current is null)
+            {
+                _logger.LogDebug("OnHarvested but no current pair — overlay was torn down before harvest finished");
+                return;
+            }
+            _current.Links = links;
+            _logger.LogInformation("LinkRect overlay link list updated: {Count} link(s)", links.Count);
         });
     }
 
@@ -219,6 +236,11 @@ public sealed class LinkRectOverlayHost : IAsyncInitializer, IAsyncDisposable
     public async ValueTask DisposeAsync()
     {
         _disposed = true;
+        if (_rectCommittedHandler is not null)
+        {
+            _linkRectStash.RectCommitted -= _rectCommittedHandler;
+            _rectCommittedHandler = null;
+        }
         if (_harvestedHandler is not null)
         {
             _linkRectStash.Harvested -= _harvestedHandler;
@@ -241,7 +263,9 @@ public sealed class LinkRectOverlayHost : IAsyncInitializer, IAsyncDisposable
 
     private sealed class HarvestOverlayPair
     {
-        public IReadOnlyList<HarvestedLink> Links { get; }
+        // Mutable: starts empty when the rect-only overlay appears,
+        // upgraded by OnHarvested once the AX scan finishes.
+        public IReadOnlyList<HarvestedLink> Links { get; set; }
         public AnnotationOutlineWindow Outline { get; }
         public AnnotationOverlayWindow Badge { get; }
         public AnnotationItem? LastItem { get; set; }

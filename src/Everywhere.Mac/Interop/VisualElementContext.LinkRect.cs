@@ -26,7 +26,7 @@ partial class VisualElementContext
         /// the hotkey doesn't feel broken.
         /// </summary>
         public static async Task<HarvestResult> HarvestAsync(
-            IWindowHelper windowHelper, CancellationToken cancellationToken = default)
+            IWindowHelper windowHelper, Action<PixelRect>? onRectCommitted, CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
             await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Background);
@@ -49,25 +49,16 @@ partial class VisualElementContext
                 await Dispatcher.UIThread.InvokeAsync(window!.Close);
                 return new HarvestResult(window._wasCanceled, []);
             }
-            // Run the harvest while the overlay is still on screen so we
-            // can flash the captured link bboxes before closing — visual
-            // confirmation of "linkclump caught these N anchors". Skip the
-            // flash entirely on zero results so the user doesn't sit on a
-            // dim overlay for nothing.
+            // Pin-style UX: the moment the user releases the drag, hand
+            // the rect to the caller AND close the picker, so an outline
+            // + ➕ can land on screen immediately. The harvest continues
+            // on a background task and is awaited below — caller still
+            // gets the same HarvestResult shape, just after the visual
+            // is already up.
+            try { onRectCommitted?.Invoke(rect.Value); }
+            catch { /* best-effort — don't let a rogue subscriber kill the harvest */ }
+            await Dispatcher.UIThread.InvokeAsync(window!.Close);
             var harvested = await Task.Run(() => HarvestLinks(rect.Value), cancellationToken);
-            try
-            {
-                if (harvested.Count > 0)
-                {
-                    await Dispatcher.UIThread.InvokeAsync(() => window!.HighlightCapturedLinks(harvested));
-                    await Task.Delay(700, cancellationToken);
-                }
-            }
-            catch (OperationCanceledException) { /* cancel during flash is fine */ }
-            finally
-            {
-                await Dispatcher.UIThread.InvokeAsync(window!.Close);
-            }
             return new HarvestResult(false, harvested);
         }
 

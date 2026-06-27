@@ -1,3 +1,5 @@
+using Avalonia;
+
 namespace Everywhere.Interop;
 
 /// <summary>
@@ -29,7 +31,60 @@ public sealed class LinkRectStash
     }
 
     public event Action<IReadOnlyList<HarvestedLink>>? Harvested;
+
+    /// <summary>
+    /// Raised the moment the user releases the drag rectangle, BEFORE the
+    /// link harvest finishes. Carries just the rect so the overlay host
+    /// can paint outline + ➕ immediately. <see cref="Harvested"/> still
+    /// fires later with the full link list for stash drain.
+    /// </summary>
+    public event Action<PixelRect>? RectCommitted;
+
     public event Action? Cleared;
+
+    /// <summary>
+    /// Stash a placeholder rect ahead of the link harvest. Raises
+    /// <see cref="RectCommitted"/>. Intended for the new rect-first /
+    /// links-later flow — <see cref="AppendLinks"/> updates the entry
+    /// once the AX scan completes.
+    /// </summary>
+    public void SetRect(PixelRect rect, TimeSpan? ttl = null)
+    {
+        if (rect.Width <= 0 || rect.Height <= 0)
+            throw new ArgumentException("Empty rect", nameof(rect));
+        var effectiveTtl = ttl ?? DefaultTtl;
+        if (effectiveTtl <= TimeSpan.Zero)
+            throw new ArgumentOutOfRangeException(nameof(ttl), "TTL must be positive.");
+        var expiry = _clock.GetUtcNow() + effectiveTtl;
+        bool fireClearedFirst;
+        lock (_gate)
+        {
+            fireClearedFirst = _current is not null;
+            _current = new Entry(Array.Empty<HarvestedLink>(), expiry, rect);
+        }
+        if (fireClearedFirst) Cleared?.Invoke();
+        RectCommitted?.Invoke(rect);
+    }
+
+    /// <summary>
+    /// Replace the link list of the existing entry (kept by SetRect).
+    /// Raises <see cref="Harvested"/>. No-op if the slot is empty or has
+    /// expired — the harvest result simply doesn't reach the agent, which
+    /// is the correct outcome (user already moved on).
+    /// </summary>
+    public void AppendLinks(IReadOnlyList<HarvestedLink> links)
+    {
+        ArgumentNullException.ThrowIfNull(links);
+        IReadOnlyList<HarvestedLink>? snapshot = null;
+        lock (_gate)
+        {
+            if (_current is null) return;
+            if (_current.ExpiresAtUtc <= _clock.GetUtcNow()) { _current = null; return; }
+            _current = _current with { Links = links };
+            snapshot = links;
+        }
+        if (snapshot is not null) Harvested?.Invoke(snapshot);
+    }
 
     public void Set(IReadOnlyList<HarvestedLink> links, TimeSpan? ttl = null)
     {
@@ -132,5 +187,8 @@ public sealed class LinkRectStash
         if (fire) Cleared?.Invoke();
     }
 
-    private sealed record Entry(IReadOnlyList<HarvestedLink> Links, DateTimeOffset ExpiresAtUtc);
+    private sealed record Entry(
+        IReadOnlyList<HarvestedLink> Links,
+        DateTimeOffset ExpiresAtUtc,
+        PixelRect? Rect = null);
 }
