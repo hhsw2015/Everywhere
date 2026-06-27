@@ -167,6 +167,31 @@ public sealed class AnnotationStash
         return result;
     }
 
+    /// <summary>
+    /// Remove the first live entry whose item is the SAME reference as
+    /// <paramref name="item"/> (reference identity, not value equality —
+    /// two records with identical fields will NOT match). Used by the
+    /// annotation overlay to replace a previously-committed note: the
+    /// caller passes back the exact instance it received from a prior
+    /// Add, we drop it, then Add a new one, keeping the stash free of
+    /// orphan revisions.
+    /// </summary>
+    public bool RemoveItem(AnnotationItem item)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+        bool removed;
+        lock (_gate)
+        {
+            PruneExpired(_clock.GetUtcNow());
+            var idx = _entries.FindIndex(e => ReferenceEquals(e.Item, item));
+            if (idx < 0) return false;
+            _entries.RemoveAt(idx);
+            removed = true;
+        }
+        if (removed) Changed?.Invoke();
+        return removed;
+    }
+
     public bool Remove(int index)
     {
         bool removed;

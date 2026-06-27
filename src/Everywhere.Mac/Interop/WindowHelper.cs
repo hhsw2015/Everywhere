@@ -296,9 +296,48 @@ public class WindowHelper : IWindowHelper
     }
 
     public void ConfigureAsCursorOverlay(Window window)
-    {
-        if (GetNativeWindow(window) is not { } nw) return;
+        => ConfigureWhenNative(window, ApplyCursorOverlay);
 
+    public void ConfigureAsInteractiveOverlay(Window window)
+        => ConfigureWhenNative(window, ApplyInteractiveOverlay);
+
+    /// <summary>
+    /// Apply an NSWindow-level configuration immediately if the native
+    /// window is ready, otherwise defer until <see cref="Window.Opened"/>.
+    /// Callers typically invoke ConfigureAs* from the Avalonia window's
+    /// .cs ctor — at that point GetNativeWindow returns null and a direct
+    /// apply would be a silent no-op.
+    /// </summary>
+    private static void ConfigureWhenNative(Window window, Action<NSWindow> apply)
+    {
+        if (GetNativeWindow(window) is { } nw)
+        {
+            apply(nw);
+            return;
+        }
+        EventHandler? handler = null;
+        handler = (_, _) =>
+        {
+            window.Opened -= handler;
+            if (GetNativeWindow(window) is { } nw2) apply(nw2);
+        };
+        window.Opened += handler;
+    }
+
+    private static void ApplyInteractiveOverlay(NSWindow nw)
+    {
+        // Same Space / fullscreen survival as ApplyCursorOverlay, minus
+        // IgnoresMouseEvents (the badge needs clicks).
+        nw.CollectionBehavior =
+            NSWindowCollectionBehavior.CanJoinAllSpaces |
+            NSWindowCollectionBehavior.FullScreenAuxiliary |
+            NSWindowCollectionBehavior.Stationary |
+            NSWindowCollectionBehavior.IgnoresCycle;
+        nw.Level = NSWindowLevel.Floating;
+    }
+
+    private static void ApplyCursorOverlay(NSWindow nw)
+    {
         // 1:1 OCCU CursorPanel (SoftwareCursorOverlay.swift L294-306):
         // borderless + nonactivating already implied by Avalonia
         // Topmost+SystemDecorations.None+ShowActivated=false. We add
@@ -311,11 +350,6 @@ public class WindowHelper : IWindowHelper
             NSWindowCollectionBehavior.FullScreenAuxiliary |
             NSWindowCollectionBehavior.Stationary |
             NSWindowCollectionBehavior.IgnoresCycle;
-        // OCCU starts at .normal then bumps to target window's layer
-        // per click (configureOrdering L328). With no target metadata
-        // here we sit at FloatingWindow — above ordinary app content,
-        // below screensaver — which is what OCCU effectively lands on
-        // most clicks.
         nw.Level = NSWindowLevel.Floating;
     }
 }

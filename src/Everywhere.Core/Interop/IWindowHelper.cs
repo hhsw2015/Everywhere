@@ -68,4 +68,13 @@ public interface IWindowHelper
     /// No-op default for non-Mac.
     /// </summary>
     void RaiseOverlayAboveTarget(Window window, int? targetProcessId) { }
+
+    /// <summary>
+    /// Floating overlay that stays alive across Space / fullscreen
+    /// switches AND still receives clicks/keyboard. Same Space and
+    /// fullscreen behavior as ConfigureAsCursorOverlay, but does NOT
+    /// set IgnoresMouseEvents — used for the annotation ➕/✓ badge.
+    /// No-op default for non-Mac platforms.
+    /// </summary>
+    void ConfigureAsInteractiveOverlay(Window window) { }
 }

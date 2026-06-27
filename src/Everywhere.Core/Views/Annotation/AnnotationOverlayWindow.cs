@@ -50,6 +50,13 @@ public class AnnotationOverlayWindow : Window
 
     public event EventHandler<string>? Committed;
 
+    /// <summary>
+    /// Fired when the user opens a previously-committed ✓ badge, clears
+    /// the textarea, and collapses. Signals "delete this note" so the
+    /// host removes it from the stash and reverts the badge to ➕.
+    /// </summary>
+    public event EventHandler? Cleared;
+
     public AnnotationOverlayWindow()
     {
         Width = BadgeSize;
@@ -174,9 +181,14 @@ public class AnnotationOverlayWindow : Window
             return;
         }
 
-        Collapse();
+        // Clear state BEFORE Collapse — otherwise, if this window were
+        // somehow expanded with a committed body when ShowFor was called
+        // a second time, Collapse() would fire `Committed` with the stale
+        // body before our reset ran. (Host currently creates a fresh
+        // window per pin, so this is defensive.)
         CommittedText = null;
         _textBox.Text = string.Empty;
+        Collapse();
         ResetBadgeVisual();
 
         var screenX = rect.Right + OffsetX;
@@ -187,15 +199,61 @@ public class AnnotationOverlayWindow : Window
         Show();
     }
 
+    private int _reanchorInFlight;
+
+    /// <summary>
+    /// Re-query the element's AX bounds and slide the badge to track it.
+    /// Called every ~250ms by AnnotationOverlayHost so the ✓ follows when
+    /// the user scrolls the host window. If bounds are unreadable (window
+    /// detached, AX permission revoked) or 0×0 (element scrolled out of
+    /// view), we leave the badge at its last known position — the user
+    /// still needs to see WHERE they annotated, even if the anchor is
+    /// momentarily off-screen.
+    ///
+    /// Skipped while expanded: jumping the popover under the user's
+    /// caret mid-typing is worse than letting it drift.
+    /// </summary>
+    public async void Reanchor(IVisualElement element)
+    {
+        if (_expanded) return;
+        if (Interlocked.CompareExchange(ref _reanchorInFlight, 1, 0) != 0) return;
+
+        try
+        {
+            PixelRect rect;
+            try
+            {
+                rect = await Task.Run(() => element.BoundingRectangle).WaitAsync(TimeSpan.FromMilliseconds(200));
+            }
+            catch (Exception ex)
+            {
+                Log.Logger.ForContext<AnnotationOverlayWindow>().Verbose(ex, "Reanchor AX query failed");
+                return;
+            }
+
+            // Re-check after the await: user may have expanded the popover
+            // during the AX query and we must not teleport the textarea.
+            if (_expanded) return;
+            if (rect.Width <= 0 || rect.Height <= 0) return;
+
+            var newOrigin = new PixelPoint(rect.Right + OffsetX, rect.Y + OffsetY);
+            if (newOrigin == _collapsedOrigin) return;
+            _collapsedOrigin = newOrigin;
+            Position = _collapsedOrigin;
+        }
+        catch (Exception ex)
+        {
+            // Position setter on a closed window during DisposeAsync etc.
+            Log.Logger.ForContext<AnnotationOverlayWindow>().Debug(ex, "Reanchor suppressed");
+        }
+        finally
+        {
+            Interlocked.Exchange(ref _reanchorInFlight, 0);
+        }
+    }
+
     private void OnPlusClicked(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
     {
-        // Committed (✓) is a terminal state — click is a no-op. The body
-        // is already visible via tooltip on hover. Re-edit is intentionally
-        // unavailable: the only way to revise a note is to clear the batch
-        // (SnapshotContext) and re-pin. Keeps the state machine simple and
-        // avoids stash-mutation paths that don't exist yet.
-        if (CommittedText is not null) return;
-
         if (_expanded) Collapse();
         else Expand();
     }
@@ -204,6 +262,11 @@ public class AnnotationOverlayWindow : Window
     {
         if (_expanded) return;
         _expanded = true;
+
+        // Re-edit: if the user already committed a note, prefill the
+        // textarea so they can revise instead of starting over. Empty
+        // string clears any leftover from a different lifecycle.
+        _textBox.Text = CommittedText ?? string.Empty;
 
         // Resize and re-anchor so the badge stays where it was; the
         // popover grows down-and-left from that corner.
@@ -246,6 +309,16 @@ public class AnnotationOverlayWindow : Window
             // can see WHERE they annotated (the whole point per the
             // user's "得知道我是在哪里标注的" feedback).
             MarkAnnotated();
+        }
+        else if (CommittedText is not null)
+        {
+            // User opened a previously-committed ✓, cleared the textarea,
+            // and collapsed → treat as delete. Reverts the badge to ➕ so
+            // the visual matches "no note here anymore", and tells the
+            // host to drop the stash entry it cached for this pair.
+            CommittedText = null;
+            Cleared?.Invoke(this, EventArgs.Empty);
+            ResetBadgeVisual();
         }
 
         _textBox.IsVisible = false;

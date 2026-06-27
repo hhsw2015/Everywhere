@@ -37,15 +37,41 @@ public class VisualElementOverlayWindow : Window
         base.OnClosing(e);
     }
 
+    /// <summary>
+    /// When true, <see cref="UpdateForVisualElement"/> always re-queries
+    /// bounds and re-shows, even if the same element is passed in again.
+    /// Set by callers that need continuous tracking (annotation overlay
+    /// following a scrolling element). Default off preserves the existing
+    /// fast-path for ChatInputArea / picker debugger.
+    /// </summary>
+    public bool AlwaysRefresh { get; set; }
+
+    // Re-entrancy guard: with AlwaysRefresh on, a 250ms timer can fire
+    // a second update before the previous AX query (up to 1s) returns.
+    // Without the guard, stale continuations clobber fresh ones — Hide()
+    // races Show(), Position is overwritten with old bounds.
+    private int _updating;
+
     public async void UpdateForVisualElement(IVisualElement? element)
     {
         if (element is null)
         {
             _visualElement = null;
             Hide();
+            return;
         }
-        else if (_visualElement?.TryGetTarget(out var existingElement) is not true || !Equals(existingElement, element))
+
+        if (AlwaysRefresh && Interlocked.CompareExchange(ref _updating, 1, 0) != 0) return;
+
+        try
         {
+            if (!AlwaysRefresh
+                && _visualElement?.TryGetTarget(out var existingElement) is true
+                && Equals(existingElement, element))
+            {
+                return; // same element, fast path
+            }
+
             if (_visualElement is null)
             {
                 _visualElement = new WeakReference<IVisualElement>(element);
@@ -62,21 +88,29 @@ public class VisualElementOverlayWindow : Window
             }
             catch (TimeoutException)
             {
-                _visualElement = null;
+                if (!AlwaysRefresh) _visualElement = null;
                 return;
             }
             catch (Exception ex)
             {
-                _visualElement = null;
+                if (!AlwaysRefresh) _visualElement = null;
                 Log.Logger.ForContext<VisualElementOverlayWindow>().Error(ex, "Failed to update OverlayWindow for visual element.");
-                Hide();
+                if (!AlwaysRefresh) Hide();
                 return;
             }
 
             if (boundingRectangle.Width <= 0 || boundingRectangle.Height <= 0)
             {
-                _visualElement = null;
-                Hide();
+                // AlwaysRefresh callers (annotation outline) want to keep
+                // the last-known frame visible when the element scrolls
+                // off-screen — losing the anchor visual is worse than a
+                // stale rect. Default callers (chat input, picker
+                // debugger) still hide so they don't paint over nothing.
+                if (!AlwaysRefresh)
+                {
+                    _visualElement = null;
+                    Hide();
+                }
                 return;
             }
 
@@ -85,7 +119,6 @@ public class VisualElementOverlayWindow : Window
                 .Select(s => s.Bounds)
                 .Aggregate((a, b) => a.Union(b));
 
-            // Clamp to screen bounds
             var x = Math.Clamp(boundingRectangle.X, screenBounds.X, screenBounds.Right);
             var y = Math.Clamp(boundingRectangle.Y, screenBounds.Y, screenBounds.Bottom);
             var right = Math.Min(boundingRectangle.Right, screenBounds.Right);
@@ -95,8 +128,11 @@ public class VisualElementOverlayWindow : Window
 
             if (width <= 0 || height <= 0)
             {
-                _visualElement = null;
-                Hide();
+                if (!AlwaysRefresh)
+                {
+                    _visualElement = null;
+                    Hide();
+                }
                 return;
             }
 
@@ -107,6 +143,16 @@ public class VisualElementOverlayWindow : Window
             Height = height / scaling;
 
             Show();
+        }
+        catch (Exception ex)
+        {
+            // Window disposed mid-update during DisposeAsync, AX permission
+            // revoked, etc. Don't let async-void take down the process.
+            Log.Logger.ForContext<VisualElementOverlayWindow>().Debug(ex, "OverlayWindow update suppressed");
+        }
+        finally
+        {
+            if (AlwaysRefresh) Interlocked.Exchange(ref _updating, 0);
         }
     }
 }
