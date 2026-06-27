@@ -100,14 +100,28 @@ public sealed class WhiteboardOverlayHost : IAsyncInitializer, IAsyncDisposable
         if (Interlocked.CompareExchange(ref pair.RefreshInFlight, 1, 0) != 0) return;
         try
         {
-            if (pair.AnchorInitialBounds is null) return;
-            var anchorInitial = pair.AnchorInitialBounds.Value;
-            var leaf = pair.Region.Leaves[0];
-            PixelRect anchorNow;
+            var leaves = pair.Region.Leaves;
+            if (leaves.Count == 0) return;
+            PixelRect union;
             try
             {
-                anchorNow = await Task.Run(() => leaf.BoundingRectangleLive)
-                    .WaitAsync(TimeSpan.FromMilliseconds(50));
+                // Re-compute the leaves' union with cache-bypass live
+                // bounds — same Pin trick (BoundingRectangleLive). One
+                // sync IPC per leaf; usually 1-3 leaves per gesture.
+                union = await Task.Run(() =>
+                {
+                    var u = default(PixelRect);
+                    var first = true;
+                    foreach (var leaf in leaves)
+                    {
+                        PixelRect b;
+                        try { b = leaf.BoundingRectangleLive; } catch { continue; }
+                        if (b.Width <= 0 || b.Height <= 0) continue;
+                        if (first) { u = b; first = false; }
+                        else u = u.Union(b);
+                    }
+                    return u;
+                }).WaitAsync(TimeSpan.FromMilliseconds(150));
             }
             catch { return; }
 
@@ -115,24 +129,12 @@ public sealed class WhiteboardOverlayHost : IAsyncInitializer, IAsyncDisposable
             {
                 if (_disposed) return;
                 if (!_overlays.Contains(pair)) return;
-                // Anchor lost AX geometry (e.g. Chromium Hyperlink
-                // container vanished). Leave the outline where it is —
-                // user keeps a stale-but-visible marker.
-                if (anchorNow.Width <= 0 || anchorNow.Height <= 0) return;
-                // Delta-follow: shift the user's drawn frame by how
-                // far the anchor element moved. Outline never resizes
-                // to match anchor bounds — the user-drawn rect stays
-                // as the visible frame, anchor just provides the
-                // scroll offset.
-                var dx = anchorNow.X - anchorInitial.X;
-                var dy = anchorNow.Y - anchorInitial.Y;
-                var moved = new PixelRect(
-                    pair.OutlineRectInitial.X + dx,
-                    pair.OutlineRectInitial.Y + dy,
-                    pair.OutlineRectInitial.Width,
-                    pair.OutlineRectInitial.Height);
-                pair.Outline.MoveTo(moved);
-                pair.Badge.MoveTo(moved);
+                // Leaves gone AX-side: keep the overlay at its last known
+                // position. User retains a visual marker even when the
+                // anchor element vanished.
+                if (union.Width <= 0 || union.Height <= 0) return;
+                pair.Outline.MoveTo(union);
+                pair.Badge.MoveTo(union);
             });
         }
         catch (Exception ex)
@@ -161,27 +163,27 @@ public sealed class WhiteboardOverlayHost : IAsyncInitializer, IAsyncDisposable
                 foreach (var region in regions)
                 {
                     if (existing.Contains(region)) continue;
-                    // Outline rect = USER GESTURE rect (what they drew),
-                    // not leaf bounds. Leaf gives us the anchor element
-                    // for follow tracking; the user's frame is what they
-                    // see and expect to see.
-                    var outlineRect = new PixelRect(
-                        (int)Math.Round(region.Rect.X),
-                        (int)Math.Round(region.Rect.Y),
-                        (int)Math.Round(region.Rect.Width),
-                        (int)Math.Round(region.Rect.Height));
+                    // Outline rect = LEAF UNION (element-aligned). Matches
+                    // Pin's UX: outline frames the actual a11y leaf the
+                    // snapper picked, neat and tight. Falls back to the
+                    // user's gesture rect only when no leaves resolved
+                    // (Chromium webview where AX can't expose DOM nodes).
+                    var outlineRect = region.Leaves.Count > 0
+                        ? UnionLeafBounds(region.Leaves)
+                        : new PixelRect(
+                            (int)Math.Round(region.Rect.X),
+                            (int)Math.Round(region.Rect.Y),
+                            (int)Math.Round(region.Rect.Width),
+                            (int)Math.Round(region.Rect.Height));
                     if (outlineRect.Width <= 0 || outlineRect.Height <= 0)
                     {
                         _logger.LogWarning("WhiteboardOverlay: skipping region with empty rect");
                         continue;
                     }
-                    var anchorInitial = region.Leaves.Count > 0
-                        ? TryGetBounds(region.Leaves[0])
-                        : (PixelRect?)null;
                     _logger.LogInformation(
-                        "WhiteboardOverlay region: kind={Kind} outlineRect=({X},{Y},{W}x{H}) leaves={Leaves} anchorInitial={Anchor}",
+                        "WhiteboardOverlay region: kind={Kind} outlineRect=({X},{Y},{W}x{H}) leaves={Leaves}",
                         region.Kind, outlineRect.X, outlineRect.Y, outlineRect.Width, outlineRect.Height,
-                        region.Leaves.Count, anchorInitial?.ToString() ?? "<none>");
+                        region.Leaves.Count);
 
                     AnnotationOutlineWindow? outline = null;
                     AnnotationOverlayWindow? badge = null;
@@ -192,11 +194,7 @@ public sealed class WhiteboardOverlayHost : IAsyncInitializer, IAsyncDisposable
                         _windowHelper.ConfigureAsCursorOverlay(outline);
 
                         badge = new AnnotationOverlayWindow();
-                        var pair = new RegionOverlayPair(region, outline, badge)
-                        {
-                            OutlineRectInitial = outlineRect,
-                            AnchorInitialBounds = anchorInitial,
-                        };
+                        var pair = new RegionOverlayPair(region, outline, badge);
                         pair.CommittedHandler = (_, body) => OnCommitted(pair, body);
                         pair.ClearedHandler = (_, _) => OnBadgeCleared(pair);
                         badge.Committed += pair.CommittedHandler;
@@ -233,6 +231,21 @@ public sealed class WhiteboardOverlayHost : IAsyncInitializer, IAsyncDisposable
     /// SAME coordinate space (DIP/points on macOS, physical px on
     /// Windows; see WhiteboardOverlay.Commit's coord-space note).
     /// </summary>
+    private static PixelRect UnionLeafBounds(IReadOnlyList<IVisualElement> leaves)
+    {
+        var union = default(PixelRect);
+        var first = true;
+        foreach (var leaf in leaves)
+        {
+            PixelRect b;
+            try { b = leaf.BoundingRectangle; } catch { continue; }
+            if (b.Width <= 0 || b.Height <= 0) continue;
+            if (first) { union = b; first = false; }
+            else union = union.Union(b);
+        }
+        return union;
+    }
+
     private static PixelRect? TryGetBounds(IVisualElement element)
     {
         try

@@ -101,34 +101,41 @@ public sealed class LinkRectOverlayHost : IAsyncInitializer, IAsyncDisposable
         if (Interlocked.CompareExchange(ref pair.RefreshInFlight, 1, 0) != 0) return;
         try
         {
-            var anchor = pair.Anchor;
-            if (anchor is null) return;
-            if (pair.AnchorInitialBounds is null) return;
-            var anchorInitial = pair.AnchorInitialBounds.Value;
-            PixelRect anchorNow;
+            // Prefer the harvested links' union bbox: tight to actual link
+            // elements (Pin-style accuracy). Fall back to the rect-time
+            // anchor element when no links have arrived yet, else nothing.
+            PixelRect union;
             try
             {
-                anchorNow = await Task.Run(() => anchor.BoundingRectangleLive)
-                    .WaitAsync(TimeSpan.FromMilliseconds(50));
+                union = await Task.Run(() =>
+                {
+                    var u = default(PixelRect);
+                    var first = true;
+                    foreach (var link in pair.Links)
+                    {
+                        var el = link.Element;
+                        if (el is null) continue;
+                        PixelRect b;
+                        try { b = el.BoundingRectangleLive; } catch { continue; }
+                        if (b.Width <= 0 || b.Height <= 0) continue;
+                        if (first) { u = b; first = false; }
+                        else u = u.Union(b);
+                    }
+                    if (first && pair.Anchor is not null)
+                    {
+                        try { u = pair.Anchor.BoundingRectangleLive; first = false; } catch { }
+                    }
+                    return first ? default : u;
+                }).WaitAsync(TimeSpan.FromMilliseconds(150));
             }
             catch { return; }
 
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
                 if (_disposed || _current != pair) return;
-                if (anchorNow.Width <= 0 || anchorNow.Height <= 0) return;
-                // Delta-follow: shift the user's drag rect by the same
-                // amount the anchor element moved. Outline keeps the
-                // user's framing, doesn't snap to anchor bounds.
-                var dx = anchorNow.X - anchorInitial.X;
-                var dy = anchorNow.Y - anchorInitial.Y;
-                var moved = new PixelRect(
-                    pair.DragRect.X + dx,
-                    pair.DragRect.Y + dy,
-                    pair.DragRect.Width,
-                    pair.DragRect.Height);
-                pair.Outline.MoveTo(moved);
-                pair.Badge.MoveTo(moved);
+                if (union.Width <= 0 || union.Height <= 0) return;
+                pair.Outline.MoveTo(union);
+                pair.Badge.MoveTo(union);
             });
         }
         catch (Exception ex)
@@ -274,14 +281,24 @@ public sealed class LinkRectOverlayHost : IAsyncInitializer, IAsyncDisposable
             if (bestElement is not null)
             {
                 _current.Anchor = bestElement;
-                // Re-baseline the delta-follow zero point. Anchor just
-                // changed, so the next follow tick computes movement
-                // relative to where the link is RIGHT NOW (likely the
-                // same spot as the user's drag rect on Mac, where the
-                // link's BoundingRectangle resolves to its rendered
-                // position).
-                _current.AnchorInitialBounds = TryGetBounds(bestElement);
                 _logger.LogDebug("LinkRect anchor upgraded to harvested link element");
+            }
+            // Snap the outline to the harvested links' actual bounding
+            // box immediately. Don't wait for the next 50ms follow tick.
+            var union = default(PixelRect);
+            var firstU = true;
+            foreach (var l in links)
+            {
+                var b = l.Bounds;
+                if (b.Width <= 0 || b.Height <= 0) continue;
+                if (firstU) { union = b; firstU = false; }
+                else union = union.Union(b);
+            }
+            if (!firstU)
+            {
+                _current.Outline.MoveTo(union);
+                _current.Badge.MoveTo(union);
+                _logger.LogDebug("LinkRect outline snapped to harvested union: {Rect}", union);
             }
             _logger.LogInformation("LinkRect overlay link list updated: {Count} link(s)", links.Count);
         });
