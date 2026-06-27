@@ -199,67 +199,6 @@ public class AnnotationOverlayWindow : Window
         Show();
     }
 
-    private int _reanchorInFlight;
-
-    /// <summary>
-    /// Re-query the element's AX bounds and slide the badge to track it.
-    /// Called every ~250ms by AnnotationOverlayHost so the ✓ follows when
-    /// the user scrolls the host window. If bounds are unreadable (window
-    /// detached, AX permission revoked) or 0×0 (element scrolled out of
-    /// view), we leave the badge at its last known position — the user
-    /// still needs to see WHERE they annotated, even if the anchor is
-    /// momentarily off-screen.
-    ///
-    /// Skipped while expanded: jumping the popover under the user's
-    /// caret mid-typing is worse than letting it drift.
-    /// </summary>
-    public async void Reanchor(IVisualElement element)
-    {
-        if (_expanded) return;
-        if (Interlocked.CompareExchange(ref _reanchorInFlight, 1, 0) != 0) return;
-
-        try
-        {
-            PixelRect rect;
-            try
-            {
-                rect = await Task.Run(() => element.BoundingRectangle).WaitAsync(TimeSpan.FromMilliseconds(200));
-            }
-            catch (Exception ex)
-            {
-                Log.Logger.ForContext<AnnotationOverlayWindow>().Verbose(ex, "Reanchor AX query failed");
-                return;
-            }
-
-            // Re-check after the await: user may have expanded the popover
-            // during the AX query and we must not teleport the textarea.
-            if (_expanded) return;
-
-            if (rect.Width <= 0 || rect.Height <= 0)
-            {
-                // Element off-screen / host window hidden. Hide the badge
-                // so it doesn't sit at a stale screen coordinate. The next
-                // tick re-queries and Show()s when the element is back.
-                Hide();
-                return;
-            }
-
-            var newOrigin = new PixelPoint(rect.Right + OffsetX, rect.Y + OffsetY);
-            _collapsedOrigin = newOrigin;
-            Position = _collapsedOrigin;
-            if (!IsVisible) Show();
-        }
-        catch (Exception ex)
-        {
-            // Position setter on a closed window during DisposeAsync etc.
-            Log.Logger.ForContext<AnnotationOverlayWindow>().Debug(ex, "Reanchor suppressed");
-        }
-        finally
-        {
-            Interlocked.Exchange(ref _reanchorInFlight, 0);
-        }
-    }
-
     private void OnPlusClicked(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
     {
         if (_expanded) Collapse();

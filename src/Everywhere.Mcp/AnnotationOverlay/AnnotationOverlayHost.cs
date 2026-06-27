@@ -15,13 +15,13 @@ namespace Everywhere.Mcp.AnnotationOverlay;
 /// fleet is torn down — the annotations have shipped to the agent and
 /// the badges no longer belong on screen.
 ///
-/// Also runs a 250ms follow-up timer: AX elements move when the user
-/// scrolls / resizes the host window, so we re-query BoundingRectangle
-/// and re-anchor outline + badge accordingly. The outline runs in
-/// AlwaysRefresh mode so on 0×0 bounds (element scrolled out of view)
-/// it keeps its last frame instead of hiding; the badge does the same
-/// in <see cref="AnnotationOverlayWindow.Reanchor"/>. Losing the anchor
-/// visual mid-scroll is worse than briefly stale bounds.
+/// Anchor is FIXED at pin time (screen-coordinate snapshot, Figma-comment
+/// style). No follow-up timer — AX BoundingRectangle on Chromium-based
+/// hosts (Arc, Brave) returns stale or 0×0 bounds during scroll, which
+/// produced "✓ in wrong place" reports. A static screen coordinate is
+/// less fancy but always correct: when the user scrolls the element away
+/// the ✓ stays put — the visual reminder "you have a note in this region"
+/// outranks tracking the now-off-screen element.
 /// </summary>
 public sealed class AnnotationOverlayHost : IAsyncInitializer, IAsyncDisposable
 {
@@ -34,7 +34,6 @@ public sealed class AnnotationOverlayHost : IAsyncInitializer, IAsyncDisposable
     private readonly List<PinOverlayPair> _overlays = new();
     private Action<IVisualElement>? _pinnedHandler;
     private Action? _captureCompletedHandler;
-    private DispatcherTimer? _followTimer;
     private volatile bool _disposed;
 
     public AnnotationOverlayHost(
@@ -61,13 +60,6 @@ public sealed class AnnotationOverlayHost : IAsyncInitializer, IAsyncDisposable
         _captureCompletedHandler = OnManualCaptureCompleted;
         _contextStashWriter.ManualCaptureCompleted += _captureCompletedHandler;
 
-        Dispatcher.UIThread.Post(() =>
-        {
-            _followTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
-            _followTimer.Tick += OnFollowTick;
-            _followTimer.Start();
-        });
-
         _logger.LogInformation("AnnotationOverlayHost subscribed (Pinned + ManualCaptureCompleted)");
         return Task.CompletedTask;
     }
@@ -79,14 +71,7 @@ public sealed class AnnotationOverlayHost : IAsyncInitializer, IAsyncDisposable
             if (_disposed) return; // host torn down between event and UI dispatch
             try
             {
-                var outline = new VisualElementOverlayWindow
-                {
-                    // Annotation outline must follow scroll/resize; the
-                    // default UpdateForVisualElement fast-paths when the
-                    // same element is passed twice, which would freeze
-                    // the frame in place.
-                    AlwaysRefresh = true,
-                };
+                var outline = new VisualElementOverlayWindow();
                 // Outline needs to (a) survive switching into a fullscreen
                 // Arc/Safari space, (b) stay above ordinary app windows.
                 // ConfigureAsCursorOverlay nails both via
@@ -115,32 +100,6 @@ public sealed class AnnotationOverlayHost : IAsyncInitializer, IAsyncDisposable
                 _logger.LogWarning(ex, "Failed to show annotation overlay");
             }
         });
-    }
-
-    private void OnFollowTick(object? sender, EventArgs e)
-    {
-        // Empty list = nothing to follow. Avoids burning AX queries / CPU
-        // 4× per second when no pins exist.
-        if (_overlays.Count == 0) return;
-
-        // Re-anchor every live pair against current AX bounds. AX query
-        // hops to a background thread inside UpdateForVisualElement /
-        // Reanchor; both have their own re-entrancy guards so overlapping
-        // ticks won't pile up. On 0×0 bounds both retain their last frame
-        // (outline via AlwaysRefresh path, badge via Reanchor early-return)
-        // so the user doesn't lose the anchor mid-scroll.
-        foreach (var pair in _overlays)
-        {
-            try
-            {
-                pair.Outline.UpdateForVisualElement(pair.Element);
-                pair.Badge.Reanchor(pair.Element);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogDebug(ex, "Follow-tick refresh failed");
-            }
-        }
     }
 
     private void OnManualCaptureCompleted()
@@ -246,8 +205,6 @@ public sealed class AnnotationOverlayHost : IAsyncInitializer, IAsyncDisposable
 
         await Dispatcher.UIThread.InvokeAsync(() =>
         {
-            _followTimer?.Stop();
-            _followTimer = null;
             foreach (var pair in _overlays)
             {
                 pair.Badge.Close();
