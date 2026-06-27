@@ -56,6 +56,15 @@ public sealed class AnnotationStash
 {
     public static readonly TimeSpan DefaultTtl = TimeSpan.FromMinutes(10);
 
+    // Defensive caps so a buggy or malicious MCP client can't grow the
+    // queue / a single entry without bound. The hard limits sit at the
+    // single choke point that both the MCP path and any future UI path
+    // funnel through.
+    public const int MaxBodyLength = 8_000;
+    public const int MaxAnchorLabelLength = 400;
+    public const int MaxAnchorRefLength = 200;
+    public const int MaxQueueDepth = 200;
+
     private readonly Lock _gate = new();
     private readonly TimeProvider _clock;
     private readonly List<Entry> _entries = new();
@@ -79,16 +88,41 @@ public sealed class AnnotationStash
     /// </summary>
     public event Action? Changed;
 
-    public void Add(AnnotationItem item, TimeSpan? ttl = null)
+    /// <summary>
+    /// Queue an annotation. Returns the post-insert live count (atomic
+    /// with the insert — never observes a concurrent drain happening
+    /// between insert and read). Rejects oversize fields and overflow
+    /// of the queue depth cap by throwing <see cref="ArgumentException"/>.
+    /// </summary>
+    public int Add(AnnotationItem item, TimeSpan? ttl = null)
     {
         ArgumentNullException.ThrowIfNull(item);
+        if (item.Body.Length > MaxBodyLength)
+            throw new ArgumentException($"body exceeds {MaxBodyLength} characters", nameof(item));
+        if (item.AnchorLabel.Length > MaxAnchorLabelLength)
+            throw new ArgumentException($"anchor_label exceeds {MaxAnchorLabelLength} characters", nameof(item));
+        if (item.AnchorRef is { Length: > MaxAnchorRefLength })
+            throw new ArgumentException($"anchor_ref exceeds {MaxAnchorRefLength} characters", nameof(item));
+
         var expiry = _clock.GetUtcNow() + (ttl ?? DefaultTtl);
+        int newCount;
         lock (_gate)
         {
+            // Prune first so the queue-depth check matches what callers
+            // will actually see in Peek/Drain.
+            PruneExpired(_clock.GetUtcNow());
+            if (_entries.Count >= MaxQueueDepth)
+                throw new ArgumentException($"queue depth would exceed {MaxQueueDepth}", nameof(item));
             _entries.Add(new Entry(item, expiry));
+            newCount = _entries.Count;
         }
-        Added?.Invoke(item);
-        Changed?.Invoke();
+        // Fire Changed first so state-aware subscribers see the new size
+        // before the per-item handler runs. Wrap subscribers in try/finally
+        // so an exception in Added still surfaces Changed and never leaves
+        // the UI tray out of sync with the stash.
+        try { Changed?.Invoke(); }
+        finally { Added?.Invoke(item); }
+        return newCount;
     }
 
     /// <summary>
@@ -138,12 +172,39 @@ public sealed class AnnotationStash
         bool removed;
         lock (_gate)
         {
+            // Prune before bounds-checking so the caller's index lines up
+            // with the same view Peek would have returned.
+            PruneExpired(_clock.GetUtcNow());
             if (index < 0 || index >= _entries.Count) return false;
             _entries.RemoveAt(index);
             removed = true;
         }
         if (removed) Changed?.Invoke();
         return removed;
+    }
+
+    /// <summary>
+    /// Drop exactly the items that were returned by a prior Peek. Used by
+    /// the snapshot pipeline so an annotation is only consumed AFTER the
+    /// on-disk ctx file is written successfully — a transient I/O failure
+    /// leaves the queued notes available for the user's next press. Items
+    /// are matched by reference identity against the underlying entries;
+    /// anything that has since been added or expired stays.
+    /// </summary>
+    public void Consume(ImmutableArray<AnnotationItem> matched)
+    {
+        if (matched.IsDefaultOrEmpty) return;
+        lock (_gate)
+        {
+            for (var i = _entries.Count - 1; i >= 0; i--)
+            {
+                if (matched.Contains(_entries[i].Item))
+                {
+                    _entries.RemoveAt(i);
+                }
+            }
+        }
+        Changed?.Invoke();
     }
 
     public void Clear()

@@ -21,7 +21,7 @@ public static class ReadAnnotationsTool
         var items = annotations.Peek();
         var rows = items.Select(item => new
         {
-            source = item.Source.ToString().ToLowerInvariant(),
+            source = SourceToWire(item.Source),
             body = item.Body,
             anchor_label = item.AnchorLabel,
             anchor_ref = item.AnchorRef,
@@ -31,4 +31,13 @@ public static class ReadAnnotationsTool
         var json = JsonSerializer.Serialize(new { count = rows.Length, annotations = rows });
         return new CallToolResult { Content = [new TextContentBlock { Text = json }] };
     }
+
+    private static string SourceToWire(AnnotationSource source) => source switch
+    {
+        AnnotationSource.Pin        => "pin",
+        AnnotationSource.Whiteboard => "whiteboard",
+        AnnotationSource.Selected   => "selected",
+        AnnotationSource.LinkRect   => "linkrect",
+        _ => throw new ArgumentOutOfRangeException(nameof(source), source, null),
+    };
 }

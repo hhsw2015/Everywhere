@@ -111,7 +111,12 @@ public sealed class MacAppActivator : IAppActivator
                 // if SetFront fails (deprecated symbol, sandbox, ...) we
                 // still have the activate above as a baseline.
                 var pidSel = sel_registerName("processIdentifier");
-                var pid = (int)objc_msgSend_get(app, pidSel);
+                // NSRunningApplication.processIdentifier returns pid_t
+                // (32-bit). Routing through the nint-returning overload
+                // is ABI-fragile on arm64 (upper 32 bits undefined for
+                // an int32_t return); use a dedicated overload, same
+                // precedent as objc_msgSend_activate.
+                var pid = objc_msgSend_pid(app, pidSel);
                 if (pid > 0)
                 {
                     TryCarbonSetFront(pid);
@@ -210,6 +215,12 @@ public sealed class MacAppActivator : IAppActivator
     // return value (success is observed via the next focus event), so
     // declare void to mirror MacFocusBackend.ActivateProcess.
     [DllImport(Objc, EntryPoint = "objc_msgSend")] private static extern void objc_msgSend_activate(nint receiver, nint selector, ulong options);
+    // Dedicated overload for properties that return pid_t (int32_t). Routing
+    // an int return through objc_msgSend_get's nint signature is ABI-
+    // fragile on arm64 — the upper 32 bits of the return register are
+    // undefined for int32_t return values. Same precedent as
+    // objc_msgSend_activate.
+    [DllImport(Objc, EntryPoint = "objc_msgSend")] private static extern int objc_msgSend_pid(nint receiver, nint selector);
 
     // Carbon process management — deprecated since 10.9 but still
     // exported and still works on macOS 26. Goes through the older
@@ -236,18 +247,34 @@ public sealed class MacAppActivator : IAppActivator
     [DllImport(ApplicationServices)]
     private static extern int SetFrontProcessWithOptions(ref ProcessSerialNumber psn, uint options);
 
-    private static void TryCarbonSetFront(int pid)
+    private void TryCarbonSetFront(int pid)
     {
         try
         {
             var psn = default(ProcessSerialNumber);
-            if (GetProcessForPID(pid, ref psn) != 0) return;
-            SetFrontProcessWithOptions(ref psn, SetFrontProcessFrontWindowOnly);
+            var status = GetProcessForPID(pid, ref psn);
+            if (status != 0)
+            {
+                _logger?.LogDebug(
+                    "MacAppActivator.TryCarbonSetFront: GetProcessForPID(pid={Pid}) returned OSStatus {Status}",
+                    pid, status);
+                return;
+            }
+            var setStatus = SetFrontProcessWithOptions(ref psn, SetFrontProcessFrontWindowOnly);
+            if (setStatus != 0)
+            {
+                _logger?.LogDebug(
+                    "MacAppActivator.TryCarbonSetFront: SetFrontProcessWithOptions(pid={Pid}) returned OSStatus {Status}",
+                    pid, setStatus);
+            }
         }
-        catch
+        catch (DllNotFoundException ex)
         {
-            // Carbon symbol absent on a future macOS or sandbox; the
-            // NSRunningApplication.activate above is still in effect.
+            _logger?.LogWarning(ex, "MacAppActivator.TryCarbonSetFront: ApplicationServices framework not loadable");
+        }
+        catch (EntryPointNotFoundException ex)
+        {
+            _logger?.LogWarning(ex, "MacAppActivator.TryCarbonSetFront: Carbon symbol missing (likely future macOS); polite activate still in effect");
         }
     }
 }

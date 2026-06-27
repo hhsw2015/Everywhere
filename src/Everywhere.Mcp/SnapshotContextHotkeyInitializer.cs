@@ -106,24 +106,39 @@ public sealed class SnapshotContextHotkeyInitializer : IAsyncInitializer
     // this race in practice — the cost is paid only where it matters.
     private const int MacosModifierReleaseDelayMs = 180;
 
-    // Last successful capture timestamp; coalesces rapid repeats from a
-    // single hotkey press. Without this, the OS sometimes delivers the
-    // shortcut twice (KeyDown + modifier-release re-fire) and the second
-    // capture overwrites the on-disk ctx file with a fresh snapshot that
-    // has already drained whatever the user queued — annotations vanish.
-    private long _lastCaptureTicks;
-    private const int RepeatSuppressionMs = 600;
+    // Tick of the most recently *accepted* hotkey press (not yet
+    // necessarily a successful capture). Coalesces rapid repeats from a
+    // single press — macOS sometimes delivers the shortcut twice
+    // (KeyDown + modifier-release re-fire), and at v0.9.157+ the second
+    // call would overwrite the on-disk ctx file with a fresh snapshot
+    // that had already drained the user's queued annotations.
+    //
+    // 1500ms window: observed re-fire gap was ~520ms after subtracting
+    // the modifier-release delay. 600ms (v0.9.163) was uncomfortably
+    // close; widening to 1500ms gives headroom against GC pauses /
+    // dispatcher backlog without being long enough that a user
+    // deliberately re-firing notices the suppression.
+    private long _lastAcceptedPressTicks;
+    private const int RepeatSuppressionMs = 1500;
 
     private void OnSnapshotPressed()
     {
         var nowTicks = Environment.TickCount64;
-        var prev = Interlocked.Read(ref _lastCaptureTicks);
+        var prev = Interlocked.Read(ref _lastAcceptedPressTicks);
         if (prev != 0 && (nowTicks - prev) < RepeatSuppressionMs)
         {
             _logger.LogDebug("Snapshot hotkey re-fired within {Ms}ms; ignoring", nowTicks - prev);
             return;
         }
-        Interlocked.Exchange(ref _lastCaptureTicks, nowTicks);
+        // CompareExchange so two concurrent callers don't both observe
+        // the same `prev` and both proceed past the guard. Loser logs
+        // and returns. (IShortcutListener dispatch thread is
+        // platform-dependent; we don't assume single-threaded delivery.)
+        if (Interlocked.CompareExchange(ref _lastAcceptedPressTicks, nowTicks, prev) != prev)
+        {
+            _logger.LogDebug("Snapshot hotkey lost coalescing race; ignoring");
+            return;
+        }
 
         // Capture must happen on the UI thread because IVisualElement.CaptureAsync
         // may bounce through Avalonia rendering. Fire-and-forget; user just wants

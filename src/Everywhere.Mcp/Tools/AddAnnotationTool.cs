@@ -9,6 +9,9 @@ namespace Everywhere.Mcp.Tools;
 [McpServerToolType]
 public static class AddAnnotationTool
 {
+    private static readonly string AllowedSources =
+        string.Join(", ", Enum.GetNames<AnnotationSource>().Select(n => n.ToLowerInvariant()));
+
     [McpServerTool(Name = "add_annotation")]
     [Description(
         "Queue a user-authored note against a perception anchor. Notes accumulate " +
@@ -36,16 +39,25 @@ public static class AddAnnotationTool
             return ToolErrors.ParameterRequired("anchor_label");
 
         if (!Enum.TryParse<AnnotationSource>(source, ignoreCase: true, out var parsedSource))
-            return ToolErrors.Error($"Invalid source '{source}'. Expected one of: pin, whiteboard, selected, linkrect.");
+            return ToolErrors.Error($"Invalid source '{source}'. Expected one of: {AllowedSources}.");
 
-        annotations.Add(new AnnotationItem(
-            Source: parsedSource,
-            Body: body.Trim(),
-            AnchorRef: string.IsNullOrWhiteSpace(anchor_ref) ? null : anchor_ref.Trim(),
-            AnchorLabel: anchor_label.Trim(),
-            CapturedAtUtc: DateTimeOffset.UtcNow));
+        int queuedAfter;
+        try
+        {
+            queuedAfter = annotations.Add(new AnnotationItem(
+                Source: parsedSource,
+                Body: body.Trim(),
+                AnchorRef: string.IsNullOrWhiteSpace(anchor_ref) ? null : anchor_ref.Trim(),
+                AnchorLabel: anchor_label.Trim(),
+                CapturedAtUtc: DateTimeOffset.UtcNow));
+        }
+        catch (ArgumentException ex)
+        {
+            // Stash rejected the input (oversize body / anchor_label / queue depth).
+            return ToolErrors.Error(ex.Message);
+        }
 
-        var json = JsonSerializer.Serialize(new { queued = annotations.Count });
+        var json = JsonSerializer.Serialize(new { queued = queuedAfter });
         return new CallToolResult { Content = [new TextContentBlock { Text = json }] };
     }
 }

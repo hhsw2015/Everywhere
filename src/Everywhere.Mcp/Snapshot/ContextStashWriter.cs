@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
@@ -33,6 +34,7 @@ public sealed class ContextStashWriter
     private readonly SelectionCache _selectionCache;
     private readonly PickStash _pickStash;
     private readonly WhiteboardStash _whiteboardStash;
+    private readonly AnnotationStash _annotationStash;
     private readonly IAppActivator _appActivator;
     private readonly IInputSimulator _input;
     private readonly IClipboardReader _clipboard;
@@ -66,8 +68,6 @@ public sealed class ContextStashWriter
         _logger = logger;
     }
 
-    private readonly AnnotationStash _annotationStash;
-
     /// <summary>
     /// Manual escape hatch bound to the ClearContextStash hotkey. Wipes the
     /// on-disk stash, any orphaned <c>.tmp</c>, AND any fresh pin so the
@@ -88,15 +88,11 @@ public sealed class ContextStashWriter
     public Task CaptureAsync(CancellationToken cancellationToken = default) => CaptureCoreAsync(seed: null, drainAnnotations: true, cancellationToken);
 
     /// <summary>
-    /// Capture context anchored to a specific element instead of whatever
-    /// happens to be focused right now. Used by pin-driven auto-capture: by
-    /// the time the Pinned event fires, focus has already returned to the
-    /// chat window, so reading FocusedElement would yield the chat window
-    /// (or nothing).
-    /// </summary>
-    /// <summary>
     /// Auto-capture entry: a perception event (pin / whiteboard finish) fires
-    /// this. User did NOT just press the manual hotkey, so we leave any queued
+    /// this with the just-pinned element as seed, because by the time the
+    /// Pinned event runs focus has already returned to the chat window and
+    /// reading FocusedElement would yield the chat window (or nothing).
+    /// User did NOT just press the manual hotkey, so we leave any queued
     /// annotations untouched — they belong to the next *manual* SnapshotContext.
     /// </summary>
     public Task CaptureAsync(IVisualElement seed, CancellationToken cancellationToken = default) => CaptureCoreAsync(seed, drainAnnotations: false, cancellationToken);
@@ -171,6 +167,7 @@ public sealed class ContextStashWriter
                     "LinkRect batch: kept={Kept} dropped={Dropped} capped_remaining={Capped} total_in={Total}",
                     picked.Count, dropped, capped, links.Count);
             if (picked.Count == 0) return;
+            var (annoPayload, annoSource) = PeekAnnotationsForPayload();
             var payload = new ContextSnapshotPayload(
                 SchemaVersion: CurrentSchemaVersion,
                 CapturedAtUtc: DateTimeOffset.UtcNow,
@@ -182,8 +179,12 @@ public sealed class ContextStashWriter
                 SelectedApp: null,
                 PinPending: null,
                 PickedLinks: picked,
-                Annotations: DrainAnnotationsForPayload());
+                Annotations: annoPayload);
             await WriteAtomicAsync(FormatForHook(payload), cancellationToken);
+            // Consume only AFTER the on-disk ctx is written, so a
+            // transient write failure leaves the queued annotations
+            // available for the next press.
+            _annotationStash.Consume(annoSource);
             _logger.LogInformation("Context stash captured {Count} links from {App}.", picked.Count, appKey);
             ActivateAgentApp();
         }
@@ -272,6 +273,16 @@ public sealed class ContextStashWriter
             // the user just collected. Sentinel guard ensures arbitrary
             // clipboard text is never harvested.
             var clipboardLinks = TryReadXlbMultiPick();
+            // Peek annotations now so we can include them in the payload,
+            // but defer the actual Consume until after the on-disk write
+            // succeeds (see CaptureLinksAsync for the same pattern). Auto
+            // capture paths skip the peek entirely so they neither include
+            // nor consume queued annotations.
+            (IReadOnlyList<PayloadAnnotation>? annoPayload, ImmutableArray<AnnotationItem> annoSource) =
+                drainAnnotations
+                    ? PeekAnnotationsForPayload()
+                    : (null, ImmutableArray<AnnotationItem>.Empty);
+
             var payload = new ContextSnapshotPayload(
                 SchemaVersion: CurrentSchemaVersion,
                 CapturedAtUtc: DateTimeOffset.UtcNow,
@@ -285,9 +296,10 @@ public sealed class ContextStashWriter
                 WhiteboardPending: whiteboardPending ? true : null,
                 WhiteboardRegionCount: whiteboardPending ? whiteboardRegions!.Count : null,
                 PickedLinks: clipboardLinks,
-                Annotations: drainAnnotations ? DrainAnnotationsForPayload() : null);
+                Annotations: annoPayload);
 
             await WriteAtomicAsync(FormatForHook(payload), cancellationToken);
+            if (drainAnnotations) _annotationStash.Consume(annoSource);
             _logger.LogInformation("Context stash captured for {App} ({Title}).", appKey, topLevel?.Name);
 
             ActivateAgentApp();
@@ -813,28 +825,39 @@ public sealed class ContextStashWriter
     }
 
     /// <summary>
-    /// Pulls all queued annotations off the stash and maps them into the
-    /// wire-format record. Called once per CaptureCoreAsync so one user
-    /// hotkey press consumes everything they accumulated since the last
-    /// send. Returns null (not an empty list) when there's nothing
+    /// Snapshot the current queued annotations for serialisation without
+    /// consuming them yet. The caller is responsible for calling
+    /// <see cref="AnnotationStash.Consume"/> after the on-disk ctx write
+    /// succeeds, so a transient I/O failure leaves the user's queued
+    /// notes available for the next hotkey press instead of silently
+    /// vanishing. Returns null (not an empty list) when there's nothing
     /// pending, so the JSON serializer omits the field entirely.
     /// </summary>
-    private IReadOnlyList<PayloadAnnotation>? DrainAnnotationsForPayload()
+    private (IReadOnlyList<PayloadAnnotation>? Payload, ImmutableArray<AnnotationItem> Source) PeekAnnotationsForPayload()
     {
-        var items = _annotationStash.Drain();
-        if (items.IsDefaultOrEmpty) return null;
+        var items = _annotationStash.Peek();
+        if (items.IsDefaultOrEmpty) return (null, ImmutableArray<AnnotationItem>.Empty);
         var result = new List<PayloadAnnotation>(items.Length);
         foreach (var item in items)
         {
             result.Add(new PayloadAnnotation(
-                Source: item.Source.ToString().ToLowerInvariant(),
+                Source: AnnotationSourceToWire(item.Source),
                 Body: item.Body,
                 AnchorLabel: item.AnchorLabel,
                 AnchorRef: item.AnchorRef,
                 CapturedAtUtc: item.CapturedAtUtc));
         }
-        return result;
+        return (result, items);
     }
+
+    private static string AnnotationSourceToWire(AnnotationSource source) => source switch
+    {
+        AnnotationSource.Pin        => "pin",
+        AnnotationSource.Whiteboard => "whiteboard",
+        AnnotationSource.Selected   => "selected",
+        AnnotationSource.LinkRect   => "linkrect",
+        _ => throw new ArgumentOutOfRangeException(nameof(source), source, null),
+    };
 
     private static async Task WriteAtomicAsync(string content, CancellationToken cancellationToken)
     {
