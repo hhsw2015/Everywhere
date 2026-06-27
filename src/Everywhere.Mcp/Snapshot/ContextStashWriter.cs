@@ -85,7 +85,7 @@ public sealed class ContextStashWriter
         _logger.LogInformation("Context stash cleared by user.");
     }
 
-    public Task CaptureAsync(CancellationToken cancellationToken = default) => CaptureCoreAsync(seed: null, cancellationToken);
+    public Task CaptureAsync(CancellationToken cancellationToken = default) => CaptureCoreAsync(seed: null, drainAnnotations: true, cancellationToken);
 
     /// <summary>
     /// Capture context anchored to a specific element instead of whatever
@@ -94,7 +94,12 @@ public sealed class ContextStashWriter
     /// chat window, so reading FocusedElement would yield the chat window
     /// (or nothing).
     /// </summary>
-    public Task CaptureAsync(IVisualElement seed, CancellationToken cancellationToken = default) => CaptureCoreAsync(seed, cancellationToken);
+    /// <summary>
+    /// Auto-capture entry: a perception event (pin / whiteboard finish) fires
+    /// this. User did NOT just press the manual hotkey, so we leave any queued
+    /// annotations untouched — they belong to the next *manual* SnapshotContext.
+    /// </summary>
+    public Task CaptureAsync(IVisualElement seed, CancellationToken cancellationToken = default) => CaptureCoreAsync(seed, drainAnnotations: false, cancellationToken);
 
     /// <summary>
     /// Bring the configured agent app to the front. Public so the LinkRect
@@ -177,7 +182,7 @@ public sealed class ContextStashWriter
                 SelectedApp: null,
                 PinPending: null,
                 PickedLinks: picked,
-                Annotations: DrainAnnotationsForPayload());
+                Annotations: drainAnnotations ? DrainAnnotationsForPayload() : null);
             await WriteAtomicAsync(FormatForHook(payload), cancellationToken);
             _logger.LogInformation("Context stash captured {Count} links from {App}.", picked.Count, appKey);
             ActivateAgentApp();
@@ -188,7 +193,7 @@ public sealed class ContextStashWriter
         }
     }
 
-    private async Task CaptureCoreAsync(IVisualElement? seed, CancellationToken cancellationToken)
+    private async Task CaptureCoreAsync(IVisualElement? seed, bool drainAnnotations, CancellationToken cancellationToken)
     {
         // Single-flight: rapid hotkey double-presses must serialise on the file
         // write, otherwise both invocations race on the same .tmp path.
@@ -280,7 +285,7 @@ public sealed class ContextStashWriter
                 WhiteboardPending: whiteboardPending ? true : null,
                 WhiteboardRegionCount: whiteboardPending ? whiteboardRegions!.Count : null,
                 PickedLinks: clipboardLinks,
-                Annotations: DrainAnnotationsForPayload());
+                Annotations: drainAnnotations ? DrainAnnotationsForPayload() : null);
 
             await WriteAtomicAsync(FormatForHook(payload), cancellationToken);
             _logger.LogInformation("Context stash captured for {App} ({Title}).", appKey, topLevel?.Name);
