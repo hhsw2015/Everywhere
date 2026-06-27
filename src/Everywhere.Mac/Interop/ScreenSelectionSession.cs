@@ -383,6 +383,21 @@ internal abstract class ScreenSelectionSession : ScreenSelectionTransparentWindo
         ToolTipWindow.ToolTip.SizeInfo = $"{rect.Width} x {rect.Height}";
     }
 
+    /// <summary>
+    /// Public hit-test helper for callers that need to enumerate the
+    /// owner pids of windows at a screen point, but ignore our own
+    /// process (mask / overlay / badge windows). Used by
+    /// <c>VisualElementContext.ElementAtPointBelowOwnProcess</c> so
+    /// annotation paths can hit-test as if their mask weren't there.
+    /// </summary>
+    public static List<int> WindowOwnerPidsBelowOurProcess(CGPoint point)
+    {
+        var list = new List<int>();
+        // relativeToWindow=0 = enumerate every window, no anchor.
+        GetWindowOwnerPidsAtLocation(point, 0, list);
+        return list;
+    }
+
     private static void GetWindowOwnerPidsAtLocation(CGPoint point, uint relativeToWindow, List<int> pids)
     {
         var currentPid = Environment.ProcessId;

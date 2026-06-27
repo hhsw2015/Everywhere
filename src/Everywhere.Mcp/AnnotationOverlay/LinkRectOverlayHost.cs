@@ -163,7 +163,10 @@ public sealed class LinkRectOverlayHost : IAsyncInitializer, IAsyncDisposable
                 IVisualElement? anchor = null;
                 try
                 {
-                    var cand = _visualContext.ElementFromPoint(
+                    // BelowOwnProcess hit-test: skips our own mask /
+                    // badge windows so we get the real underlying AX
+                    // leaf at the rect's centre (Pin-style).
+                    var cand = _visualContext.ElementAtPointBelowOwnProcess(
                         new PixelPoint(rect.X + rect.Width / 2, rect.Y + rect.Height / 2));
                     if (cand is not null)
                     {

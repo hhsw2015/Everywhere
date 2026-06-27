@@ -1225,7 +1225,10 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
             IVisualElement? cand;
             try
             {
-                cand = _visualContext.ElementFromPoint(new PixelPoint((int)Math.Round(px), (int)Math.Round(py)));
+                // BelowOwnProcess hit-test: skips windows owned by our
+                // pid (Whiteboard mask, badges) so we get the real AX
+                // leaf, not the mask we just drew on top of the screen.
+                cand = _visualContext.ElementAtPointBelowOwnProcess(new PixelPoint((int)Math.Round(px), (int)Math.Round(py)));
             }
             catch (Exception ex)
             {

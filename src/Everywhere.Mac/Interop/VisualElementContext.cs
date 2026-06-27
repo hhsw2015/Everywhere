@@ -148,4 +148,23 @@ public partial class VisualElementContext(IWindowHelper windowHelper) : IVisualE
     {
         return LinkRectSession.HarvestAsync(windowHelper, onRectCommitted, cancellationToken);
     }
+
+    public IVisualElement? ElementAtPointBelowOwnProcess(PixelPoint point)
+    {
+        // Mirror PickerSession.GetElementAtPoint: enumerate the window
+        // list excluding our own process so the hit-test ignores any
+        // mask / overlay we drew on top of the screen, then walk the
+        // owner-PID's AX subtree at the given point.
+        var pids = ScreenSelectionSession.WindowOwnerPidsBelowOurProcess(
+            new CGPoint(point.X, point.Y));
+        foreach (var pid in pids)
+        {
+            if (AXUIElement.ElementFromPid(pid) is not { } root) continue;
+            if (root.ElementAtPosition((float)point.X, (float)point.Y) is { } found)
+            {
+                return found;
+            }
+        }
+        return null;
+    }
 }
