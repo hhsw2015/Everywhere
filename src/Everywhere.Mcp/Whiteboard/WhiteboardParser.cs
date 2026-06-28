@@ -154,22 +154,27 @@ public static class WhiteboardParser
             var lenB = Math.Sqrt(Sq(b[^1].X - b[0].X) + Sq(b[^1].Y - b[0].Y));
             if (lenA < 5 || lenB < 5) continue;
             var ratio = lenA / lenB;
-            if (ratio < 0.3 || ratio > 3.3) continue;
             // Mid-point coincidence: a real X has both chords passing
             // through a common centre — their midpoints sit close
-            // together. Angle alone misses wide-flat X drawings (8-15°
-            // between two near-horizontal chords that still cross at the
-            // middle).
+            // together. Catches wide-flat X (chords near-horizontal,
+            // angle as low as 8°) that the angle gate below misses.
+            // No length-ratio gate here: a wide-flat X drawn over one
+            // line of text has an extreme ratio (200px wide × 25px
+            // tall → ratio 8) yet midpoints still coincide.
             var midAX = (a[0].X + a[^1].X) * 0.5;
             var midAY = (a[0].Y + a[^1].Y) * 0.5;
             var midBX = (b[0].X + b[^1].X) * 0.5;
             var midBY = (b[0].Y + b[^1].Y) * 0.5;
             var midDist = Math.Sqrt(Sq(midAX - midBX) + Sq(midAY - midBY));
             var avgLen = (lenA + lenB) * 0.5;
-            // Two near-parallel strokes that happen to cross briefly at
-            // their tails (like ⪥) would have far-apart midpoints; a
-            // proper X has midpoints within ~30% of the average length.
             if (avgLen > 0 && midDist / avgLen <= 0.3) return true;
+            // Angle-fallback: two strokes meeting near-perpendicular at
+            // ANY point (not necessarily the centre). On its own this
+            // gate also accepts shaft+barb-V arrows whose strokes cross
+            // at the tip, so guard with a strict length-parity band —
+            // a real X has similar-length chords (ratio in 0.4..2.5);
+            // an axis+barb arrow has ratio 2.5+ and is rejected here.
+            if (ratio < 0.4 || ratio > 2.5) continue;
             var angle = AngleBetween(a[0], a[^1], b[0], b[^1]);
             if (angle >= 35 && angle <= 145) return true;
         }
