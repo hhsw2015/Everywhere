@@ -39,16 +39,25 @@ public static class AnnotationSnapper
     public static SnapResult Snap(
         Annotation ann,
         IVisualElement root,
-        IReadOnlyList<Stroke> strokes)
+        IReadOnlyList<Stroke> strokes,
+        PrewarmedTree? prewarmed = null)
     {
         return ann.Kind switch
         {
-            AnnotationKind.Arrow => SnapArrow(ann, root, strokes),
-            AnnotationKind.Underline => SnapUnderline(ann, root, strokes),
-            AnnotationKind.Circle => SnapCircleOrX(ann, root),
-            AnnotationKind.X => SnapCircleOrX(ann, root),
+            AnnotationKind.Arrow => SnapArrow(ann, root, strokes, prewarmed),
+            AnnotationKind.Underline => SnapUnderline(ann, root, strokes, prewarmed),
+            AnnotationKind.Circle => SnapCircleOrX(ann, root, prewarmed),
+            AnnotationKind.X => SnapCircleOrX(ann, root, prewarmed),
             _ => Reject(ann.BoundingRect, "unknown gesture kind"),
         };
+    }
+
+    // Walk source: cache when available (no live AX calls), else live tree.
+    private static IEnumerable<(IVisualElement Node, Rect Bbox)> Walk(
+        IVisualElement root, Rect query, PrewarmedTree? prewarmed, double slack = 8.0)
+    {
+        if (prewarmed is not null) return prewarmed.QueryRect(query, slack);
+        return DescendantsInRect(root, query, slack);
     }
 
     // -------------------------------------------------------------------
@@ -58,7 +67,8 @@ public static class AnnotationSnapper
     private static SnapResult SnapArrow(
         Annotation ann,
         IVisualElement root,
-        IReadOnlyList<Stroke> strokes)
+        IReadOnlyList<Stroke> strokes,
+        PrewarmedTree? prewarmed)
     {
         var diag = new StringBuilder();
         diag.Append("arrow: ");
@@ -84,7 +94,7 @@ public static class AnnotationSnapper
         double tipX = endpoints[0].X, tipY = endpoints[0].Y;
         foreach (var (ex, ey) in endpoints)
         {
-            var inLeaf = LeafAtPoint(root, ex, ey);
+            var inLeaf = LeafAtPoint(root, ex, ey, prewarmed);
             var inWalk = s_lastWalkVisited;
             if (inLeaf is not null)
             {
@@ -103,7 +113,7 @@ public static class AnnotationSnapper
             }
             diag.Append($"miss@{F(ex, ey)}[w={inWalk}] ");
             if (foundInLeaf) continue;
-            var (nearLeaf, d) = NearestLeaf(root, ex, ey);
+            var (nearLeaf, d) = NearestLeaf(root, ex, ey, prewarmed);
             var nearWalk = s_lastWalkVisited;
             if (nearLeaf is not null)
             {
@@ -181,7 +191,8 @@ public static class AnnotationSnapper
     private static SnapResult SnapUnderline(
         Annotation ann,
         IVisualElement root,
-        IReadOnlyList<Stroke> strokes)
+        IReadOnlyList<Stroke> strokes,
+        PrewarmedTree? prewarmed)
     {
         double strokeTop = double.PositiveInfinity, strokeBottom = double.NegativeInfinity,
                strokeX1 = double.PositiveInfinity, strokeX2 = double.NegativeInfinity;
@@ -203,7 +214,7 @@ public static class AnnotationSnapper
 
         var strokeWidth = Math.Max(strokeX2 - strokeX1, 1);
         var (above, aboveDiag) = CollectUnderlineCandidatesV(
-            root, strokeTop, strokeX1, strokeX2, strokeWidth, above: true);
+            root, strokeTop, strokeX1, strokeX2, strokeWidth, above: true, prewarmed);
         diag.Append("above=").Append(aboveDiag).Append(' ');
         var candidates = above;
         var pickedSide = UnderlineSide.Above;
@@ -213,7 +224,7 @@ public static class AnnotationSnapper
         if (candidates.Count == 0)
         {
             var (below, belowDiag) = CollectUnderlineCandidatesV(
-                root, strokeBottom, strokeX1, strokeX2, strokeWidth, above: false);
+                root, strokeBottom, strokeX1, strokeX2, strokeWidth, above: false, prewarmed);
             diag.Append("below=").Append(belowDiag);
             candidates = below;
             pickedSide = UnderlineSide.Below;
@@ -266,7 +277,7 @@ public static class AnnotationSnapper
     private static (List<IVisualElement>, string) CollectUnderlineCandidatesV(
         IVisualElement root,
         double strokeY, double strokeX1, double strokeX2, double strokeWidth,
-        bool above)
+        bool above, PrewarmedTree? prewarmed)
     {
         var list = new List<IVisualElement>();
         int seen = 0, failedSide = 0, failedGap = 0, failedXBand = 0, failedXRatio = 0;
@@ -276,7 +287,7 @@ public static class AnnotationSnapper
         var queryRect = above
             ? new Rect(strokeX1, strokeY - 80 - 15, strokeWidth, 80 + 30)
             : new Rect(strokeX1, strokeY - 15, strokeWidth, 80 + 30);
-        foreach (var (e, bb) in DescendantsInRect(root, queryRect))
+        foreach (var (e, bb) in Walk(root, queryRect, prewarmed))
         {
             // Hard cap on total walked nodes. v0.9.216 diag showed
             // Chromium webview can deliver 76k+ Label nodes in a single
@@ -324,14 +335,14 @@ public static class AnnotationSnapper
     // Circle / X: center-in-rect collection
     // -------------------------------------------------------------------
 
-    private static SnapResult SnapCircleOrX(Annotation ann, IVisualElement root)
+    private static SnapResult SnapCircleOrX(Annotation ann, IVisualElement root, PrewarmedTree? prewarmed)
     {
         var diag = new StringBuilder();
         diag.Append("circle/x: rect=").Append(F(ann.BoundingRect)).Append(' ');
         var leaves = new List<IVisualElement>();
         int totalLeaves = 0;
         int walked = 0;
-        foreach (var (e, bb) in DescendantsInRect(root, ann.BoundingRect))
+        foreach (var (e, bb) in Walk(root, ann.BoundingRect, prewarmed))
         {
             walked++; if (walked > 5000) break;
             if (!LeafTextOrImageRoles.Contains(e.Type)) continue;
@@ -358,7 +369,7 @@ public static class AnnotationSnapper
             // gestures that miss the visual center but still cover most
             // of the line.
             int walked2 = 0;
-            foreach (var (e, bb) in DescendantsInRect(root, ann.BoundingRect))
+            foreach (var (e, bb) in Walk(root, ann.BoundingRect, prewarmed))
             {
                 walked2++; if (walked2 > 5000) break;
                 if (!LeafTextOrImageRoles.Contains(e.Type)) continue;
@@ -379,7 +390,7 @@ public static class AnnotationSnapper
         {
             // Fallback 2: 50% overlap.
             int walked3 = 0;
-            foreach (var (e, bb) in DescendantsInRect(root, ann.BoundingRect))
+            foreach (var (e, bb) in Walk(root, ann.BoundingRect, prewarmed))
             {
                 walked3++; if (walked3 > 5000) break;
                 if (!LeafTextOrImageRoles.Contains(e.Type)) continue;
@@ -435,12 +446,13 @@ public static class AnnotationSnapper
     private static SnapResult Reject(Rect rect, string reason) =>
         new(rect, [], Rejected: true, RejectReason: reason);
 
-    private static IVisualElement? LeafAtPoint(IVisualElement root, double x, double y)
+    private static IVisualElement? LeafAtPoint(
+        IVisualElement root, double x, double y, PrewarmedTree? prewarmed = null)
     {
         var pointRect = new Rect(x, y, 1, 1);
         var visited = 0;
         IVisualElement? hit = null;
-        foreach (var (e, bb) in DescendantsInRect(root, pointRect, slack: 2.0))
+        foreach (var (e, bb) in Walk(root, pointRect, prewarmed, slack: 2.0))
         {
             visited++;
             // Hard cap defends against degenerate trees where prune fails.
@@ -466,7 +478,7 @@ public static class AnnotationSnapper
     [ThreadStatic] private static int s_lastWalkVisited;
 
     private static (IVisualElement? leaf, double dist) NearestLeaf(
-        IVisualElement root, double x, double y)
+        IVisualElement root, double x, double y, PrewarmedTree? prewarmed = null)
     {
         // The single caller rejects matches with d > 120 (SnapCircleOrX
         // fallback path). Bound the walk to a 240×240 box around the point
@@ -475,7 +487,7 @@ public static class AnnotationSnapper
         var bestD = double.PositiveInfinity;
         var pointRect = new Rect(x - 120, y - 120, 240, 240);
         var visited = 0;
-        foreach (var (e, bb) in DescendantsInRect(root, pointRect, slack: 0.0))
+        foreach (var (e, bb) in Walk(root, pointRect, prewarmed, slack: 0.0))
         {
             visited++;
             if (visited > 5000) break;  // bail on degenerate AX trees
@@ -516,6 +528,98 @@ public static class AnnotationSnapper
     private static double RectArea(Rect r) => Math.Max(0, r.Width) * Math.Max(0, r.Height);
 
     private static Rect ToRect(PixelRect pr) => new(pr.X, pr.Y, pr.Width, pr.Height);
+
+    // -----------------------------------------------------------------
+    // Prewarmed tree — flat snapshot of every node visited from the root
+    // taken once during overlay-show idle time. Snap routines query this
+    // by rect intersection instead of doing live AX walks at commit time,
+    // dropping perceived snap latency on Chromium webviews (where each
+    // live walk takes 5–15s) to whatever the user already spent drawing
+    // their gesture.
+    // -----------------------------------------------------------------
+    public sealed class PrewarmedTree
+    {
+        // Flat list, DFS pre-order to preserve "first hit wins" semantics
+        // some callers rely on (LeafAtPoint, NearestLeaf already use rect
+        // pruning + cap on top).
+        public List<(IVisualElement Node, Rect Bbox)> Nodes { get; }
+        public int RootChildCount { get; }
+        public int CapHit { get; set; }
+        public PrewarmedTree(List<(IVisualElement, Rect)> nodes, int rootChildCount, int capHit)
+        {
+            Nodes = nodes;
+            RootChildCount = rootChildCount;
+            CapHit = capHit;
+        }
+
+        // Build by reusing the existing rect-pruned recursion, but with a
+        // "match everything" query so we get the full subtree once. Cap
+        // at 100k nodes — far above the worst Arc page (~76k seen) yet
+        // still bounded for pathological trees. CancellationToken lets
+        // the caller bail when the user commits before prewarm finishes.
+        public static PrewarmedTree Build(IVisualElement root, CancellationToken ct)
+        {
+            var bigRect = new Rect(-1e9, -1e9, 2e9, 2e9);
+            var nodes = new List<(IVisualElement, Rect)>(4096);
+            var visited = new HashSet<IVisualElement>(ReferenceEqualityComparer.Instance);
+            var capHit = 0;
+            Rect rootBb;
+            try { rootBb = ToRect(root.BoundingRectangle); }
+            catch { rootBb = default; }
+            DescendantsInRectImplCapped(root, rootBb, bigRect, nodes, visited, 100_000,
+                ref capHit, ct);
+            return new PrewarmedTree(nodes, root.Children.Count, capHit);
+        }
+
+        // Filter the flat list to nodes whose bbox intersects query+slack.
+        // For empty-bbox nodes (Chromium wrappers) we include them so the
+        // body's role-based filter still has a chance — same semantics as
+        // the live walk.
+        public IEnumerable<(IVisualElement Node, Rect Bbox)> QueryRect(
+            Rect query, double slack = 8.0)
+        {
+            var expanded = new Rect(
+                query.X - slack, query.Y - slack,
+                query.Width + 2 * slack, query.Height + 2 * slack);
+            foreach (var n in Nodes)
+            {
+                var bb = n.Bbox;
+                if (bb.Width <= 0 || bb.Height <= 0) { yield return n; continue; }
+                var inter = bb.Intersect(expanded);
+                if (inter.Width <= 0 || inter.Height <= 0) continue;
+                yield return n;
+            }
+        }
+    }
+
+    private static void DescendantsInRectImplCapped(
+        IVisualElement node, Rect nodeBb, Rect expanded,
+        List<(IVisualElement, Rect)> sink,
+        HashSet<IVisualElement> visited,
+        int cap, ref int capHit, CancellationToken ct)
+    {
+        if (sink.Count >= cap) { capHit++; return; }
+        if (ct.IsCancellationRequested) return;
+        if (!visited.Add(node)) return;
+        sink.Add((node, nodeBb));
+        // Leaf-role nodes: don't descend into glyph children.
+        if (LeafTextRoles.Contains(node.Type)
+            || LeafTextOrImageRoles.Contains(node.Type))
+            return;
+        foreach (var c in node.Children)
+        {
+            if (ct.IsCancellationRequested) return;
+            Rect cBb;
+            try { cBb = ToRect(c.BoundingRectangle); }
+            catch { cBb = default; }
+            if (cBb.Width > 0 && cBb.Height > 0)
+            {
+                var inter = cBb.Intersect(expanded);
+                if (inter.Width <= 0 || inter.Height <= 0) continue;
+            }
+            DescendantsInRectImplCapped(c, cBb, expanded, sink, visited, cap, ref capHit, ct);
+        }
+    }
 
     // Rect-pruned descent. Skip subtrees whose own bbox can't possibly contain
     // a leaf intersecting `query` (expanded by `slack`). Empty-bbox nodes

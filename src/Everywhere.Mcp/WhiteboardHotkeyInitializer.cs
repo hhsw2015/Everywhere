@@ -335,6 +335,44 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
             overlay.Show();
             overlay.Activate();
             _logger.LogInformation("Whiteboard overlay shown");
+
+            // Prewarm: walk the focused-window AX tree once while the user
+            // is drawing. Snap reads from the cached flat list instead of
+            // doing live AX calls (Chromium webview live walk = 5–15s).
+            // Cancelled if the user commits before the walk finishes — Snap
+            // then falls back to live walk with the existing 5k cap.
+            var prewarmCts = new CancellationTokenSource();
+            Task<Everywhere.Mcp.Whiteboard.AnnotationSnapper.PrewarmedTree?>? prewarmTask = null;
+            if (focusedRoot is not null)
+            {
+                var prewarmRoot = focusedRoot;
+                var prewarmToken = prewarmCts.Token;
+                var prewarmSw = System.Diagnostics.Stopwatch.StartNew();
+                prewarmTask = Task.Run(() =>
+                {
+                    try
+                    {
+                        var tree = Everywhere.Mcp.Whiteboard.AnnotationSnapper.PrewarmedTree.Build(
+                            prewarmRoot, prewarmToken);
+                        _logger.LogInformation(
+                            "Whiteboard prewarm: {Nodes} nodes in {Ms}ms (capHit={Cap})",
+                            tree.Nodes.Count, prewarmSw.ElapsedMilliseconds, tree.CapHit);
+                        return (Everywhere.Mcp.Whiteboard.AnnotationSnapper.PrewarmedTree?)tree;
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        _logger.LogDebug("Whiteboard prewarm cancelled at {Ms}ms",
+                            prewarmSw.ElapsedMilliseconds);
+                        return null;
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Whiteboard prewarm failed");
+                        return null;
+                    }
+                }, prewarmToken);
+            }
+
             var result = await overlay.ResultTask;
             _logger.LogInformation(
                 "Whiteboard commit: continueSession={Continue} commitKeyModifiers={Mods}",
@@ -393,6 +431,31 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
                 return;
             }
 
+            // Wait briefly for the prewarm walk we started when the overlay
+            // showed. If the user drew their gesture in <1s on a big Arc
+            // page, the walk may need a little more time to finish — but
+            // we don't block forever; if it isn't done after a short window
+            // we cancel and Snap falls back to a live (capped) walk.
+            Everywhere.Mcp.Whiteboard.AnnotationSnapper.PrewarmedTree? prewarmed = null;
+            if (prewarmTask is not null)
+            {
+                var awaitSw = System.Diagnostics.Stopwatch.StartNew();
+                var completed = await Task.WhenAny(prewarmTask, Task.Delay(3000));
+                if (ReferenceEquals(completed, prewarmTask))
+                {
+                    prewarmed = await prewarmTask;
+                    _logger.LogInformation(
+                        "Whiteboard prewarm consumed: nodes={Nodes} awaitedMs={Ms}",
+                        prewarmed?.Nodes.Count ?? -1, awaitSw.ElapsedMilliseconds);
+                }
+                else
+                {
+                    prewarmCts.Cancel();
+                    _logger.LogInformation(
+                        "Whiteboard prewarm not ready within 3000ms — Snap will use live walk");
+                }
+            }
+
             var (annotations, strokeGroups) = WhiteboardParser.ParseGrouped(strokes);
             System.Diagnostics.Debug.Assert(annotations.Count == strokeGroups.Count,
                 "WhiteboardParser.ParseGrouped contract: annotations and strokeGroups are 1:1");
@@ -425,7 +488,7 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
                 // snapper, NOT all strokes — otherwise endpoints from
                 // unrelated gestures contaminate SnapArrow's "nearest
                 // text" lookup and SnapUnderline's strokeTop/Bottom.
-                var snap = AnnotationSnapper.Snap(ann, focusedRoot, annStrokes);
+                var snap = AnnotationSnapper.Snap(ann, focusedRoot, annStrokes, prewarmed);
                 snapTrace.Add((ann, snap));
                 if (!string.IsNullOrEmpty(snap.Diagnostics))
                     _logger.LogInformation("Whiteboard snap diag ({Kind}): {Diag}",
