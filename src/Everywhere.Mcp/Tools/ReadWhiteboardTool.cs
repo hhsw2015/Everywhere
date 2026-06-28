@@ -51,6 +51,7 @@ public static class ReadWhiteboardTool
                     sb.Append(", ").Append(imgCount).Append(imgCount == 1 ? " image" : " images");
                 sb.Append(", confidence ").Append(r.Confidence.ToString("F2"))
                   .Append(")\n\n");
+                var sectionStart = sb.Length;
                 // De-duplicate leaves whose text is fully contained in
                 // another selected leaf's text — happens when a Hyperlink
                 // and its child Label both pass the snapper filter.
@@ -88,17 +89,36 @@ public static class ReadWhiteboardTool
                 }
                 // OCR fallback: every leaf in this region had empty text
                 // (anchor wrapping an icon/canvas, hidden Label) but OCR
-                // saw real glyphs in the gesture rect. Fall back to those
-                // lines so the agent gets the visible content instead of
-                // an empty region body.
-                if (!emittedAnyLeafText && r.OcrLines.Count > 0)
+                // may have seen real glyphs in the gesture rect. If OCR
+                // also came up empty (the gesture rect is on a non-text
+                // area such as a button row), surface a placeholder so
+                // the agent at least knows there was an empty-leaf hit
+                // here rather than silently dropping the region body.
+                if (!emittedAnyLeafText)
                 {
-                    foreach (var line in r.OcrLines)
+                    if (r.OcrLines.Count > 0)
                     {
-                        var t = (line.Text ?? string.Empty).Trim();
-                        if (string.IsNullOrEmpty(t)) continue;
-                        if (!emitted.Add(t)) continue;
-                        sb.Append(t).Append('\n');
+                        foreach (var line in r.OcrLines)
+                        {
+                            var t = (line.Text ?? string.Empty).Trim();
+                            if (string.IsNullOrEmpty(t)) continue;
+                            if (!emitted.Add(t)) continue;
+                            sb.Append(t).Append('\n');
+                        }
+                    }
+                    if (sb.Length == sectionStart && r.Leaves.Count > 0)
+                    {
+                        // Still nothing — leaves were empty AND OCR had no
+                        // glyphs in the gesture rect. Emit the leaf bbox
+                        // as a hint instead of returning a header-only
+                        // region; the agent can decide whether the visual
+                        // (an icon, a canvas) is what the user meant.
+                        var leaf = r.Leaves[0];
+                        var bb = leaf.BoundingRectangle;
+                        sb.Append("(empty-text leaf at ")
+                          .Append(bb.X).Append(',').Append(bb.Y)
+                          .Append(' ').Append(bb.Width).Append('x').Append(bb.Height)
+                          .Append(")\n");
                     }
                 }
                 // Image markers: surface metadata only. The agent decides
