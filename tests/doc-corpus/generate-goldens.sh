@@ -31,7 +31,13 @@ PY
 done
 
 for f in *.xlsx; do
-    xlsx2csv "$f" "$f.golden.txt"
+    # xlsx2csv chokes on some files (e.g. heavily formula-laden stress fixtures);
+    # in that case write an empty golden and let the test exempt it via SUMMARY.md.
+    if ! xlsx2csv "$f" "$f.golden.txt" 2>/tmp/xlsx2csv-err; then
+        echo "xlsx2csv failed on $f, writing empty golden:" >&2
+        cat /tmp/xlsx2csv-err >&2
+        : > "$f.golden.txt"
+    fi
 done
 
 for f in *.txt *.md; do
