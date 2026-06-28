@@ -542,10 +542,26 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
                 // actually drew so the slicer can keep the lines they
                 // gestured over — slicing across the entire leaf would
                 // produce too many candidate rows.
-                var ocrLines = RunOcrForRegion(ocrBitmap, ocrBitmapBounds, ann.BoundingRect);
+                // For Underline gestures, OCR a wider Y-band: the user
+                // draws a thin horizontal stroke (stroke height ~3-10px)
+                // and expects it to mark the text line. The text usually
+                // sits ABOVE the stroke (classic underline) or BELOW
+                // (overline-style). OCR'ing only the stroke's bbox often
+                // returns 0 lines because it misses the text rows entirely.
+                // Expand the rect by 30px above and 10px below — covers a
+                // standard text row's ascender/descender plus inter-line
+                // gap on each side.
+                var ocrRect = ann.Kind == AnnotationKind.Underline
+                    ? new Avalonia.Rect(
+                        ann.BoundingRect.X,
+                        Math.Max(0, ann.BoundingRect.Y - 30),
+                        ann.BoundingRect.Width,
+                        ann.BoundingRect.Height + 40)
+                    : ann.BoundingRect;
+                var ocrLines = RunOcrForRegion(ocrBitmap, ocrBitmapBounds, ocrRect);
                 _logger.LogInformation(
                     "Whiteboard OCR: bitmap={HasBitmap} region={Region} -> {LineCount} lines",
-                    ocrBitmap is not null, snap.Rect, ocrLines.Count);
+                    ocrBitmap is not null, ocrRect, ocrLines.Count);
                 // Use the parser-output rect (user's actual gesture bbox)
                 // for downstream slicing, NOT snap.Rect — snapper expands
                 // its rect to the full a11y leaf bounds so the agent sees a
