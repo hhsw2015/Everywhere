@@ -475,9 +475,20 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
             {
                 var ann = annotations[ai];
                 var annStrokes = strokeGroups[ai];
+                // Per-stroke chord (first→last point) + chord length, so
+                // post-mortem analysis of misclassifications has the
+                // actual geometry the parser worked from.
+                var strokeDiag = string.Join("; ", annStrokes.Select(s =>
+                {
+                    if (s.Points.Count < 2) return "(<2pts)";
+                    var p0 = s.Points[0]; var p1 = s.Points[^1];
+                    var dx = p1.X - p0.X; var dy = p1.Y - p0.Y;
+                    var len = Math.Sqrt(dx * dx + dy * dy);
+                    return $"({p0.X:F0},{p0.Y:F0})->({p1.X:F0},{p1.Y:F0}) len={len:F0}";
+                }));
                 _logger.LogInformation(
-                    "Whiteboard ann: kind={Kind} parserRect={Rect}",
-                    ann.Kind, ann.BoundingRect);
+                    "Whiteboard ann: kind={Kind} parserRect={Rect} strokes=[{Strokes}]",
+                    ann.Kind, ann.BoundingRect, strokeDiag);
                 // Always snap against focusedRoot. v0.8.25 tried falling
                 // back to targetScreen when focusedRoot.BoundingRect was
                 // 0x0, but that traverses EVERY app's leaves on screen

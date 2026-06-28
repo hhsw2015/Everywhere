@@ -201,16 +201,13 @@ public static class WhiteboardParser
         var axisLen = Math.Max(lenA, lenB);
         var headLen = Math.Min(lenA, lenB);
         var (axis, head) = lenA >= lenB ? (a, b) : (b, a);
-        // Head ≤ ~70% of axis. Originally 55% but users often draw the
-        // arrowhead as one big V whose chord endpoint-to-endpoint length
-        // approaches the axis length (e.g. axis 168px + head V chord
-        // 100px → ratio 0.59, previously rejected). 70% admits these
-        // while still rejecting two similar-length strokes (a real X
-        // has ratio 0.7..1.4 which falls inside, but X is matched
-        // separately by mid-point coincidence and angle, and Arrow's
-        // endpoint-proximity check below excludes Xs whose chords cross
-        // at the centre rather than meet at an axis endpoint).
-        if (headLen / axisLen > 0.70) return false;
+        // Head ≤ ~95% of axis. Users sometimes draw the head V as long
+        // as the shaft (a "hook" arrow). Pure length comparison can't
+        // disambiguate Arrow from X; the endpoint-proximity check below
+        // is the actual disambiguator. Real X has chord midpoints that
+        // coincide (handled by LooksLikeX) and chord endpoints that
+        // DON'T sit near each other — fails Arrow's NearEither test.
+        if (headLen / axisLen > 0.95) return false;
         // Endpoints within 30% of axis length. Originally 25%; widened
         // because arrow heads drawn as one V often have chord endpoints
         // a bit further from the axis tip than 25% allows when the V
