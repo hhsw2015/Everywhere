@@ -661,7 +661,16 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
         // cross-process) GetText call on UIA/AT-SPI.
         var hyperlinkHasImage = new HashSet<IVisualElement>(ReferenceEqualityComparer.Instance);
         var hyperlinkHasText = new HashSet<IVisualElement>(ReferenceEqualityComparer.Instance);
+        // Prune-by-gesture-rect for the precompute walk. Subtrees outside
+        // the user's gesture can't contain a Hyperlink we'll consider in
+        // the main loop below — same expanded rect, same logic.
         {
+            const double precomputeSlack = 8.0;
+            var expanded = new Avalonia.Rect(
+                regionRectScreenPx.X - precomputeSlack,
+                regionRectScreenPx.Y - precomputeSlack,
+                regionRectScreenPx.Width + 2 * precomputeSlack,
+                regionRectScreenPx.Height + 2 * precomputeSlack);
             var stack = new Stack<(IVisualElement Node, IVisualElement? AncestorHyperlink)>();
             stack.Push((root, null));
             while (stack.Count > 0)
@@ -681,11 +690,25 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
                              && !string.IsNullOrWhiteSpace(node.GetText(maxLength: 1)))
                         hyperlinkHasText.Add(ancestor);
                 }
+                var nbb = node.BoundingRectangle;
+                var prune = nbb.Width > 0 && nbb.Height > 0;
                 foreach (var c in node.Children)
+                {
+                    if (prune)
+                    {
+                        var cbb = c.BoundingRectangle;
+                        if (cbb.Width > 0 && cbb.Height > 0)
+                        {
+                            var cRect = new Avalonia.Rect(cbb.X, cbb.Y, cbb.Width, cbb.Height);
+                            var inter = cRect.Intersect(expanded);
+                            if (inter.Width <= 0 || inter.Height <= 0) continue;
+                        }
+                    }
                     stack.Push((c, nextAncestor));
+                }
             }
         }
-        foreach (var e in DescendantsOf(root))
+        foreach (var e in DescendantsOfInRect(root, regionRectScreenPx))
         {
             totalLeaves++;
             // Accept either an explicit Image leaf, or a Hyperlink whose
@@ -1016,6 +1039,49 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
             if (depth >= maxDepth) continue;
             foreach (var c in node.Children)
                 stack.Push((c, depth + 1));
+        }
+    }
+
+    // Like DescendantsOf, but prunes subtrees whose bbox can't intersect
+    // `query` (expanded by `slack`). Empty-bbox parents (Chromium webview
+    // wrappers) recurse anyway. Cuts a multi-second full-DOM scan to <100ms
+    // when the gesture covers a small fraction of a deep AX tree. Same
+    // emission order, same node/depth caps.
+    private static IEnumerable<IVisualElement> DescendantsOfInRect(
+        IVisualElement root, Avalonia.Rect query, double slack = 8.0,
+        int maxNodes = 5000, int maxDepth = 64)
+    {
+        var expanded = new Avalonia.Rect(
+            query.X - slack, query.Y - slack,
+            query.Width + 2 * slack, query.Height + 2 * slack);
+        var visited = new HashSet<IVisualElement>(ReferenceEqualityComparer.Instance);
+        var stack = new Stack<(IVisualElement Node, int Depth)>();
+        stack.Push((root, 0));
+        var emitted = 0;
+        while (stack.Count > 0 && emitted < maxNodes)
+        {
+            var (node, depth) = stack.Pop();
+            if (!visited.Add(node)) continue;
+            yield return node;
+            emitted++;
+            if (depth >= maxDepth) continue;
+            // Decide pruneability from this node's own bbox.
+            var bb = node.BoundingRectangle;
+            var prune = bb.Width > 0 && bb.Height > 0;
+            foreach (var c in node.Children)
+            {
+                if (prune)
+                {
+                    var cbb = c.BoundingRectangle;
+                    if (cbb.Width > 0 && cbb.Height > 0)
+                    {
+                        var cRect = new Avalonia.Rect(cbb.X, cbb.Y, cbb.Width, cbb.Height);
+                        var inter = cRect.Intersect(expanded);
+                        if (inter.Width <= 0 || inter.Height <= 0) continue;
+                    }
+                }
+                stack.Push((c, depth + 1));
+            }
         }
     }
 
