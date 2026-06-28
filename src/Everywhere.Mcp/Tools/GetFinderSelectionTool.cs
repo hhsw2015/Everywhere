@@ -64,7 +64,7 @@ public static class GetFinderSelectionTool
         }
     }
 
-    internal static string KindHintFromExtension(string name, bool isDir)
+    public static string KindHintFromExtension(string name, bool isDir)
     {
         if (isDir) return "folder";
         var ext = Path.GetExtension(name).ToLowerInvariant();
@@ -82,7 +82,7 @@ public static class GetFinderSelectionTool
         };
     }
 
-    internal static string MimeFromExtension(string name, bool isDir)
+    public static string MimeFromExtension(string name, bool isDir)
     {
         if (isDir) return "inode/directory";
         var ext = Path.GetExtension(name).ToLowerInvariant();
