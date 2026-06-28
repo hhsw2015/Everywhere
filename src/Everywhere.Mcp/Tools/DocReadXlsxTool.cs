@@ -33,12 +33,20 @@ public static class DocReadXlsxTool
                 });
 
                 var sst = wb.SharedStringTablePart?.SharedStringTable;
-                foreach (var sheet in wb.Workbook.Descendants<Sheet>())
+                var workbook = wb.Workbook;
+                if (workbook is null) return DocReaderResult.Build(string.Empty, new Dictionary<string, object?>
+                {
+                    ["sheets"] = 0, ["source"] = path,
+                });
+
+                foreach (var sheet in workbook.Descendants<Sheet>())
                 {
                     sheetCount++;
                     if (sheet.Id?.Value is null) continue;
                     var part = (WorksheetPart)wb.GetPartById(sheet.Id.Value);
-                    var sheetData = part.Worksheet.Elements<SheetData>().FirstOrDefault();
+                    var ws = part.Worksheet;
+                    if (ws is null) continue;
+                    var sheetData = ws.Elements<SheetData>().FirstOrDefault();
                     if (sheetData is null) continue;
 
                     foreach (var row in sheetData.Elements<Row>())
