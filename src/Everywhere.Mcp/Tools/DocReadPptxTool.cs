@@ -30,7 +30,9 @@ public static class DocReadPptxTool
                     foreach (var slide in pres.SlideParts)
                     {
                         slideCount++;
-                        foreach (var t in slide.Slide.Descendants<Text>())
+                        var slideRoot = slide.Slide;
+                        if (slideRoot is null) continue;
+                        foreach (var t in slideRoot.Descendants<Text>())
                         {
                             sb.AppendLine(t.Text);
                         }

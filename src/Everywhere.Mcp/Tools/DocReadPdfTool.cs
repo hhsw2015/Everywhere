@@ -3,7 +3,6 @@ using System.Text;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 using UglyToad.PdfPig;
-using UglyToad.PdfPig.Content;
 using UglyToad.PdfPig.DocumentLayoutAnalysis.TextExtractor;
 
 namespace Everywhere.Mcp.Tools;
@@ -29,9 +28,7 @@ public static class DocReadPdfTool
                 pageCount = doc.NumberOfPages;
                 for (var i = 1; i <= pageCount; i++)
                 {
-                    Page page = doc.GetPage(i);
-                    var letters = page.Letters;
-                    var words = NearestNeighbourWordExtractor.Instance.GetWords(letters);
+                    var page = doc.GetPage(i);
                     var content = ContentOrderTextExtractor.GetText(page);
                     sb.AppendLine(content);
                 }
