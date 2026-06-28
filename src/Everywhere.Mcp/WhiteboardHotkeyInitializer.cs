@@ -548,15 +548,17 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
                 // sits ABOVE the stroke (classic underline) or BELOW
                 // (overline-style). OCR'ing only the stroke's bbox often
                 // returns 0 lines because it misses the text rows entirely.
-                // Expand the rect by 30px above and 10px below — covers a
-                // standard text row's ascender/descender plus inter-line
-                // gap on each side.
+                // 50px above + 20px below covers a 30-px tall text row
+                // (large/heading font) plus its ascender + the inter-line
+                // gap on each side. Width also expanded slightly so the
+                // first/last glyph of a row whose first character starts
+                // before the stroke isn't clipped.
                 var ocrRect = ann.Kind == AnnotationKind.Underline
                     ? new Avalonia.Rect(
-                        ann.BoundingRect.X,
-                        Math.Max(0, ann.BoundingRect.Y - 30),
-                        ann.BoundingRect.Width,
-                        ann.BoundingRect.Height + 40)
+                        Math.Max(0, ann.BoundingRect.X - 20),
+                        Math.Max(0, ann.BoundingRect.Y - 50),
+                        ann.BoundingRect.Width + 40,
+                        ann.BoundingRect.Height + 70)
                     : ann.BoundingRect;
                 var ocrLines = RunOcrForRegion(ocrBitmap, ocrBitmapBounds, ocrRect);
                 _logger.LogInformation(
