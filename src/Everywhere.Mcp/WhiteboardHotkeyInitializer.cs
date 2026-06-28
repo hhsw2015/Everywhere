@@ -397,31 +397,7 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
                 // snapper, NOT all strokes — otherwise endpoints from
                 // unrelated gestures contaminate SnapArrow's "nearest
                 // text" lookup and SnapUnderline's strokeTop/Bottom.
-                // Short-circuit when focusedRoot has degenerate bounds.
-                // Chromium webview Hyperlink ancestors expose 0×0 bounds
-                // but their Descendants() walk pulls back thousands of
-                // sync cross-process AX nodes — the snapper can sit at
-                // 30+ seconds, looking exactly like a freeze (user
-                // report: "按回车直接卡死了"). Producing a pre-rejected
-                // SnapResult skips the walk entirely; the Circle/X
-                // image fallback below still ships the gesture as a
-                // cropped image region so agent payload isn't empty.
-                SnapResult snap;
-                PixelRect rootBounds;
-                try { rootBounds = focusedRoot.BoundingRectangle; }
-                catch { rootBounds = default; }
-                if (rootBounds.Width <= 0 || rootBounds.Height <= 0)
-                {
-                    _logger.LogInformation(
-                        "Whiteboard snap skipped: focusedRoot bbox empty (chromium webview anchor)");
-                    snap = new SnapResult(ann.BoundingRect, [],
-                        Rejected: true,
-                        RejectReason: "focusedRoot has empty bounds (chromium webview anchor)");
-                }
-                else
-                {
-                    snap = AnnotationSnapper.Snap(ann, focusedRoot, annStrokes);
-                }
+                var snap = AnnotationSnapper.Snap(ann, focusedRoot, annStrokes);
                 snapTrace.Add((ann, snap));
                 if (!string.IsNullOrEmpty(snap.Diagnostics))
                     _logger.LogInformation("Whiteboard snap diag ({Kind}): {Diag}",
@@ -435,7 +411,7 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
                     // thumbnails, infinite-scroll cards, etc.), crop the
                     // gesture rect itself as a single fallback image so
                     // the user's selection isn't lost.
-                    if (ann.Kind is AnnotationKind.Circle or AnnotationKind.X or AnnotationKind.Arrow
+                    if (ann.Kind is AnnotationKind.Circle or AnnotationKind.X
                         && TryFallbackRegionImage(ann.BoundingRect, ocrBitmap, ocrBitmapBounds,
                                                     ref sessionImageCount, ref sessionImageBytes,
                                                     out var fallbackImage))
@@ -509,7 +485,7 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
                 // back instead of an empty region.
                 var allLeavesEmpty = textLeaves.Count == 0 || textLeaves.All(l =>
                     string.IsNullOrWhiteSpace(l.GetText(maxLength: 1)));
-                if (ann.Kind is AnnotationKind.Circle or AnnotationKind.X or AnnotationKind.Arrow
+                if (ann.Kind is AnnotationKind.Circle or AnnotationKind.X
                     && imageLeaves.Count == 0 && allLeavesEmpty
                     && TryFallbackRegionImage(ann.BoundingRect, ocrBitmap, ocrBitmapBounds,
                                                 ref sessionImageCount, ref sessionImageBytes,
@@ -528,15 +504,11 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
 
             if (regions.Count == 0)
             {
-                _logger.LogInformation("Whiteboard produced no usable regions; activating agent anyway");
+                _logger.LogInformation("Whiteboard produced no usable regions; nothing to stash");
+                // Same reasoning as the cancel path: no commit happened,
+                // don't keep a stale cache around for a future Continue.
                 _sessionFocusedRoot = null;
                 TryDumpDebugBundle(strokes, ocrBitmap, ocrBitmapBounds, focusedRoot, snapTrace);
-                // User drew strokes — they meant something even if AX
-                // couldn't snap them (Chromium webview Underline, etc).
-                // Bring the agent app to front so the user isn't left
-                // staring at the source app wondering whether Enter did
-                // anything. Mirrors LinkRect's no-results path.
-                _contextWriter.ActivateAgent();
                 return;
             }
 
