@@ -1,0 +1,8 @@
+DocReader corpus
+================
+
+A small, deterministic plain-text fixture.
+
+Lines are stable across regenerations so the golden cp(1) output is
+byte-identical to the source. Anything more elaborate belongs in a
+separate file under this directory.
