@@ -37,7 +37,6 @@ public sealed class EverywhereMcpHttpHost : IHostedService, IAsyncDisposable
     private readonly SessionStore _sessions;
     private readonly PickStash _pickStash;
     private readonly WhiteboardStash _whiteboardStash;
-    private readonly LinkRectStash _linkRectStash;
     private readonly AnnotationStash _annotationStash;
     private readonly IVisualElementContext _visualContext;
     private readonly IInputSimulator _input;
@@ -68,7 +67,6 @@ public sealed class EverywhereMcpHttpHost : IHostedService, IAsyncDisposable
         _sessions = parentServices.GetRequiredService<SessionStore>();
         _pickStash = parentServices.GetRequiredService<PickStash>();
         _whiteboardStash = parentServices.GetRequiredService<WhiteboardStash>();
-        _linkRectStash = parentServices.GetRequiredService<LinkRectStash>();
         _annotationStash = parentServices.GetRequiredService<AnnotationStash>();
         _visualContext = parentServices.GetRequiredService<IVisualElementContext>();
         _input = parentServices.GetRequiredService<IInputSimulator>();
@@ -211,7 +209,6 @@ public sealed class EverywhereMcpHttpHost : IHostedService, IAsyncDisposable
         builder.Services.AddSingleton(_sessions);
         builder.Services.AddSingleton(_pickStash);
         builder.Services.AddSingleton(_whiteboardStash);
-        builder.Services.AddSingleton(_linkRectStash);
         builder.Services.AddSingleton(_annotationStash);
         builder.Services.AddSingleton(_visualContext);
         builder.Services.AddSingleton(_input);

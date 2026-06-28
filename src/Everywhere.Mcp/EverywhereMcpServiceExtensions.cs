@@ -60,7 +60,6 @@ public static class EverywhereMcpServiceExtensions
         services.TryAddSingleton<SessionStore>();
         services.TryAddSingleton<PickStash>();
         services.TryAddSingleton<WhiteboardStash>();
-        services.TryAddSingleton<LinkRectStash>();
         services.TryAddSingleton<AnnotationStash>();
         services.TryAddSingleton<IVisualElementContext, EmptyVisualElementContext>();
         // Cursor overlay infra: always-on shared trace channel that
