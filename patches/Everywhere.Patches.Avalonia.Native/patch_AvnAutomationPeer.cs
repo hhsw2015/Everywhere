@@ -245,6 +245,64 @@ internal class patch_AvnAutomationPeer : IAvnAutomationPeer
         throw new NotSupportedException();
     }
 
+    // ---- Avalonia 12 additions -------------------------------------
+    // These members were added to IAvnAutomationPeer in Avalonia 12;
+    // the patch must implement them so the assembly type-checks. We
+    // mirror the original implementations' "delegate to the underlying
+    // peer" shape with throw-stubs since this patch is replaced at
+    // load-time by Avalonia's real method body via MonoMod.
+
+    [MonoModIgnore]
+    public void BringIntoView()
+    {
+        throw new NotSupportedException();
+    }
+
+    [MonoModIgnore]
+    public int RangeValueProvider_IsReadOnly()
+    {
+        throw new NotSupportedException();
+    }
+
+    [MonoModIgnore]
+    public void SelectionItemProvider_Select()
+    {
+        throw new NotSupportedException();
+    }
+
+    [MonoModIgnore]
+    public void SelectionItemProvider_AddToSelection()
+    {
+        throw new NotSupportedException();
+    }
+
+    [MonoModIgnore]
+    public void SelectionItemProvider_RemoveFromSelection()
+    {
+        throw new NotSupportedException();
+    }
+
+    [MonoModIgnore]
+    public IAvnAutomationPeer ScrollProvider_GetHorizontalScrollBar()
+    {
+        throw new NotSupportedException();
+    }
+
+    [MonoModIgnore]
+    public IAvnAutomationPeer ScrollProvider_GetVerticalScrollBar()
+    {
+        throw new NotSupportedException();
+    }
+
+    [MonoModIgnore]
+    public int ValueProvider_IsReadOnly()
+    {
+        throw new NotSupportedException();
+    }
+
+    [MonoModIgnore] public IAvnAutomationPeer TemplatedParent { get; set; }
+    [MonoModIgnore] public IAvnString PlaceholderText { get; set; }
+
     [MonoModIgnore] public IAvnAutomationNode Node { get; set; }
     [MonoModIgnore] public IAvnString AcceleratorKey { get; set; }
     [MonoModIgnore] public IAvnString AccessKey { get; set; }
