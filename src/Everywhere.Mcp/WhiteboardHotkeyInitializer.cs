@@ -397,7 +397,31 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
                 // snapper, NOT all strokes — otherwise endpoints from
                 // unrelated gestures contaminate SnapArrow's "nearest
                 // text" lookup and SnapUnderline's strokeTop/Bottom.
-                var snap = AnnotationSnapper.Snap(ann, focusedRoot, annStrokes);
+                // Short-circuit when focusedRoot has degenerate bounds.
+                // Chromium webview Hyperlink ancestors expose 0×0 bounds
+                // but their Descendants() walk pulls back thousands of
+                // sync cross-process AX nodes — the snapper can sit at
+                // 30+ seconds, looking exactly like a freeze (user
+                // report: "按回车直接卡死了"). Producing a pre-rejected
+                // SnapResult skips the walk entirely; the Circle/X
+                // image fallback below still ships the gesture as a
+                // cropped image region so agent payload isn't empty.
+                SnapResult snap;
+                PixelRect rootBounds;
+                try { rootBounds = focusedRoot.BoundingRectangle; }
+                catch { rootBounds = default; }
+                if (rootBounds.Width <= 0 || rootBounds.Height <= 0)
+                {
+                    _logger.LogInformation(
+                        "Whiteboard snap skipped: focusedRoot bbox empty (chromium webview anchor)");
+                    snap = new SnapResult(ann.BoundingRect, [],
+                        Rejected: true,
+                        RejectReason: "focusedRoot has empty bounds (chromium webview anchor)");
+                }
+                else
+                {
+                    snap = AnnotationSnapper.Snap(ann, focusedRoot, annStrokes);
+                }
                 snapTrace.Add((ann, snap));
                 if (!string.IsNullOrEmpty(snap.Diagnostics))
                     _logger.LogInformation("Whiteboard snap diag ({Kind}): {Diag}",
