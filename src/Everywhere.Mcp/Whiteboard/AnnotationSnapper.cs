@@ -81,6 +81,7 @@ public static class AnnotationSnapper
         var bestDist = double.PositiveInfinity;
         var bestArea = double.PositiveInfinity;
         var foundInLeaf = false;
+        double tipX = endpoints[0].X, tipY = endpoints[0].Y;
         foreach (var (ex, ey) in endpoints)
         {
             var inLeaf = LeafAtPoint(root, ex, ey);
@@ -94,7 +95,8 @@ public static class AnnotationSnapper
                 // leaf wins — usually the arrow's tip end.
                 if (!foundInLeaf || area < bestArea)
                 {
-                    foundInLeaf = true; bestDist = 0; bestArea = area; bestLeaf = inLeaf;
+                    foundInLeaf = true; bestDist = 0; bestArea = area;
+                    bestLeaf = inLeaf; tipX = ex; tipY = ey;
                 }
                 continue;
             }
@@ -105,7 +107,7 @@ public static class AnnotationSnapper
                 diag.Append($"near@{F(ex, ey)}->\"{Trunc(nearLeaf.GetText())}\" d={d:F0} ");
                 if (d < bestDist)
                 {
-                    bestDist = d; bestLeaf = nearLeaf;
+                    bestDist = d; bestLeaf = nearLeaf; tipX = ex; tipY = ey;
                 }
             }
         }
@@ -122,7 +124,7 @@ public static class AnnotationSnapper
         if (bestDist > 100)
         {
             return new SnapResult(
-                Rect: ToRect(bestLeaf.BoundingRectangle),
+                Rect: TightenLeafToTip(bestLeaf, tipX, tipY),
                 Leaves: [],
                 Rejected: true,
                 RejectReason: $"arrow tip is {(int)bestDist}px from the nearest text — please point closer",
@@ -130,10 +132,29 @@ public static class AnnotationSnapper
         }
         var conf = bestDist == 0 ? 1.0 : Math.Max(0.4, 1.0 - bestDist / 100);
         return new SnapResult(
-            Rect: ToRect(bestLeaf.BoundingRectangle),
+            Rect: TightenLeafToTip(bestLeaf, tipX, tipY),
             Leaves: [bestLeaf],
             Confidence: conf,
             Diagnostics: diag.ToString());
+    }
+
+    // When a leaf bbox is much taller than a single text row (Arc/Chromium
+    // expose multi-line commit body, lyric block, etc. as one Label of
+    // ~250×500px), returning the whole leaf bbox dumps the entire block
+    // even though the user pointed at one line. Crop the leaf bbox to a
+    // ~row-tall slice centred on the arrow tip's Y. Width = full leaf
+    // width (a row spans the full block horizontally). Height fudge: 32px
+    // — covers most font sizes, < the 50px "huge leaf" threshold below.
+    private static Rect TightenLeafToTip(IVisualElement leaf, double tipX, double tipY)
+    {
+        var bb = ToRect(leaf.BoundingRectangle);
+        // Small leaves (single-line labels, hyperlinks): return as-is.
+        if (bb.Height <= 50) return bb;
+        const double rowH = 32.0;
+        var top = Math.Max(bb.Y, tipY - rowH / 2);
+        var bottom = Math.Min(bb.Bottom, tipY + rowH / 2);
+        if (bottom <= top) return bb;
+        return new Rect(bb.X, top, bb.Width, bottom - top);
     }
 
     private static List<(double X, double Y)> StrokeEndpoints(IReadOnlyList<Stroke> strokes)
