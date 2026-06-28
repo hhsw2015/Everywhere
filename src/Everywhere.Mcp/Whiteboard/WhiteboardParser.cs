@@ -120,7 +120,12 @@ public static class WhiteboardParser
         }
         var s = strokes[0];
         var bb = StrokeBBox(s);
-        if (bb.Width * bb.Height < 1.0) return AnnotationKind.Unknown;
+        // Reject only truly degenerate strokes (single tap, no extent).
+        // The previous test bb.Width * bb.Height < 1 rejected perfect
+        // horizontal underlines (0 vertical jitter from a fast user)
+        // because Width * 0 = 0. Use the longer side instead — a real
+        // gesture extends in at least one axis.
+        if (Math.Max(bb.Width, bb.Height) < 5.0) return AnnotationKind.Unknown;
 
         var straight = Straightness(s);
         // Closed-loop: start ≈ end and curvy → Circle even if not

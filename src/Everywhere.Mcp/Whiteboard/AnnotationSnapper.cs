@@ -96,6 +96,16 @@ public static class AnnotationSnapper
         {
             var inLeaf = LeafAtPoint(root, ex, ey, prewarmed);
             var inWalk = s_lastWalkVisited;
+            // Prewarm-miss fallback: prewarm caps at 25k visited nodes,
+            // so on long pages a real leaf may sit past the cap and be
+            // absent from prewarm.Nodes. Retry with a live walk for
+            // this single point — query rect is 5×5, prune is effective,
+            // typical cost <50ms.
+            if (inLeaf is null && prewarmed is not null)
+            {
+                inLeaf = LeafAtPoint(root, ex, ey, prewarmed: null);
+                if (inLeaf is not null) inWalk = s_lastWalkVisited;
+            }
             if (inLeaf is not null)
             {
                 var bb = ToRect(inLeaf.BoundingRectangle);
@@ -115,6 +125,19 @@ public static class AnnotationSnapper
             if (foundInLeaf) continue;
             var (nearLeaf, d) = NearestLeaf(root, ex, ey, prewarmed);
             var nearWalk = s_lastWalkVisited;
+            // Prewarm-miss fallback for NearestLeaf — only when prewarm
+            // returned nothing at all. Don't fall back on "got a leaf
+            // with empty text" — that's a legitimate case (anchor
+            // wrapping an image) and would force a redundant 240×240
+            // live walk on every commit.
+            if (nearLeaf is null && prewarmed is not null)
+            {
+                var (liveNear, liveDist) = NearestLeaf(root, ex, ey, prewarmed: null);
+                if (liveNear is not null)
+                {
+                    nearLeaf = liveNear; d = liveDist; nearWalk = s_lastWalkVisited;
+                }
+            }
             if (nearLeaf is not null)
             {
                 diag.Append($"near@{F(ex, ey)}[w={nearWalk}]->\"{Trunc(nearLeaf.GetText())}\" d={d:F0} ");
@@ -216,6 +239,17 @@ public static class AnnotationSnapper
         var (above, aboveDiag) = CollectUnderlineCandidatesV(
             root, strokeTop, strokeX1, strokeX2, strokeWidth, above: true, prewarmed);
         diag.Append("above=").Append(aboveDiag).Append(' ');
+        // Prewarm-miss fallback: if prewarm returned no candidates but
+        // a prewarm IS in use, retry once against the live tree. The
+        // query rect is small (strokeWidth × ~110) so the live walk is
+        // bounded — typical cost <300ms on Chromium.
+        if (above.Count == 0 && prewarmed is not null)
+        {
+            var (aboveLive, aboveLiveDiag) = CollectUnderlineCandidatesV(
+                root, strokeTop, strokeX1, strokeX2, strokeWidth, above: true, prewarmed: null);
+            diag.Append("aboveLive=").Append(aboveLiveDiag).Append(' ');
+            above = aboveLive;
+        }
         var candidates = above;
         var pickedSide = UnderlineSide.Above;
         // Tolerate users who draw the line ABOVE the text (overline-style
@@ -226,6 +260,13 @@ public static class AnnotationSnapper
             var (below, belowDiag) = CollectUnderlineCandidatesV(
                 root, strokeBottom, strokeX1, strokeX2, strokeWidth, above: false, prewarmed);
             diag.Append("below=").Append(belowDiag);
+            if (below.Count == 0 && prewarmed is not null)
+            {
+                var (belowLive, belowLiveDiag) = CollectUnderlineCandidatesV(
+                    root, strokeBottom, strokeX1, strokeX2, strokeWidth, above: false, prewarmed: null);
+                diag.Append(" belowLive=").Append(belowLiveDiag);
+                below = belowLive;
+            }
             candidates = below;
             pickedSide = UnderlineSide.Below;
         }
