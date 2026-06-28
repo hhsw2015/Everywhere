@@ -67,11 +67,19 @@ public static class ReadWhiteboardTool
                     // concatenate their text. Common pattern in GitHub /
                     // Linear / etc. where the visible row text lives inside
                     // child nodes the parent anchor doesn't surface itself.
+                    // Dedup pieces — many AX trees emit the same string at
+                    // multiple depths (label + accessibility-name) and we
+                    // don't want "Releases 298 298 Releases 298 298".
                     if (string.IsNullOrEmpty(text)
                         && leaf.Type == VisualElementType.Hyperlink)
                     {
                         var pieces = new List<string>();
-                        CollectChildText(leaf, pieces, depthLeft: 4, charBudget: 4096);
+                        // Reuse the per-region `emitted` set so duplicate
+                        // anchor leaves (the snap returned 16 copies of the
+                        // same Hyperlink) don't each contribute their own
+                        // copy of "Releases 298" to the body.
+                        CollectChildText(leaf, pieces, emitted,
+                            depthLeft: 4, charBudget: 4096);
                         if (pieces.Count > 0)
                             text = string.Join(" ", pieces).Trim();
                     }
@@ -233,7 +241,8 @@ public static class ReadWhiteboardTool
     // appends any non-empty text snippets it finds. Bounded by depth and
     // char budget so a runaway tree can't blow up the region body.
     private static void CollectChildText(
-        IVisualElement node, List<string> sink, int depthLeft, int charBudget)
+        IVisualElement node, List<string> sink, HashSet<string> seen,
+        int depthLeft, int charBudget)
     {
         if (depthLeft <= 0) return;
         IEnumerable<IVisualElement> kids;
@@ -245,12 +254,12 @@ public static class ReadWhiteboardTool
             string t;
             try { t = (c.GetText(maxLength: 200) ?? string.Empty).Trim(); }
             catch { t = string.Empty; }
-            if (!string.IsNullOrEmpty(t))
+            if (!string.IsNullOrEmpty(t) && seen.Add(t))
             {
                 sink.Add(t);
                 charBudget -= t.Length;
             }
-            CollectChildText(c, sink, depthLeft - 1, charBudget);
+            CollectChildText(c, sink, seen, depthLeft - 1, charBudget);
         }
     }
 
