@@ -567,11 +567,32 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
                 var ocrRect = ann.Kind == AnnotationKind.Underline
                     ? new Avalonia.Rect(
                         Math.Max(0, ann.BoundingRect.X - 60),
-                        Math.Max(0, ann.BoundingRect.Y - 50),
+                        Math.Max(0, ann.BoundingRect.Y - 100),
                         ann.BoundingRect.Width + 120,
-                        ann.BoundingRect.Height + 70)
+                        ann.BoundingRect.Height + 120)
                     : ann.BoundingRect;
                 var ocrLines = RunOcrForRegion(ocrBitmap, ocrBitmapBounds, ocrRect);
+                // For Underline: the wide OCR rect can pick up multiple
+                // text rows above/below the stroke. The user's intent is
+                // the SINGLE row closest to the stroke (typically just
+                // above it). Keep only the row whose vertical centre is
+                // nearest to the stroke's centre Y.
+                if (ann.Kind == AnnotationKind.Underline && ocrLines.Count > 1)
+                {
+                    var strokeMidY = ann.BoundingRect.Y + ann.BoundingRect.Height * 0.5;
+                    OcrLine? bestLine = null;
+                    var bestDy = double.PositiveInfinity;
+                    foreach (var line in ocrLines)
+                    {
+                        var lineMidY = line.Bounds.Y + line.Bounds.Height * 0.5;
+                        var dy = Math.Abs(lineMidY - strokeMidY);
+                        if (dy < bestDy) { bestDy = dy; bestLine = line; }
+                    }
+                    if (bestLine is not null)
+                    {
+                        ocrLines = new[] { bestLine };
+                    }
+                }
                 _logger.LogInformation(
                     "Whiteboard OCR: bitmap={HasBitmap} region={Region} -> {LineCount} lines",
                     ocrBitmap is not null, ocrRect, ocrLines.Count);
