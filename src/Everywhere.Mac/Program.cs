@@ -170,8 +170,6 @@ public static class Program
                 .AddTransient<IAsyncInitializer>(sp => sp.GetRequiredService<Everywhere.Mcp.Snapshot.AutoCaptureService>())
                 .AddSingleton<Everywhere.Mcp.AnnotationOverlay.AnnotationOverlayHost>()
                 .AddTransient<IAsyncInitializer>(sp => sp.GetRequiredService<Everywhere.Mcp.AnnotationOverlay.AnnotationOverlayHost>())
-                .AddSingleton<Everywhere.Mcp.AnnotationOverlay.WhiteboardOverlayHost>()
-                .AddTransient<IAsyncInitializer>(sp => sp.GetRequiredService<Everywhere.Mcp.AnnotationOverlay.WhiteboardOverlayHost>())
 
             #endregion
 

@@ -245,45 +245,6 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
                                               stashedSummaries: stashedSummaries);
         _activeOverlay = overlay;
 
-        // Auto-commit on recognised gesture: stroke release → parse all
-        // current strokes → if at least one parsed annotation has a
-        // recognised kind (Arrow/Circle/X), commit the session so the
-        // user gets immediate outline + ➕ feedback (Pin path's UX).
-        // No-op while the user is still mid-gesture (Line / unclassified
-        // shapes don't trigger commit; the user can keep drawing).
-        // Subscribed before overlay.Show() to catch the very first
-        // release.
-        var autoCommitFired = 0;
-        overlay.StrokeReleased += converted =>
-        {
-            if (Interlocked.CompareExchange(ref autoCommitFired, 1, 0) != 0) return;
-            try
-            {
-                var strokesForParse = converted
-                    .Select(pts => new Stroke(pts
-                        .Select(p => new StrokePoint(p.X, p.Y, p.T)).ToList()))
-                    .ToList();
-                var (annotations, _) = WhiteboardParser.ParseGrouped(strokesForParse);
-                var hasShape = annotations.Any(a =>
-                    a.Kind is AnnotationKind.Arrow
-                          or AnnotationKind.Circle
-                          or AnnotationKind.X);
-                if (hasShape)
-                {
-                    Dispatcher.UIThread.Post(() => overlay.Commit(continueSession: false));
-                }
-                else
-                {
-                    Interlocked.Exchange(ref autoCommitFired, 0); // allow next stroke to retry
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogDebug(ex, "Auto-commit parse failed");
-                Interlocked.Exchange(ref autoCommitFired, 0);
-            }
-        };
-
         // OCR-only screenshot, taken in the background while user draws.
         // Doesn't affect the overlay visually.
         var captureSources = new List<(string Name, IVisualElement Element)>();
@@ -398,13 +359,11 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
             // before pre-capture succeeded — rare).
             focusedRoot ??= _visualContext.FocusedElement?.Root()
                             ?? _visualContext.FocusedElement;
-            // focusedRoot can still be null — when focus didn't recover
-            // between rapid hotkey presses on Arc. We no longer bail
-            // here; the per-annotation loop treats null focusedRoot the
-            // same as Chromium-webview empty-bounds (skip snap, take the
-            // image-only fallback with multi-point hit-test anchor).
-            // Without this, repeated whiteboard sessions on the same
-            // webview silently produced zero regions ("没触发").
+            if (focusedRoot is null)
+            {
+                _logger.LogWarning("Whiteboard committed but no focused root for snap");
+                return;
+            }
 
             var (annotations, strokeGroups) = WhiteboardParser.ParseGrouped(strokes);
             System.Diagnostics.Debug.Assert(annotations.Count == strokeGroups.Count,
@@ -416,20 +375,9 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
             int sessionImageCount = 0;
             long sessionImageBytes = 0;
             var snapTrace = new List<(Annotation Ann, SnapResult Snap)>();
-            // Resolve focusedRoot bounds ONCE per commit. Each
-            // BoundingRectangle on Mac is a sync cross-process AX call;
-            // the empty-bbox decision doesn't change between annotations
-            // in the same batch.
-            var rootBounds = focusedRoot is null ? default : SafeBounds(focusedRoot);
-            var rootBoundsEmpty = rootBounds.Width <= 0 || rootBounds.Height <= 0;
             _logger.LogInformation(
-                "Whiteboard snap context: focusedRoot={Root} bbox={FrootBbox}, ocrBitmap bbox={OcrBbox}",
-                focusedRoot?.GetType().Name ?? "null", rootBounds, ocrBitmapBounds);
-            if (rootBoundsEmpty)
-            {
-                _logger.LogInformation(
-                    "Whiteboard snap will be skipped for all annotations in this batch — focusedRoot has empty bounds (chromium webview anchor)");
-            }
+                "Whiteboard snap context: focusedRoot bbox={FrootBbox}, ocrBitmap bbox={OcrBbox}",
+                focusedRoot.BoundingRectangle, ocrBitmapBounds);
             for (var ai = 0; ai < annotations.Count; ai++)
             {
                 var ann = annotations[ai];
@@ -449,44 +397,7 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
                 // snapper, NOT all strokes — otherwise endpoints from
                 // unrelated gestures contaminate SnapArrow's "nearest
                 // text" lookup and SnapUnderline's strokeTop/Bottom.
-                // Short-circuit when focusedRoot has degenerate bounds
-                // (hoisted check from outside the loop). Chromium webview
-                // anchors (Arc / Brave Hyperlink) give us a 0×0 root
-                // whose Descendants() walk does thousands of sync AX IPCs
-                // — 30+ seconds, looks like a freeze. Producing a
-                // pre-rejected SnapResult skips the walk; the Arrow /
-                // Circle / X fallback below turns ann.BoundingRect into
-                // an image region so the user still gets outline + ➕
-                // within ms.
-                SnapResult snap;
-                if (rootBoundsEmpty || focusedRoot is null)
-                {
-                    // Chromium webview / no focus: skip alt-root Snap
-                    // entirely (it walks the whole DOM tree, often
-                    // exceeded the 5s timeout). Direct hit-test below
-                    // our own process — same call PickerSession uses,
-                    // gives back the AX leaf at the gesture's probe
-                    // point. Whatever element comes back is the anchor;
-                    // no climb, no rejection, no area cap. Pin path
-                    // does exactly this and works on Arc.
-                    var probe = ResolveProbePoint(ann, annStrokes);
-                    var hitElement = _visualContext.ElementAtPointBelowOwnProcess(probe);
-                    if (hitElement is not null)
-                    {
-                        snap = new SnapResult(ann.BoundingRect, new[] { hitElement },
-                            Rejected: false);
-                    }
-                    else
-                    {
-                        snap = new SnapResult(ann.BoundingRect, [],
-                            Rejected: true,
-                            RejectReason: "no AX element at gesture probe point");
-                    }
-                }
-                else
-                {
-                    snap = AnnotationSnapper.Snap(ann, focusedRoot, annStrokes);
-                }
+                var snap = AnnotationSnapper.Snap(ann, focusedRoot, annStrokes);
                 snapTrace.Add((ann, snap));
                 if (!string.IsNullOrEmpty(snap.Diagnostics))
                     _logger.LogInformation("Whiteboard snap diag ({Kind}): {Diag}",
@@ -495,40 +406,29 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
                 {
                     _logger.LogInformation("Whiteboard region rejected ({Kind}): {Reason}",
                         ann.Kind, string.IsNullOrEmpty(snap.RejectReason) ? "no leaves" : snap.RejectReason);
-                    // Fallback for Circle / X / Arrow: when a11y exposes
-                    // no matching leaf inside the gesture (canvas-rendered
-                    // thumbnails, infinite-scroll cards, Chromium webviews
-                    // that don't expose subtree structure), crop the
+                    // Fallback for Circle / X: when a11y exposes no
+                    // matching leaf inside the gesture (canvas-rendered
+                    // thumbnails, infinite-scroll cards, etc.), crop the
                     // gesture rect itself as a single fallback image so
-                    // the user's selection isn't lost. Arrow was added to
-                    // this list per v0.9.184 user report — Arc Hyperlink
-                    // ancestor returned no Arrow leaves and the gesture
-                    // silently produced no overlay/➕.
-                    if (ann.Kind is AnnotationKind.Circle or AnnotationKind.X or AnnotationKind.Arrow
+                    // the user's selection isn't lost.
+                    if (ann.Kind is AnnotationKind.Circle or AnnotationKind.X
                         && TryFallbackRegionImage(ann.BoundingRect, ocrBitmap, ocrBitmapBounds,
                                                     ref sessionImageCount, ref sessionImageBytes,
                                                     out var fallbackImage))
                     {
+                        // Run OCR on the gesture rect even on the rejected
+                        // path — the cropped image may contain rasterized
+                        // text the agent should be able to reason over.
                         var fallbackOcr = RunOcrForRegion(ocrBitmap, ocrBitmapBounds, ann.BoundingRect);
-                        // Pick-style anchor: same hit-test logic the
-                        // empty-root path uses (single point below own
-                        // process). No climb / no rejection — accept
-                        // whatever element AX gives back.
-                        var probe = ResolveProbePoint(ann, annStrokes);
-                        var anchorElement = _visualContext.ElementAtPointBelowOwnProcess(probe);
-                        var leaves = anchorElement is null
-                            ? Array.Empty<IVisualElement>()
-                            : new[] { anchorElement };
                         _logger.LogInformation(
-                            "Whiteboard region fallback image: id={Id} bbox=({X},{Y},{W}x{H}) ocrLines={Ocr} anchor={Anchor}",
+                            "Whiteboard region fallback image: id={Id} bbox=({X},{Y},{W}x{H}) ocrLines={Ocr}",
                             fallbackImage.ImageId,
                             fallbackImage.Bbox.X, fallbackImage.Bbox.Y,
                             fallbackImage.Bbox.Width, fallbackImage.Bbox.Height,
-                            fallbackOcr.Count,
-                            anchorElement?.Type.ToString() ?? "<none>");
+                            fallbackOcr.Count);
                         regions.Add(new WhiteboardRegion(
                             ann.Kind, ann.BoundingRect,
-                            leaves, 0.3,
+                            Array.Empty<IVisualElement>(), 0.3,
                             fallbackOcr,
                             new[] { fallbackImage }));
                     }
@@ -571,7 +471,7 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
                     .Where(l => l.Type == VisualElementType.Image)
                     .ToList();
                 var (imageLeaves, imageDiag) = CollectImageLeavesWithDiag(
-                    focusedRoot!, ann.BoundingRect, ocrBitmap, ocrBitmapBounds,
+                    focusedRoot, ann.BoundingRect, ocrBitmap, ocrBitmapBounds,
                     ref sessionImageCount, ref sessionImageBytes);
                 _logger.LogInformation(
                     "Whiteboard image collect: {Diag} -> {Count} ids=[{Ids}] bboxes=[{Bboxes}]",
@@ -639,14 +539,19 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
                 // avoids a TOCTOU window between HasFreshWhiteboard and
                 // the mutation.
                 _whiteboardStash.Append(regions);
+                // Final commit — drop the cached root so a brand-new
+                // session next time starts fresh.
                 _sessionFocusedRoot = null;
                 _logger.LogInformation("Whiteboard stash filled with {Count} new region(s)", regions.Count);
                 TryDumpDebugBundle(strokes, ocrBitmap, ocrBitmapBounds, focusedRoot, snapTrace);
-                // No immediate CaptureAsync: per the v0.9.183 UX-consistency
-                // pass, Whiteboard now follows the same flow as Pin —
-                // regions land in the stash, the user optionally annotates
-                // via the ➕ overlay, then SnapshotContext drains and ships.
-                // Mirrors what users do for pinned elements.
+                try
+                {
+                    await _contextWriter.CaptureAsync();
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Whiteboard: ContextStashWriter.CaptureAsync failed");
+                }
             }
         }
         finally
@@ -977,7 +882,7 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
         IReadOnlyList<Stroke> strokes,
         Avalonia.Media.Imaging.Bitmap? ocrBitmap,
         PixelRect ocrBounds,
-        IVisualElement? focusedRoot,
+        IVisualElement focusedRoot,
         IReadOnlyList<(Annotation Ann, SnapResult Snap)> snapTrace)
     {
         // Gated on an explicit env var. The DiagnosticData setting
@@ -1015,7 +920,7 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
 
             // 2. Trace JSON.
             var leaves = new List<object>();
-            if (focusedRoot is not null) foreach (var e in DescendantsOf(focusedRoot))
+            foreach (var e in DescendantsOf(focusedRoot))
             {
                 var bb = e.BoundingRectangle;
                 if (bb.Width <= 0 || bb.Height <= 0) continue;
@@ -1215,168 +1120,6 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
         if (string.IsNullOrEmpty(s)) return "";
         var t = s.Replace('\n', ' ').Replace('\r', ' ');
         return t.Length > max ? t.Substring(0, max) + "…" : t;
-    }
-
-    private IVisualElement? ResolveFallbackAnchor(Annotation ann, IReadOnlyList<Stroke> strokes)
-    {
-        // Arrow direction-agnostic: try BOTH endpoints (per AnnotationSnapper.SnapArrow's note —
-        // users draw arrows in either direction), plus the gesture centre as a last resort.
-        // Pick the candidate whose hit-test element is "best" — smallest sane bbox that
-        // intersects ann.BoundingRect. Anything bigger than 4× the gesture rect is likely a
-        // window/scrollview container and is rejected.
-        var probes = new List<(double X, double Y)>();
-        if (ann.Kind == AnnotationKind.Arrow && strokes.Count > 0)
-        {
-            foreach (var s in strokes)
-            {
-                if (s.Points.Count == 0) continue;
-                var first = s.Points[0];
-                var last = s.Points[^1];
-                probes.Add((first.X, first.Y));
-                if (s.Points.Count > 1) probes.Add((last.X, last.Y));
-            }
-        }
-        probes.Add((ann.BoundingRect.Center.X, ann.BoundingRect.Center.Y));
-
-        IVisualElement? best = null;
-        long bestArea = long.MaxValue;
-        foreach (var (px, py) in probes)
-        {
-            IVisualElement? cand;
-            try
-            {
-                // BelowOwnProcess hit-test: skips windows owned by our
-                // pid (Whiteboard mask, badges) so we get the real AX
-                // leaf, not the mask we just drew on top of the screen.
-                cand = _visualContext.ElementAtPointBelowOwnProcess(new PixelPoint((int)Math.Round(px), (int)Math.Round(py)));
-            }
-            catch (Exception ex)
-            {
-                _logger.LogDebug(ex, "ResolveFallbackAnchor: ElementFromPoint failed at ({X},{Y})", px, py);
-                continue;
-            }
-            if (cand is null) continue;
-
-            // Walk up from the hit element looking for a "leaf-ish" type
-            // — Label / Hyperlink / Button / Image / TextEdit / MenuItem
-            // / etc. — and reject pure containers (Panel / Document /
-            // TopLevel / Screen / list / grid frames). ElementFromPoint
-            // on Chromium often returns the Panel wrapper; without this
-            // climb we either pick the screen-sized container or, with
-            // an area cap, drop the candidate entirely. The walk caps
-            // at 8 hops to keep cross-process IPC bounded.
-            var leaf = ClimbToLeafType(cand, maxHops: 8);
-            if (leaf is null) continue;
-
-            PixelRect b;
-            try { b = leaf.BoundingRectangle; }
-            catch { continue; }
-            if (b.Width <= 0 || b.Height <= 0) continue;
-            // Must overlap the gesture; otherwise we walked into a
-            // sibling leaf that happens to be a leaf type but isn't
-            // what the user pointed at.
-            if (!RectsIntersect(b, ann.BoundingRect)) continue;
-            // Cap at 8× gesture area — Hyperlinks wrapping a paragraph
-            // can be 2-3× the gesture, but anything larger is almost
-            // always a misread (a row container marked as Button).
-            var gestureArea = Math.Max(1L, (long)ann.BoundingRect.Width * (long)ann.BoundingRect.Height);
-            var maxArea = gestureArea * 8;
-            var area = (long)b.Width * (long)b.Height;
-            if (area > maxArea) continue;
-            if (area < bestArea)
-            {
-                best = leaf;
-                bestArea = area;
-            }
-        }
-        return best;
-    }
-
-    /// <summary>
-    /// Score by how "leaf-like" a type is — lower is better (tighter to
-    /// the user's actual target). Hyperlink/Button/Image/MenuItem/etc.
-    /// are unambiguous leaves; Label is ambiguous on Chromium (often a
-    /// row-level wrapper around a paragraph), so we keep it last-resort.
-    /// Containers return -1 (rejected entirely).
-    /// </summary>
-    private static int LeafTypeScore(VisualElementType t) => t switch
-    {
-        VisualElementType.Hyperlink     => 0,
-        VisualElementType.Button        => 0,
-        VisualElementType.Image         => 0,
-        VisualElementType.MenuItem      => 0,
-        VisualElementType.CheckBox      => 0,
-        VisualElementType.RadioButton   => 0,
-        VisualElementType.ListViewItem  => 1,
-        VisualElementType.TreeViewItem  => 1,
-        VisualElementType.DataGridItem  => 1,
-        VisualElementType.TabItem       => 1,
-        VisualElementType.HeaderItem    => 1,
-        VisualElementType.TextEdit      => 1,
-        VisualElementType.TableRow      => 2,
-        VisualElementType.Label         => 3, // last resort — often row-level on Chromium
-        _ => -1,
-    };
-
-    private static bool IsLeafType(VisualElementType t) => LeafTypeScore(t) >= 0;
-
-    private static IVisualElement? ClimbToLeafType(IVisualElement start, int maxHops)
-    {
-        // Climb up to maxHops, picking the best (lowest-score) leaf-type
-        // ancestor along the way. Containers (score < 0) are skipped,
-        // not stoppers — Chromium puts Label / Hyperlink elements
-        // *inside* Panel/Document subtrees, so the first hop into a
-        // container doesn't mean leaves are exhausted.
-        IVisualElement? best = null;
-        var bestScore = int.MaxValue;
-        var cur = start;
-        for (var i = 0; i < maxHops && cur is not null; i++)
-        {
-            var score = LeafTypeScore(cur.Type);
-            if (score >= 0 && score < bestScore) { best = cur; bestScore = score; }
-            try { cur = cur.Parent; } catch { break; }
-        }
-        return best;
-    }
-
-    private static bool RectsIntersect(PixelRect a, Rect b)
-    {
-        var ax2 = a.X + a.Width;
-        var ay2 = a.Y + a.Height;
-        return a.X < b.Right && ax2 > b.X && a.Y < b.Bottom && ay2 > b.Y;
-    }
-
-    /// <summary>
-    /// Where to hit-test for the gesture's anchor element. Arrow uses
-    /// the last stroke's last point (the tip), Circle/X uses the
-    /// gesture rect centre. Mirrors AnnotationSnapper's "stroke endpoint
-    /// closest to text" heuristic but cheaper — single point, single
-    /// IPC, no AX tree walk.
-    /// </summary>
-    private static PixelPoint ResolveProbePoint(Annotation ann, IReadOnlyList<Stroke> strokes)
-    {
-        if (ann.Kind == AnnotationKind.Arrow && strokes.Count > 0)
-        {
-            var last = strokes[^1];
-            if (last.Points.Count > 0)
-            {
-                var tip = last.Points[^1];
-                return new PixelPoint((int)Math.Round(tip.X), (int)Math.Round(tip.Y));
-            }
-        }
-        return new PixelPoint(
-            (int)Math.Round(ann.BoundingRect.Center.X),
-            (int)Math.Round(ann.BoundingRect.Center.Y));
-    }
-
-    private PixelRect SafeBounds(IVisualElement element)
-    {
-        try { return element.BoundingRectangle; }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Whiteboard SafeBounds: BoundingRectangle threw, treating as empty");
-            return default;
-        }
     }
 }
 

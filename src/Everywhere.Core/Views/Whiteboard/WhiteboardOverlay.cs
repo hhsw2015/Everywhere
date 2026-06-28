@@ -195,15 +195,6 @@ public sealed class WhiteboardOverlay : ScreenSelectionTransparentWindow
     public Task<WhiteboardCaptureResult> ResultTask => _result.Task;
 
     /// <summary>
-    /// Raised on every stroke release with the current screen-coord
-    /// stroke list. Lets the hotkey initializer parse-as-you-draw and
-    /// auto-commit when the user has drawn a recognised gesture
-    /// (Arrow / Circle / X), so the user gets immediate visual feedback
-    /// (outline + ➕) without having to press Enter.
-    /// </summary>
-    public event Action<IReadOnlyList<IReadOnlyList<(double X, double Y, double T)>>>? StrokeReleased;
-
-    /// <summary>
     /// Replace the dim background with the captured screenshot AFTER the
     /// overlay has opened. Caller passes the bitmap once their async
     /// capture pipeline returns; ownership transfers to the overlay (it
@@ -224,30 +215,6 @@ public sealed class WhiteboardOverlay : ScreenSelectionTransparentWindow
             try { prior?.Dispose(); } catch { /* swallow */ }
             bitmap.Dispose();
         });
-    }
-
-    private void FireStrokeReleased()
-    {
-        if (StrokeReleased is null) return;
-        var origin = Position;
-        var converted = new List<IReadOnlyList<(double X, double Y, double T)>>(_strokes.Count);
-        for (var i = 0; i < _strokes.Count; i++)
-        {
-            var pts = _strokes[i];
-            var ts = _strokeTimestamps[i];
-            var screenPts = new (double X, double Y, double T)[pts.Count];
-            for (var j = 0; j < pts.Count; j++)
-            {
-                screenPts[j] = (origin.X + pts[j].X, origin.Y + pts[j].Y, ts[j]);
-            }
-            converted.Add(screenPts);
-        }
-        try { StrokeReleased.Invoke(converted); }
-        catch (Exception ex)
-        {
-            Serilog.Log.Logger.ForContext<WhiteboardOverlay>()
-                .Warning(ex, "StrokeReleased subscriber threw");
-        }
     }
 
     private void OnCanvasPointerPressed(object? sender, PointerPressedEventArgs e)
@@ -329,12 +296,6 @@ public sealed class WhiteboardOverlay : ScreenSelectionTransparentWindow
         {
             _strokes.Add(_activeStrokeRaw);
             _strokeTimestamps.Add(_activeStrokeTs!);
-            // Fire AFTER the stroke is appended so the listener sees the
-            // full set including this new one. Project to screen coords
-            // (window position + menu-bar offset) the same way Commit
-            // does, otherwise the parser sees window-local coords that
-            // don't match BoundingRectangle space.
-            FireStrokeReleased();
         }
         else if (_activePath is not null)
         {
@@ -414,12 +375,6 @@ public sealed class WhiteboardOverlay : ScreenSelectionTransparentWindow
             }
             converted.Add(screenPts);
         }
-        // Close BEFORE TrySetResult: the hotkey initializer's await on
-        // ResultTask runs ElementFromPoint to anchor the gesture to a
-        // real AX leaf. While this overlay is still on screen, hit-test
-        // lands on the mask itself, not the underlying app. Closing
-        // first means the next hop sees the actual content.
-        Hide();
         CompleteIfPending(canceled: false, strokes: converted,
                           windowPos: Position, screenBounds: _screenBounds,
                           continueSession: continueSession);

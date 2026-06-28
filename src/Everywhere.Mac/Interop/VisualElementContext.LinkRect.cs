@@ -26,7 +26,7 @@ partial class VisualElementContext
         /// the hotkey doesn't feel broken.
         /// </summary>
         public static async Task<HarvestResult> HarvestAsync(
-            IWindowHelper windowHelper, Action<PixelRect>? onRectCommitted, CancellationToken cancellationToken = default)
+            IWindowHelper windowHelper, CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
             await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Background);
@@ -49,14 +49,12 @@ partial class VisualElementContext
                 await Dispatcher.UIThread.InvokeAsync(window!.Close);
                 return new HarvestResult(window._wasCanceled, []);
             }
-            try { onRectCommitted?.Invoke(rect.Value); }
-            catch { /* best-effort — don't let a rogue subscriber kill the harvest */ }
-
+            // Run the harvest while the overlay is still on screen so we
+            // can flash the captured link bboxes before closing — visual
+            // confirmation of "linkclump caught these N anchors". Skip the
+            // flash entirely on zero results so the user doesn't sit on a
+            // dim overlay for nothing.
             var harvested = await Task.Run(() => HarvestLinks(rect.Value), cancellationToken);
-
-            // Flash captured links on the mask before closing so the user
-            // sees what was actually harvested (pre-v0.9.183 behaviour).
-            // Skip when zero — no point sitting on a dim mask for nothing.
             try
             {
                 if (harvested.Count > 0)
@@ -373,7 +371,7 @@ partial class VisualElementContext
                             && bounds.Width <= 32 && bounds.Height <= 32;
                         if (!isUntitledIcon)
                         {
-                            AddOrUpgrade(byUrl, new HarvestedLink(title ?? string.Empty, url, bounds, node));
+                            AddOrUpgrade(byUrl, new HarvestedLink(title ?? string.Empty, url, bounds));
                         }
                         // Additional URLs packed into the same aria-label
                         // (xlinkBook "url1*url2*url3" pattern) get their own
@@ -385,7 +383,7 @@ partial class VisualElementContext
                             {
                                 if (string.IsNullOrEmpty(extra) || extra.Length > 2048) continue;
                                 if (!IsAllowedScheme(extra)) continue;
-                                AddOrUpgrade(byUrl, new HarvestedLink(extra, extra, bounds, node));
+                                AddOrUpgrade(byUrl, new HarvestedLink(extra, extra, bounds));
                             }
                         }
                     }

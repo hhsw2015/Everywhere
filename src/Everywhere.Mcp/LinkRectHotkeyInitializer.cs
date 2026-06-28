@@ -121,12 +121,6 @@ public sealed class LinkRectHotkeyInitializer : IAsyncInitializer
             try
             {
                 var sw = System.Diagnostics.Stopwatch.StartNew();
-                // Rolled back to pre-v0.9.183 flow: harvest → ship to
-                // agent immediately, no outline / ➕ / deferred stash.
-                // The annotation path on LinkRect introduced accuracy
-                // and timing regressions that the user couldn't accept;
-                // until the underlying AX limits on Chromium webviews
-                // can be solved, this channel stays "fire and forget".
                 var result = await _visualContext.HarvestLinksAsync(CancellationToken.None);
                 sw.Stop();
                 var links = result.Links ?? Array.Empty<HarvestedLink>();
@@ -135,18 +129,41 @@ public sealed class LinkRectHotkeyInitializer : IAsyncInitializer
                     sw.ElapsedMilliseconds, links.Count, result.Canceled);
                 if (result.Canceled)
                 {
+                    // User pressed Esc / right-click — keep the user in
+                    // their current app, no agent activation.
                     return;
                 }
                 if (links.Count == 0)
                 {
                     _logger.LogInformation("LinkRect: rect produced no navigable hyperlinks");
+                    // Bring the agent app to front anyway so users get
+                    // visible feedback when their rect only covered
+                    // javascript: anchors (most row-click sites). Without
+                    // this the hotkey looks broken when AX simply had
+                    // nothing navigable to give.
                     _contextWriter.ActivateAgent();
                     return;
+                }
+                // Per-link Debug rows are gated on logger level — building
+                // the strings for hundreds of anchors is wasted work when
+                // logger is at Info and the message will be discarded.
+                if (_logger.IsEnabled(LogLevel.Debug))
+                {
+                    var cap = Math.Min(links.Count, 50);
+                    for (var i = 0; i < cap; i++)
+                    {
+                        var h = links[i];
+                        _logger.LogDebug("LinkRect[{I}] bbox=({X},{Y},{W}x{H}) title=\"{T}\" url={U}",
+                            i, h.Bounds.X, h.Bounds.Y, h.Bounds.Width, h.Bounds.Height,
+                            h.Title, h.Url);
+                    }
+                    if (links.Count > cap)
+                        _logger.LogDebug("LinkRect: {Extra} additional links omitted from debug log", links.Count - cap);
                 }
                 var pairs = new List<(string Title, string Url)>(links.Count);
                 foreach (var h in links) pairs.Add((h.Title, h.Url));
                 await _contextWriter.CaptureLinksAsync(pairs);
-                _logger.LogInformation("LinkRect stash filled with {Count} links (immediate ship)", links.Count);
+                _logger.LogInformation("LinkRect stash filled with {Count} links", links.Count);
             }
             catch (Exception ex)
             {

@@ -169,29 +169,7 @@ public interface IVisualElementContext : IObservable<TextSelectionData>
     /// drag that produced no navigable URLs (e.g. only javascript:
     /// anchors) — usually still worth surfacing to the agent.
     /// </summary>
-    /// <summary>
-    /// Hit-test that explicitly skips windows owned by our own process
-    /// (whiteboard/linkrect masks, picker overlays, badge windows).
-    /// Used by the annotation paths so the rect-resolution
-    /// ElementFromPoint isn't intercepted by the mask we just drew on
-    /// top of the screen — which is what made <c>SystemWide</c>
-    /// hit-tests return null on Whiteboard's snap path. Default impl
-    /// falls back to the system-wide hit-test for non-Mac platforms.
-    /// </summary>
-    IVisualElement? ElementAtPointBelowOwnProcess(PixelPoint point) => ElementFromPoint(point);
-
     Task<HarvestResult> HarvestLinksAsync(CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// Same as <see cref="HarvestLinksAsync(CancellationToken)"/> but raises
-    /// <paramref name="onRectCommitted"/> the moment the user releases the
-    /// drag — so a caller can paint an outline + ➕ overlay immediately
-    /// (Pin-style UX) while the link harvest continues in the background.
-    /// The Task still completes when harvesting finishes. onRectCommitted
-    /// is invoked at most once; not invoked on cancellation.
-    /// </summary>
-    Task<HarvestResult> HarvestLinksAsync(Action<PixelRect> onRectCommitted, CancellationToken cancellationToken = default)
-        => HarvestLinksAsync(cancellationToken);
 }
 
 public readonly record struct HarvestResult(
@@ -206,5 +184,4 @@ public readonly record struct HarvestResult(
 public readonly record struct HarvestedLink(
     string Title,
     string Url,
-    PixelRect Bounds,
-    IVisualElement? Element = null);
+    PixelRect Bounds);
