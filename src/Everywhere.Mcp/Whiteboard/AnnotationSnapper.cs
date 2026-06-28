@@ -423,24 +423,28 @@ public static class AnnotationSnapper
 
     private static IVisualElement? LeafAtPoint(IVisualElement root, double x, double y)
     {
-        IVisualElement? best = null;
-        var bestArea = double.PositiveInfinity;
         var pointRect = new Rect(x, y, 1, 1);
         var visited = 0;
+        IVisualElement? hit = null;
         foreach (var (e, bb) in DescendantsInRect(root, pointRect, slack: 2.0))
         {
             visited++;
-            // Hard cap: if we walk more than 5k nodes for one point lookup,
-            // the prune predicate is degenerate (zero-bbox wrapper chain
-            // all the way down). Bail rather than freeze the UI.
+            // Hard cap defends against degenerate trees where prune fails.
             if (visited > 5000) break;
             if (!LeafTextRoles.Contains(e.Type)) continue;
             if (x < bb.X || x > bb.Right || y < bb.Y || y > bb.Bottom) continue;
-            var area = RectArea(bb);
-            if (area < bestArea) { bestArea = area; best = e; }
+            // First leaf-role node containing the point wins. DFS pre-order
+            // means we visit ancestors before descendants, so the first hit
+            // is the SHALLOWEST leaf containing the point. We don't need
+            // "smallest area" — for a 1×1 query, any leaf containing it is
+            // already a precise match, and walking further to find a tighter
+            // sibling costs thousands of node visits on Chromium webviews
+            // where a single page region holds deep wrapper chains.
+            hit = e;
+            break;
         }
         s_lastWalkVisited = visited;
-        return best;
+        return hit;
     }
 
     // Cross-call diagnostic counter — Snap reads & resets it after each
