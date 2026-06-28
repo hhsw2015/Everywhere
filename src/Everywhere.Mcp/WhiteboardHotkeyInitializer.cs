@@ -186,6 +186,34 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
         {
             var focused = _visualContext.FocusedElement;
             focusedRoot = focused?.Root() ?? focused;
+            // Parent-walk Root() can return a degenerate node (Chromium
+            // Hyperlink with no Parent → bbox=0×0). When that happens,
+            // ask the platform for the OS-level focused window of the
+            // same process; that gives us the webview / document with
+            // real bounds, and Descendants() only walks the actual
+            // tab subtree instead of the whole AX universe. Without
+            // this, AnnotationSnapper.Snap hangs ~30s on Arc.
+            if (focused is not null
+                && (focusedRoot is null
+                    || focusedRoot.BoundingRectangle.Width <= 0
+                    || focusedRoot.BoundingRectangle.Height <= 0))
+            {
+                try
+                {
+                    var window = _visualContext.FreshFocusedWindowOf(focused.ProcessId);
+                    if (window is not null)
+                    {
+                        focusedRoot = window;
+                        _logger.LogInformation(
+                            "Whiteboard pre-capture: Root()=degenerate, recovered via FreshFocusedWindowOf(pid={Pid})",
+                            focused.ProcessId);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogDebug(ex, "Whiteboard pre-capture: FreshFocusedWindowOf failed");
+                }
+            }
             // During a Continue session, the underlying app may not have
             // refocused yet when the user re-triggers Whiteboard. Use the
             // cached root from the first commit instead so we keep
