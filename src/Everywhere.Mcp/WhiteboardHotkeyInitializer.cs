@@ -566,9 +566,9 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
                 // before the stroke isn't clipped.
                 var ocrRect = ann.Kind == AnnotationKind.Underline
                     ? new Avalonia.Rect(
-                        Math.Max(0, ann.BoundingRect.X - 20),
+                        Math.Max(0, ann.BoundingRect.X - 60),
                         Math.Max(0, ann.BoundingRect.Y - 50),
-                        ann.BoundingRect.Width + 40,
+                        ann.BoundingRect.Width + 120,
                         ann.BoundingRect.Height + 70)
                     : ann.BoundingRect;
                 var ocrLines = RunOcrForRegion(ocrBitmap, ocrBitmapBounds, ocrRect);
