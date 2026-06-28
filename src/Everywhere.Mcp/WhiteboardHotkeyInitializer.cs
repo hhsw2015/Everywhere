@@ -567,9 +567,9 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
                 var ocrRect = ann.Kind == AnnotationKind.Underline
                     ? new Avalonia.Rect(
                         Math.Max(0, ann.BoundingRect.X - 60),
-                        Math.Max(0, ann.BoundingRect.Y - 100),
+                        Math.Max(0, ann.BoundingRect.Y - 50),
                         ann.BoundingRect.Width + 120,
-                        ann.BoundingRect.Height + 120)
+                        ann.BoundingRect.Height + 20)
                     : ann.BoundingRect;
                 var ocrLines = RunOcrForRegion(ocrBitmap, ocrBitmapBounds, ocrRect);
                 // For Underline: the wide OCR rect can pick up multiple

@@ -62,6 +62,19 @@ public static class ReadWhiteboardTool
                     // Use a generous cap so long code-block Labels aren't
                     // truncated before the slicer can index into them.
                     var text = (leaf.GetText(maxLength: 64000) ?? string.Empty).Trim();
+                    // Empty-text Hyperlink (anchor wrapping inline children
+                    // like an icon + label combo): walk the children and
+                    // concatenate their text. Common pattern in GitHub /
+                    // Linear / etc. where the visible row text lives inside
+                    // child nodes the parent anchor doesn't surface itself.
+                    if (string.IsNullOrEmpty(text)
+                        && leaf.Type == VisualElementType.Hyperlink)
+                    {
+                        var pieces = new List<string>();
+                        CollectChildText(leaf, pieces, depthLeft: 4, charBudget: 4096);
+                        if (pieces.Count > 0)
+                            text = string.Join(" ", pieces).Trim();
+                    }
                     if (string.IsNullOrEmpty(text)) continue;
                     // Hybrid slice: OCR-detected per-line bboxes pick which
                     // a11y lines fall under the region; falls back to
@@ -213,6 +226,32 @@ public static class ReadWhiteboardTool
         const int Cap = 120;
         if (cleaned.Length > Cap) cleaned = cleaned.Substring(0, Cap) + "…";
         return cleaned;
+    }
+
+    // Walks the children of a leaf-role node (typically a Hyperlink with
+    // empty GetText() — an anchor wrapping an icon+label combo) and
+    // appends any non-empty text snippets it finds. Bounded by depth and
+    // char budget so a runaway tree can't blow up the region body.
+    private static void CollectChildText(
+        IVisualElement node, List<string> sink, int depthLeft, int charBudget)
+    {
+        if (depthLeft <= 0) return;
+        IEnumerable<IVisualElement> kids;
+        try { kids = node.Children; }
+        catch { return; }
+        foreach (var c in kids)
+        {
+            if (charBudget <= 0) return;
+            string t;
+            try { t = (c.GetText(maxLength: 200) ?? string.Empty).Trim(); }
+            catch { t = string.Empty; }
+            if (!string.IsNullOrEmpty(t))
+            {
+                sink.Add(t);
+                charBudget -= t.Length;
+            }
+            CollectChildText(c, sink, depthLeft - 1, charBudget);
+        }
     }
 
     private static string KindLabel(AnnotationKind k) => k switch
