@@ -74,6 +74,7 @@
     <Project Path="tests/Everywhere.Abstractions.Tests/Everywhere.Abstractions.Tests.csproj" />
     <Project Path="tests/Everywhere.Core.Tests/Everywhere.Core.Tests.csproj" />
     <Project Path="tests/Everywhere.Mcp.Tests/Everywhere.Mcp.Tests.csproj" />
+    <Project Path="tests/Everywhere.DocReaders.Tests/Everywhere.DocReaders.Tests.csproj" />
     <Project Path="tests/Everywhere.Terminal.TestApp/Everywhere.Terminal.TestApp.csproj" />
     <Project Path="tests/Everywhere.Terminal.Tests/Everywhere.Terminal.Tests.csproj" />
   </Folder>

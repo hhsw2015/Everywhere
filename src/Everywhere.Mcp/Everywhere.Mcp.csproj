@@ -13,6 +13,10 @@
     <PackageReference Include="System.Text.Json" />
     <PackageReference Include="SkiaSharp" />
     <PackageReference Include="Avalonia" />
+    <PackageReference Include="PdfPig" />
+    <PackageReference Include="DocumentFormat.OpenXml" />
+    <PackageReference Include="VersOne.Epub" />
+    <PackageReference Include="AngleSharp" />
   </ItemGroup>
 
   <ItemGroup>
