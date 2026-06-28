@@ -563,8 +563,22 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
                 var imageLeavesFromSnap = snap.Leaves
                     .Where(l => l.Type == VisualElementType.Image)
                     .ToList();
+                // For Arrow: only consider images in a small box around
+                // the snapped leaf rect (the arrow tip's actual target),
+                // not the whole gesture bbox. Pointing at one image is
+                // still a valid use case ("look at this logo") and we
+                // shouldn't drop it — but scanning the entire 200×100
+                // arrow bbox for images on a Chromium webview costs
+                // ~3.5s and is mostly wasted (the user pointed at one
+                // pixel, not a region). The snapped rect is already
+                // tightened to a row-sized slice when the AX leaf is
+                // huge, so it's a good proxy for "what the arrow tip
+                // actually targets".
+                var imageScanRect = ann.Kind == AnnotationKind.Arrow
+                    ? snap.Rect
+                    : ann.BoundingRect;
                 var (imageLeaves, imageDiag) = CollectImageLeavesWithDiag(
-                    focusedRoot, ann.BoundingRect, ocrBitmap, ocrBitmapBounds,
+                    focusedRoot, imageScanRect, ocrBitmap, ocrBitmapBounds,
                     ref sessionImageCount, ref sessionImageBytes);
                 _logger.LogInformation(
                     "Whiteboard image collect: {Diag} -> {Count} ids=[{Ids}] bboxes=[{Bboxes}]",
