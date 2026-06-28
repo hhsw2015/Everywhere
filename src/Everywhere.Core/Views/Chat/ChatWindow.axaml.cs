@@ -236,7 +236,7 @@ public partial class ChatWindow :
         return new Size(width, height);
     }
 
-    protected override void OnLostFocus(RoutedEventArgs e)
+    protected override void OnLostFocus(FocusChangedEventArgs e)
     {
         base.OnLostFocus(e);
 
@@ -249,13 +249,6 @@ public partial class ChatWindow :
     protected override AutomationPeer OnCreateAutomationPeer()
     {
         return new NoneAutomationPeer(this); // Disable automation peer to avoid being detected by self
-    }
-
-    protected override void OnPointerPressed(PointerPressedEventArgs e)
-    {
-        base.OnPointerPressed(e);
-        if (TitleBarBorder.Bounds.Contains(e.GetCurrentPoint(this).Position))
-            BeginMoveDrag(e);
     }
 
     void IRecipient<CloakChatWindowMessage>.Receive(CloakChatWindowMessage message)

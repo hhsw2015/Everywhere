@@ -3,7 +3,6 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Threading;
-using Avalonia.Utilities;
 using Avalonia.VisualTree;
 
 namespace Everywhere.Views;
@@ -399,7 +398,7 @@ public class VariableHeightVirtualizingStackPanel : VirtualizingPanel
 
         var desiredViewportTop = GetOffsetForIndex(anchor.Index) + anchor.Delta;
         var correction = desiredViewportTop - oldViewportTop;
-        if (!MathUtilities.AreClose(correction, 0))
+        if (!(Math.Abs(correction) > double.Epsilon))
         {
             _pendingScrollOffsetCorrection += correction;
             if (double.IsNaN(_pendingScrollOffsetCorrectionBaseY) &&
@@ -753,7 +752,7 @@ public class VariableHeightVirtualizingStackPanel : VirtualizingPanel
     {
         EnsureSlotCountAtLeast(index + 1);
         var slot = _slots[index];
-        if (slot.HasMeasuredHeight && MathUtilities.AreClose(slot.MeasuredHeight, height))
+        if (slot.HasMeasuredHeight && Math.Abs(height - slot.MeasuredHeight) <= double.Epsilon)
         {
             slot.PendingShrinkHeight = double.NaN;
             return;
@@ -763,7 +762,7 @@ public class VariableHeightVirtualizingStackPanel : VirtualizingPanel
             height + HeightShrinkGuardThreshold < slot.MeasuredHeight)
         {
             if (slot.HasPendingShrinkHeight &&
-                MathUtilities.AreClose(slot.PendingShrinkHeight, height))
+                Math.Abs(slot.PendingShrinkHeight - height) <= double.Epsilon)
             {
                 slot.PendingShrinkHeight = double.NaN;
                 slot.MeasuredHeight = height;
@@ -943,7 +942,7 @@ public class VariableHeightVirtualizingStackPanel : VirtualizingPanel
 
     private void ApplyPendingScrollOffsetCorrection()
     {
-        if (MathUtilities.AreClose(_pendingScrollOffsetCorrection, 0))
+        if (Math.Abs(_pendingScrollOffsetCorrection) <= double.Epsilon)
         {
             return;
         }
@@ -967,7 +966,7 @@ public class VariableHeightVirtualizingStackPanel : VirtualizingPanel
                 }
 
                 if (double.IsFinite(baseY) &&
-                    !MathUtilities.AreClose(scrollViewer.Offset.Y, baseY))
+                    !(Math.Abs(scrollViewer.Offset.Y - baseY) <= double.Epsilon))
                 {
                     _pendingScrollOffsetCorrectionBaseY = double.NaN;
                     return;

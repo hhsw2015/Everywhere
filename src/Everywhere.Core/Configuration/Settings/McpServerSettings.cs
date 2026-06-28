@@ -28,19 +28,19 @@ public sealed partial class McpServerSettings : SettingsBase, ISettingsCategory
     public LucideIconKind Icon => LucideIconKind.Plug;
 
     [SettingsItemIgnore]
-    public IDynamicResourceKey TitleKey { get; } = new DynamicResourceKey(LocaleKey.SettingsCategory_Settings_McpServer_Header);
+    public IDynamicLocaleKey TitleKey { get; } = new DynamicLocaleKey(LocaleKey.SettingsCategory_Settings_McpServer_Header);
 
     [SettingsItemIgnore]
-    public IDynamicResourceKey? DescriptionKey { get; } = new DynamicResourceKey(LocaleKey.SettingsCategory_Settings_McpServer_Description);
+    public IDynamicLocaleKey? DescriptionKey { get; } = new DynamicLocaleKey(LocaleKey.SettingsCategory_Settings_McpServer_Description);
 
     [ObservableProperty]
-    [DynamicResourceKey(
+    [DynamicLocaleKey(
         LocaleKey.McpServerSettings_HttpEnabled_Header,
         LocaleKey.McpServerSettings_HttpEnabled_Description)]
     public partial bool HttpEnabled { get; set; } = true;
 
     [ObservableProperty]
-    [DynamicResourceKey(
+    [DynamicLocaleKey(
         LocaleKey.McpServerSettings_HttpPort_Header,
         LocaleKey.McpServerSettings_HttpPort_Description)]
     [SettingsItem(IsVisibleBindingPath = nameof(HttpEnabled), Group = "_")]
@@ -48,7 +48,7 @@ public sealed partial class McpServerSettings : SettingsBase, ISettingsCategory
     public partial int HttpPort { get; set; } = 7878;
 
     [ObservableProperty]
-    [DynamicResourceKey(
+    [DynamicLocaleKey(
         LocaleKey.McpServerSettings_AutoCaptureContext_Header,
         LocaleKey.McpServerSettings_AutoCaptureContext_Description)]
     public partial bool AutoCaptureContext { get; set; } = false;
@@ -62,13 +62,13 @@ public sealed partial class McpServerSettings : SettingsBase, ISettingsCategory
     /// pointed at Everywhere — no node.js / npm dependency.
     /// </summary>
     [ObservableProperty]
-    [DynamicResourceKey(
+    [DynamicLocaleKey(
         LocaleKey.McpServerSettings_OpenDiaEnabled_Header,
         LocaleKey.McpServerSettings_OpenDiaEnabled_Description)]
     public partial bool OpenDiaEnabled { get; set; } = false;
 
     [ObservableProperty]
-    [DynamicResourceKey(
+    [DynamicLocaleKey(
         LocaleKey.McpServerSettings_OpenDiaPort_Header,
         LocaleKey.McpServerSettings_OpenDiaPort_Description)]
     [SettingsItem(IsVisibleBindingPath = nameof(OpenDiaEnabled), Group = "_")]
@@ -76,7 +76,7 @@ public sealed partial class McpServerSettings : SettingsBase, ISettingsCategory
     public partial int OpenDiaPort { get; set; } = 5555;
 
     [ObservableProperty]
-    [DynamicResourceKey(
+    [DynamicLocaleKey(
         LocaleKey.McpServerSettings_AgentAppId_Header,
         LocaleKey.McpServerSettings_AgentAppId_Description)]
     [SettingsStringItem(Watermark = "com.github.cmux")]
@@ -90,7 +90,7 @@ public sealed partial class McpServerSettings : SettingsBase, ISettingsCategory
     /// blank phrase means "raise the agent and let me type".
     /// </summary>
     [ObservableProperty]
-    [DynamicResourceKey(
+    [DynamicLocaleKey(
         LocaleKey.McpServerSettings_LaunchPhrase_Header,
         LocaleKey.McpServerSettings_LaunchPhrase_Description)]
     [SettingsStringItem(Watermark = "take a look")]
@@ -120,7 +120,7 @@ public sealed partial class McpServerSettings : SettingsBase, ISettingsCategory
     /// </summary>
     [ObservableProperty]
     [SettingsItemIgnore]
-    [DynamicResourceKey(
+    [DynamicLocaleKey(
         LocaleKey.McpServerSettings_CursorOverlayEnabled_Header,
         LocaleKey.McpServerSettings_CursorOverlayEnabled_Description)]
     public partial bool CursorOverlayEnabled { get; set; } = false;

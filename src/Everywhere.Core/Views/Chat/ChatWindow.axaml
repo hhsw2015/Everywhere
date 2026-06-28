@@ -6,15 +6,14 @@
   xmlns:p="clr-namespace:Everywhere.Chat.Plugins" xmlns:se="clr-namespace:Everywhere.StrategyEngine"
   xmlns:shadui="clr-namespace:ShadUI.Controls;assembly=ShadUI" xmlns:sys="clr-namespace:System;assembly=System.Runtime"
   xmlns:v="clr-namespace:Everywhere.Views" xmlns:vc="clr-namespace:Everywhere.ValueConverters"
-  xmlns:vm="clr-namespace:Everywhere.ViewModels"
+  xmlns:vm="clr-namespace:Everywhere.ViewModels" x:Name="Self"
   Title="{I18N {x:Static LocaleKey.ChatWindow_Title}}"
   MinWidth="400" MinHeight="300"
   x:DataType="vm:ChatWindowViewModel" x:TypeArguments="vm:ChatWindowViewModel"
   Background="{DynamicResource AcrylicWindowBackgroundColor}"
   BorderBrush="{DynamicResource BorderColor}"
-  ExtendClientAreaChromeHints="NoChrome" ExtendClientAreaToDecorationsHint="True"
-  SizeToContent="WidthAndHeight" TransparencyLevelHint="AcrylicBlur"
-  WindowStartupLocation="CenterScreen">
+  ExtendClientAreaToDecorationsHint="True" SizeToContent="WidthAndHeight"
+  TransparencyLevelHint="AcrylicBlur,Blur,None" WindowStartupLocation="CenterScreen">
 
   <v:ReactiveShadWindow.BorderThickness>
     <OnPlatform
@@ -23,9 +22,7 @@
   </v:ReactiveShadWindow.BorderThickness>
 
   <v:ReactiveShadWindow.Hosts>
-    <shadui:DialogHost
-      x:Name="PART_DialogHost"
-      Owner="{Binding RelativeSource={RelativeSource AncestorType=v:ChatWindow}}"/>
+    <shadui:DialogHost x:Name="PART_DialogHost"/>
     <shadui:ToastHost
       x:Name="PART_ToastHost" Margin="0,36,0,0"/>
   </v:ReactiveShadWindow.Hosts>
@@ -34,7 +31,7 @@
     <Border
       x:Name="TitleBarBorder" Grid.Row="0"
       Height="44" Padding="8,0"
-      Background="Transparent">
+      Background="Transparent" WindowDecorationProperties.ElementRole="TitleBar">
       <Border.FlowDirection>
         <OnPlatform
           x:TypeArguments="FlowDirection" Linux="LeftToRight"
@@ -46,7 +43,8 @@
           x:Name="Eva" DockPanel.Dock="Left"
           Width="36" Height="36"
           Margin="0,0,0,-4" FlowDirection="LeftToRight"
-          IsThinking="{Binding IsBusy}">
+          IsThinking="{Binding IsBusy}"
+          WindowDecorationProperties.ElementRole="User">
           <v:Eva.Effect>
             <DropShadowEffect
               OffsetX="1.5" OffsetY="1.5"
@@ -140,7 +138,8 @@
             Classes="Ghost TitleBar" Margin="0,0,2,0"
             IsChecked="{Binding ChatContextManager.Current.Metadata.IsTemporary, Mode=TwoWay}"
             IsVisible="{Binding ChatContextManager.Current.DisplayItems.Count, Converter={x:Static vc:Int32Converters.NotGreaterThan}, ConverterParameter=1}"
-            ToolTip.Tip="{I18N {x:Static LocaleKey.ChatContext_TemporaryToggleButton_ToolTip}}">
+            ToolTip.Tip="{I18N {x:Static LocaleKey.ChatContext_TemporaryToggleButton_ToolTip}}"
+            WindowDecorationProperties.ElementRole="User">
             <LucideIcon
               Kind="Ghost" Size="16"/>
           </ToggleButton>
@@ -152,7 +151,8 @@
               Content="{LucideIconContent History, Size=16}"
               FlowDirection="LeftToRight"
               IsChecked="{Binding PersistentState.IsChatWindowHistoryOpened, Mode=TwoWay}"
-              ToolTip.Tip="{I18N {x:Static LocaleKey.ChatWindow_History_ToolTip}}"/>
+              ToolTip.Tip="{I18N {x:Static LocaleKey.ChatWindow_History_ToolTip}}"
+              WindowDecorationProperties.ElementRole="User"/>
 
             <Panel
               x:Name="BackgroundStatusIndicator"
@@ -198,14 +198,16 @@
             Command="{Binding ChatContextManager.CreateNewCommand}"
             Content="{LucideIconContent Plus, Size=20}"
             HotKey="Ctrl+N"
-            ToolTip.Tip="{I18N {x:Static LocaleKey.ChatWindow_CreateNew_ToolTip}}"/>
+            ToolTip.Tip="{I18N {x:Static LocaleKey.ChatWindow_CreateNew_ToolTip}}"
+            WindowDecorationProperties.ElementRole="User"/>
 
           <ToggleButton
             Classes="Ghost TitleBar" Background="#00252525"
             BorderThickness="1.5" HotKey="Ctrl+D"
-            IsChecked="{Binding $parent[v:ChatWindow].IsWindowPinned, Mode=TwoWay}"
+            IsChecked="{Binding #Self.IsWindowPinned, Mode=TwoWay}"
             IsThreeState="True"
-            ToolTip.Tip="{I18N {x:Static LocaleKey.ChatWindow_TogglePin_ToolTip}}">
+            ToolTip.Tip="{I18N {x:Static LocaleKey.ChatWindow_TogglePin_ToolTip}}"
+            WindowDecorationProperties.ElementRole="User">
             <LucideIcon Size="15"/>
           </ToggleButton>
 
@@ -214,7 +216,8 @@
             Command="{Binding CloseCommand}"
             Content="{LucideIconContent X, Size=20}"
             HotKey="Ctrl+W"
-            ToolTip.Tip="{I18N {x:Static LocaleKey.ChatWindow_Close_ToolTip}}"/>
+            ToolTip.Tip="{I18N {x:Static LocaleKey.ChatWindow_Close_ToolTip}}"
+            WindowDecorationProperties.ElementRole="User"/>
         </StackPanel>
 
         <TextBlock
@@ -300,7 +303,7 @@
             HorizontalContentAlignment="Stretch" BringIntoViewOnFocusChange="False"
             HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
             <Interaction.Behaviors>
-              <in:AutoLoadBehavior Command="{Binding $parent[v:ChatWindow].ViewModel.ChatContextManager.LoadMoreHistoryCommand}">
+              <in:AutoLoadBehavior Command="{Binding #Self.ViewModel.ChatContextManager.LoadMoreHistoryCommand}">
                 <in:AutoLoadBehavior.CommandParameter>
                   <sys:Int32>20</sys:Int32>
                 </in:AutoLoadBehavior.CommandParameter>
@@ -335,7 +338,7 @@
                         HorizontalAlignment="Left"
                         FontSize="{DynamicResource FontSizeS}">
                         <TextBlock.Text>
-                          <I18N Key="{Binding Date, Converter={x:Static vc:DynamicResourceKeyConverter.Shared}}"/>
+                          <I18N Key="{Binding Date, Converter={x:Static vc:DynamicLocaleKeyConverter.Shared}}"/>
                         </TextBlock.Text>
                       </TextBlock>
 
@@ -349,9 +352,9 @@
                       Background="Transparent" BorderThickness="0"
                       CornerRadius="0"
                       ItemsSource="{Binding MetadataList}"
-                      ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                      SelectedItem="{Binding $parent[v:ChatWindow].ViewModel.ChatContextManager.CurrentMetadata, FallbackValue={x:Null}}">
+                      ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                       <Interaction.Behaviors>
+                        <shadui:FixSelectedItemBehavior SelectedItem="{Binding #Self.ViewModel.ChatContextManager.CurrentMetadata}"/>
                         <AdaptiveBehavior SourceControl="{Binding $parent[ListBox]}">
                           <AdaptiveClassSetter
                             MinWidth="0" MaxWidth="260"
@@ -456,9 +459,9 @@
                               FontSize="{DynamicResource FontSizeM}"
                               IsEditing="{Binding IsRenaming, Mode=TwoWay}"
                               IsVisible="{Binding !IsTemporary}"
+                              PlaceholderText="{I18N {x:Static LocaleKey.ChatContext_Metadata_Topic_Default}}"
                               Text="{Binding Topic, Mode=TwoWay}"
-                              TextTrimming="CharacterEllipsis"
-                              Watermark="{I18N {x:Static LocaleKey.ChatContext_Metadata_Topic_Default}}"/>
+                              TextTrimming="CharacterEllipsis"/>
 
                             <TextBlock
                               x:Name="DateColumn" Grid.Column="2"
@@ -472,7 +475,7 @@
                               Orientation="Horizontal" Spacing="2">
                               <Button
                                 Classes="Compact" VerticalAlignment="Center"
-                                Command="{Binding $parent[v:ChatWindow].ViewModel.ChatContextManager.RemoveCommand}"
+                                Command="{Binding #Self.ViewModel.ChatContextManager.RemoveCommand}"
                                 CommandParameter="{Binding}"
                                 ToolTip.Tip="{I18N {x:Static LocaleKey.ChatWindow_ChatHistory_DeleteMenuItem_Header}}">
                                 <LucideIcon
@@ -491,7 +494,7 @@
                                       Icon="{LucideIconContent Pencil}"
                                       IsVisible="{Binding !IsTemporary}"/>
                                     <MenuItem
-                                      Command="{Binding $parent[v:ChatWindow].ViewModel.ExportMarkdownCommand}"
+                                      Command="{Binding #Self.ViewModel.ExportMarkdownCommand}"
                                       CommandParameter="{Binding}"
                                       Header="{I18N {x:Static LocaleKey.ChatWindow_ChatHistory_ExportMarkdownMenuItem_Header}}"
                                       Icon="{LucideIconContent Upload}"/>
@@ -549,7 +552,7 @@
                     Classes="Outline" Width="240"
                     Padding="8" HorizontalAlignment="Stretch"
                     HorizontalContentAlignment="Stretch"
-                    Command="{Binding $parent[v:ChatWindow].ViewModel.SelectStrategyCommand, Mode=OneTime}"
+                    Command="{Binding #Self.ViewModel.SelectStrategyCommand, Mode=OneTime}"
                     CommandParameter="{Binding Mode=OneTime}"
                     CornerRadius="{DynamicResource LgCornerRadius}"
                     Focusable="False">
@@ -568,13 +571,13 @@
                       <TextBlock
                         Grid.Row="0" Grid.Column="1"
                         FontWeight="SemiBold"
-                        Text="{Binding NameKey^, Mode=OneTime}"
+                        Text="{Binding NameKey^}"
                         TextWrapping="Wrap"/>
                       <TextBlock
                         Classes="Muted Caption" Grid.Row="1"
                         Grid.Column="0" Grid.ColumnSpan="2"
                         Margin="4,0"
-                        Text="{Binding DescriptionKey^, Mode=OneTime, FallbackValue={x:Null}}"
+                        Text="{Binding DescriptionKey^, FallbackValue={x:Null}}"
                         TextWrapping="Wrap"/>
                     </Grid>
                   </Button>
@@ -646,7 +649,7 @@
                   <DataTemplate x:DataType="se:Strategy">
                     <Button
                       Classes="Outline Compact Uniform" Padding="6,4"
-                      Command="{Binding $parent[v:ChatWindow].ViewModel.SelectStrategyCommand, Mode=OneTime}"
+                      Command="{Binding #Self.ViewModel.SelectStrategyCommand, Mode=OneTime}"
                       CommandParameter="{Binding Mode=OneTime}"
                       Focusable="False">
                       <ToolTip.Tip>
@@ -877,7 +880,7 @@
               <Button
                 Classes="Ghost Compact Uniform" DockPanel.Dock="Right"
                 Padding="1" VerticalAlignment="Center"
-                Command="{Binding $parent[v:ChatWindow].ViewModel.CancelEditingCommand}"
+                Command="{Binding #Self.ViewModel.CancelEditingCommand}"
                 CommandParameter="{Binding}"
                 ToolTip.Tip="{I18N {x:Static LocaleKey.ChatWindow_CancelEditingButton_ToolTip}}">
                 <TextBlock
@@ -1080,7 +1083,7 @@
                       <ToggleSwitch
                         Grid.Row="1" Grid.Column="1"
                         VerticalAlignment="Center"
-                        IsChecked="{Binding $parent[v:ChatWindow].ViewModel.PersistentState.IsToolCallEnabled, Mode=TwoWay}"/>
+                        IsChecked="{Binding #Self.ViewModel.PersistentState.IsToolCallEnabled, Mode=TwoWay}"/>
 
                       <TextBlock
                         Grid.Row="1" Grid.Column="0"
@@ -1097,8 +1100,8 @@
                       <TreeView
                         Grid.Row="0" Grid.Column="0"
                         Grid.ColumnSpan="2" Grid.IsSharedSizeScope="True"
-                        IsVisible="{Binding $parent[v:ChatWindow].ViewModel.PersistentState.IsToolCallEnabled}"
-                        ItemsSource="{Binding $parent[v:ChatWindow].ViewModel.ChatPlugins}">
+                        IsVisible="{Binding #Self.ViewModel.PersistentState.IsToolCallEnabled}"
+                        ItemsSource="{Binding #Self.ViewModel.ChatPlugins}">
                         <TreeView.DataTemplates>
                           <TreeDataTemplate
                             DataType="p:ChatPlugin"
@@ -1172,7 +1175,7 @@
                     Classes="Muted" VerticalAlignment="Center"
                     FontSize="{DynamicResource FontSizeS}">
                     <TextBlock.Text>
-                      <I18N Key="{Binding PersistentState.VisualContextLengthLimit, Converter={x:Static vc:DynamicResourceKeyConverter.Shared}}"/>
+                      <I18N Key="{Binding PersistentState.VisualContextLengthLimit, Converter={x:Static vc:DynamicLocaleKeyConverter.Shared}}"/>
                     </TextBlock.Text>
                   </TextBlock>
 
@@ -1203,7 +1206,7 @@
                     Classes="Muted" VerticalAlignment="Center"
                     FontSize="{DynamicResource FontSizeS}">
                     <TextBlock.Text>
-                      <I18N Key="{Binding PersistentState.VisualContextDetailLevel, Converter={x:Static vc:DynamicResourceKeyConverter.Shared}}"/>
+                      <I18N Key="{Binding PersistentState.VisualContextDetailLevel, Converter={x:Static vc:DynamicLocaleKeyConverter.Shared}}"/>
                     </TextBlock.Text>
                   </TextBlock>
 

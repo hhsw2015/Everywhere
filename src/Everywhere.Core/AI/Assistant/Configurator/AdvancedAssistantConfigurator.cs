@@ -28,7 +28,7 @@ public sealed partial class AdvancedAssistantConfigurator(Assistant owner) : Ass
         }
     }
 
-    [DynamicResourceKey(
+    [DynamicLocaleKey(
         LocaleKey.Assistant_Endpoint_Header,
         LocaleKey.Assistant_Endpoint_Description)]
     [SettingsItem(Group = "_")]
@@ -36,16 +36,14 @@ public sealed partial class AdvancedAssistantConfigurator(Assistant owner) : Ass
         new PreviewEndpointTextBox
         {
             MinWidth = 320d,
-            [!PreviewEndpointTextBox.EndpointProperty] = new Binding(nameof(Endpoint))
-            {
-                Source = this,
-                Mode = BindingMode.TwoWay
-            },
-            [!PreviewEndpointTextBox.SchemaProperty] = new Binding(nameof(Schema))
-            {
-                Source = this,
-                Mode = BindingMode.OneWay
-            }
+            [!PreviewEndpointTextBox.EndpointProperty] = CompiledBinding.Create(
+                (AdvancedAssistantConfigurator x) => x.Endpoint,
+                source: this,
+                mode: BindingMode.TwoWay),
+            [!PreviewEndpointTextBox.SchemaProperty] = CompiledBinding.Create(
+                (AdvancedAssistantConfigurator x) => x.Schema,
+                source: this,
+                mode: BindingMode.OneWay)
         });
 
     [SettingsItemIgnore]
@@ -62,21 +60,20 @@ public sealed partial class AdvancedAssistantConfigurator(Assistant owner) : Ass
     }
 
     [JsonIgnore]
-    [DynamicResourceKey(
+    [DynamicLocaleKey(
         LocaleKey.Assistant_ApiKey_Header,
         LocaleKey.Assistant_ApiKey_Description)]
     [SettingsItem(Group = "_")]
     public SettingsControl<ApiKeyComboBox> ApiKeyControl => new(
         new ApiKeyComboBox(ServiceLocator.Resolve<Settings>().Model.ApiKeys)
         {
-            [!ApiKeyComboBox.SelectedIdProperty] = new Binding(nameof(ApiKey))
-            {
-                Source = this,
-                Mode = BindingMode.TwoWay
-            },
+            [!ApiKeyComboBox.SelectedIdProperty] = CompiledBinding.Create(
+                (AdvancedAssistantConfigurator x) => x.ApiKey,
+                source: this,
+                mode: BindingMode.TwoWay)
         });
 
-    [DynamicResourceKey(
+    [DynamicLocaleKey(
         LocaleKey.Assistant_Schema_Header,
         LocaleKey.Assistant_Schema_Description)]
     [SettingsItem(Group = "_")]
@@ -92,7 +89,7 @@ public sealed partial class AdvancedAssistantConfigurator(Assistant owner) : Ass
         }
     }
 
-    [DynamicResourceKey(
+    [DynamicLocaleKey(
         LocaleKey.Assistant_ModelId_Header,
         LocaleKey.Assistant_ModelId_Description)]
     [SettingsItem(Group = "_")]
@@ -103,7 +100,7 @@ public sealed partial class AdvancedAssistantConfigurator(Assistant owner) : Ass
         set => owner.ModelId = value;
     }
 
-    [DynamicResourceKey(
+    [DynamicLocaleKey(
         LocaleKey.Assistant_SupportsToolCall_Header,
         LocaleKey.Assistant_SupportsToolCall_Description)]
     [SettingsItem(Group = "_")]
@@ -113,24 +110,23 @@ public sealed partial class AdvancedAssistantConfigurator(Assistant owner) : Ass
         set => owner.SupportsToolCall = value;
     }
 
-    [DynamicResourceKey(
+    [DynamicLocaleKey(
         LocaleKey.Assistant_InputModalities_Header,
         LocaleKey.Assistant_InputModalities_Description)]
     [SettingsItem(Group = "_")]
     public SettingsControl<ModalitiesSelector> InputModalitiesSelector => new(
         new ModalitiesSelector
         {
-            [!ModalitiesSelector.ModalitiesProperty] = new Binding(nameof(owner.InputModalities))
-            {
-                Source = owner,
-                Mode = BindingMode.TwoWay
-            }
+            [!ModalitiesSelector.ModalitiesProperty] = CompiledBinding.Create(
+                (Assistant x) => x.InputModalities,
+                source: owner,
+                mode: BindingMode.TwoWay)
         });
 
     /// <summary>
     /// Maximum number of tokens that the model can process in a single request.
     /// </summary>
-    [DynamicResourceKey(
+    [DynamicLocaleKey(
         LocaleKey.Assistant_ContextLimit_Header,
         LocaleKey.Assistant_ContextLimit_Description)]
     [SettingsItem(Group = "_")]
@@ -144,7 +140,7 @@ public sealed partial class AdvancedAssistantConfigurator(Assistant owner) : Ass
     /// <summary>
     /// Maximum number of tokens that the model can output in a single request.
     /// </summary>
-    [DynamicResourceKey(
+    [DynamicLocaleKey(
         LocaleKey.Assistant_OutputLimit_Header,
         LocaleKey.Assistant_OutputLimit_Description)]
     [SettingsItem(Group = "_")]

@@ -38,7 +38,7 @@ public sealed partial class PresetBasedAssistantConfigurator(Assistant owner) : 
 
     [Required]
     [JsonIgnore]
-    [DynamicResourceKey(
+    [DynamicLocaleKey(
         LocaleKey.CustomAssistant_ModelProviderTemplate_Header,
         LocaleKey.CustomAssistant_ModelProviderTemplate_Description)]
     [SettingsItem(Group = "_")]
@@ -63,22 +63,22 @@ public sealed partial class PresetBasedAssistantConfigurator(Assistant owner) : 
     }
 
     [JsonIgnore]
-    [DynamicResourceKey(
+    [DynamicLocaleKey(
         LocaleKey.Assistant_ApiKey_Header,
         LocaleKey.Assistant_ApiKey_Description)]
     [SettingsItem(Group = "_")]
     public SettingsControl<ApiKeyComboBox> ApiKeyControl => new(
         new ApiKeyComboBox(ServiceLocator.Resolve<Settings>().Model.ApiKeys)
         {
-            [!ApiKeyComboBox.SelectedIdProperty] = new Binding(nameof(ApiKey))
-            {
-                Source = this,
-                Mode = BindingMode.TwoWay
-            },
-            [!ApiKeyComboBox.DefaultNameProperty] = new Binding($"{nameof(ModelProviderTemplate)}.{nameof(ModelProviderTemplate.DisplayName)}")
-            {
-                Source = this,
-            },
+            [!ApiKeyComboBox.SelectedIdProperty] = CompiledBinding.Create(
+                (PresetBasedAssistantConfigurator x) => x.ApiKey,
+                source: this,
+                mode: BindingMode.TwoWay),
+            [!ApiKeyComboBox.DefaultNameProperty] = CompiledBinding.Create(
+                (PresetBasedAssistantConfigurator x) => x.ModelProviderTemplate!.DisplayName,
+                source: this,
+                targetNullValue: string.Empty,
+                fallbackValue: string.Empty)
         });
 
     [JsonIgnore]
@@ -103,7 +103,7 @@ public sealed partial class PresetBasedAssistantConfigurator(Assistant owner) : 
 
     [Required]
     [JsonIgnore]
-    [DynamicResourceKey(
+    [DynamicLocaleKey(
         LocaleKey.CustomAssistant_ModelDefinitionTemplate_Header,
         LocaleKey.CustomAssistant_ModelDefinitionTemplate_Description)]
     [SettingsItem(Group = "_")]
