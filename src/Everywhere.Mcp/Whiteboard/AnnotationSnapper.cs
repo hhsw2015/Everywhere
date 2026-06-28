@@ -503,13 +503,20 @@ public static class AnnotationSnapper
         IVisualElement node, Rect nodeBb, Rect expanded)
     {
         yield return (node, nodeBb);
-        var pruneable = nodeBb.Width > 0 && nodeBb.Height > 0;
         foreach (var c in node.Children)
         {
             Rect cBb;
             try { cBb = ToRect(c.BoundingRectangle); }
             catch { cBb = default; }
-            if (pruneable && cBb.Width > 0 && cBb.Height > 0)
+            // Prune purely on the child's own bbox: if it has real bounds
+            // and they don't intersect the query, the entire subtree is
+            // irrelevant. The parent's bbox is NOT consulted — Chromium
+            // and other toolkit webviews emit chains of zero-bbox wrapper
+            // nodes (Document → Body → Div → ...) before the pixel-bearing
+            // leaves; making prune conditional on parent.pruneable means
+            // those chains disable pruning all the way down and we walk
+            // the entire tree.
+            if (cBb.Width > 0 && cBb.Height > 0)
             {
                 var inter = cBb.Intersect(expanded);
                 if (inter.Width <= 0 || inter.Height <= 0) continue;

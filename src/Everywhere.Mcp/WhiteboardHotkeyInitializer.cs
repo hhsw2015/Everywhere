@@ -693,11 +693,14 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
                              && !string.IsNullOrWhiteSpace(node.GetText(maxLength: 1)))
                         hyperlinkHasText.Add(ancestor);
                 }
-                var prune = nbb.Width > 0 && nbb.Height > 0;
                 foreach (var c in node.Children)
                 {
                     var cbb = c.BoundingRectangle;
-                    if (prune && cbb.Width > 0 && cbb.Height > 0)
+                    // Prune on child's own bbox only. Parent-gated prune
+                    // breaks under Chromium-style zero-bbox wrapper chains
+                    // (Document/Body/Div), where the parent never has
+                    // bounds and the prune condition stays false forever.
+                    if (cbb.Width > 0 && cbb.Height > 0)
                     {
                         var cRect = new Avalonia.Rect(cbb.X, cbb.Y, cbb.Width, cbb.Height);
                         var inter = cRect.Intersect(expanded);
@@ -1063,11 +1066,15 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
             yield return (node, bb);
             emitted++;
             if (depth >= maxDepth) continue;
-            var prune = bb.Width > 0 && bb.Height > 0;
             foreach (var c in node.Children)
             {
                 var cbb = c.BoundingRectangle;
-                if (prune && cbb.Width > 0 && cbb.Height > 0)
+                // Prune on the child's own bbox only; do not require the
+                // parent to also have a bbox. Chromium/AT-SPI emit chains
+                // of zero-bbox wrappers (Document/Body/Div) before the
+                // real leaves, so a parent-gated prune disables pruning
+                // for the entire subtree below such a chain.
+                if (cbb.Width > 0 && cbb.Height > 0)
                 {
                     var cRect = new Avalonia.Rect(cbb.X, cbb.Y, cbb.Width, cbb.Height);
                     var inter = cRect.Intersect(expanded);
