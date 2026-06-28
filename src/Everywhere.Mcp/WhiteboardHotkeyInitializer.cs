@@ -435,7 +435,7 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
                     // thumbnails, infinite-scroll cards, etc.), crop the
                     // gesture rect itself as a single fallback image so
                     // the user's selection isn't lost.
-                    if (ann.Kind is AnnotationKind.Circle or AnnotationKind.X
+                    if (ann.Kind is AnnotationKind.Circle or AnnotationKind.X or AnnotationKind.Arrow
                         && TryFallbackRegionImage(ann.BoundingRect, ocrBitmap, ocrBitmapBounds,
                                                     ref sessionImageCount, ref sessionImageBytes,
                                                     out var fallbackImage))
@@ -509,7 +509,7 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
                 // back instead of an empty region.
                 var allLeavesEmpty = textLeaves.Count == 0 || textLeaves.All(l =>
                     string.IsNullOrWhiteSpace(l.GetText(maxLength: 1)));
-                if (ann.Kind is AnnotationKind.Circle or AnnotationKind.X
+                if (ann.Kind is AnnotationKind.Circle or AnnotationKind.X or AnnotationKind.Arrow
                     && imageLeaves.Count == 0 && allLeavesEmpty
                     && TryFallbackRegionImage(ann.BoundingRect, ocrBitmap, ocrBitmapBounds,
                                                 ref sessionImageCount, ref sessionImageBytes,
@@ -528,11 +528,15 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
 
             if (regions.Count == 0)
             {
-                _logger.LogInformation("Whiteboard produced no usable regions; nothing to stash");
-                // Same reasoning as the cancel path: no commit happened,
-                // don't keep a stale cache around for a future Continue.
+                _logger.LogInformation("Whiteboard produced no usable regions; activating agent anyway");
                 _sessionFocusedRoot = null;
                 TryDumpDebugBundle(strokes, ocrBitmap, ocrBitmapBounds, focusedRoot, snapTrace);
+                // User drew strokes — they meant something even if AX
+                // couldn't snap them (Chromium webview Underline, etc).
+                // Bring the agent app to front so the user isn't left
+                // staring at the source app wondering whether Enter did
+                // anything. Mirrors LinkRect's no-results path.
+                _contextWriter.ActivateAgent();
                 return;
             }
 
