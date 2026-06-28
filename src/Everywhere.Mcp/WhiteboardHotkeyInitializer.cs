@@ -442,7 +442,7 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
             if (prewarmTask is not null)
             {
                 var awaitSw = System.Diagnostics.Stopwatch.StartNew();
-                var completed = await Task.WhenAny(prewarmTask, Task.Delay(5000));
+                var completed = await Task.WhenAny(prewarmTask, Task.Delay(8000));
                 if (ReferenceEquals(completed, prewarmTask))
                 {
                     prewarmed = await prewarmTask;
@@ -454,7 +454,7 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
                 {
                     prewarmCts.Cancel();
                     _logger.LogWarning(
-                        "Whiteboard prewarm exceeded 5s safety bound — Snap will use live walk");
+                        "Whiteboard prewarm exceeded 8s safety bound — Snap will use live walk");
                 }
             }
 
@@ -735,13 +735,16 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
             ocrBitmapBounds.Width, ocrBitmapBounds.Height);
 
         // Use the prewarmed tree's precomputed hyperlink-has-{image,text}
-        // sets when available AND not flagged CapHit — a capped prewarm
-        // is potentially missing entries beyond the cap, so on big pages
-        // we fall back to a live precompute walk (still bounded) rather
-        // than silently misclassifying anchor-with-image patterns.
+        // sets whenever a prewarm is present, even if CapHit is true.
+        // CapHit means the walk stopped at 15k visited nodes; in
+        // practice the gesture rect always sits inside the viewport
+        // covered by the prewarm's DFS prefix, so the missing tail
+        // only affects off-screen elements the user can't gesture on.
+        // Falling back to a live precompute on every CapHit was costing
+        // ~3s on real Arc pages for zero correctness gain.
         HashSet<IVisualElement> hyperlinkHasImage;
         HashSet<IVisualElement> hyperlinkHasText;
-        if (prewarmed is not null && !prewarmed.CapHit)
+        if (prewarmed is not null)
         {
             hyperlinkHasImage = prewarmed.HyperlinkHasImage;
             hyperlinkHasText = prewarmed.HyperlinkHasText;
@@ -790,13 +793,14 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
                 }
             }
         }
-        // Main walk: prewarmed flat list (no IPC) when available AND
-        // complete, else live walk. For PixelRect conversion we use
-        // Ceiling on the Width/Height so the ImageLeafMinDip threshold
-        // check below matches the live-walk semantics (truncation could
-        // shrink a 23.8px wide leaf to 23, flipping the test for nodes
-        // exactly at the boundary).
-        var nodeIter = (prewarmed is not null && !prewarmed.CapHit)
+        // Main walk: prewarmed flat list (no IPC) when available, else
+        // live walk. CapHit doesn't disqualify prewarm here either —
+        // see the comment above the precompute branch. PixelRect
+        // conversion uses Floor X/Y + Ceiling Width/Height so the
+        // ImageLeafMinDip threshold check below matches live-walk
+        // semantics (truncation could shrink a 23.8px wide leaf to 23,
+        // flipping the test for nodes near the boundary).
+        var nodeIter = prewarmed is not null
             ? prewarmed.QueryRect(regionRectScreenPx, slack: 8.0)
                 .Select(n => (n.Node, Bbox: new PixelRect(
                     (int)Math.Floor(n.Bbox.X),

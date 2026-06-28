@@ -583,9 +583,17 @@ public static class AnnotationSnapper
             Rect rootBb;
             try { rootBb = ToRect(root.BoundingRectangle); }
             catch { rootBb = default; }
+            // 25k visited cap. v0.9.222 used 15k and on real Arc pages
+            // hit the cap with 10916 leaves emitted in 4.4s. The user-
+            // gestured leaves were sometimes missed when the relevant
+            // DOM region sat past the cap in DFS order (e.g. release
+            // table rows, late commit artifacts). 25k buys ~50% more
+            // coverage at ~50% more time (~6.5s estimated worst-case),
+            // still inside the 5s await on most pages and inside the
+            // overall WhenAny deadline on the rest.
             BuildImpl(root, rootBb, bigRect, nodes, visited,
                 hyperlinkHasImage, hyperlinkHasText,
-                ancestorHyperlink: null, cap: 15_000, ref capHit, ct);
+                ancestorHyperlink: null, cap: 25_000, ref capHit, ct);
             return new PrewarmedTree(nodes, hyperlinkHasImage, hyperlinkHasText, capHit);
         }
 
@@ -679,7 +687,15 @@ public static class AnnotationSnapper
             {
                 if (yielded >= maxYield) yield break;
                 var bb = n.Bbox;
-                if (bb.Width <= 0 || bb.Height <= 0) { yield return n; yielded++; continue; }
+                // Skip zero-bbox nodes — they can't satisfy any geometric
+                // test snap callers do. The live walk yields them too
+                // (DescendantsInRect needs them for prune decisions on
+                // children) but Nodes here is leaf-role only and a zero-
+                // bbox leaf is just AX noise (empty hidden Hyperlinks
+                // Chromium emits in bulk). Including them inflates the
+                // candidate set ~4× on real Arc pages and makes
+                // CollectUnderlineCandidatesV's `seen` counter useless.
+                if (bb.Width <= 0 || bb.Height <= 0) continue;
                 var inter = bb.Intersect(expanded);
                 if (inter.Width <= 0 || inter.Height <= 0) continue;
                 yield return n;
