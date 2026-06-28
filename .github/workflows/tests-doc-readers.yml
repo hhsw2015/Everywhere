@@ -29,6 +29,10 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y poppler-utils pandoc python3-openpyxl xlsx2csv
+      - name: Generate goldens
+        run: bash tests/doc-corpus/generate-goldens.sh
+      - name: Verify goldens present
+        run: bash tests/doc-corpus/check-goldens.sh
       - name: Restore
         run: dotnet restore tests/Everywhere.DocReaders.Tests/Everywhere.DocReaders.Tests.csproj
       - name: Build
