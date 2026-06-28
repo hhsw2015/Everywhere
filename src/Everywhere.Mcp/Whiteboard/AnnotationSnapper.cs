@@ -681,24 +681,24 @@ public static class AnnotationSnapper
         // CancellationToken lets the caller bail.
         public static PrewarmedTree Build(IVisualElement root, CancellationToken ct)
         {
-            var bigRect = new Rect(-1e9, -1e9, 2e9, 2e9);
+            // Constrain the walk to the focused window's own bounds. Off-
+            // screen subtrees (long pages with virtualised content above /
+            // below the viewport) get pruned at parent level, freeing the
+            // 25k node budget for content the user can actually gesture
+            // on. Empty-bbox wrappers still recurse — the prune predicate
+            // is "child has real bbox AND it's outside viewport".
+            Rect rootBb;
+            try { rootBb = ToRect(root.BoundingRectangle); }
+            catch { rootBb = default; }
+            var viewport = (rootBb.Width > 0 && rootBb.Height > 0)
+                ? rootBb
+                : new Rect(-1e9, -1e9, 2e9, 2e9);
             var nodes = new List<(IVisualElement, Rect)>(4096);
             var visited = new HashSet<IVisualElement>(ReferenceEqualityComparer.Instance);
             var hyperlinkHasImage = new HashSet<IVisualElement>(ReferenceEqualityComparer.Instance);
             var hyperlinkHasText = new HashSet<IVisualElement>(ReferenceEqualityComparer.Instance);
             var capHit = false;
-            Rect rootBb;
-            try { rootBb = ToRect(root.BoundingRectangle); }
-            catch { rootBb = default; }
-            // 25k visited cap. v0.9.222 used 15k and on real Arc pages
-            // hit the cap with 10916 leaves emitted in 4.4s. The user-
-            // gestured leaves were sometimes missed when the relevant
-            // DOM region sat past the cap in DFS order (e.g. release
-            // table rows, late commit artifacts). 25k buys ~50% more
-            // coverage at ~50% more time (~6.5s estimated worst-case),
-            // still inside the 5s await on most pages and inside the
-            // overall WhenAny deadline on the rest.
-            BuildImpl(root, rootBb, bigRect, nodes, visited,
+            BuildImpl(root, rootBb, viewport, nodes, visited,
                 hyperlinkHasImage, hyperlinkHasText,
                 ancestorHyperlink: null, cap: 25_000, ref capHit, ct);
             return new PrewarmedTree(nodes, hyperlinkHasImage, hyperlinkHasText, capHit);
