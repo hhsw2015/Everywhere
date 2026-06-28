@@ -521,6 +521,17 @@ public static class AnnotationSnapper
         IVisualElement node, Rect nodeBb, Rect expanded)
     {
         yield return (node, nodeBb);
+        // Don't recurse into a leaf-role element. Chromium/macOS AX expose
+        // multi-line Labels as a single leaf, but their children are
+        // per-character or per-glyph wrappers (thousands of nodes, each
+        // with bbox INSIDE the parent's bbox so prune doesn't help). The
+        // caller already considers `node` itself as a candidate; walking
+        // into its glyphs would just re-find the same leaf at every level
+        // of detail and inflate the visit count to many thousands per
+        // point lookup.
+        if (LeafTextRoles.Contains(node.Type)
+            || LeafTextOrImageRoles.Contains(node.Type))
+            yield break;
         foreach (var c in node.Children)
         {
             Rect cBb;

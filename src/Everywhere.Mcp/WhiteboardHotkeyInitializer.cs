@@ -1066,14 +1066,19 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
             yield return (node, bb);
             emitted++;
             if (depth >= maxDepth) continue;
+            // Don't descend into a Label — its children are per-glyph
+            // wrappers (Chromium) with bboxes inside the parent so prune
+            // cannot help and the visit count blows up. Image and
+            // Hyperlink ARE recursed into intentionally: the image-collect
+            // path needs to discover Image leaves nested inside Hyperlink
+            // wrappers (anchor with <img>) and Hyperlink itself can contain
+            // Label or other text-bearing descendants the precompute walk
+            // tracks via hyperlinkHasText.
+            if (node.Type == VisualElementType.Label)
+                continue;
             foreach (var c in node.Children)
             {
                 var cbb = c.BoundingRectangle;
-                // Prune on the child's own bbox only; do not require the
-                // parent to also have a bbox. Chromium/AT-SPI emit chains
-                // of zero-bbox wrappers (Document/Body/Div) before the
-                // real leaves, so a parent-gated prune disables pruning
-                // for the entire subtree below such a chain.
                 if (cbb.Width > 0 && cbb.Height > 0)
                 {
                     var cRect = new Avalonia.Rect(cbb.X, cbb.Y, cbb.Width, cbb.Height);
