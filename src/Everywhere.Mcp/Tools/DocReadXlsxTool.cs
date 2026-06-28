@@ -1,7 +1,8 @@
 using System.ComponentModel;
-using System.Globalization;
 using System.Text;
-using ClosedXML.Excel;
+using DocumentFormat.OpenXml;
+using DocumentFormat.OpenXml.Packaging;
+using DocumentFormat.OpenXml.Spreadsheet;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 
@@ -23,17 +24,26 @@ public static class DocReadXlsxTool
 
             var sb = new StringBuilder();
             int sheetCount = 0;
-            using (var wb = new XLWorkbook(path))
+            using (var doc = SpreadsheetDocument.Open(path, false))
             {
-                foreach (var sheet in wb.Worksheets)
+                var wb = doc.WorkbookPart;
+                if (wb is null) return DocReaderResult.Build(string.Empty, new Dictionary<string, object?>
+                {
+                    ["sheets"] = 0, ["source"] = path,
+                });
+
+                var sst = wb.SharedStringTablePart?.SharedStringTable;
+                foreach (var sheet in wb.Workbook.Descendants<Sheet>())
                 {
                     sheetCount++;
-                    var range = sheet.RangeUsed();
-                    if (range is null) continue;
-                    var rows = range.RowsUsed();
-                    foreach (var row in rows)
+                    if (sheet.Id?.Value is null) continue;
+                    var part = (WorksheetPart)wb.GetPartById(sheet.Id.Value);
+                    var sheetData = part.Worksheet.Elements<SheetData>().FirstOrDefault();
+                    if (sheetData is null) continue;
+
+                    foreach (var row in sheetData.Elements<Row>())
                     {
-                        var cells = row.Cells(1, range.LastColumn().ColumnNumber()).Select(FormatCell);
+                        var cells = row.Elements<Cell>().Select(c => FormatCell(c, sst));
                         sb.AppendLine(string.Join(",", cells));
                     }
                 }
@@ -51,13 +61,26 @@ public static class DocReadXlsxTool
         }
     }
 
-    private static string FormatCell(IXLCell cell)
+    private static string FormatCell(Cell cell, SharedStringTable? sst)
     {
-        var v = cell.IsEmpty() ? string.Empty : cell.GetFormattedString();
-        if (v.IndexOfAny([',', '"', '\n', '\r']) >= 0)
+        string raw;
+        if (cell.DataType?.Value == CellValues.SharedString && cell.CellValue?.Text is { } idxStr && int.TryParse(idxStr, out var idx) && sst is not null && idx >= 0 && idx < sst.ChildElements.Count)
         {
-            return "\"" + v.Replace("\"", "\"\"") + "\"";
+            raw = sst.ChildElements[idx].InnerText;
         }
-        return v;
+        else if (cell.DataType?.Value == CellValues.InlineString)
+        {
+            raw = cell.InnerText;
+        }
+        else
+        {
+            raw = cell.CellValue?.Text ?? string.Empty;
+        }
+
+        if (raw.IndexOfAny([',', '"', '\n', '\r']) >= 0)
+        {
+            return "\"" + raw.Replace("\"", "\"\"") + "\"";
+        }
+        return raw;
     }
 }

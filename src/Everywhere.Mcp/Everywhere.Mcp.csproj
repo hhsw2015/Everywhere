@@ -15,7 +15,6 @@
     <PackageReference Include="Avalonia" />
     <PackageReference Include="PdfPig" />
     <PackageReference Include="DocumentFormat.OpenXml" />
-    <PackageReference Include="ClosedXML" />
     <PackageReference Include="VersOne.Epub" />
     <PackageReference Include="AngleSharp" />
   </ItemGroup>
