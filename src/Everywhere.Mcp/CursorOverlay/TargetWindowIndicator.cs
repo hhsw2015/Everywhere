@@ -164,7 +164,7 @@ public sealed class TargetWindowIndicator : IAsyncDisposable
 
         public IndicatorWindow()
         {
-            SystemDecorations = SystemDecorations.None;
+            WindowDecorations = WindowDecorations.None;
             Background = Brushes.Transparent;
             TransparencyLevelHint = new[] { WindowTransparencyLevel.Transparent };
             ShowInTaskbar = false;

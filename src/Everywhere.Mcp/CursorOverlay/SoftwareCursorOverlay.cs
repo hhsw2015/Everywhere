@@ -511,7 +511,7 @@ internal sealed class CursorWindow : Window
 
     public CursorWindow()
     {
-        SystemDecorations = SystemDecorations.None;
+        WindowDecorations = WindowDecorations.None;
         Background = Brushes.Transparent;
         TransparencyLevelHint = new[] { WindowTransparencyLevel.Transparent };
         ShowInTaskbar = false;

@@ -22,7 +22,7 @@ public sealed class AnnotationOutlineWindow : Window
         CanResize = false;
         ShowInTaskbar = false;
         ShowActivated = false;
-        SystemDecorations = SystemDecorations.None;
+        WindowDecorations = WindowDecorations.None;
         TransparencyLevelHint = [WindowTransparencyLevel.Transparent];
         Background = null;
         Topmost = true;
