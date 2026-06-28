@@ -36,7 +36,10 @@ jobs:
         ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
         fetch-depth: 0
         submodules: true
-        lfs: true
+        # 3rd/open-codex-computer-use is a reference submodule whose LFS
+        # objects (a 100MB+ zip) blow the repo's bandwidth quota on every
+        # build. Nothing in the build pipeline reads those bytes.
+        lfs: false
 
     - name: Setup Node
       uses: actions/setup-node@v4
