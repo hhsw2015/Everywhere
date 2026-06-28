@@ -72,21 +72,59 @@ public static class AnnotationSnapper
     {
         var diag = new StringBuilder();
         diag.Append("arrow: ");
-        // Direction-agnostic: the arrow tip is whichever stroke endpoint
-        // sits closer to text. Users draw arrows in both directions
-        // ("look at this!" from left or right), so we cannot assume
-        // start = tail / end = tip.
         var endpoints = StrokeEndpoints(strokes);
         if (endpoints.Count == 0)
             return Reject(ann.BoundingRect, "no usable stroke points");
         diag.Append("endpoints=[")
             .AppendJoin(",", endpoints.Select(e => F(e.X, e.Y)))
             .Append("] ");
-        // Evaluate ALL endpoints — don't short-circuit on the first hit.
-        // When tail and tip both happen to land inside text leaves, we
-        // need to compare and pick the better one (smaller leaf area =
-        // tighter target — usually the tip), not whichever the stroke
-        // happened to start with.
+        // Identify the actual arrow tip from geometry. For a 2-stroke
+        // arrow (axis + V head), the tip is the axis endpoint nearest
+        // the head V's centre — the head sits AT the tip. For a 1-
+        // stroke arrow we don't have a head to triangulate; tipHint is
+        // null and we fall back to the prior "smallest leaf area"
+        // heuristic across all endpoints.
+        var tipHint = IdentifyArrowTip(strokes);
+        if (tipHint is { } tip)
+        {
+            // Prefer the leaf at the tip endpoint when one exists,
+            // regardless of leaf area. This avoids the failure mode
+            // where the arrow's TAIL happens to sit inside a small
+            // leaf ("2 days ago") and outranks the tip's larger leaf
+            // (commit body description) just because area-as-tightness
+            // is a poor proxy for user intent.
+            diag.Append($"tipHint={F(tip.X, tip.Y)} ");
+            var tipLeaf = LeafAtPoint(root, tip.X, tip.Y, prewarmed);
+            if (tipLeaf is null && prewarmed is not null)
+                tipLeaf = LeafAtPoint(root, tip.X, tip.Y, prewarmed: null);
+            if (tipLeaf is not null)
+            {
+                var bb = ToRect(tipLeaf.BoundingRectangle);
+                diag.Append($"tipLeaf=\"{Trunc(tipLeaf.GetText())}\" ");
+                return new SnapResult(
+                    Rect: TightenLeafToTip(tipLeaf, tip.X, tip.Y),
+                    Leaves: [tipLeaf],
+                    Confidence: 1.0,
+                    Diagnostics: diag.ToString());
+            }
+            // No leaf at tip — try a NearestLeaf at tip first before
+            // falling through to the all-endpoints heuristic.
+            var (tipNear, tipDist) = NearestLeaf(root, tip.X, tip.Y, prewarmed);
+            if (tipNear is null && prewarmed is not null)
+                (tipNear, tipDist) = NearestLeaf(root, tip.X, tip.Y, prewarmed: null);
+            if (tipNear is not null && tipDist <= 100)
+            {
+                diag.Append($"tipNear=\"{Trunc(tipNear.GetText())}\" d={tipDist:F0} ");
+                var conf = Math.Max(0.4, 1.0 - tipDist / 100);
+                return new SnapResult(
+                    Rect: TightenLeafToTip(tipNear, tip.X, tip.Y),
+                    Leaves: [tipNear],
+                    Confidence: conf,
+                    Diagnostics: diag.ToString());
+            }
+        }
+        // Fall-through path (1-stroke arrow or tipHint produced nothing
+        // usable): evaluate ALL endpoints, prefer in-leaf, smallest area.
         IVisualElement? bestLeaf = null;
         var bestDist = double.PositiveInfinity;
         var bestArea = double.PositiveInfinity;
@@ -172,6 +210,34 @@ public static class AnnotationSnapper
             Leaves: [bestLeaf],
             Confidence: conf,
             Diagnostics: diag.ToString());
+    }
+
+    // For a 2-stroke arrow (axis + head V), returns the axis endpoint that
+    // sits nearest the head V's centre — that's the tip in screen space.
+    // The head wraps the tip, so the head V's chord-midpoint is a proxy
+    // for the tip's location, and the axis endpoint closer to that
+    // midpoint is the tip end of the axis. Returns null for 1-stroke
+    // arrows (caller falls back to its older smallest-leaf heuristic).
+    private static double Sq(double v) => v * v;
+
+    private static (double X, double Y)? IdentifyArrowTip(IReadOnlyList<Stroke> strokes)
+    {
+        if (strokes.Count != 2) return null;
+        // Stroke roles aren't tagged; pick by length — axis is the longer
+        // chord, head is the shorter one (LooksLikeArrow already enforced
+        // ratio ≤ 0.70 so this is unambiguous).
+        var p1 = strokes[0].Points;
+        var p2 = strokes[1].Points;
+        if (p1.Count < 2 || p2.Count < 2) return null;
+        var len1 = Math.Sqrt(Sq(p1[^1].X - p1[0].X) + Sq(p1[^1].Y - p1[0].Y));
+        var len2 = Math.Sqrt(Sq(p2[^1].X - p2[0].X) + Sq(p2[^1].Y - p2[0].Y));
+        var axis = len1 >= len2 ? p1 : p2;
+        var head = len1 >= len2 ? p2 : p1;
+        var headMidX = (head[0].X + head[^1].X) * 0.5;
+        var headMidY = (head[0].Y + head[^1].Y) * 0.5;
+        var d0 = Sq(axis[0].X - headMidX) + Sq(axis[0].Y - headMidY);
+        var d1 = Sq(axis[^1].X - headMidX) + Sq(axis[^1].Y - headMidY);
+        return d0 <= d1 ? (axis[0].X, axis[0].Y) : (axis[^1].X, axis[^1].Y);
     }
 
     // When a leaf bbox is much taller than a single text row (Arc/Chromium
