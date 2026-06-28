@@ -75,9 +75,22 @@ public class DocReaderTests
     private static string ExtractText(CallToolResult result)
     {
         var raw = (result.Content[0] as TextContentBlock)?.Text ?? string.Empty;
-        using var doc = JsonDocument.Parse(raw);
-        if (doc.RootElement.TryGetProperty("text", out var t)) return t.GetString() ?? string.Empty;
-        // Fall through: tool returned an error envelope.
+        if (result.IsError == true)
+        {
+            Assert.Fail($"tool returned IsError: {raw}");
+            return string.Empty;
+        }
+
+        try
+        {
+            using var doc = JsonDocument.Parse(raw);
+            if (doc.RootElement.TryGetProperty("text", out var t)) return t.GetString() ?? string.Empty;
+        }
+        catch (JsonException)
+        {
+            // fall through
+        }
+
         return raw;
     }
 }
