@@ -676,8 +676,14 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
             // a fresh re-read at pop time.
             var stack = new Stack<(IVisualElement Node, IVisualElement? AncestorHyperlink, PixelRect Bbox)>();
             stack.Push((root, null, root.BoundingRectangle));
-            while (stack.Count > 0)
+            // Hard cap defends against Chromium div-soup trees where rect
+            // pruning + child-bbox check both fail (wrappers all bbox-cover
+            // the gesture rect). Image-collect tolerates a partial
+            // hyperlinkHasImage/hyperlinkHasText set — better than freezing.
+            var precomputeWalked = 0;
+            while (stack.Count > 0 && precomputeWalked < 5000)
             {
+                precomputeWalked++;
                 var (node, ancestor, nbb) = stack.Pop();
                 var nextAncestor = ancestor;
                 if (node.Type == VisualElementType.Hyperlink && nextAncestor is null

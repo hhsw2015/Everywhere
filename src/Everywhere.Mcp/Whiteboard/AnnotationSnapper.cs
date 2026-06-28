@@ -270,6 +270,7 @@ public static class AnnotationSnapper
     {
         var list = new List<IVisualElement>();
         int seen = 0, failedSide = 0, failedGap = 0, failedXBand = 0, failedXRatio = 0;
+        int totalWalked = 0;
         // Underline considers leaves up to 80px above/below the stroke and
         // within its x-band — bound the walk to that rect.
         var queryRect = above
@@ -277,6 +278,13 @@ public static class AnnotationSnapper
             : new Rect(strokeX1, strokeY - 15, strokeWidth, 80 + 30);
         foreach (var (e, bb) in DescendantsInRect(root, queryRect))
         {
+            // Hard cap on total walked nodes. v0.9.216 diag showed
+            // Chromium webview can deliver 76k+ Label nodes in a single
+            // CollectUnderlineCandidates pass (deeply nested div soup);
+            // beyond ~5k the candidate set isn't getting better, just
+            // longer. Bail rather than freeze.
+            totalWalked++;
+            if (totalWalked > 5000) break;
             if (!LeafTextRoles.Contains(e.Type)) continue;
             seen++;
             // Tolerate small jitter — leaf may extend slightly past the
@@ -322,8 +330,10 @@ public static class AnnotationSnapper
         diag.Append("circle/x: rect=").Append(F(ann.BoundingRect)).Append(' ');
         var leaves = new List<IVisualElement>();
         int totalLeaves = 0;
+        int walked = 0;
         foreach (var (e, bb) in DescendantsInRect(root, ann.BoundingRect))
         {
+            walked++; if (walked > 5000) break;
             if (!LeafTextOrImageRoles.Contains(e.Type)) continue;
             totalLeaves++;
             // Strict containment: the leaf must be FULLY inside the gesture
@@ -347,8 +357,10 @@ public static class AnnotationSnapper
             // Better than 'center inside': handles slightly mis-drawn
             // gestures that miss the visual center but still cover most
             // of the line.
+            int walked2 = 0;
             foreach (var (e, bb) in DescendantsInRect(root, ann.BoundingRect))
             {
+                walked2++; if (walked2 > 5000) break;
                 if (!LeafTextOrImageRoles.Contains(e.Type)) continue;
                 var inter = Math.Min(bb.Bottom, ann.BoundingRect.Bottom)
                             - Math.Max(bb.Y, ann.BoundingRect.Y);
@@ -366,8 +378,10 @@ public static class AnnotationSnapper
         if (leaves.Count == 0)
         {
             // Fallback 2: 50% overlap.
+            int walked3 = 0;
             foreach (var (e, bb) in DescendantsInRect(root, ann.BoundingRect))
             {
+                walked3++; if (walked3 > 5000) break;
                 if (!LeafTextOrImageRoles.Contains(e.Type)) continue;
                 if (OverlapRatio(bb, ann.BoundingRect) >= 0.5)
                     leaves.Add(e);
