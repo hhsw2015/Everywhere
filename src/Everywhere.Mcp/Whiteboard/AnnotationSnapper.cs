@@ -543,88 +543,148 @@ public static class AnnotationSnapper
         // some callers rely on (LeafAtPoint, NearestLeaf already use rect
         // pruning + cap on top).
         public List<(IVisualElement Node, Rect Bbox)> Nodes { get; }
-        public int RootChildCount { get; }
-        public int CapHit { get; set; }
-        public PrewarmedTree(List<(IVisualElement, Rect)> nodes, int rootChildCount, int capHit)
+        // Empty-text Hyperlinks that DO have an Image descendant. Computed
+        // once during Build() so image-collect doesn't need to retraverse
+        // the tree at commit time.
+        public HashSet<IVisualElement> HyperlinkHasImage { get; }
+        // Empty-text Hyperlinks that have a text-bearing Label descendant
+        // (treated as a text-link, not as image-as-link).
+        public HashSet<IVisualElement> HyperlinkHasText { get; }
+        // True when Build() bailed at the node cap. Callers should treat
+        // hyperlinkHasImage/hyperlinkHasText as POTENTIALLY incomplete and
+        // either fall back to a live precompute or accept degraded image
+        // classification for image-collect.
+        public bool CapHit { get; }
+        public PrewarmedTree(
+            List<(IVisualElement, Rect)> nodes,
+            HashSet<IVisualElement> hyperlinkHasImage,
+            HashSet<IVisualElement> hyperlinkHasText,
+            bool capHit)
         {
             Nodes = nodes;
-            RootChildCount = rootChildCount;
+            HyperlinkHasImage = hyperlinkHasImage;
+            HyperlinkHasText = hyperlinkHasText;
             CapHit = capHit;
         }
 
-        // Build by reusing the existing rect-pruned recursion, but with a
-        // "match everything" query so we get the full subtree once. Cap
-        // at 100k nodes — far above the worst Arc page (~76k seen) yet
-        // still bounded for pathological trees. CancellationToken lets
-        // the caller bail when the user commits before prewarm finishes.
+        // Build the flat node list AND the hyperlink-has-{image,text}
+        // ancestor sets in a single rect-pruned walk. Cap is small (15k)
+        // so the walk completes in 2.5–3.5s on the worst Arc commit
+        // pages observed — well under the commit-time await window.
+        // CancellationToken lets the caller bail.
         public static PrewarmedTree Build(IVisualElement root, CancellationToken ct)
         {
             var bigRect = new Rect(-1e9, -1e9, 2e9, 2e9);
             var nodes = new List<(IVisualElement, Rect)>(4096);
             var visited = new HashSet<IVisualElement>(ReferenceEqualityComparer.Instance);
-            var capHit = 0;
+            var hyperlinkHasImage = new HashSet<IVisualElement>(ReferenceEqualityComparer.Instance);
+            var hyperlinkHasText = new HashSet<IVisualElement>(ReferenceEqualityComparer.Instance);
+            var capHit = false;
             Rect rootBb;
             try { rootBb = ToRect(root.BoundingRectangle); }
             catch { rootBb = default; }
-            // 15k node cap. Real Arc pages have 38–84k nodes total but
-            // 99% are inert wrapper divs that leaf-yield-break already
-            // skips at parent level. 15k captures every leaf in the
-            // visible viewport plus a buffer, finishes in 2.5–3.5s on
-            // the worst pages observed. 100k cap was too lax — it took
-            // 18s on a real Arc commit page and missed the 12s await
-            // window every time, defeating the prewarm entirely.
-            DescendantsInRectImplCapped(root, rootBb, bigRect, nodes, visited, 15_000,
-                ref capHit, ct);
-            return new PrewarmedTree(nodes, 0, capHit);
+            BuildImpl(root, rootBb, bigRect, nodes, visited,
+                hyperlinkHasImage, hyperlinkHasText,
+                ancestorHyperlink: null, cap: 15_000, ref capHit, ct);
+            return new PrewarmedTree(nodes, hyperlinkHasImage, hyperlinkHasText, capHit);
+        }
+
+        private static void BuildImpl(
+            IVisualElement node, Rect nodeBb, Rect expanded,
+            List<(IVisualElement, Rect)> sink,
+            HashSet<IVisualElement> visited,
+            HashSet<IVisualElement> hyperlinkHasImage,
+            HashSet<IVisualElement> hyperlinkHasText,
+            IVisualElement? ancestorHyperlink,
+            int cap, ref bool capHit, CancellationToken ct)
+        {
+            // Cap on TOTAL visited (not sink size) — Arc has ~80k total nodes
+            // but only ~2k are leaf-role; capping by sink would let the walk
+            // run uncapped through wrappers.
+            if (visited.Count >= cap) { capHit = true; return; }
+            if (ct.IsCancellationRequested) return;
+            if (!visited.Add(node)) return;
+
+            // Only emit leaf-role nodes (Label / Hyperlink / Image) into
+            // Nodes. Snap callers only ever filter by these roles, so
+            // emitting wrappers / Document / Group / etc. just bloats the
+            // list and inflates per-call iteration cost.
+            if (LeafTextRoles.Contains(node.Type)
+                || LeafTextOrImageRoles.Contains(node.Type))
+                sink.Add((node, nodeBb));
+
+            // Track empty-text Hyperlinks for the image-collect phase.
+            // Mirrors the precompute walk in WhiteboardHotkeyInitializer's
+            // CollectImageLeavesWithDiag.
+            var nextAncestor = ancestorHyperlink;
+            try
+            {
+                if (node.Type == VisualElementType.Hyperlink && nextAncestor is null
+                    && string.IsNullOrWhiteSpace(node.GetText(maxLength: 1)))
+                {
+                    nextAncestor = node;
+                }
+                if (ancestorHyperlink is not null)
+                {
+                    if (node.Type == VisualElementType.Image)
+                        hyperlinkHasImage.Add(ancestorHyperlink);
+                    else if (node.Type == VisualElementType.Label
+                             && !string.IsNullOrWhiteSpace(node.GetText(maxLength: 1)))
+                        hyperlinkHasText.Add(ancestorHyperlink);
+                }
+            }
+            catch { /* GetText may fail on transient AX nodes — ignore */ }
+
+            // Don't recurse into Label or Image — their children are
+            // per-glyph wrappers that explode the walk count and add
+            // nothing meaningful. DO recurse into Hyperlink, even though
+            // it is leaf-role: image-collect needs to discover Image
+            // descendants nested inside <a><img></a> anchors and
+            // hyperlinkHasImage is populated in the recursion below.
+            if (node.Type == VisualElementType.Label
+                || node.Type == VisualElementType.Image)
+                return;
+            foreach (var c in node.Children)
+            {
+                if (ct.IsCancellationRequested) return;
+                Rect cBb;
+                try { cBb = ToRect(c.BoundingRectangle); }
+                catch { cBb = default; }
+                if (cBb.Width > 0 && cBb.Height > 0)
+                {
+                    var inter = cBb.Intersect(expanded);
+                    if (inter.Width <= 0 || inter.Height <= 0) continue;
+                }
+                BuildImpl(c, cBb, expanded, sink, visited,
+                    hyperlinkHasImage, hyperlinkHasText,
+                    nextAncestor, cap, ref capHit, ct);
+            }
         }
 
         // Filter the flat list to nodes whose bbox intersects query+slack.
         // For empty-bbox nodes (Chromium wrappers) we include them so the
         // body's role-based filter still has a chance — same semantics as
-        // the live walk.
+        // the live walk. The yield cap mirrors live-walk semantics: snap
+        // callers each have their own 5000-visit cap, but on a heavily-
+        // dense webview the prewarm could plausibly include >5000 leaves,
+        // so we cap at the same shape here too.
         public IEnumerable<(IVisualElement Node, Rect Bbox)> QueryRect(
-            Rect query, double slack = 8.0)
+            Rect query, double slack = 8.0, int maxYield = 5000)
         {
             var expanded = new Rect(
                 query.X - slack, query.Y - slack,
                 query.Width + 2 * slack, query.Height + 2 * slack);
+            var yielded = 0;
             foreach (var n in Nodes)
             {
+                if (yielded >= maxYield) yield break;
                 var bb = n.Bbox;
-                if (bb.Width <= 0 || bb.Height <= 0) { yield return n; continue; }
+                if (bb.Width <= 0 || bb.Height <= 0) { yield return n; yielded++; continue; }
                 var inter = bb.Intersect(expanded);
                 if (inter.Width <= 0 || inter.Height <= 0) continue;
                 yield return n;
+                yielded++;
             }
-        }
-    }
-
-    private static void DescendantsInRectImplCapped(
-        IVisualElement node, Rect nodeBb, Rect expanded,
-        List<(IVisualElement, Rect)> sink,
-        HashSet<IVisualElement> visited,
-        int cap, ref int capHit, CancellationToken ct)
-    {
-        if (sink.Count >= cap) { capHit++; return; }
-        if (ct.IsCancellationRequested) return;
-        if (!visited.Add(node)) return;
-        sink.Add((node, nodeBb));
-        // Leaf-role nodes: don't descend into glyph children.
-        if (LeafTextRoles.Contains(node.Type)
-            || LeafTextOrImageRoles.Contains(node.Type))
-            return;
-        foreach (var c in node.Children)
-        {
-            if (ct.IsCancellationRequested) return;
-            Rect cBb;
-            try { cBb = ToRect(c.BoundingRectangle); }
-            catch { cBb = default; }
-            if (cBb.Width > 0 && cBb.Height > 0)
-            {
-                var inter = cBb.Intersect(expanded);
-                if (inter.Width <= 0 || inter.Height <= 0) continue;
-            }
-            DescendantsInRectImplCapped(c, cBb, expanded, sink, visited, cap, ref capHit, ct);
         }
     }
 

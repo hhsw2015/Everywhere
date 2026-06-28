@@ -442,7 +442,7 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
             if (prewarmTask is not null)
             {
                 var awaitSw = System.Diagnostics.Stopwatch.StartNew();
-                var completed = await Task.WhenAny(prewarmTask, Task.Delay(12000));
+                var completed = await Task.WhenAny(prewarmTask, Task.Delay(5000));
                 if (ReferenceEquals(completed, prewarmTask))
                 {
                     prewarmed = await prewarmTask;
@@ -454,7 +454,7 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
                 {
                     prewarmCts.Cancel();
                     _logger.LogWarning(
-                        "Whiteboard prewarm exceeded 12s safety bound — Snap will use live walk");
+                        "Whiteboard prewarm exceeded 5s safety bound — Snap will use live walk");
                 }
             }
 
@@ -579,7 +579,7 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
                     : ann.BoundingRect;
                 var (imageLeaves, imageDiag) = CollectImageLeavesWithDiag(
                     focusedRoot, imageScanRect, ocrBitmap, ocrBitmapBounds,
-                    ref sessionImageCount, ref sessionImageBytes);
+                    ref sessionImageCount, ref sessionImageBytes, prewarmed);
                 _logger.LogInformation(
                     "Whiteboard image collect: {Diag} -> {Count} ids=[{Ids}] bboxes=[{Bboxes}]",
                     imageDiag, imageLeaves.Count,
@@ -717,7 +717,8 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
         Avalonia.Media.Imaging.Bitmap? ocrBitmap,
         PixelRect ocrBitmapBounds,
         ref int sessionImageCount,
-        ref long sessionImageBytes)
+        ref long sessionImageBytes,
+        Everywhere.Mcp.Whiteboard.AnnotationSnapper.PrewarmedTree? prewarmed)
     {
         var totalLeaves = 0;
         var imageType = 0;
@@ -733,32 +734,30 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
             ocrBitmapBounds.X, ocrBitmapBounds.Y,
             ocrBitmapBounds.Width, ocrBitmapBounds.Height);
 
-        // Precompute, in a single tree walk, which empty-text Hyperlinks
-        // contain an Image descendant or a text-bearing Label descendant.
-        // The nested-walk version was O(N·H) — every Hyperlink retraversed
-        // its subtree, with each descendant triggering a (potentially
-        // cross-process) GetText call on UIA/AT-SPI.
-        var hyperlinkHasImage = new HashSet<IVisualElement>(ReferenceEqualityComparer.Instance);
-        var hyperlinkHasText = new HashSet<IVisualElement>(ReferenceEqualityComparer.Instance);
-        // Prune-by-gesture-rect for the precompute walk. Subtrees outside
-        // the user's gesture can't contain a Hyperlink we'll consider in
-        // the main loop below — same expanded rect, same logic.
+        // Use the prewarmed tree's precomputed hyperlink-has-{image,text}
+        // sets when available AND not flagged CapHit — a capped prewarm
+        // is potentially missing entries beyond the cap, so on big pages
+        // we fall back to a live precompute walk (still bounded) rather
+        // than silently misclassifying anchor-with-image patterns.
+        HashSet<IVisualElement> hyperlinkHasImage;
+        HashSet<IVisualElement> hyperlinkHasText;
+        if (prewarmed is not null && !prewarmed.CapHit)
         {
+            hyperlinkHasImage = prewarmed.HyperlinkHasImage;
+            hyperlinkHasText = prewarmed.HyperlinkHasText;
+        }
+        else
+        {
+            hyperlinkHasImage = new HashSet<IVisualElement>(ReferenceEqualityComparer.Instance);
+            hyperlinkHasText = new HashSet<IVisualElement>(ReferenceEqualityComparer.Instance);
             const double precomputeSlack = 8.0;
             var expanded = new Avalonia.Rect(
                 regionRectScreenPx.X - precomputeSlack,
                 regionRectScreenPx.Y - precomputeSlack,
                 regionRectScreenPx.Width + 2 * precomputeSlack,
                 regionRectScreenPx.Height + 2 * precomputeSlack);
-            // Stack carries (node, ancestor, cached bbox) so the prune
-            // check uses the bbox we paid one IPC for at push time, not
-            // a fresh re-read at pop time.
             var stack = new Stack<(IVisualElement Node, IVisualElement? AncestorHyperlink, PixelRect Bbox)>();
             stack.Push((root, null, root.BoundingRectangle));
-            // Hard cap defends against Chromium div-soup trees where rect
-            // pruning + child-bbox check both fail (wrappers all bbox-cover
-            // the gesture rect). Image-collect tolerates a partial
-            // hyperlinkHasImage/hyperlinkHasText set — better than freezing.
             var precomputeWalked = 0;
             while (stack.Count > 0 && precomputeWalked < 5000)
             {
@@ -781,10 +780,6 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
                 foreach (var c in node.Children)
                 {
                     var cbb = c.BoundingRectangle;
-                    // Prune on child's own bbox only. Parent-gated prune
-                    // breaks under Chromium-style zero-bbox wrapper chains
-                    // (Document/Body/Div), where the parent never has
-                    // bounds and the prune condition stays false forever.
                     if (cbb.Width > 0 && cbb.Height > 0)
                     {
                         var cRect = new Avalonia.Rect(cbb.X, cbb.Y, cbb.Width, cbb.Height);
@@ -795,7 +790,21 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
                 }
             }
         }
-        foreach (var (e, bb) in DescendantsOfInRect(root, regionRectScreenPx))
+        // Main walk: prewarmed flat list (no IPC) when available AND
+        // complete, else live walk. For PixelRect conversion we use
+        // Ceiling on the Width/Height so the ImageLeafMinDip threshold
+        // check below matches the live-walk semantics (truncation could
+        // shrink a 23.8px wide leaf to 23, flipping the test for nodes
+        // exactly at the boundary).
+        var nodeIter = (prewarmed is not null && !prewarmed.CapHit)
+            ? prewarmed.QueryRect(regionRectScreenPx, slack: 8.0)
+                .Select(n => (n.Node, Bbox: new PixelRect(
+                    (int)Math.Floor(n.Bbox.X),
+                    (int)Math.Floor(n.Bbox.Y),
+                    Math.Max(0, (int)Math.Ceiling(n.Bbox.Width)),
+                    Math.Max(0, (int)Math.Ceiling(n.Bbox.Height)))))
+            : DescendantsOfInRect(root, regionRectScreenPx);
+        foreach (var (e, bb) in nodeIter)
         {
             totalLeaves++;
             // Accept either an explicit Image leaf, or a Hyperlink whose
