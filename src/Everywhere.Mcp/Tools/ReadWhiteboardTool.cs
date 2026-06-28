@@ -55,6 +55,7 @@ public static class ReadWhiteboardTool
                 // another selected leaf's text — happens when a Hyperlink
                 // and its child Label both pass the snapper filter.
                 var emitted = new HashSet<string>(StringComparer.Ordinal);
+                var emittedAnyLeafText = false;
                 foreach (var leaf in r.Leaves)
                 {
                     // Use a generous cap so long code-block Labels aren't
@@ -83,6 +84,22 @@ public static class ReadWhiteboardTool
                     if (!emitted.Add(text)) continue;
                     sb.Append(leaf.Type == VisualElementType.Hyperlink ? "- " : "")
                       .Append(text).Append('\n');
+                    emittedAnyLeafText = true;
+                }
+                // OCR fallback: every leaf in this region had empty text
+                // (anchor wrapping an icon/canvas, hidden Label) but OCR
+                // saw real glyphs in the gesture rect. Fall back to those
+                // lines so the agent gets the visible content instead of
+                // an empty region body.
+                if (!emittedAnyLeafText && r.OcrLines.Count > 0)
+                {
+                    foreach (var line in r.OcrLines)
+                    {
+                        var t = (line.Text ?? string.Empty).Trim();
+                        if (string.IsNullOrEmpty(t)) continue;
+                        if (!emitted.Add(t)) continue;
+                        sb.Append(t).Append('\n');
+                    }
                 }
                 // Image markers: surface metadata only. The agent decides
                 // whether the image is worth pulling in — call
