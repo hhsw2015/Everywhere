@@ -23,7 +23,6 @@
   </Folder>
   <Folder Name="/patches/">
     <Project Path="patches/Everywhere.BuildTask.Patcher/Everywhere.BuildTask.Patcher.csproj" />
-    <Project Path="patches/Everywhere.Patches.Avalonia.Base/Everywhere.Patches.Avalonia.Base.csproj" />
     <Project Path="patches/Everywhere.Patches.Avalonia.Controls/Everywhere.Patches.Avalonia.Controls.csproj" />
     <Project Path="patches/Everywhere.Patches.Avalonia.Native/Everywhere.Patches.Avalonia.Native.csproj" />
     <Project Path="patches/Everywhere.Patches.AvaloniaEdit/Everywhere.Patches.AvaloniaEdit.csproj" />
