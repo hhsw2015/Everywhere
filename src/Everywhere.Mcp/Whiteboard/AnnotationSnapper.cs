@@ -251,11 +251,10 @@ public static class AnnotationSnapper
         var queryRect = above
             ? new Rect(strokeX1, strokeY - 80 - 15, strokeWidth, 80 + 30)
             : new Rect(strokeX1, strokeY - 15, strokeWidth, 80 + 30);
-        foreach (var e in DescendantsInRect(root, queryRect))
+        foreach (var (e, bb) in DescendantsInRect(root, queryRect))
         {
             if (!LeafTextRoles.Contains(e.Type)) continue;
             seen++;
-            var bb = ToRect(e.BoundingRectangle);
             // Tolerate small jitter — leaf may extend slightly past the
             // stroke's top/bottom edge when the user grazed the text. 15px
             // covers font ascender/descender + light hand jitter.
@@ -299,11 +298,10 @@ public static class AnnotationSnapper
         diag.Append("circle/x: rect=").Append(F(ann.BoundingRect)).Append(' ');
         var leaves = new List<IVisualElement>();
         int totalLeaves = 0;
-        foreach (var e in DescendantsInRect(root, ann.BoundingRect))
+        foreach (var (e, bb) in DescendantsInRect(root, ann.BoundingRect))
         {
             if (!LeafTextOrImageRoles.Contains(e.Type)) continue;
             totalLeaves++;
-            var bb = ToRect(e.BoundingRectangle);
             // Strict containment: the leaf must be FULLY inside the gesture
             // rect. Avoids picking up the line above/below when the user's
             // circle was drawn slightly larger than the visual content —
@@ -325,10 +323,9 @@ public static class AnnotationSnapper
             // Better than 'center inside': handles slightly mis-drawn
             // gestures that miss the visual center but still cover most
             // of the line.
-            foreach (var e in DescendantsInRect(root, ann.BoundingRect))
+            foreach (var (e, bb) in DescendantsInRect(root, ann.BoundingRect))
             {
                 if (!LeafTextOrImageRoles.Contains(e.Type)) continue;
-                var bb = ToRect(e.BoundingRectangle);
                 var inter = Math.Min(bb.Bottom, ann.BoundingRect.Bottom)
                             - Math.Max(bb.Y, ann.BoundingRect.Y);
                 if (inter <= 0 || bb.Height <= 0) continue;
@@ -345,10 +342,10 @@ public static class AnnotationSnapper
         if (leaves.Count == 0)
         {
             // Fallback 2: 50% overlap.
-            foreach (var e in DescendantsInRect(root, ann.BoundingRect))
+            foreach (var (e, bb) in DescendantsInRect(root, ann.BoundingRect))
             {
                 if (!LeafTextOrImageRoles.Contains(e.Type)) continue;
-                if (OverlapRatio(ToRect(e.BoundingRectangle), ann.BoundingRect) >= 0.5)
+                if (OverlapRatio(bb, ann.BoundingRect) >= 0.5)
                     leaves.Add(e);
             }
             diag.Append($"pass3Area={leaves.Count} ");
@@ -405,10 +402,9 @@ public static class AnnotationSnapper
         IVisualElement? best = null;
         var bestArea = double.PositiveInfinity;
         var pointRect = new Rect(x, y, 1, 1);
-        foreach (var e in DescendantsInRect(root, pointRect, slack: 2.0))
+        foreach (var (e, bb) in DescendantsInRect(root, pointRect, slack: 2.0))
         {
             if (!LeafTextRoles.Contains(e.Type)) continue;
-            var bb = ToRect(e.BoundingRectangle);
             if (x < bb.X || x > bb.Right || y < bb.Y || y > bb.Bottom) continue;
             var area = RectArea(bb);
             if (area < bestArea) { bestArea = area; best = e; }
@@ -419,12 +415,15 @@ public static class AnnotationSnapper
     private static (IVisualElement? leaf, double dist) NearestLeaf(
         IVisualElement root, double x, double y)
     {
+        // The single caller rejects matches with d > 120 (SnapCircleOrX
+        // fallback path). Bound the walk to a 240×240 box around the point
+        // — anything farther can't possibly improve on bestD.
         IVisualElement? best = null;
         var bestD = double.PositiveInfinity;
-        foreach (var e in Descendants(root))
+        var pointRect = new Rect(x - 120, y - 120, 240, 240);
+        foreach (var (e, bb) in DescendantsInRect(root, pointRect, slack: 0.0))
         {
             if (!LeafTextRoles.Contains(e.Type)) continue;
-            var bb = ToRect(e.BoundingRectangle);
             var dx = Math.Max(Math.Max(bb.X - x, 0), x - bb.Right);
             var dy = Math.Max(Math.Max(bb.Y - y, 0), y - bb.Bottom);
             var d = Math.Sqrt(dx * dx + dy * dy);
@@ -461,55 +460,40 @@ public static class AnnotationSnapper
 
     private static Rect ToRect(PixelRect pr) => new(pr.X, pr.Y, pr.Width, pr.Height);
 
-    private static IEnumerable<IVisualElement> Descendants(IVisualElement root)
-    {
-        yield return root;
-        foreach (var c in root.Children)
-        foreach (var d in Descendants(c))
-            yield return d;
-    }
-
     // Rect-pruned descent. Skip subtrees whose own bbox can't possibly contain
-    // a leaf intersecting `query` (expanded by `slack`). Critically, when a
-    // node's bbox is empty (0×0) — common for Chromium webview wrappers and
-    // some toolkit AX containers — we recurse anyway; the children may have
-    // real bounds inside the query rect. This single change cuts a 16-second
-    // 5000-leaf walk on a Chromium tab to <100ms by skipping the entire
-    // offscreen DOM. Same yield order as Descendants(), so callers that use
-    // first-match logic stay correct.
-    private static IEnumerable<IVisualElement> DescendantsInRect(
+    // a leaf intersecting `query` (expanded by `slack`). Empty-bbox nodes
+    // (Chromium wrappers, some toolkit AX containers) recurse anyway. Yields
+    // (node, bbox) tuples so callers can reuse the bbox we already paid an
+    // IPC for in the prune check — saves ~one extra sync read per emitted
+    // node in the body.
+    private static IEnumerable<(IVisualElement Node, Rect Bbox)> DescendantsInRect(
         IVisualElement root, Rect query, double slack = 8.0)
     {
         var expanded = new Rect(
             query.X - slack, query.Y - slack,
             query.Width + 2 * slack, query.Height + 2 * slack);
-        return DescendantsInRectImpl(root, expanded);
+        Rect rootBb;
+        try { rootBb = ToRect(root.BoundingRectangle); }
+        catch { rootBb = default; }
+        return DescendantsInRectImpl(root, rootBb, expanded);
     }
 
-    private static IEnumerable<IVisualElement> DescendantsInRectImpl(
-        IVisualElement node, Rect expanded)
+    private static IEnumerable<(IVisualElement Node, Rect Bbox)> DescendantsInRectImpl(
+        IVisualElement node, Rect nodeBb, Rect expanded)
     {
-        yield return node;
-        Rect nodeBb;
-        try { nodeBb = ToRect(node.BoundingRectangle); }
-        catch { nodeBb = default; }
-        // Empty bbox -> AX wrapper with no own geometry; can't prune, must
-        // descend.
+        yield return (node, nodeBb);
         var pruneable = nodeBb.Width > 0 && nodeBb.Height > 0;
         foreach (var c in node.Children)
         {
-            if (pruneable)
+            Rect cBb;
+            try { cBb = ToRect(c.BoundingRectangle); }
+            catch { cBb = default; }
+            if (pruneable && cBb.Width > 0 && cBb.Height > 0)
             {
-                Rect cBb;
-                try { cBb = ToRect(c.BoundingRectangle); }
-                catch { cBb = default; }
-                if (cBb.Width > 0 && cBb.Height > 0)
-                {
-                    var inter = cBb.Intersect(expanded);
-                    if (inter.Width <= 0 || inter.Height <= 0) continue;
-                }
+                var inter = cBb.Intersect(expanded);
+                if (inter.Width <= 0 || inter.Height <= 0) continue;
             }
-            foreach (var d in DescendantsInRectImpl(c, expanded))
+            foreach (var d in DescendantsInRectImpl(c, cBb, expanded))
                 yield return d;
         }
     }
