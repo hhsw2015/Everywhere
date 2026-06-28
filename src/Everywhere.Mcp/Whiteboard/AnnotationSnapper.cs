@@ -115,11 +115,11 @@ public static class AnnotationSnapper
             if (tipNear is not null && tipDist <= 100)
             {
                 diag.Append($"tipNear=\"{Trunc(tipNear.GetText())}\" d={tipDist:F0} ");
-                var conf = Math.Max(0.4, 1.0 - tipDist / 100);
+                var tipConf = Math.Max(0.4, 1.0 - tipDist / 100);
                 return new SnapResult(
                     Rect: TightenLeafToTip(tipNear, tip.X, tip.Y),
                     Leaves: [tipNear],
-                    Confidence: conf,
+                    Confidence: tipConf,
                     Diagnostics: diag.ToString());
             }
         }
