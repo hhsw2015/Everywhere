@@ -85,11 +85,12 @@ public static class AnnotationSnapper
         foreach (var (ex, ey) in endpoints)
         {
             var inLeaf = LeafAtPoint(root, ex, ey);
+            var inWalk = s_lastWalkVisited;
             if (inLeaf is not null)
             {
                 var bb = ToRect(inLeaf.BoundingRectangle);
                 var area = RectArea(bb);
-                diag.Append($"in@{F(ex, ey)}->\"{Trunc(inLeaf.GetText())}\" ");
+                diag.Append($"in@{F(ex, ey)}[w={inWalk}]->\"{Trunc(inLeaf.GetText())}\" ");
                 // In-leaf hit always beats any nearest-leaf candidate.
                 // Among multiple in-leaf hits, the tighter (smaller area)
                 // leaf wins — usually the arrow's tip end.
@@ -100,11 +101,13 @@ public static class AnnotationSnapper
                 }
                 continue;
             }
+            diag.Append($"miss@{F(ex, ey)}[w={inWalk}] ");
             if (foundInLeaf) continue;
             var (nearLeaf, d) = NearestLeaf(root, ex, ey);
+            var nearWalk = s_lastWalkVisited;
             if (nearLeaf is not null)
             {
-                diag.Append($"near@{F(ex, ey)}->\"{Trunc(nearLeaf.GetText())}\" d={d:F0} ");
+                diag.Append($"near@{F(ex, ey)}[w={nearWalk}]->\"{Trunc(nearLeaf.GetText())}\" d={d:F0} ");
                 if (d < bestDist)
                 {
                     bestDist = d; bestLeaf = nearLeaf; tipX = ex; tipY = ey;
@@ -423,15 +426,26 @@ public static class AnnotationSnapper
         IVisualElement? best = null;
         var bestArea = double.PositiveInfinity;
         var pointRect = new Rect(x, y, 1, 1);
+        var visited = 0;
         foreach (var (e, bb) in DescendantsInRect(root, pointRect, slack: 2.0))
         {
+            visited++;
+            // Hard cap: if we walk more than 5k nodes for one point lookup,
+            // the prune predicate is degenerate (zero-bbox wrapper chain
+            // all the way down). Bail rather than freeze the UI.
+            if (visited > 5000) break;
             if (!LeafTextRoles.Contains(e.Type)) continue;
             if (x < bb.X || x > bb.Right || y < bb.Y || y > bb.Bottom) continue;
             var area = RectArea(bb);
             if (area < bestArea) { bestArea = area; best = e; }
         }
+        s_lastWalkVisited = visited;
         return best;
     }
+
+    // Cross-call diagnostic counter — Snap reads & resets it after each
+    // LeafAtPoint to surface walk size in the snap diag log line.
+    [ThreadStatic] private static int s_lastWalkVisited;
 
     private static (IVisualElement? leaf, double dist) NearestLeaf(
         IVisualElement root, double x, double y)
@@ -442,14 +456,18 @@ public static class AnnotationSnapper
         IVisualElement? best = null;
         var bestD = double.PositiveInfinity;
         var pointRect = new Rect(x - 120, y - 120, 240, 240);
+        var visited = 0;
         foreach (var (e, bb) in DescendantsInRect(root, pointRect, slack: 0.0))
         {
+            visited++;
+            if (visited > 5000) break;  // bail on degenerate AX trees
             if (!LeafTextRoles.Contains(e.Type)) continue;
             var dx = Math.Max(Math.Max(bb.X - x, 0), x - bb.Right);
             var dy = Math.Max(Math.Max(bb.Y - y, 0), y - bb.Bottom);
             var d = Math.Sqrt(dx * dx + dy * dy);
             if (d < bestD) { bestD = d; best = e; }
         }
+        s_lastWalkVisited = visited;
         return (best, bestD);
     }
 
