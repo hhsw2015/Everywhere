@@ -510,12 +510,15 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
                 {
                     _logger.LogInformation("Whiteboard region rejected ({Kind}): {Reason}",
                         ann.Kind, string.IsNullOrEmpty(snap.RejectReason) ? "no leaves" : snap.RejectReason);
-                    // Fallback for Circle / X: when a11y exposes no
-                    // matching leaf inside the gesture (canvas-rendered
-                    // thumbnails, infinite-scroll cards, etc.), crop the
-                    // gesture rect itself as a single fallback image so
-                    // the user's selection isn't lost.
-                    if (ann.Kind is AnnotationKind.Circle or AnnotationKind.X
+                    // Fallback for any non-Arrow gesture: when a11y exposes
+                    // no matching leaf inside the gesture (canvas-rendered
+                    // thumbnails, infinite-scroll cards, anchor-with-image
+                    // patterns where the matching leaves were all empty
+                    // text), crop the gesture rect itself + run OCR over
+                    // it. Better than dropping the region entirely — the
+                    // user drew there for a reason and the agent at least
+                    // gets the visual or whatever text OCR can recover.
+                    if (ann.Kind is AnnotationKind.Circle or AnnotationKind.X or AnnotationKind.Underline
                         && TryFallbackRegionImage(ann.BoundingRect, ocrBitmap, ocrBitmapBounds,
                                                     ref sessionImageCount, ref sessionImageBytes,
                                                     out var fallbackImage))
@@ -523,7 +526,33 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
                         // Run OCR on the gesture rect even on the rejected
                         // path — the cropped image may contain rasterized
                         // text the agent should be able to reason over.
-                        var fallbackOcr = RunOcrForRegion(ocrBitmap, ocrBitmapBounds, ann.BoundingRect);
+                        // For Underline use the same widened band the
+                        // happy path uses (stroke is too thin on its own
+                        // to OCR meaningfully).
+                        var fallbackOcrRect = ann.Kind == AnnotationKind.Underline
+                            ? new Avalonia.Rect(
+                                Math.Max(0, ann.BoundingRect.X - 60),
+                                Math.Max(0, ann.BoundingRect.Y - 50),
+                                ann.BoundingRect.Width + 120,
+                                ann.BoundingRect.Height + 20)
+                            : ann.BoundingRect;
+                        var fallbackOcr = RunOcrForRegion(ocrBitmap, ocrBitmapBounds, fallbackOcrRect);
+                        // Same nearest-line filter as the happy path so a
+                        // multi-row OCR result doesn't dump all rows.
+                        if (ann.Kind == AnnotationKind.Underline && fallbackOcr.Count > 1)
+                        {
+                            var strokeMidY = ann.BoundingRect.Y + ann.BoundingRect.Height * 0.5;
+                            OcrLine? bestLine = null;
+                            var bestDy = double.PositiveInfinity;
+                            foreach (var line in fallbackOcr)
+                            {
+                                var lineMidY = line.Bounds.Y + line.Bounds.Height * 0.5;
+                                var dy = Math.Abs(lineMidY - strokeMidY);
+                                if (dy < bestDy) { bestDy = dy; bestLine = line; }
+                            }
+                            if (bestLine is not null)
+                                fallbackOcr = new[] { bestLine };
+                        }
                         _logger.LogInformation(
                             "Whiteboard region fallback image: id={Id} bbox=({X},{Y},{W}x{H}) ocrLines={Ocr}",
                             fallbackImage.ImageId,
