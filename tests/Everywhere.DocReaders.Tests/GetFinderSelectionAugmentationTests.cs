@@ -17,6 +17,10 @@ public class GetFinderSelectionAugmentationTests
     [TestCase("photo.JPG", false, "image", "image/jpeg")]
     [TestCase("Downloads", true, "folder", "inode/directory")]
     [TestCase("strange.bin", false, "unknown", "application/octet-stream")]
+    // Legacy Office binary formats are not handled by the OOXML readers.
+    [TestCase("old.doc", false, "unknown", "application/msword")]
+    [TestCase("old.xls", false, "unknown", "application/vnd.ms-excel")]
+    [TestCase("old.ppt", false, "unknown", "application/vnd.ms-powerpoint")]
     public void KindHintAndMime_MatchExtension(string name, bool isDir, string kind, string mime)
     {
         Assert.That(GetFinderSelectionTool.KindHintFromExtension(name, isDir), Is.EqualTo(kind));

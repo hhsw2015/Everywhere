@@ -71,9 +71,11 @@ public static class GetFinderSelectionTool
         return ext switch
         {
             ".pdf" => "pdf",
-            ".docx" or ".doc" => "docx",
-            ".xlsx" or ".xls" => "xlsx",
-            ".pptx" or ".ppt" => "pptx",
+            ".docx" => "docx",
+            ".xlsx" => "xlsx",
+            ".pptx" => "pptx",
+            // Legacy binary Office formats are not OOXML — OpenXml readers can't open them.
+            ".doc" or ".xls" or ".ppt" => "unknown",
             ".epub" => "epub",
             ".html" or ".htm" => "html",
             ".txt" or ".md" or ".rst" or ".log" => "text",

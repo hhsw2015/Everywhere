@@ -66,7 +66,9 @@ public class DocReaderTests
         }
 
         var text = ExtractText(result);
-        var golden = File.ReadAllText(goldenPath);
+        // Force UTF-8 so a Windows runner with a non-UTF-8 ANSI code page does
+        // not silently misdecode the goldens and flip Jaccard near 0.92.
+        var golden = File.ReadAllText(goldenPath, System.Text.Encoding.UTF8);
         var sim = Similarity.NormalizedTokenJaccard(text, golden);
 
         if (Exemptions.ByFileName.Contains(Path.GetFileName(path)))
@@ -82,7 +84,8 @@ public class DocReaderTests
 
     private static string ExtractText(CallToolResult result)
     {
-        var raw = (result.Content[0] as TextContentBlock)?.Text ?? string.Empty;
+        var first = result.Content?.FirstOrDefault();
+        var raw = (first as TextContentBlock)?.Text ?? string.Empty;
         if (result.IsError == true)
         {
             Assert.Fail($"tool returned IsError: {raw}");

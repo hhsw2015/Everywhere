@@ -7,6 +7,7 @@ missing=0
 for f in *.pdf *.docx *.xlsx *.pptx *.epub *.html *.htm *.txt *.md; do
     case "$f" in
         *.golden.txt) continue ;;
+        SUMMARY.md) continue ;;
     esac
     [ -f "$f" ] || continue
     if [ ! -f "$f.golden.txt" ]; then

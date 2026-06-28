@@ -43,6 +43,7 @@ done
 for f in *.txt *.md; do
     case "$f" in
         *.golden.txt) continue ;;
+        SUMMARY.md) continue ;;
     esac
     cp "$f" "$f.golden.txt"
 done

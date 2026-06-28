@@ -11,7 +11,10 @@ public static class CorpusLocator
             if (Directory.Exists(bin)) return bin;
             // Fallback for local "dotnet test" runs from repo root.
             var src = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "doc-corpus"));
-            return src;
+            if (Directory.Exists(src)) return src;
+            throw new DirectoryNotFoundException(
+                $"corpus dir not found. Looked under '{bin}' and '{src}'. " +
+                "Did 'dotnet build' run? Did generate-goldens.sh run in CI?");
         }
     }
 }
