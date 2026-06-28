@@ -568,7 +568,7 @@ public static class AnnotationSnapper
             catch { rootBb = default; }
             DescendantsInRectImplCapped(root, rootBb, bigRect, nodes, visited, 100_000,
                 ref capHit, ct);
-            return new PrewarmedTree(nodes, root.Children.Count, capHit);
+            return new PrewarmedTree(nodes, 0, capHit);
         }
 
         // Filter the flat list to nodes whose bbox intersects query+slack.
