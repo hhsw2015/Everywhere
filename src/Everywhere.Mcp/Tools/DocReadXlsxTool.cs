@@ -47,7 +47,7 @@ public static class DocReadXlsxTool
         }
         catch (Exception ex)
         {
-            return ToolErrors.FromException(ex, "doc_read_xlsx");
+            return ToolErrors.Error($"doc_read_xlsx: {ex.GetType().Name}: {ex.Message}");
         }
     }
 
