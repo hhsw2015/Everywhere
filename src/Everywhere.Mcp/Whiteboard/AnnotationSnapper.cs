@@ -566,6 +566,12 @@ public static class AnnotationSnapper
             Rect rootBb;
             try { rootBb = ToRect(root.BoundingRectangle); }
             catch { rootBb = default; }
+            // 100k node cap is safety, not a perf knob. The walk is
+            // bounded by node count for pathological trees but on real
+            // pages it finishes when there are no more nodes to visit
+            // — typical Arc page is ~38k nodes / 8s, smaller pages
+            // finish in <2s. The caller (WhiteboardHotkeyInitializer)
+            // is responsible for awaiting the result.
             DescendantsInRectImplCapped(root, rootBb, bigRect, nodes, visited, 100_000,
                 ref capHit, ct);
             return new PrewarmedTree(nodes, 0, capHit);

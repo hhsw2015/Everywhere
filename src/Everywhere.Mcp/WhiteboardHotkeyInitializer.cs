@@ -431,16 +431,18 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
                 return;
             }
 
-            // Wait briefly for the prewarm walk we started when the overlay
-            // showed. If the user drew their gesture in <1s on a big Arc
-            // page, the walk may need a little more time to finish — but
-            // we don't block forever; if it isn't done after a short window
-            // we cancel and Snap falls back to a live (capped) walk.
+            // Wait for the prewarm walk we started when the overlay showed.
+            // The walk runs in parallel with user drawing time, so by
+            // commit it's typically already most of the way done — we
+            // join the rest. Falling back to a live walk on timeout
+            // turned out to be slower than just waiting (live walk takes
+            // ~5s with the 5k cap, which is the same order as the prewarm
+            // tail), so we wait up to 12s — safety bound, not deadline.
             Everywhere.Mcp.Whiteboard.AnnotationSnapper.PrewarmedTree? prewarmed = null;
             if (prewarmTask is not null)
             {
                 var awaitSw = System.Diagnostics.Stopwatch.StartNew();
-                var completed = await Task.WhenAny(prewarmTask, Task.Delay(3000));
+                var completed = await Task.WhenAny(prewarmTask, Task.Delay(12000));
                 if (ReferenceEquals(completed, prewarmTask))
                 {
                     prewarmed = await prewarmTask;
@@ -451,8 +453,8 @@ public sealed class WhiteboardHotkeyInitializer : IAsyncInitializer
                 else
                 {
                     prewarmCts.Cancel();
-                    _logger.LogInformation(
-                        "Whiteboard prewarm not ready within 3000ms — Snap will use live walk");
+                    _logger.LogWarning(
+                        "Whiteboard prewarm exceeded 12s safety bound — Snap will use live walk");
                 }
             }
 
