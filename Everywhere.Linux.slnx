@@ -36,4 +36,7 @@
   <Project Path="src/Everywhere.Linux/Everywhere.Linux.csproj" />
   <Project Path="src/Everywhere.Terminal/Everywhere.Terminal.csproj" />
   <Project Path="src/Everywhere.Watchdog/Everywhere.Watchdog.csproj" />
+  <Folder Name="/tests/">
+    <Project Path="tests/Everywhere.DocReaders.Tests/Everywhere.DocReaders.Tests.csproj" />
+  </Folder>
 </Solution>
