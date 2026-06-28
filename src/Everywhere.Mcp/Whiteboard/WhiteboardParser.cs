@@ -78,16 +78,19 @@ public static class WhiteboardParser
             if (s.Points.Count == 0) continue;
             groups.Add([s]);
         }
-        // Try to merge each pair into an X or Arrow gesture. First match
-        // wins per stroke; we scan in order and remove the merged stroke
-        // so each stroke participates in at most one merger.
+        // Try to merge each pair into an Arrow or X gesture. Arrow is
+        // checked FIRST because X's angle-fallback (35-145°) is wide
+        // enough to swallow shaft+barb arrows whose two strokes cross
+        // near-perpendicularly at the tip. Arrow's matcher is stricter
+        // (axis must dominate length, head endpoints must sit near one
+        // axis endpoint) so a real X never matches it.
         for (var i = 0; i < groups.Count; i++)
         {
             for (var j = i + 1; j < groups.Count; j++)
             {
                 if (groups[i].Count != 1 || groups[j].Count != 1) continue;
                 var pair = new List<Stroke> { groups[i][0], groups[j][0] };
-                if (LooksLikeX(pair) || LooksLikeArrow(pair))
+                if (LooksLikeArrow(pair) || LooksLikeX(pair))
                 {
                     groups[i].Add(groups[j][0]);
                     groups.RemoveAt(j);
@@ -107,9 +110,12 @@ public static class WhiteboardParser
         if (strokes.Count == 2)
         {
             // GroupStrokes only ever merges pairs that already pass
-            // LooksLikeX or LooksLikeArrow. Re-check to disambiguate.
-            if (LooksLikeX(strokes)) return AnnotationKind.X;
+            // LooksLikeArrow or LooksLikeX. Re-check, Arrow first —
+            // X's angle fallback is permissive enough to also match
+            // shaft+barb arrows, so giving X priority here would
+            // silently re-classify every two-stroke arrow as X.
             if (LooksLikeArrow(strokes)) return AnnotationKind.Arrow;
+            if (LooksLikeX(strokes)) return AnnotationKind.X;
             return AnnotationKind.Circle; // shouldn't happen with the new grouper
         }
         var s = strokes[0];
