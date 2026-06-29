@@ -94,10 +94,10 @@
       "est_effort": "S",
       "opendia_prereq": null,
       "acceptance": "bench:back",
-      "status": "missing",
-      "last_push_sha": null,
+      "status": "in-progress",
+      "last_push_sha": "beb9d94b0596c9117922ae40372ebf70de7ec3a5",
       "last_bench_run": null,
-      "notes": ""
+      "notes": "Extension WS op landed in opendia @ beb9d94; forwarded as browser_back. Bench fixture pending."
     },
     {
       "ab_command": "agent_browser_batch",
@@ -670,10 +670,10 @@
       "est_effort": "S",
       "opendia_prereq": null,
       "acceptance": "bench:forward",
-      "status": "missing",
-      "last_push_sha": null,
+      "status": "in-progress",
+      "last_push_sha": "beb9d94b0596c9117922ae40372ebf70de7ec3a5",
       "last_bench_run": null,
-      "notes": ""
+      "notes": "Extension WS op landed in opendia @ beb9d94; forwarded as browser_forward. Bench fixture pending."
     },
     {
       "ab_command": "agent_browser_frame_main",
@@ -1214,10 +1214,10 @@
       "est_effort": "M",
       "opendia_prereq": null,
       "acceptance": "bench:open",
-      "status": "missing",
-      "last_push_sha": null,
+      "status": "in-progress",
+      "last_push_sha": "beb9d94b0596c9117922ae40372ebf70de7ec3a5",
       "last_bench_run": null,
-      "notes": "reverted from opendia experiment/replace-ab; topology A1 puts implementation in src/Everywhere.Mcp/OpenDia (dynamic forwarder via OpenDiaToolListBuilder; browser_<name> prefix). OpenDia extension side carries its own implementation per §3.1 universal-twice clause."
+      "notes": "Extension WS op landed in opendia @ beb9d94; forwarded as browser_open. Bench fixture pending."
     },
     {
       "ab_command": "agent_browser_pdf",
@@ -1534,10 +1534,10 @@
       "est_effort": "S",
       "opendia_prereq": null,
       "acceptance": "bench:reload",
-      "status": "missing",
-      "last_push_sha": null,
+      "status": "in-progress",
+      "last_push_sha": "beb9d94b0596c9117922ae40372ebf70de7ec3a5",
       "last_bench_run": null,
-      "notes": ""
+      "notes": "Extension WS op landed in opendia @ beb9d94; forwarded as browser_reload. Bench fixture pending."
     },
     {
       "ab_command": "agent_browser_remove_init_script",
