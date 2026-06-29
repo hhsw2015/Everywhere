@@ -66,8 +66,8 @@ DO NOT EDIT BY HAND. Run `node scripts/render-parity-matrix.mjs`.
 | agent_browser_get_html | niche | in-browser | universal | browser_get_html | missing | bench:get_html |
 | agent_browser_get_styles | niche | in-browser | opendia | browser_get_styles | missing | bench:get_styles |
 | agent_browser_get_text | core | in-browser | universal | browser_get_text | missing | bench:get_text |
-| agent_browser_get_title | core | in-browser | opendia | browser_get_title | missing | bench:get_title |
-| agent_browser_get_url | core | in-browser | opendia | browser_get_url | missing | bench:get_url |
+| agent_browser_get_title | core | in-browser | opendia | browser_get_title | in-progress | bench:get_title |
+| agent_browser_get_url | core | in-browser | opendia | browser_get_url | in-progress | bench:get_url |
 | agent_browser_get_value | niche | in-browser | opendia | browser_get_value | missing | bench:get_value |
 | agent_browser_highlight | value-add | in-browser | universal | browser_highlight | missing | bench:highlight |
 | agent_browser_hover | niche | in-browser | opendia | browser_hover | missing | bench:hover |
