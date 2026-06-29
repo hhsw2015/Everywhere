@@ -106,7 +106,7 @@ DO NOT EDIT BY HAND. Run `node scripts/render-parity-matrix.mjs`.
 | agent_browser_react_renders_stop | niche | in-browser | opendia | opendia.react_renders_stop | missing | bench:react_renders_stop |
 | agent_browser_react_suspense | niche | in-browser | opendia | opendia.react_suspense | missing | bench:react_suspense |
 | agent_browser_react_tree | niche | in-browser | opendia | opendia.react_tree | missing | bench:react_tree |
-| agent_browser_read | core | in-browser | universal | opendia.read | missing | bench:read |
+| agent_browser_read | core | in-browser | universal | opendia.read | blocked | bench:read |
 | agent_browser_record_restart | value-add | in-browser | wont-do |  | wont-do | none |
 | agent_browser_record_start | value-add | in-browser | wont-do |  | wont-do | none |
 | agent_browser_record_stop | value-add | in-browser | wont-do |  | wont-do | none |

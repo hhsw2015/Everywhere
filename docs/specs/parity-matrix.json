@@ -1470,10 +1470,10 @@
       "est_effort": "L",
       "opendia_prereq": null,
       "acceptance": "bench:read",
-      "status": "missing",
+      "status": "blocked",
       "last_push_sha": null,
       "last_bench_run": null,
-      "notes": ""
+      "notes": "bench-variance-too-high: ab v0.31.1 alternates between read vs snapshot+get_text paths; tokens span 19-21%. Spec §11.4 escape hatch (rerun-once failed)."
     },
     {
       "ab_command": "agent_browser_record_restart",
