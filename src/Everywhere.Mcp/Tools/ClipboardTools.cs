@@ -37,7 +37,12 @@ public static class ClipboardTools
         "SPEC ab agent_browser_clipboard_write.")]
     public static CallToolResult ClipboardWrite(IClipboardWriter writer, string text)
     {
-        try { writer.SetText(text ?? string.Empty); return JsonOk(new { ok = true, bytes = (text ?? string.Empty).Length }); }
+        try
+        {
+            if (!writer.IsAvailable) return JsonOk(new { ok = false, error = "clipboard write not available on this host" });
+            writer.SetText(text ?? string.Empty);
+            return JsonOk(new { ok = true, bytes = (text ?? string.Empty).Length });
+        }
         catch (Exception ex) { return ToolErrors.FromException(ex, "clipboard_write"); }
     }
 
@@ -47,7 +52,12 @@ public static class ClipboardTools
         "SPEC ab agent_browser_clipboard_copy.")]
     public static CallToolResult ClipboardCopy(IClipboardWriter writer, string text)
     {
-        try { writer.SetText(text ?? string.Empty); return JsonOk(new { ok = true, bytes = (text ?? string.Empty).Length }); }
+        try
+        {
+            if (!writer.IsAvailable) return JsonOk(new { ok = false, error = "clipboard write not available on this host" });
+            writer.SetText(text ?? string.Empty);
+            return JsonOk(new { ok = true, bytes = (text ?? string.Empty).Length });
+        }
         catch (Exception ex) { return ToolErrors.FromException(ex, "clipboard_copy"); }
     }
 
