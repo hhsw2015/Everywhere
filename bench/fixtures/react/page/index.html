@@ -1,0 +1,22 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>react fixture</title></head>
+<body>
+<div id="root"></div>
+<script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+<script>
+  function Counter() {
+    const [n, setN] = React.useState(0);
+    return React.createElement('div', null,
+      React.createElement('span', { id: 'count' }, 'count: ' + n),
+      React.createElement('button', { id: 'inc', onClick: () => setN(n + 1) }, 'Increment'));
+  }
+  function App() {
+    return React.createElement('div', null,
+      React.createElement('h1', null, 'React fixture'),
+      React.createElement(Counter));
+  }
+  ReactDOM.createRoot(document.getElementById('root'))
+          .render(React.createElement(App));
+</script>
+</body></html>
