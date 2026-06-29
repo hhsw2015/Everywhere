@@ -53,7 +53,7 @@ DO NOT EDIT BY HAND. Run `node scripts/render-parity-matrix.mjs`.
 | agent_browser_drag | niche | in-browser | opendia | browser_drag | missing | bench:drag |
 | agent_browser_errors | value-add | in-browser | opendia | browser_errors | missing | bench:errors |
 | agent_browser_eval | core | in-browser | opendia | browser_eval | missing | manual:user |
-| agent_browser_fill | core | in-browser | opendia | browser_fill | missing | bench:fill |
+| agent_browser_fill | core | in-browser | opendia | browser_fill | in-progress | bench:fill |
 | agent_browser_find | niche | in-browser | opendia | browser_find | missing | bench:find |
 | agent_browser_focus | niche | in-browser | opendia | browser_focus | missing | bench:focus |
 | agent_browser_forward | core | in-browser | opendia | browser_forward | in-progress | bench:forward |
@@ -153,7 +153,7 @@ DO NOT EDIT BY HAND. Run `node scripts/render-parity-matrix.mjs`.
 | agent_browser_tools_profiles | core | in-browser | wont-do |  | wont-do | none |
 | agent_browser_trace_start | value-add | in-browser | opendia | browser_trace_start | missing | bench:trace_start |
 | agent_browser_trace_stop | value-add | in-browser | opendia | browser_trace_stop | missing | bench:trace_stop |
-| agent_browser_type | core | in-browser | opendia | browser_type | missing | bench:type |
+| agent_browser_type | core | in-browser | opendia | browser_type | in-progress | bench:type |
 | agent_browser_uncheck | core | in-browser | opendia | browser_uncheck | missing | bench:uncheck |
 | agent_browser_upgrade | value-add | in-browser | wont-do |  | wont-do | none |
 | agent_browser_upload | value-add | both | opendia | browser_upload | missing | bench:upload |
