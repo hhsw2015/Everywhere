@@ -17,17 +17,9 @@
             BorderThickness="1"
             CornerRadius="6"
             MinHeight="32">
-            <Grid ColumnDefinitions="*,Auto">
-              <TextBlock
-                Grid.Column="0"
-                VerticalAlignment="Center"
-                Text="{Binding Summary, RelativeSource={RelativeSource TemplatedParent}}"/>
-              <PathIcon
-                Grid.Column="1"
-                Width="12" Height="12"
-                Margin="6,0,0,0"
-                Data="{LucideIconContent ChevronDown}"/>
-            </Grid>
+            <TextBlock
+              VerticalAlignment="Center"
+              Text="{Binding Summary, RelativeSource={RelativeSource TemplatedParent}}"/>
             <Button.Flyout>
               <Flyout Placement="Bottom" ShowMode="Standard">
                 <ScrollViewer MaxHeight="320">
