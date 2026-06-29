@@ -2094,10 +2094,10 @@
       "est_effort": "M",
       "opendia_prereq": null,
       "acceptance": "bench:tab_close",
-      "status": "missing",
-      "last_push_sha": null,
+      "status": "in-progress",
+      "last_push_sha": "22227be904bc87bb63916b2638ce84c73ead9dfd",
       "last_bench_run": null,
-      "notes": ""
+      "notes": "Existing extension WS op (since pre-SPEC) — forwarded as-is. opendia @ 22227be. Bench fixture pending."
     },
     {
       "ab_command": "agent_browser_tab_list",
@@ -2110,10 +2110,10 @@
       "est_effort": "M",
       "opendia_prereq": null,
       "acceptance": "bench:tab_list",
-      "status": "missing",
-      "last_push_sha": null,
+      "status": "in-progress",
+      "last_push_sha": "22227be904bc87bb63916b2638ce84c73ead9dfd",
       "last_bench_run": null,
-      "notes": ""
+      "notes": "Existing extension WS op (since pre-SPEC) — forwarded as-is. opendia @ 22227be. Bench fixture pending."
     },
     {
       "ab_command": "agent_browser_tab_new",
@@ -2142,10 +2142,10 @@
       "est_effort": "M",
       "opendia_prereq": null,
       "acceptance": "bench:tab_switch",
-      "status": "missing",
-      "last_push_sha": null,
+      "status": "in-progress",
+      "last_push_sha": "22227be904bc87bb63916b2638ce84c73ead9dfd",
       "last_bench_run": null,
-      "notes": ""
+      "notes": "Existing extension WS op (since pre-SPEC) — forwarded as-is. opendia @ 22227be. Bench fixture pending."
     },
     {
       "ab_command": "agent_browser_tap",

@@ -145,10 +145,10 @@ DO NOT EDIT BY HAND. Run `node scripts/render-parity-matrix.mjs`.
 | agent_browser_stream_enable | value-add | in-browser | wont-do |  | wont-do | none |
 | agent_browser_stream_status | value-add | in-browser | wont-do |  | wont-do | none |
 | agent_browser_swipe | niche | in-browser | opendia | browser_swipe | missing | bench:swipe |
-| agent_browser_tab_close | core | in-browser | opendia | browser_tab_close | missing | bench:tab_close |
-| agent_browser_tab_list | core | in-browser | opendia | browser_tab_list | missing | bench:tab_list |
+| agent_browser_tab_close | core | in-browser | opendia | browser_tab_close | in-progress | bench:tab_close |
+| agent_browser_tab_list | core | in-browser | opendia | browser_tab_list | in-progress | bench:tab_list |
 | agent_browser_tab_new | core | in-browser | opendia | browser_tab_new | in-progress | bench:tab_new |
-| agent_browser_tab_switch | core | in-browser | opendia | browser_tab_switch | missing | bench:tab_switch |
+| agent_browser_tab_switch | core | in-browser | opendia | browser_tab_switch | in-progress | bench:tab_switch |
 | agent_browser_tap | niche | in-browser | opendia | browser_tap | missing | bench:tap |
 | agent_browser_tools_profiles | core | in-browser | wont-do |  | wont-do | none |
 | agent_browser_trace_start | value-add | in-browser | opendia | browser_trace_start | missing | bench:trace_start |
