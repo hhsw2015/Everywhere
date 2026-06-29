@@ -130,7 +130,7 @@ DO NOT EDIT BY HAND. Run `node scripts/render-parity-matrix.mjs`.
 | agent_browser_skills_get | value-add | in-browser | wont-do |  | wont-do | none |
 | agent_browser_skills_list | value-add | in-browser | wont-do |  | wont-do | none |
 | agent_browser_skills_path | value-add | in-browser | wont-do |  | wont-do | none |
-| agent_browser_snapshot | core | in-browser | universal | opendia.snapshot | missing | bench:snapshot |
+| agent_browser_snapshot | core | in-browser | universal | opendia.snapshot | in-progress | bench:snapshot |
 | agent_browser_state_clean | value-add | in-browser | opendia | opendia.state_clean | missing | manual:user |
 | agent_browser_state_clear | value-add | in-browser | opendia | opendia.state_clear | missing | manual:user |
 | agent_browser_state_list | value-add | in-browser | opendia | opendia.state_list | missing | manual:user |

@@ -1854,10 +1854,10 @@
       "est_effort": "L",
       "opendia_prereq": null,
       "acceptance": "bench:snapshot",
-      "status": "missing",
-      "last_push_sha": null,
+      "status": "in-progress",
+      "last_push_sha": "07dc5b5cab502cc8691e5970fce4e4a9b688f2e7",
       "last_bench_run": null,
-      "notes": ""
+      "notes": "opendia.snapshot landed in opendia experiment/replace-ab (07dc5b5); status promoted to have once a bench:snapshot fixture is authored + ab baseline frozen."
     },
     {
       "ab_command": "agent_browser_state_clean",

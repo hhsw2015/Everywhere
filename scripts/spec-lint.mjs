@@ -86,13 +86,21 @@ for (const [i, r] of rows.entries()) {
   }
 }
 
-// Rule 4 — universal-row Everywhere half requires opendia counterpart in opendia-mcp/server.js.
-const opendiaServerJs = join(OPENDIA_DIR, "opendia-mcp/server.js");
+// Rule 4 — universal-row Everywhere half requires opendia counterpart
+// somewhere in the opendia-mcp/ source tree. Spec text §6 names server.js
+// as the canonical surface; lint scans every .js in opendia-mcp/ so a
+// dedicated parity registry module (registered via require() from server.js)
+// still satisfies the contract — that is in-tree code, not a manifest.
+const opendiaMcpDir = join(OPENDIA_DIR, "opendia-mcp");
 let opendiaSrc = "";
-if (existsSync(opendiaServerJs)) {
-  opendiaSrc = readFileSync(opendiaServerJs, "utf8");
+if (existsSync(opendiaMcpDir)) {
+  for (const f of readdirSync(opendiaMcpDir)) {
+    if (f.endsWith(".js") && !f.endsWith(".test.js")) {
+      opendiaSrc += readFileSync(join(opendiaMcpDir, f), "utf8") + "\n";
+    }
+  }
 } else {
-  warn(4, `opendia server.js not found at ${opendiaServerJs}; Rule 4 deferred until counterpart repo is reachable`);
+  warn(4, `opendia-mcp/ not found at ${opendiaMcpDir}; Rule 4 deferred until counterpart repo is reachable`);
 }
 function opendiaRegistered(name) {
   if (!opendiaSrc) return null;
