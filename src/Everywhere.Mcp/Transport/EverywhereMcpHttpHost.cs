@@ -267,6 +267,21 @@ public sealed class EverywhereMcpHttpHost : IHostedService, IAsyncDisposable
         if (bridgeForHandler is not null)
         {
             mcpBuilder
+                .WithRequestFilters(rf => rf
+                    .AddListToolsFilter(next => async (ctx, ct) =>
+                    {
+                        // Filter the static [McpServerTool] surface (native tools)
+                        // through the gate. Hidden native tools stay reachable
+                        // via call_tool — see Tools/MetaTools.cs.
+                        var result = await next(ctx, ct).ConfigureAwait(false);
+                        if (CoreToolGate.FilterEnabled && result?.Tools is { Count: > 0 } tools)
+                        {
+                            var kept = tools.Where(t => !CoreToolGate.ShouldFilter(t.Name)).ToList();
+                            tools.Clear();
+                            foreach (var t in kept) tools.Add(t);
+                        }
+                        return result!;
+                    }))
                 .WithListToolsHandler((ctx, ct) =>
                 {
                     var result = new ModelContextProtocol.Protocol.ListToolsResult();
@@ -278,20 +293,6 @@ public sealed class EverywhereMcpHttpHost : IHostedService, IAsyncDisposable
                         result.Tools.Add(t);
                     }
                     return ValueTask.FromResult(result);
-                })
-                .AddListToolsFilter(next => async (ctx, ct) =>
-                {
-                    // Filter the static [McpServerTool] surface (native tools)
-                    // through the same gate. Hidden native tools stay reachable
-                    // via call_tool — see Tools/MetaTools.cs.
-                    var result = await next(ctx, ct).ConfigureAwait(false);
-                    if (CoreToolGate.FilterEnabled && result?.Tools is { Count: > 0 } tools)
-                    {
-                        var kept = tools.Where(t => !CoreToolGate.ShouldFilter(t.Name)).ToList();
-                        tools.Clear();
-                        foreach (var t in kept) tools.Add(t);
-                    }
-                    return result!;
                 })
                 .WithCallToolHandler(async (ctx, ct) =>
                 {
