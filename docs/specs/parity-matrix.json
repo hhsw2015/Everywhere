@@ -113,7 +113,7 @@
       "status": "in-progress",
       "last_push_sha": null,
       "last_bench_run": null,
-      "notes": "C# tool landed in src/Everywhere.Mcp/Tools/BatchTool.cs; routes browser_* via OpenDiaBridge, everywhere.* dispatch deferred to Phase 2. Bench fixture pending."
+      "notes": "C# tool landed in src/Everywhere.Mcp/Tools/BatchTool.cs; routes browser_* via OpenDiaBridge, everywhere.* dispatch deferred to Phase 2. Bench fixture pending. | E2E-verified 2026-06-29 v0.9.244 (pbpaste/batch real round-trip)"
     },
     {
       "ab_command": "agent_browser_chat",
@@ -177,7 +177,7 @@
       "status": "in-progress",
       "last_push_sha": null,
       "last_bench_run": null,
-      "notes": "C# tool landed in src/Everywhere.Mcp/Tools/ClipboardTools.cs; IClipboardWriter abstraction added; macOS impl in src/Everywhere.Mac/Mcp/MacClipboardWriter.cs. Bench fixture pending."
+      "notes": "C# tool landed in src/Everywhere.Mcp/Tools/ClipboardTools.cs; IClipboardWriter abstraction added; macOS impl in src/Everywhere.Mac/Mcp/MacClipboardWriter.cs. Bench fixture pending. | E2E-verified 2026-06-29 v0.9.244 (pbpaste/batch real round-trip)"
     },
     {
       "ab_command": "agent_browser_clipboard_paste",
@@ -193,7 +193,7 @@
       "status": "in-progress",
       "last_push_sha": null,
       "last_bench_run": null,
-      "notes": "C# tool landed in src/Everywhere.Mcp/Tools/ClipboardTools.cs; IClipboardWriter abstraction added; macOS impl in src/Everywhere.Mac/Mcp/MacClipboardWriter.cs. Bench fixture pending."
+      "notes": "C# tool landed in src/Everywhere.Mcp/Tools/ClipboardTools.cs; IClipboardWriter abstraction added; macOS impl in src/Everywhere.Mac/Mcp/MacClipboardWriter.cs. Bench fixture pending. | E2E-verified 2026-06-29 v0.9.244 (pbpaste/batch real round-trip)"
     },
     {
       "ab_command": "agent_browser_clipboard_read",
@@ -209,7 +209,7 @@
       "status": "in-progress",
       "last_push_sha": null,
       "last_bench_run": null,
-      "notes": "C# tool landed in src/Everywhere.Mcp/Tools/ClipboardTools.cs; IClipboardWriter abstraction added; macOS impl in src/Everywhere.Mac/Mcp/MacClipboardWriter.cs. Bench fixture pending."
+      "notes": "C# tool landed in src/Everywhere.Mcp/Tools/ClipboardTools.cs; IClipboardWriter abstraction added; macOS impl in src/Everywhere.Mac/Mcp/MacClipboardWriter.cs. Bench fixture pending. | E2E-verified 2026-06-29 v0.9.244 (pbpaste/batch real round-trip)"
     },
     {
       "ab_command": "agent_browser_clipboard_write",
@@ -225,7 +225,7 @@
       "status": "in-progress",
       "last_push_sha": null,
       "last_bench_run": null,
-      "notes": "C# tool landed in src/Everywhere.Mcp/Tools/ClipboardTools.cs; IClipboardWriter abstraction added; macOS impl in src/Everywhere.Mac/Mcp/MacClipboardWriter.cs. Bench fixture pending."
+      "notes": "C# tool landed in src/Everywhere.Mcp/Tools/ClipboardTools.cs; IClipboardWriter abstraction added; macOS impl in src/Everywhere.Mac/Mcp/MacClipboardWriter.cs. Bench fixture pending. | E2E-verified 2026-06-29 v0.9.244 (pbpaste/batch real round-trip)"
     },
     {
       "ab_command": "agent_browser_close",
