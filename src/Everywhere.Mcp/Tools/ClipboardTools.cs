@@ -13,50 +13,66 @@ namespace Everywhere.Mcp.Tools;
 /// (browser-side has its own clipboard via the page, Everywhere-side has
 /// the macOS general pasteboard).
 /// </summary>
+/// IMPORTANT: instance class, not static. The MCP server SDK reflects
+/// on method-parameter types when building each tool's input JSON
+/// schema. For interface params it treats them as inputs unless the
+/// SDK already knows they're DI-resolvable. IClipboardReader squeaks
+/// through (no public properties, mostly), but IClipboardWriter was
+/// being added to the schema. Constructor injection sidesteps the
+/// reflection altogether — same fix as BatchTool.
 [McpServerToolType]
-public static class ClipboardTools
+public sealed class ClipboardTools
 {
+    private readonly IClipboardReader _reader;
+    private readonly IClipboardWriter _writer;
+
+    public ClipboardTools(IClipboardReader reader, IClipboardWriter writer)
+    {
+        _reader = reader;
+        _writer = writer;
+    }
+
     [McpServerTool(Name = "clipboard_read", ReadOnly = true)]
     [Description(
         "Read the macOS general pasteboard as plain text. " +
         "Returns {has_text:bool, text:string}. " +
         "Cheap; prefer this for inspecting the clipboard. SPEC ab agent_browser_clipboard_read.")]
-    public static CallToolResult ClipboardRead(IClipboardReader reader) => DoRead(reader, "clipboard_read");
+    public CallToolResult ClipboardRead() => DoRead("clipboard_read");
 
     [McpServerTool(Name = "clipboard_paste", ReadOnly = true)]
     [Description(
         "Read the macOS general pasteboard (alias for clipboard_read). " +
         "SPEC ab agent_browser_clipboard_paste.")]
-    public static CallToolResult ClipboardPaste(IClipboardReader reader) => DoRead(reader, "clipboard_paste");
+    public CallToolResult ClipboardPaste() => DoRead("clipboard_paste");
 
     [McpServerTool(Name = "clipboard_write")]
     [Description(
         "DANGEROUS: replace the macOS general pasteboard with the given text. " +
         "SPEC ab agent_browser_clipboard_write.")]
-    public static CallToolResult ClipboardWrite(IClipboardWriter writer, string text) => DoWrite(writer, text, "clipboard_write");
+    public CallToolResult ClipboardWrite(string text) => DoWrite(text, "clipboard_write");
 
     [McpServerTool(Name = "clipboard_copy")]
     [Description(
         "DANGEROUS: copy a string to the macOS general pasteboard (alias for clipboard_write). " +
         "SPEC ab agent_browser_clipboard_copy.")]
-    public static CallToolResult ClipboardCopy(IClipboardWriter writer, string text) => DoWrite(writer, text, "clipboard_copy");
+    public CallToolResult ClipboardCopy(string text) => DoWrite(text, "clipboard_copy");
 
-    private static CallToolResult DoRead(IClipboardReader reader, string label)
+    private CallToolResult DoRead(string label)
     {
         try
         {
-            var text = reader.GetText() ?? string.Empty;
+            var text = _reader.GetText() ?? string.Empty;
             return JsonOk(new { has_text = !string.IsNullOrEmpty(text), text });
         }
         catch (Exception ex) { return ToolErrors.FromException(ex, label); }
     }
 
-    private static CallToolResult DoWrite(IClipboardWriter writer, string text, string label)
+    private CallToolResult DoWrite(string text, string label)
     {
         try
         {
-            if (!writer.IsAvailable()) return JsonOk(new { ok = false, error = "clipboard write not available on this host" });
-            writer.SetText(text ?? string.Empty);
+            if (!_writer.IsAvailable()) return JsonOk(new { ok = false, error = "clipboard write not available on this host" });
+            _writer.SetText(text ?? string.Empty);
             return JsonOk(new { ok = true, bytes = (text ?? string.Empty).Length });
         }
         catch (Exception ex) { return ToolErrors.FromException(ex, label); }
