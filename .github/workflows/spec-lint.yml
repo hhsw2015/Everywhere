@@ -1,0 +1,42 @@
+name: spec-lint
+on:
+  push:
+    branches: [main, "experiment/replace-ab"]
+  pull_request:
+    branches: [main, "experiment/replace-ab"]
+
+jobs:
+  spec-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # Cross-repo: SPEC §6 grants the lint a read-only view of the
+      # hhsw2015/opendia fork at HEAD so Rule 4 / Rule 8 can resolve.
+      - name: Clone opendia fork (read-only)
+        run: |
+          git clone --depth 1 https://github.com/hhsw2015/opendia.git opendia-readonly
+
+      - name: Verify parity matrix regenerates deterministically
+        run: |
+          [ -d /tmp/agent-browser ] || git clone https://github.com/vercel-labs/agent-browser.git /tmp/agent-browser
+          ( cd /tmp/agent-browser && git fetch && git checkout ed2e10598c9064aecfaeb7cf21b540684db4be2c )
+          node scripts/extract-ab-commands.mjs --out /tmp/parity-matrix.regen.json
+          diff <(jq -S 'del(.generated_at)' docs/specs/parity-matrix.json) \
+               <(jq -S 'del(.generated_at)' /tmp/parity-matrix.regen.json)
+
+      - name: Verify PARITY_MATRIX.md regenerates deterministically
+        run: |
+          node scripts/render-parity-matrix.mjs
+          git diff --exit-code docs/specs/PARITY_MATRIX.md
+
+      - name: Run spec-lint
+        env:
+          OPENDIA_READONLY: ./opendia-readonly
+        run: node scripts/spec-lint.mjs
