@@ -224,6 +224,10 @@ public sealed class EverywhereMcpHttpHost : IHostedService, IAsyncDisposable
         if (clipboardWriter is not null) builder.Services.AddSingleton(clipboardWriter);
         var openDiaBridge = _parentServices.GetService<OpenDia.OpenDiaBridge>();
         if (openDiaBridge is not null) builder.Services.AddSingleton(openDiaBridge);
+        // MetaTools (list_more_tools / call_tool) is an instance
+        // [McpServerToolType] like BatchTool/ClipboardTools — register here
+        // so the SDK constructor injection resolves the optional bridge.
+        builder.Services.AddSingleton<Tools.MetaTools>();
         builder.Services.AddSingleton(_idle);
         builder.Services.AddSingleton(_browserUrl);
         builder.Services.AddSingleton(_finder);
@@ -250,6 +254,15 @@ public sealed class EverywhereMcpHttpHost : IHostedService, IAsyncDisposable
         // ListToolsHandler / CallToolHandler are called AFTER the static
         // ToolCollection per SDK semantics, so we can append our dynamic
         // browser_* tools without touching the static set.
+        //
+        // Long-tail browser_* tools are hidden behind the CoreToolGate to
+        // shrink the system-prompt token cost (~25K → ~5K). The agent
+        // reaches them via the meta tools list_more_tools / call_tool
+        // (see Tools/MetaTools.cs). Native tools are NOT gated — their
+        // total surface is small and they are the agent's perception
+        // layer, so the description-token budget is well-spent.
+        // Set EVERYWHERE_MCP_FULL=1 to disable the gate entirely (debug,
+        // bench parity tests).
         var bridgeForHandler = _parentServices.GetService<OpenDia.OpenDiaBridge>();
         if (bridgeForHandler is not null)
         {
@@ -260,9 +273,25 @@ public sealed class EverywhereMcpHttpHost : IHostedService, IAsyncDisposable
                     foreach (var spec in bridgeForHandler.AvailableTools)
                     {
                         var t = OpenDia.OpenDiaToolListBuilder.BuildTool(spec);
-                        if (t is not null) result.Tools.Add(t);
+                        if (t is null) continue;
+                        if (CoreToolGate.ShouldFilter(t.Name)) continue;
+                        result.Tools.Add(t);
                     }
                     return ValueTask.FromResult(result);
+                })
+                .AddListToolsFilter(next => async (ctx, ct) =>
+                {
+                    // Filter the static [McpServerTool] surface (native tools)
+                    // through the same gate. Hidden native tools stay reachable
+                    // via call_tool — see Tools/MetaTools.cs.
+                    var result = await next(ctx, ct).ConfigureAwait(false);
+                    if (CoreToolGate.FilterEnabled && result?.Tools is { Count: > 0 } tools)
+                    {
+                        var kept = tools.Where(t => !CoreToolGate.ShouldFilter(t.Name)).ToList();
+                        tools.Clear();
+                        foreach (var t in kept) tools.Add(t);
+                    }
+                    return result!;
                 })
                 .WithCallToolHandler(async (ctx, ct) =>
                 {

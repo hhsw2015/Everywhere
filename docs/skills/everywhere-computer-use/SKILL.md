@@ -59,6 +59,32 @@ Pick one. Do not fan out.
 - `EVERYWHERE_ALLOW_GLOBAL_POINTER_FALLBACKS=1` is diagnostic only. Don't enable.
 - Switching families mid-step loses state. Pick one, finish, then switch.
 
+## Long-tail tools (when core doesn't fit)
+
+`tools/list` ships ~32 core tools — perception priority, plus high-frequency
+operations. Niche tools are hidden to keep the system prompt small. Reach
+them on demand:
+
+| Step | Tool | Use |
+|---|---|---|
+| 1 | `list_more_tools(category)` | Discover names + one-line description. |
+| 2 | `call_tool(name, arguments)` | Invoke. Args are passed through verbatim. |
+
+Categories: `action_browser` | `action_macos` | `perception_active` |
+`perception_content` | `debug` | `config`. Omit for an overview with counts.
+
+When to reach for it:
+- Browser cookies / storage / state / auth → `config`
+- CDP eval / React tree / network capture / vitals → `debug`
+- find_by_role / find_by_label / find_by_testid / hover / select → `action_browser`
+- `doc_read_xlsx` / `pptx` / `epub` / `html` / `txt` → `perception_content`
+- `drag` / `perform_secondary_action` / `pick_element` → `action_macos`
+- `list_apps` / `expand_element` / `get_browser_tabs` → `perception_active`
+
+Native tools are dispatched in-process; browser tools forward through the
+OpenDia bridge. If `call_tool` returns `{"ok":false,"error":"opendia-not-connected"}`
+the browser extension isn't connected — surface this; do NOT retry.
+
 ## Hand-off
 
 | From → To | How |

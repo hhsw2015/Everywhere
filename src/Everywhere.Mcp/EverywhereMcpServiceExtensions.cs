@@ -40,6 +40,9 @@ public static class EverywhereMcpServiceExtensions
         // [McpServerToolType] don't need this.)
         services.TryAddSingleton<Tools.BatchTool>();
         services.TryAddSingleton<Tools.ClipboardTools>();
+        // Meta tools (list_more_tools / call_tool) — depend on OpenDiaBridge
+        // for the long-tail browser_* surface listing + dispatch.
+        services.TryAddSingleton<Tools.MetaTools>();
         // OpenDiaToolSync needs IOptions<McpServerOptions> from the inner
         // MCP container — it's instantiated from there in
         // EverywhereMcpHttpHost.BuildApp(), not here.
