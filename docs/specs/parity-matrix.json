@@ -158,10 +158,10 @@
       "est_effort": "M",
       "opendia_prereq": "browser_snapshot",
       "acceptance": "bench:click",
-      "status": "missing",
-      "last_push_sha": null,
+      "status": "in-progress",
+      "last_push_sha": "8be4553ab1d68c3c1ee6538fda7d2464d82c4765",
       "last_bench_run": null,
-      "notes": ""
+      "notes": "Extension WS op landed in opendia @ 8be4553; @refN consumer of snapshot. Forwarded as browser_click. Bench fixture pending."
     },
     {
       "ab_command": "agent_browser_clipboard_copy",

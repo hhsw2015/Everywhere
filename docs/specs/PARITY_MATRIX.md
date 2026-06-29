@@ -24,7 +24,7 @@ DO NOT EDIT BY HAND. Run `node scripts/render-parity-matrix.mjs`.
 | agent_browser_batch | value-add | in-browser | universal | browser_batch | missing | bench:batch |
 | agent_browser_chat | value-add | in-browser | wont-do |  | wont-do | none |
 | agent_browser_check | core | in-browser | opendia | browser_check | missing | bench:check |
-| agent_browser_click | core | in-browser | opendia | browser_click | missing | bench:click |
+| agent_browser_click | core | in-browser | opendia | browser_click | in-progress | bench:click |
 | agent_browser_clipboard_copy | value-add | out-of-browser | everywhere | everywhere.clipboard_copy | missing | bench:clipboard_copy |
 | agent_browser_clipboard_paste | value-add | out-of-browser | everywhere | everywhere.clipboard_paste | missing | bench:clipboard_paste |
 | agent_browser_clipboard_read | value-add | out-of-browser | everywhere | everywhere.clipboard_read | missing | bench:clipboard_read |
