@@ -1,3 +1,4 @@
+using Everywhere.Interop;
 using Everywhere.Mcp;
 using Everywhere.Mcp.Snapshot;
 using Microsoft.Extensions.DependencyInjection;
