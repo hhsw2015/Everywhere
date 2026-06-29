@@ -703,9 +703,9 @@
       "opendia_prereq": null,
       "acceptance": "bench:frame_switch",
       "status": "in-progress",
-      "last_push_sha": "e00daac57dd9c44b9016f6e29947ec3237de8ddc",
+      "last_push_sha": "72212f6b3df22731566f75c192745326cde17b0e",
       "last_bench_run": null,
-      "notes": "Extension WS op landed in opendia @ e00daac. Forwarded as browser_frame_switch. Bench fixture pending."
+      "notes": "Real implementation in opendia @ 72212f6. Forwarded as browser_frame_switch. Bench fixture pending."
     },
     {
       "ab_command": "agent_browser_get_attr",
@@ -1183,9 +1183,9 @@
       "opendia_prereq": null,
       "acceptance": "manual:user",
       "status": "in-progress",
-      "last_push_sha": "1c22c130e1d10c7232d56022748c1774a46ab6b5",
+      "last_push_sha": "72212f6b3df22731566f75c192745326cde17b0e",
       "last_bench_run": null,
-      "notes": "DANGEROUS — implemented in opendia @ 1c22c13; user-approved per /goal session. SPEC §6 step 7 keeps row at in-progress (not have) until human merge to main. Bench fixture pending."
+      "notes": "Real implementation in opendia @ 72212f6. Forwarded as browser_network_route. Bench fixture pending."
     },
     {
       "ab_command": "agent_browser_network_unroute",
@@ -1199,9 +1199,9 @@
       "opendia_prereq": null,
       "acceptance": "manual:user",
       "status": "in-progress",
-      "last_push_sha": "1c22c130e1d10c7232d56022748c1774a46ab6b5",
+      "last_push_sha": "72212f6b3df22731566f75c192745326cde17b0e",
       "last_bench_run": null,
-      "notes": "DANGEROUS — implemented in opendia @ 1c22c13; user-approved per /goal session. SPEC §6 step 7 keeps row at in-progress (not have) until human merge to main. Bench fixture pending."
+      "notes": "Real implementation in opendia @ 72212f6. Forwarded as browser_network_unroute. Bench fixture pending."
     },
     {
       "ab_command": "agent_browser_open",
@@ -1391,9 +1391,9 @@
       "opendia_prereq": null,
       "acceptance": "bench:react_inspect",
       "status": "in-progress",
-      "last_push_sha": "0a26b7212d45283d9a795b3d87baa9e82d8f35f5",
+      "last_push_sha": "72212f6b3df22731566f75c192745326cde17b0e",
       "last_bench_run": null,
-      "notes": "Extension WS op landed in opendia @ 0a26b72. Forwarded as browser_react_inspect. Bench fixture pending."
+      "notes": "Real implementation in opendia @ 72212f6. Forwarded as browser_react_inspect. Bench fixture pending."
     },
     {
       "ab_command": "agent_browser_react_renders_start",
@@ -1407,9 +1407,9 @@
       "opendia_prereq": null,
       "acceptance": "bench:react_renders_start",
       "status": "in-progress",
-      "last_push_sha": "0a26b7212d45283d9a795b3d87baa9e82d8f35f5",
+      "last_push_sha": "72212f6b3df22731566f75c192745326cde17b0e",
       "last_bench_run": null,
-      "notes": "Extension WS op landed in opendia @ 0a26b72. Forwarded as browser_react_renders_start. Bench fixture pending."
+      "notes": "Real implementation in opendia @ 72212f6. Forwarded as browser_react_renders_start. Bench fixture pending."
     },
     {
       "ab_command": "agent_browser_react_renders_stop",
@@ -1423,9 +1423,9 @@
       "opendia_prereq": null,
       "acceptance": "bench:react_renders_stop",
       "status": "in-progress",
-      "last_push_sha": "0a26b7212d45283d9a795b3d87baa9e82d8f35f5",
+      "last_push_sha": "72212f6b3df22731566f75c192745326cde17b0e",
       "last_bench_run": null,
-      "notes": "Extension WS op landed in opendia @ 0a26b72. Forwarded as browser_react_renders_stop. Bench fixture pending."
+      "notes": "Real implementation in opendia @ 72212f6. Forwarded as browser_react_renders_stop. Bench fixture pending."
     },
     {
       "ab_command": "agent_browser_react_suspense",
@@ -1439,9 +1439,9 @@
       "opendia_prereq": null,
       "acceptance": "bench:react_suspense",
       "status": "in-progress",
-      "last_push_sha": "0a26b7212d45283d9a795b3d87baa9e82d8f35f5",
+      "last_push_sha": "72212f6b3df22731566f75c192745326cde17b0e",
       "last_bench_run": null,
-      "notes": "Extension WS op landed in opendia @ 0a26b72. Forwarded as browser_react_suspense. Bench fixture pending."
+      "notes": "Real implementation in opendia @ 72212f6. Forwarded as browser_react_suspense. Bench fixture pending."
     },
     {
       "ab_command": "agent_browser_react_tree",
@@ -1455,9 +1455,9 @@
       "opendia_prereq": null,
       "acceptance": "bench:react_tree",
       "status": "in-progress",
-      "last_push_sha": "0a26b7212d45283d9a795b3d87baa9e82d8f35f5",
+      "last_push_sha": "72212f6b3df22731566f75c192745326cde17b0e",
       "last_bench_run": null,
-      "notes": "Extension WS op landed in opendia @ 0a26b72. Forwarded as browser_react_tree. Bench fixture pending."
+      "notes": "Real implementation in opendia @ 72212f6. Forwarded as browser_react_tree. Bench fixture pending."
     },
     {
       "ab_command": "agent_browser_read",
@@ -1551,9 +1551,9 @@
       "opendia_prereq": null,
       "acceptance": "manual:user",
       "status": "in-progress",
-      "last_push_sha": "74220da8d4ba39e194f7ede213b873ebccabc504",
+      "last_push_sha": "72212f6b3df22731566f75c192745326cde17b0e",
       "last_bench_run": null,
-      "notes": "Extension WS op landed in opendia @ 74220da. Forwarded as browser_remove_init_script. Bench fixture pending."
+      "notes": "Real implementation in opendia @ 72212f6. Forwarded as browser_remove_init_script. Bench fixture pending."
     },
     {
       "ab_command": "agent_browser_screenshot",

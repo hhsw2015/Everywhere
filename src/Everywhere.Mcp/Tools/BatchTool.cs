@@ -21,46 +21,50 @@ public static class BatchTool
 {
     [McpServerTool(Name = "batch")]
     [Description(
-        "Run a sequence of tool calls in one round-trip. steps[] = [{tool, args}, ...]. " +
+        "Run a sequence of tool calls in one round-trip. " +
+        "steps_json = JSON array of {tool, args}, e.g. " +
+        "'[{\"tool\":\"browser_snapshot\",\"args\":{}}, {\"tool\":\"browser_click\",\"args\":{\"ref\":\"@ref3\"}}]'. " +
         "browser_* steps forward via the OpenDia WS bridge; everywhere.* are dispatched locally. " +
         "Stops on first error and returns the partial result list. SPEC §3.3 ab agent_browser_batch.")]
     public static async Task<CallToolResult> Batch(
         OpenDiaBridge bridge,
-        JsonElement steps,
+        string steps_json,
         CancellationToken ct = default)
     {
         var results = new List<JsonNode?>();
         var stopAt = -1;
         string? err = null;
 
-        if (steps.ValueKind != JsonValueKind.Array)
-        {
-            return ToolErrors.FromException(new ArgumentException("steps must be a JSON array"), "batch");
-        }
+        JsonNode? root;
+        try { root = JsonNode.Parse(steps_json ?? "[]"); }
+        catch (Exception ex) { return ToolErrors.FromException(ex, "batch"); }
 
-        var arr = steps.EnumerateArray().ToList();
+        if (root is not JsonArray arrNode)
+        {
+            return ToolErrors.FromException(new ArgumentException("steps_json must be a JSON array"), "batch");
+        }
+        var arr = arrNode.ToList();
         for (var i = 0; i < arr.Count; i++)
         {
             ct.ThrowIfCancellationRequested();
-            var step = arr[i];
-            var name = step.TryGetProperty("tool", out var tn) && tn.ValueKind == JsonValueKind.String ? tn.GetString() : null;
+            var step = arr[i] as JsonObject;
+            if (step is null)
+            {
+                err = $"step[{i}] not an object"; stopAt = i; break;
+            }
+            var name = step["tool"]?.GetValue<string>();
             if (string.IsNullOrEmpty(name))
             {
                 err = $"step[{i}].tool missing"; stopAt = i; break;
             }
-            JsonNode? argsNode = null;
-            if (step.TryGetProperty("args", out var an) && an.ValueKind != JsonValueKind.Null)
-            {
-                argsNode = JsonNode.Parse(an.GetRawText());
-            }
+            var argsNode = step["args"]?.DeepClone();
 
             try
             {
                 if (name!.StartsWith("browser_", StringComparison.Ordinal))
                 {
                     var origName = name.Substring("browser_".Length);
-                    var r = await bridge.CallToolAsync(origName, argsNode, ct: ct);
-                    results.Add(r is null ? null : JsonNode.Parse(JsonSerializer.Serialize(r)));
+                    results.Add(await bridge.CallToolAsync(origName, argsNode, ct: ct));
                 }
                 else if (name.StartsWith("everywhere.", StringComparison.Ordinal))
                 {
@@ -86,13 +90,21 @@ public static class BatchTool
             }
         }
 
-        var payload = err is null
-            ? new { ok = true, count = results.Count, results }
-            : (object)new { ok = false, error = err, step_index = stopAt, count = results.Count, results };
+        var payload = new JsonObject
+        {
+            ["ok"] = err is null,
+            ["count"] = results.Count,
+            ["results"] = new JsonArray(results.Select(r => r?.DeepClone()).ToArray()),
+        };
+        if (err is not null)
+        {
+            payload["error"] = err;
+            payload["step_index"] = stopAt;
+        }
 
         return new CallToolResult
         {
-            Content = [new TextContentBlock { Text = JsonSerializer.Serialize(payload) }],
+            Content = [new TextContentBlock { Text = payload.ToJsonString() }],
         };
     }
 }
