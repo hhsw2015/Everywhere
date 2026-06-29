@@ -1854,10 +1854,10 @@
       "est_effort": "L",
       "opendia_prereq": null,
       "acceptance": "bench:snapshot",
-      "status": "missing",
-      "last_push_sha": null,
+      "status": "in-progress",
+      "last_push_sha": "0abab5c12154c84255f5b3a81e471c309c7ccfe8",
       "last_bench_run": null,
-      "notes": "reverted from opendia experiment/replace-ab; topology A1 puts implementation in src/Everywhere.Mcp/OpenDia (dynamic forwarder via OpenDiaToolListBuilder; browser_<name> prefix). OpenDia extension side carries its own implementation per §3.1 universal-twice clause."
+      "notes": "Extension half landed: src/content/snapshot.js + WS op snapshot in hhsw2015/opendia experiment/replace-ab @ 0abab5c. Forwarded as browser_snapshot by OpenDiaToolListBuilder. Bench fixture + Everywhere-side everywhere.snapshot still pending."
     },
     {
       "ab_command": "agent_browser_state_clean",
