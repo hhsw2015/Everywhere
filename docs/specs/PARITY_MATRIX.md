@@ -40,24 +40,24 @@ DO NOT EDIT BY HAND. Run `node scripts/render-parity-matrix.mjs`.
 | agent_browser_dashboard_start | value-add | in-browser | wont-do |  | wont-do | none |
 | agent_browser_dashboard_stop | value-add | in-browser | wont-do |  | wont-do | none |
 | agent_browser_dblclick | niche | in-browser | opendia | browser_dblclick | in-progress | bench:dblclick |
-| agent_browser_deny | value-add | in-browser | opendia | browser_deny | missing | bench:deny |
+| agent_browser_deny | value-add | in-browser | opendia | browser_deny | in-progress | bench:deny |
 | agent_browser_device | niche | in-browser | opendia | browser_device | in-progress | bench:device |
 | agent_browser_dialog_accept | value-add | in-browser | opendia | browser_dialog_accept | in-progress | bench:dialog_accept |
 | agent_browser_dialog_dismiss | value-add | in-browser | opendia | browser_dialog_dismiss | in-progress | bench:dialog_dismiss |
 | agent_browser_dialog_status | value-add | in-browser | opendia | browser_dialog_status | missing | bench:dialog_status |
-| agent_browser_diff_screenshot | value-add | in-browser | universal | browser_diff_screenshot | missing | bench:diff_screenshot |
+| agent_browser_diff_screenshot | value-add | in-browser | universal | browser_diff_screenshot | in-progress | bench:diff_screenshot |
 | agent_browser_diff_snapshot | value-add | in-browser | universal | browser_diff_snapshot | in-progress | bench:diff_snapshot |
-| agent_browser_diff_url | value-add | in-browser | opendia | browser_diff_url | missing | bench:diff_url |
+| agent_browser_diff_url | value-add | in-browser | opendia | browser_diff_url | in-progress | bench:diff_url |
 | agent_browser_doctor | value-add | in-browser | wont-do |  | wont-do | none |
-| agent_browser_download | value-add | both | opendia | browser_download | missing | bench:download |
+| agent_browser_download | value-add | both | opendia | browser_download | in-progress | bench:download |
 | agent_browser_drag | niche | in-browser | opendia | browser_drag | in-progress | bench:drag |
-| agent_browser_errors | value-add | in-browser | opendia | browser_errors | missing | bench:errors |
+| agent_browser_errors | value-add | in-browser | opendia | browser_errors | in-progress | bench:errors |
 | agent_browser_eval | core | in-browser | opendia | browser_eval | missing | manual:user |
 | agent_browser_fill | core | in-browser | opendia | browser_fill | in-progress | bench:fill |
 | agent_browser_find | niche | in-browser | opendia | browser_find | in-progress | bench:find |
 | agent_browser_focus | niche | in-browser | opendia | browser_focus | in-progress | bench:focus |
 | agent_browser_forward | core | in-browser | opendia | browser_forward | in-progress | bench:forward |
-| agent_browser_frame_main | value-add | in-browser | opendia | browser_frame_main | missing | bench:frame_main |
+| agent_browser_frame_main | value-add | in-browser | opendia | browser_frame_main | in-progress | bench:frame_main |
 | agent_browser_frame_switch | value-add | in-browser | opendia | browser_frame_switch | missing | bench:frame_switch |
 | agent_browser_get_attr | niche | in-browser | opendia | browser_get_attr | in-progress | bench:get_attr |
 | agent_browser_get_box | niche | in-browser | opendia | browser_get_box | in-progress | bench:get_box |
@@ -69,7 +69,7 @@ DO NOT EDIT BY HAND. Run `node scripts/render-parity-matrix.mjs`.
 | agent_browser_get_title | core | in-browser | opendia | browser_get_title | in-progress | bench:get_title |
 | agent_browser_get_url | core | in-browser | opendia | browser_get_url | in-progress | bench:get_url |
 | agent_browser_get_value | niche | in-browser | opendia | browser_get_value | in-progress | bench:get_value |
-| agent_browser_highlight | value-add | in-browser | universal | browser_highlight | missing | bench:highlight |
+| agent_browser_highlight | value-add | in-browser | universal | browser_highlight | in-progress | bench:highlight |
 | agent_browser_hover | niche | in-browser | opendia | browser_hover | in-progress | bench:hover |
 | agent_browser_inspect | value-add | in-browser | universal | browser_inspect | in-progress | bench:inspect |
 | agent_browser_install | value-add | in-browser | wont-do |  | wont-do | none |
@@ -111,7 +111,7 @@ DO NOT EDIT BY HAND. Run `node scripts/render-parity-matrix.mjs`.
 | agent_browser_record_start | value-add | in-browser | wont-do |  | wont-do | none |
 | agent_browser_record_stop | value-add | in-browser | wont-do |  | wont-do | none |
 | agent_browser_reload | core | in-browser | opendia | browser_reload | in-progress | bench:reload |
-| agent_browser_remove_init_script | niche | in-browser | opendia | browser_remove_init_script | missing | manual:user |
+| agent_browser_remove_init_script | niche | in-browser | opendia | browser_remove_init_script | in-progress | manual:user |
 | agent_browser_screenshot | core | both | universal | browser_screenshot | in-progress | bench:screenshot |
 | agent_browser_scroll | core | in-browser | opendia | browser_scroll | in-progress | bench:scroll |
 | agent_browser_scroll_into_view | niche | in-browser | opendia | browser_scroll_into_view | in-progress | bench:scroll_into_view |
