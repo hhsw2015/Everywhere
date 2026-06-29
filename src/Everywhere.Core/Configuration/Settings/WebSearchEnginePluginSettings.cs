@@ -170,6 +170,17 @@ public sealed partial class GoogleWebSearchEngineProvider() : ThirdPartyWebSearc
     [SettingsItemIgnore]
     public ObservableCollection<ApiKey> ApiKeys { get; init; } = [];
 
+    /// <summary>
+    /// Legacy v0.9.247–250 field. Read on deserialize so we can lift its
+    /// values into <see cref="ApiKeys"/> via
+    /// <see cref="WebSearchEngineSettings.MigrateLegacyVault"/>; not serialised
+    /// back. Empty after migration.
+    /// </summary>
+    [SettingsItemIgnore]
+    [JsonInclude]
+    [JsonPropertyName("ExtraApiKeyIds")]
+    internal List<Guid>? LegacyExtraIds { get; set; }
+
     [JsonIgnore]
     [DynamicLocaleKey(
         LocaleKey.WebSearchEngineProvider_ApiKey_Header,
@@ -244,6 +255,12 @@ public sealed partial class ApiKeyWebSearchEngineProvider(
     [SettingsItemIgnore]
     public ObservableCollection<ApiKey> ApiKeys { get; init; } = [];
 
+    /// <summary>See GoogleWebSearchEngineProvider.LegacyExtraIds.</summary>
+    [SettingsItemIgnore]
+    [JsonInclude]
+    [JsonPropertyName("ExtraApiKeyIds")]
+    internal List<Guid>? LegacyExtraIds { get; set; }
+
     [JsonIgnore]
     [DynamicLocaleKey(
         LocaleKey.WebSearchEngineProvider_ApiKey_Header,
@@ -296,6 +313,12 @@ public sealed partial class OptionalApiKeyWebSearchEngineProvider(
     /// <summary>See GoogleWebSearchEngineProvider.ApiKeys for semantics.</summary>
     [SettingsItemIgnore]
     public ObservableCollection<ApiKey> ApiKeys { get; init; } = [];
+
+    /// <summary>See GoogleWebSearchEngineProvider.LegacyExtraIds.</summary>
+    [SettingsItemIgnore]
+    [JsonInclude]
+    [JsonPropertyName("ExtraApiKeyIds")]
+    internal List<Guid>? LegacyExtraIds { get; set; }
 
     [JsonIgnore]
     [DynamicLocaleKey(
@@ -382,27 +405,54 @@ public sealed partial class WebSearchEngineSettings : ObservableObject, System.T
     public void MigrateLegacyVault()
     {
         if (ApiKeys.Count == 0) return;
-        var byId = ApiKeys.ToDictionary(k => k.Id);
+        // Tolerate duplicate ids in user-edited settings.json: prefer the
+        // first occurrence and ignore the rest, instead of throwing inside
+        // OnDeserialized (which would brick startup).
+        var byId = new Dictionary<Guid, ApiKey>();
+        foreach (var k in ApiKeys)
+        {
+            if (k.Id == Guid.Empty) continue;
+            byId.TryAdd(k.Id, k);
+        }
         foreach (var entry in Providers.Values)
         {
-            ObservableCollection<ApiKey>? targetList = entry switch
+            ObservableCollection<ApiKey>? targetList;
+            Guid primary;
+            List<Guid>? legacyExtras;
+            switch (entry)
             {
-                GoogleWebSearchEngineProvider g => g.ApiKeys,
-                ApiKeyWebSearchEngineProvider a => a.ApiKeys,
-                OptionalApiKeyWebSearchEngineProvider o => o.ApiKeys,
-                _ => null,
-            };
-            if (targetList is null || targetList.Count > 0) continue;
+                case GoogleWebSearchEngineProvider g:
+                    targetList = g.ApiKeys; primary = g.ApiKey;
+                    legacyExtras = g.LegacyExtraIds;
+                    g.LegacyExtraIds = null;
+                    break;
+                case ApiKeyWebSearchEngineProvider a:
+                    targetList = a.ApiKeys; primary = a.ApiKey;
+                    legacyExtras = a.LegacyExtraIds;
+                    a.LegacyExtraIds = null;
+                    break;
+                case OptionalApiKeyWebSearchEngineProvider o:
+                    targetList = o.ApiKeys; primary = o.ApiKey;
+                    legacyExtras = o.LegacyExtraIds;
+                    o.LegacyExtraIds = null;
+                    break;
+                default:
+                    continue;
+            }
+            if (targetList.Count > 0) continue;
 
-            Guid primary = entry switch
-            {
-                GoogleWebSearchEngineProvider g => g.ApiKey,
-                ApiKeyWebSearchEngineProvider a => a.ApiKey,
-                OptionalApiKeyWebSearchEngineProvider o => o.ApiKey,
-                _ => Guid.Empty,
-            };
             if (primary != Guid.Empty && byId.TryGetValue(primary, out var pk))
                 targetList.Add(pk);
+
+            if (legacyExtras is not null)
+            {
+                foreach (var id in legacyExtras)
+                {
+                    if (id == Guid.Empty || id == primary) continue;
+                    if (byId.TryGetValue(id, out var k) && !targetList.Contains(k))
+                        targetList.Add(k);
+                }
+            }
         }
     }
 
@@ -420,7 +470,7 @@ public sealed partial class WebSearchEngineSettings : ObservableObject, System.T
                     WebSearchEngineProviderId.AnySearch,
                     new DirectLocaleKey("AnySearch"),
                     "avares://Everywhere.Core/Assets/Icons/anysearch-color.png",
-                    "")
+                    "https://www.anysearch.com")
                 {
                     EndPoint = new Customizable<string>("https://api.anysearch.com/v1/search", isDefaultValueReadonly: true)
                 }),
@@ -430,7 +480,7 @@ public sealed partial class WebSearchEngineSettings : ObservableObject, System.T
                     WebSearchEngineProviderId.Bocha,
                     new DynamicLocaleKey(LocaleKey.WebSearchEngineProvider_Bocha),
                     "avares://Everywhere.Core/Assets/Icons/bocha-color.png",
-                    "")
+                    "https://open.bochaai.com")
                 {
                     EndPoint = new Customizable<string>("https://api.bocha.cn/v1/web-search", isDefaultValueReadonly: true)
                 }),
@@ -440,7 +490,7 @@ public sealed partial class WebSearchEngineSettings : ObservableObject, System.T
                     WebSearchEngineProviderId.Brave,
                     new DirectLocaleKey("Brave"),
                     "avares://Everywhere.Core/Assets/Icons/brave-color.png",
-                    "")
+                    "https://brave.com/search/api")
                 {
                     EndPoint = new Customizable<string>("https://api.search.brave.com/res/v1/web/search", isDefaultValueReadonly: true)
                 }),
@@ -453,7 +503,7 @@ public sealed partial class WebSearchEngineSettings : ObservableObject, System.T
                     WebSearchEngineProviderId.Jina,
                     new DirectLocaleKey("Jina"),
                     "avares://Everywhere.Core/Assets/Icons/jina-light.svg",
-                    "")
+                    "https://jina.ai")
                 {
                     EndPoint = new Customizable<string>("https://s.jina.ai", isDefaultValueReadonly: true)
                 }),
@@ -466,7 +516,7 @@ public sealed partial class WebSearchEngineSettings : ObservableObject, System.T
                     WebSearchEngineProviderId.Tavily,
                     new DirectLocaleKey("Tavily"),
                     "avares://Everywhere.Core/Assets/Icons/tavily-color.svg",
-                    "")
+                    "https://tavily.com")
                 {
                     EndPoint = new Customizable<string>("https://api.tavily.com/search", isDefaultValueReadonly: true)
                 }),
@@ -476,7 +526,7 @@ public sealed partial class WebSearchEngineSettings : ObservableObject, System.T
                     WebSearchEngineProviderId.UniFuncs,
                     new DirectLocaleKey("UniFuncs"),
                     "avares://Everywhere.Core/Assets/Icons/unifuncs-color.png",
-                    "")
+                    "https://www.unifuncs.com")
                 {
                     EndPoint = new Customizable<string>("https://api.unifuncs.com/api/web-search/search", isDefaultValueReadonly: true)
                 }),
@@ -486,7 +536,7 @@ public sealed partial class WebSearchEngineSettings : ObservableObject, System.T
                     WebSearchEngineProviderId.TinyFish,
                     new DirectLocaleKey("TinyFish"),
                     "avares://Everywhere.Core/Assets/Icons/tinyfish-color.svg",
-                    "")
+                    "https://tinyfish.ai")
                 {
                     EndPoint = new Customizable<string>("https://api.search.tinyfish.ai", isDefaultValueReadonly: true)
                 }),
