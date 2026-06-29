@@ -131,7 +131,7 @@ public abstract class ThirdPartyWebSearchEngineProvider : ObservableValidator, I
 }
 
 [GeneratedSettingsItems]
-public sealed partial class GoogleWebSearchEngineProvider(ObservableCollection<ApiKey> apiKeys) : ThirdPartyWebSearchEngineProvider
+public sealed partial class GoogleWebSearchEngineProvider() : ThirdPartyWebSearchEngineProvider
 {
     [JsonIgnore]
     [SettingsItemIgnore]
@@ -162,12 +162,13 @@ public sealed partial class GoogleWebSearchEngineProvider(ObservableCollection<A
     public partial Guid ApiKey { get; set; }
 
     /// <summary>
-    /// Extra ApiKey ids that join the primary <see cref="ApiKey"/> in a
-    /// rotating pool (rate-limit aware, 60s cooldown on 429).
-    /// Empty = single-key behaviour unchanged.
+    /// Provider-private key vault. ApiKeyComboBox uses ApiKey (the SelectedId)
+    /// for display + manage-flow; every key in this list joins the rotating
+    /// KeyPool. Migrated from the legacy global-vault + ExtraApiKeyIds model
+    /// in v0.9.251.
     /// </summary>
     [SettingsItemIgnore]
-    public ObservableCollection<Guid> ExtraApiKeyIds { get; init; } = new();
+    public ObservableCollection<ApiKey> ApiKeys { get; init; } = [];
 
     [JsonIgnore]
     [DynamicLocaleKey(
@@ -175,27 +176,12 @@ public sealed partial class GoogleWebSearchEngineProvider(ObservableCollection<A
         LocaleKey.WebSearchEngineProvider_ApiKey_Description)]
     [SettingsItem(Group = "_")]
     public SettingsControl<ApiKeyComboBox> ApiKeyControl => new(
-        new ApiKeyComboBox(apiKeys)
+        new ApiKeyComboBox(ApiKeys)
         {
             [!ApiKeyComboBox.SelectedIdProperty] = CompiledBinding.Create(
                 (GoogleWebSearchEngineProvider x) => x.ApiKey,
                 source: this,
                 mode: BindingMode.TwoWay)
-        });
-
-    [JsonIgnore]
-    [DynamicLocaleKey(
-        LocaleKey.WebSearchEngineProvider_ApiKey_Header,
-        LocaleKey.WebSearchEngineProvider_ApiKey_Description)]
-    [SettingsItem(Group = "_")]
-    public SettingsControl<ApiKeyMultiComboBox> ExtraApiKeysControl => new(
-        new ApiKeyMultiComboBox(apiKeys)
-        {
-            SelectedIds = ExtraApiKeyIds,
-            [!ApiKeyMultiComboBox.ExcludedIdProperty] = CompiledBinding.Create(
-                (GoogleWebSearchEngineProvider x) => x.ApiKey,
-                source: this,
-                mode: BindingMode.OneWay)
         });
 
     [ObservableProperty]
@@ -223,8 +209,7 @@ public sealed partial class ApiKeyWebSearchEngineProvider(
     WebSearchEngineProviderId id,
     IDynamicLocaleKey headerKey,
     string iconUrl,
-    string? docsUrl,
-    ObservableCollection<ApiKey> apiKeys
+    string? docsUrl
 ) : ThirdPartyWebSearchEngineProvider
 {
     [JsonIgnore]
@@ -255,9 +240,9 @@ public sealed partial class ApiKeyWebSearchEngineProvider(
     [CustomValidation(typeof(ApiKey), nameof(Configuration.ApiKey.Validate))]
     public partial Guid ApiKey { get; set; }
 
-    /// <summary>See GoogleWebSearchEngineProvider.ExtraApiKeyIds for semantics.</summary>
+    /// <summary>See GoogleWebSearchEngineProvider.ApiKeys for semantics.</summary>
     [SettingsItemIgnore]
-    public ObservableCollection<Guid> ExtraApiKeyIds { get; init; } = new();
+    public ObservableCollection<ApiKey> ApiKeys { get; init; } = [];
 
     [JsonIgnore]
     [DynamicLocaleKey(
@@ -265,27 +250,12 @@ public sealed partial class ApiKeyWebSearchEngineProvider(
         LocaleKey.WebSearchEngineProvider_ApiKey_Description)]
     [SettingsItem(Group = "_")]
     public SettingsControl<ApiKeyComboBox> ApiKeyControl => new(
-        new ApiKeyComboBox(apiKeys)
+        new ApiKeyComboBox(ApiKeys)
         {
             [!ApiKeyComboBox.SelectedIdProperty] = CompiledBinding.Create(
                 (ApiKeyWebSearchEngineProvider x) => x.ApiKey,
                 source: this,
                 mode: BindingMode.TwoWay)
-        });
-
-    [JsonIgnore]
-    [DynamicLocaleKey(
-        LocaleKey.WebSearchEngineProvider_ApiKey_Header,
-        LocaleKey.WebSearchEngineProvider_ApiKey_Description)]
-    [SettingsItem(Group = "_")]
-    public SettingsControl<ApiKeyMultiComboBox> ExtraApiKeysControl => new(
-        new ApiKeyMultiComboBox(apiKeys)
-        {
-            SelectedIds = ExtraApiKeyIds,
-            [!ApiKeyMultiComboBox.ExcludedIdProperty] = CompiledBinding.Create(
-                (ApiKeyWebSearchEngineProvider x) => x.ApiKey,
-                source: this,
-                mode: BindingMode.OneWay)
         });
 }
 
@@ -294,8 +264,7 @@ public sealed partial class OptionalApiKeyWebSearchEngineProvider(
     WebSearchEngineProviderId id,
     IDynamicLocaleKey headerKey,
     string iconUrl,
-    string? docsUrl,
-    ObservableCollection<ApiKey> apiKeys
+    string? docsUrl
 ) : ThirdPartyWebSearchEngineProvider
 {
     [JsonIgnore]
@@ -324,9 +293,9 @@ public sealed partial class OptionalApiKeyWebSearchEngineProvider(
     [SettingsItemIgnore]
     public partial Guid ApiKey { get; set; }
 
-    /// <summary>See GoogleWebSearchEngineProvider.ExtraApiKeyIds for semantics.</summary>
+    /// <summary>See GoogleWebSearchEngineProvider.ApiKeys for semantics.</summary>
     [SettingsItemIgnore]
-    public ObservableCollection<Guid> ExtraApiKeyIds { get; init; } = new();
+    public ObservableCollection<ApiKey> ApiKeys { get; init; } = [];
 
     [JsonIgnore]
     [DynamicLocaleKey(
@@ -334,27 +303,12 @@ public sealed partial class OptionalApiKeyWebSearchEngineProvider(
         LocaleKey.WebSearchEngineProvider_ApiKey_Description)]
     [SettingsItem(Group = "_")]
     public SettingsControl<ApiKeyComboBox> ApiKeyControl => new(
-        new ApiKeyComboBox(apiKeys)
+        new ApiKeyComboBox(ApiKeys)
         {
             [!ApiKeyComboBox.SelectedIdProperty] = CompiledBinding.Create(
                 (OptionalApiKeyWebSearchEngineProvider x) => x.ApiKey,
                 source: this,
                 mode: BindingMode.TwoWay)
-        });
-
-    [JsonIgnore]
-    [DynamicLocaleKey(
-        LocaleKey.WebSearchEngineProvider_ApiKey_Header_Optional,
-        LocaleKey.WebSearchEngineProvider_ApiKey_Description)]
-    [SettingsItem(Group = "_")]
-    public SettingsControl<ApiKeyMultiComboBox> ExtraApiKeysControl => new(
-        new ApiKeyMultiComboBox(apiKeys)
-        {
-            SelectedIds = ExtraApiKeyIds,
-            [!ApiKeyMultiComboBox.ExcludedIdProperty] = CompiledBinding.Create(
-                (OptionalApiKeyWebSearchEngineProvider x) => x.ApiKey,
-                source: this,
-                mode: BindingMode.OneWay)
         });
 }
 
@@ -384,7 +338,7 @@ public sealed partial class SearXNGWebSearchEngineProvider : ThirdPartyWebSearch
 }
 
 [GeneratedSettingsItems]
-public sealed partial class WebSearchEngineSettings : ObservableObject
+public sealed partial class WebSearchEngineSettings : ObservableObject, System.Text.Json.Serialization.IJsonOnDeserialized
 {
     [SettingsItemIgnore]
     public ObservableImmutableDictionary<WebSearchEngineProviderId, IWebSearchEngineProvider> Providers { get; }
@@ -406,9 +360,51 @@ public sealed partial class WebSearchEngineSettings : ObservableObject
         }
     }
 
+    /// <summary>
+    /// Legacy global key vault. Pre-v0.9.251 every provider referenced
+    /// keys here by Guid. We migrate those to per-provider <c>ApiKeys</c>
+    /// in <see cref="MigrateLegacyVault"/> right after deserialization,
+    /// then leave the list as-is so manual edits to settings.json don't
+    /// surprise users.
+    /// </summary>
     [ObservableProperty]
     [SettingsItemIgnore]
     public partial ObservableCollection<ApiKey> ApiKeys { get; set; }
+
+    /// <summary>
+    /// Walk every provider and lift legacy single-key + extra-key Guid
+    /// references into the provider's private <c>ApiKeys</c> list. No-op
+    /// when ApiKeys is already populated (fresh install or already
+    /// migrated). Safe to call multiple times.
+    /// </summary>
+    void System.Text.Json.Serialization.IJsonOnDeserialized.OnDeserialized() => MigrateLegacyVault();
+
+    public void MigrateLegacyVault()
+    {
+        if (ApiKeys.Count == 0) return;
+        var byId = ApiKeys.ToDictionary(k => k.Id);
+        foreach (var entry in Providers.Values)
+        {
+            ObservableCollection<ApiKey>? targetList = entry switch
+            {
+                GoogleWebSearchEngineProvider g => g.ApiKeys,
+                ApiKeyWebSearchEngineProvider a => a.ApiKeys,
+                OptionalApiKeyWebSearchEngineProvider o => o.ApiKeys,
+                _ => null,
+            };
+            if (targetList is null || targetList.Count > 0) continue;
+
+            Guid primary = entry switch
+            {
+                GoogleWebSearchEngineProvider g => g.ApiKey,
+                ApiKeyWebSearchEngineProvider a => a.ApiKey,
+                OptionalApiKeyWebSearchEngineProvider o => o.ApiKey,
+                _ => Guid.Empty,
+            };
+            if (primary != Guid.Empty && byId.TryGetValue(primary, out var pk))
+                targetList.Add(pk);
+        }
+    }
 
     public WebSearchEngineSettings()
     {
@@ -424,8 +420,7 @@ public sealed partial class WebSearchEngineSettings : ObservableObject
                     WebSearchEngineProviderId.AnySearch,
                     new DirectLocaleKey("AnySearch"),
                     "avares://Everywhere.Core/Assets/Icons/anysearch-color.png",
-                    "https://www.anysearch.com",
-                    ApiKeys)
+                    "")
                 {
                     EndPoint = new Customizable<string>("https://api.anysearch.com/v1/search", isDefaultValueReadonly: true)
                 }),
@@ -435,8 +430,7 @@ public sealed partial class WebSearchEngineSettings : ObservableObject
                     WebSearchEngineProviderId.Bocha,
                     new DynamicLocaleKey(LocaleKey.WebSearchEngineProvider_Bocha),
                     "avares://Everywhere.Core/Assets/Icons/bocha-color.png",
-                    "https://open.bochaai.com",
-                    ApiKeys)
+                    "")
                 {
                     EndPoint = new Customizable<string>("https://api.bocha.cn/v1/web-search", isDefaultValueReadonly: true)
                 }),
@@ -446,22 +440,20 @@ public sealed partial class WebSearchEngineSettings : ObservableObject
                     WebSearchEngineProviderId.Brave,
                     new DirectLocaleKey("Brave"),
                     "avares://Everywhere.Core/Assets/Icons/brave-color.png",
-                    "https://brave.com/search/api",
-                    ApiKeys)
+                    "")
                 {
                     EndPoint = new Customizable<string>("https://api.search.brave.com/res/v1/web/search", isDefaultValueReadonly: true)
                 }),
             new KeyValuePair<WebSearchEngineProviderId, IWebSearchEngineProvider>(
                 WebSearchEngineProviderId.Google,
-                new GoogleWebSearchEngineProvider(ApiKeys)),
+                new GoogleWebSearchEngineProvider()),
             new KeyValuePair<WebSearchEngineProviderId, IWebSearchEngineProvider>(
                 WebSearchEngineProviderId.Jina,
                 new ApiKeyWebSearchEngineProvider(
                     WebSearchEngineProviderId.Jina,
                     new DirectLocaleKey("Jina"),
                     "avares://Everywhere.Core/Assets/Icons/jina-light.svg",
-                    "https://jina.ai",
-                    ApiKeys)
+                    "")
                 {
                     EndPoint = new Customizable<string>("https://s.jina.ai", isDefaultValueReadonly: true)
                 }),
@@ -474,8 +466,7 @@ public sealed partial class WebSearchEngineSettings : ObservableObject
                     WebSearchEngineProviderId.Tavily,
                     new DirectLocaleKey("Tavily"),
                     "avares://Everywhere.Core/Assets/Icons/tavily-color.svg",
-                    "https://tavily.com",
-                    ApiKeys)
+                    "")
                 {
                     EndPoint = new Customizable<string>("https://api.tavily.com/search", isDefaultValueReadonly: true)
                 }),
@@ -485,8 +476,7 @@ public sealed partial class WebSearchEngineSettings : ObservableObject
                     WebSearchEngineProviderId.UniFuncs,
                     new DirectLocaleKey("UniFuncs"),
                     "avares://Everywhere.Core/Assets/Icons/unifuncs-color.png",
-                    "https://www.unifuncs.com",
-                    ApiKeys)
+                    "")
                 {
                     EndPoint = new Customizable<string>("https://api.unifuncs.com/api/web-search/search", isDefaultValueReadonly: true)
                 }),
@@ -496,8 +486,7 @@ public sealed partial class WebSearchEngineSettings : ObservableObject
                     WebSearchEngineProviderId.TinyFish,
                     new DirectLocaleKey("TinyFish"),
                     "avares://Everywhere.Core/Assets/Icons/tinyfish-color.svg",
-                    "https://tinyfish.ai",
-                    ApiKeys)
+                    "")
                 {
                     EndPoint = new Customizable<string>("https://api.search.tinyfish.ai", isDefaultValueReadonly: true)
                 }),

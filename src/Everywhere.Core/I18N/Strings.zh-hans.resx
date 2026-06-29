@@ -644,6 +644,12 @@
     <data name="WebSearchEngineProvider_ApiKey_Description" xml:space="preserve">
         <value>需要从对应的官方获取，详情请参考文档。</value>
     </data>
+    <data name="WebSearchEngineProvider_ExtraApiKeys_Header" xml:space="preserve">
+        <value>额外 API Key</value>
+    </data>
+    <data name="WebSearchEngineProvider_ExtraApiKeys_Description" xml:space="preserve">
+        <value>加入轮询池的备用 Key。某个 Key 触发限流 (429) 时会被冷却 60 秒，其它 Key 继续工作。</value>
+    </data>
     <data name="WebSearchEngineProvider_SearchEngineId_Header" xml:space="preserve">
         <value>搜索引擎 ID</value>
     </data>

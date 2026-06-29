@@ -644,6 +644,12 @@
     <data name="WebSearchEngineProvider_ApiKey_Description" xml:space="preserve">
         <value>Obtain it from the respective official source. Please refer to the documentation for details.</value>
     </data>
+    <data name="WebSearchEngineProvider_ExtraApiKeys_Header" xml:space="preserve">
+        <value>Extra API Keys</value>
+    </data>
+    <data name="WebSearchEngineProvider_ExtraApiKeys_Description" xml:space="preserve">
+        <value>Additional keys joined in a rotating pool with the primary key. On rate-limit (429) the failed key cools for 60s while the others keep serving requests.</value>
+    </data>
     <data name="WebSearchEngineProvider_SearchEngineId_Header" xml:space="preserve">
         <value>Search Engine ID</value>
     </data>

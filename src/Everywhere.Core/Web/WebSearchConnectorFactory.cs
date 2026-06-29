@@ -24,28 +24,28 @@ internal static class WebSearchConnectorFactory
                 official.Settings),
             OptionalApiKeyWebSearchEngineProvider { Id: WebSearchEngineProviderId.AnySearch } anySearch =>
                 new AnySearchConnector(
-                    BuildPool(anySearch.ApiKey, anySearch.ExtraApiKeyIds, required: false),
+                    BuildPool(anySearch.ApiKeys, required: false),
                     httpClientFactory.CreateClient(),
                     EnsureUri(anySearch.EndPoint)),
             ApiKeyWebSearchEngineProvider { Id: WebSearchEngineProviderId.Bocha } bocha =>
-                new BoChaConnector(BuildPool(bocha.ApiKey, bocha.ExtraApiKeyIds), httpClientFactory.CreateClient(), EnsureUri(bocha.EndPoint)),
+                new BoChaConnector(BuildPool(bocha.ApiKeys), httpClientFactory.CreateClient(), EnsureUri(bocha.EndPoint)),
             ApiKeyWebSearchEngineProvider { Id: WebSearchEngineProviderId.Brave } brave =>
-                new BraveConnector(BuildPool(brave.ApiKey, brave.ExtraApiKeyIds), httpClientFactory.CreateClient(), EnsureUri(brave.EndPoint)),
+                new BraveConnector(BuildPool(brave.ApiKeys), httpClientFactory.CreateClient(), EnsureUri(brave.EndPoint)),
             GoogleWebSearchEngineProvider google => new GoogleConnector(
-                BuildPool(google.ApiKey, google.ExtraApiKeyIds),
+                BuildPool(google.ApiKeys),
                 google.SearchEngineId ?? throw new InvalidOperationException("Google Search Engine ID is not set."),
                 httpClientFactory.CreateClient(),
                 EnsureUri(google.EndPoint)),
             ApiKeyWebSearchEngineProvider { Id: WebSearchEngineProviderId.Jina } jina =>
-                new JinaConnector(BuildPool(jina.ApiKey, jina.ExtraApiKeyIds), httpClientFactory.CreateClient(), EnsureUri(jina.EndPoint)),
+                new JinaConnector(BuildPool(jina.ApiKeys), httpClientFactory.CreateClient(), EnsureUri(jina.EndPoint)),
             SearXNGWebSearchEngineProvider searXNG =>
                 new SearxngConnector(httpClientFactory.CreateClient(), EnsureUri(searXNG.EndPoint)),
             ApiKeyWebSearchEngineProvider { Id: WebSearchEngineProviderId.Tavily } tavily =>
-                new TavilyConnector(BuildPool(tavily.ApiKey, tavily.ExtraApiKeyIds), httpClientFactory.CreateClient(), EnsureUri(tavily.EndPoint)),
+                new TavilyConnector(BuildPool(tavily.ApiKeys), httpClientFactory.CreateClient(), EnsureUri(tavily.EndPoint)),
             ApiKeyWebSearchEngineProvider { Id: WebSearchEngineProviderId.UniFuncs } uniFuncs =>
-                new UniFuncsConnector(BuildPool(uniFuncs.ApiKey, uniFuncs.ExtraApiKeyIds), httpClientFactory.CreateClient(), EnsureUri(uniFuncs.EndPoint)),
+                new UniFuncsConnector(BuildPool(uniFuncs.ApiKeys), httpClientFactory.CreateClient(), EnsureUri(uniFuncs.EndPoint)),
             ApiKeyWebSearchEngineProvider { Id: WebSearchEngineProviderId.TinyFish } tinyFish =>
-                new TinyFishConnector(BuildPool(tinyFish.ApiKey, tinyFish.ExtraApiKeyIds), httpClientFactory.CreateClient(), EnsureUri(tinyFish.EndPoint)),
+                new TinyFishConnector(BuildPool(tinyFish.ApiKeys), httpClientFactory.CreateClient(), EnsureUri(tinyFish.EndPoint)),
             _ => throw new NotSupportedException($"Unsupported web search provider: {provider.Id}"),
         };
     }
@@ -63,17 +63,13 @@ internal static class WebSearchConnectorFactory
         return new UriBuilder(uri) { Query = string.Empty }.Uri;
     }
 
-    private static KeyPool BuildPool(Guid primary, IEnumerable<Guid>? extras, bool required = true)
+    private static KeyPool BuildPool(IEnumerable<ApiKey> source, bool required = true)
     {
         var keys = new List<string>();
-        if (primary != Guid.Empty && ApiKey.GetKey(primary) is { Length: > 0 } pk) keys.Add(pk);
-        if (extras is not null)
+        foreach (var k in source)
         {
-            foreach (var id in extras)
-            {
-                if (id == Guid.Empty || id == primary) continue;
-                if (ApiKey.GetKey(id) is { Length: > 0 } sk) keys.Add(sk);
-            }
+            if (k.Id == Guid.Empty) continue;
+            if (ApiKey.GetKey(k.Id) is { Length: > 0 } secret) keys.Add(secret);
         }
         if (required && keys.Count == 0)
             throw new InvalidOperationException(
