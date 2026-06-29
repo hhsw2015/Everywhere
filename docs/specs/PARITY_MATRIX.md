@@ -23,7 +23,7 @@ DO NOT EDIT BY HAND. Run `node scripts/render-parity-matrix.mjs`.
 | agent_browser_back | core | in-browser | opendia | browser_back | in-progress | bench:back |
 | agent_browser_batch | value-add | in-browser | universal | browser_batch | missing | bench:batch |
 | agent_browser_chat | value-add | in-browser | wont-do |  | wont-do | none |
-| agent_browser_check | core | in-browser | opendia | browser_check | missing | bench:check |
+| agent_browser_check | core | in-browser | opendia | browser_check | in-progress | bench:check |
 | agent_browser_click | core | in-browser | opendia | browser_click | in-progress | bench:click |
 | agent_browser_clipboard_copy | value-add | out-of-browser | everywhere | everywhere.clipboard_copy | missing | bench:clipboard_copy |
 | agent_browser_clipboard_paste | value-add | out-of-browser | everywhere | everywhere.clipboard_paste | missing | bench:clipboard_paste |
@@ -55,7 +55,7 @@ DO NOT EDIT BY HAND. Run `node scripts/render-parity-matrix.mjs`.
 | agent_browser_eval | core | in-browser | opendia | browser_eval | missing | manual:user |
 | agent_browser_fill | core | in-browser | opendia | browser_fill | in-progress | bench:fill |
 | agent_browser_find | niche | in-browser | opendia | browser_find | missing | bench:find |
-| agent_browser_focus | niche | in-browser | opendia | browser_focus | missing | bench:focus |
+| agent_browser_focus | niche | in-browser | opendia | browser_focus | in-progress | bench:focus |
 | agent_browser_forward | core | in-browser | opendia | browser_forward | in-progress | bench:forward |
 | agent_browser_frame_main | value-add | in-browser | opendia | browser_frame_main | missing | bench:frame_main |
 | agent_browser_frame_switch | value-add | in-browser | opendia | browser_frame_switch | missing | bench:frame_switch |
@@ -70,7 +70,7 @@ DO NOT EDIT BY HAND. Run `node scripts/render-parity-matrix.mjs`.
 | agent_browser_get_url | core | in-browser | opendia | browser_get_url | in-progress | bench:get_url |
 | agent_browser_get_value | niche | in-browser | opendia | browser_get_value | missing | bench:get_value |
 | agent_browser_highlight | value-add | in-browser | universal | browser_highlight | missing | bench:highlight |
-| agent_browser_hover | niche | in-browser | opendia | browser_hover | missing | bench:hover |
+| agent_browser_hover | niche | in-browser | opendia | browser_hover | in-progress | bench:hover |
 | agent_browser_inspect | value-add | in-browser | universal | browser_inspect | missing | bench:inspect |
 | agent_browser_install | value-add | in-browser | wont-do |  | wont-do | none |
 | agent_browser_is_checked | niche | in-browser | opendia | browser_is_checked | missing | bench:is_checked |
@@ -154,15 +154,15 @@ DO NOT EDIT BY HAND. Run `node scripts/render-parity-matrix.mjs`.
 | agent_browser_trace_start | value-add | in-browser | opendia | browser_trace_start | missing | bench:trace_start |
 | agent_browser_trace_stop | value-add | in-browser | opendia | browser_trace_stop | missing | bench:trace_stop |
 | agent_browser_type | core | in-browser | opendia | browser_type | in-progress | bench:type |
-| agent_browser_uncheck | core | in-browser | opendia | browser_uncheck | missing | bench:uncheck |
+| agent_browser_uncheck | core | in-browser | opendia | browser_uncheck | in-progress | bench:uncheck |
 | agent_browser_upgrade | value-add | in-browser | wont-do |  | wont-do | none |
 | agent_browser_upload | value-add | both | opendia | browser_upload | missing | bench:upload |
 | agent_browser_vitals | niche | in-browser | opendia | browser_vitals | missing | bench:vitals |
 | agent_browser_wait_for_download | value-add | in-browser | opendia | browser_wait_for_download | missing | bench:wait_for_download |
 | agent_browser_wait_for_function | niche | in-browser | universal | browser_wait_for_function | missing | bench:wait_for_function |
-| agent_browser_wait_for_load | core | in-browser | universal | browser_wait_for_load | missing | bench:wait_for_load |
-| agent_browser_wait_for_selector | core | in-browser | universal | browser_wait_for_selector | missing | bench:wait_for_selector |
-| agent_browser_wait_for_text | core | in-browser | universal | browser_wait_for_text | missing | bench:wait_for_text |
-| agent_browser_wait_for_url | niche | in-browser | universal | browser_wait_for_url | missing | bench:wait_for_url |
-| agent_browser_wait_ms | core | in-browser | opendia | browser_wait_ms | missing | bench:wait_ms |
+| agent_browser_wait_for_load | core | in-browser | universal | browser_wait_for_load | in-progress | bench:wait_for_load |
+| agent_browser_wait_for_selector | core | in-browser | universal | browser_wait_for_selector | in-progress | bench:wait_for_selector |
+| agent_browser_wait_for_text | core | in-browser | universal | browser_wait_for_text | in-progress | bench:wait_for_text |
+| agent_browser_wait_for_url | niche | in-browser | universal | browser_wait_for_url | in-progress | bench:wait_for_url |
+| agent_browser_wait_ms | core | in-browser | opendia | browser_wait_ms | in-progress | bench:wait_ms |
 | agent_browser_window_new | value-add | in-browser | opendia | browser_window_new | missing | bench:window_new |
