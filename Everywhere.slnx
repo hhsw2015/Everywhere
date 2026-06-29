@@ -16,6 +16,7 @@
     <File Path=".github/workflows/windows-release.yml" />
   </Folder>
   <Folder Name="/3rd/">
+    <Project Path="3rd/ClassicDiagnostics.Avalonia/src/ClassicDiagnostics.Avalonia.csproj" />
     <Project Path="3rd/EverythingNetCore/EverythingNet/EverythingNet.csproj" />
     <Project Path="3rd/shad-ui/src/ShadUI/ShadUI.csproj" />
     <Project Path="3rd/WritableJsonConfiguration/src/WritableJsonConfiguration/WritableJsonConfiguration.csproj" />

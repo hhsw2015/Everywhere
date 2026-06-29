@@ -19,3 +19,6 @@
 [submodule "3rd/open-codex-computer-use"]
 	path = 3rd/open-codex-computer-use
 	url = https://github.com/iFurySt/open-codex-computer-use
+[submodule "3rd/ClassicDiagnostics.Avalonia"]
+	path = 3rd/ClassicDiagnostics.Avalonia
+	url = https://github.com/Sylinko/ClassicDiagnostics.Avalonia

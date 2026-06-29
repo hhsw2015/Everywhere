@@ -19,6 +19,10 @@ using Microsoft.Extensions.DependencyInjection;
 using Serilog;
 using ShadUI;
 
+#if DEBUG
+using ClassicDiagnostics.Avalonia;
+#endif
+
 namespace Everywhere;
 
 public class App(IServiceProvider serviceProvider) : Application, IRecipient<ApplicationMessage>
@@ -61,6 +65,8 @@ public class App(IServiceProvider serviceProvider) : Application, IRecipient<App
             ServiceLocator.Build(x => x.AddAvaloniaBasicServices());
             return;
         }
+
+        this.AttachDevTools();
 #endif
 
         Window.WindowClosedEvent.AddClassHandler<TransientWindow>(HandleTransientWindowClosed);

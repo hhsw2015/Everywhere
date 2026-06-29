@@ -60,6 +60,12 @@ internal class patch_AvnAutomationPeer : IAvnAutomationPeer
     }
 
     [MonoModIgnore]
+    public void BringIntoView()
+    {
+        throw new NotSupportedException();
+    }
+
+    [MonoModIgnore]
     public int IsInteropPeer()
     {
         throw new NotSupportedException();
@@ -198,6 +204,12 @@ internal class patch_AvnAutomationPeer : IAvnAutomationPeer
     }
 
     [MonoModIgnore]
+    public int RangeValueProvider_IsReadOnly()
+    {
+        throw new NotSupportedException();
+    }
+
+    [MonoModIgnore]
     public int IsSelectionItemProvider()
     {
         throw new NotSupportedException();
@@ -205,6 +217,36 @@ internal class patch_AvnAutomationPeer : IAvnAutomationPeer
 
     [MonoModIgnore]
     public int SelectionItemProvider_IsSelected()
+    {
+        throw new NotSupportedException();
+    }
+
+    [MonoModIgnore]
+    public void SelectionItemProvider_Select()
+    {
+        throw new NotSupportedException();
+    }
+
+    [MonoModIgnore]
+    public void SelectionItemProvider_AddToSelection()
+    {
+        throw new NotSupportedException();
+    }
+
+    [MonoModIgnore]
+    public void SelectionItemProvider_RemoveFromSelection()
+    {
+        throw new NotSupportedException();
+    }
+
+    [MonoModIgnore]
+    public IAvnAutomationPeer ScrollProvider_GetHorizontalScrollBar()
+    {
+        throw new NotSupportedException();
+    }
+
+    [MonoModIgnore]
+    public IAvnAutomationPeer ScrollProvider_GetVerticalScrollBar()
     {
         throw new NotSupportedException();
     }
@@ -245,84 +287,37 @@ internal class patch_AvnAutomationPeer : IAvnAutomationPeer
         throw new NotSupportedException();
     }
 
-    // ---- Avalonia 12 additions -------------------------------------
-    // These members were added to IAvnAutomationPeer in Avalonia 12;
-    // the patch must implement them so the assembly type-checks. We
-    // mirror the original implementations' "delegate to the underlying
-    // peer" shape with throw-stubs since this patch is replaced at
-    // load-time by Avalonia's real method body via MonoMod.
-
-    [MonoModIgnore]
-    public void BringIntoView()
-    {
-        throw new NotSupportedException();
-    }
-
-    [MonoModIgnore]
-    public int RangeValueProvider_IsReadOnly()
-    {
-        throw new NotSupportedException();
-    }
-
-    [MonoModIgnore]
-    public void SelectionItemProvider_Select()
-    {
-        throw new NotSupportedException();
-    }
-
-    [MonoModIgnore]
-    public void SelectionItemProvider_AddToSelection()
-    {
-        throw new NotSupportedException();
-    }
-
-    [MonoModIgnore]
-    public void SelectionItemProvider_RemoveFromSelection()
-    {
-        throw new NotSupportedException();
-    }
-
-    [MonoModIgnore]
-    public IAvnAutomationPeer ScrollProvider_GetHorizontalScrollBar()
-    {
-        throw new NotSupportedException();
-    }
-
-    [MonoModIgnore]
-    public IAvnAutomationPeer ScrollProvider_GetVerticalScrollBar()
-    {
-        throw new NotSupportedException();
-    }
-
     [MonoModIgnore]
     public int ValueProvider_IsReadOnly()
     {
         throw new NotSupportedException();
     }
 
-    [MonoModIgnore] public IAvnAutomationPeer TemplatedParent { get; set; }
-    [MonoModIgnore] public IAvnString PlaceholderText { get; set; }
-
-    [MonoModIgnore] public IAvnAutomationNode Node { get; set; }
-    [MonoModIgnore] public IAvnString AcceleratorKey { get; set; }
-    [MonoModIgnore] public IAvnString AccessKey { get; set; }
-    [MonoModIgnore] public AvnAutomationControlType AutomationControlType { get; set; }
-    [MonoModIgnore] public IAvnString AutomationId { get; set; }
-    [MonoModIgnore] public AvnRect BoundingRectangle { get; set; }
-    [MonoModIgnore] public IAvnAutomationPeerArray Children { get; set; }
-    [MonoModIgnore] public IAvnString ClassName { get; set; }
-    [MonoModIgnore] public IAvnAutomationPeer LabeledBy { get; set; }
-    [MonoModIgnore] public IAvnString Name { get; set; }
-    [MonoModIgnore] public IAvnAutomationPeer Parent { get; set; }
-    [MonoModIgnore] public IAvnAutomationPeer VisualRoot { get; set; }
-    [MonoModIgnore] public IAvnAutomationPeer RootPeer { get; set; }
-    [MonoModIgnore] public IAvnString HelpText { get; set; }
-    [MonoModIgnore] public AvnLandmarkType LandmarkType { get; set; }
-    [MonoModIgnore] public int HeadingLevel { get; set; }
-    [MonoModIgnore] public AvnLiveSetting LiveSetting { get; set; }
+    [MonoModIgnore] public IAvnAutomationNode Node => throw new NotSupportedException();
+    [MonoModIgnore] public IAvnString AcceleratorKey => throw new NotSupportedException();
+    [MonoModIgnore] public IAvnString AccessKey => throw new NotSupportedException();
+    [MonoModIgnore] public AvnAutomationControlType AutomationControlType => throw new NotSupportedException();
+    [MonoModIgnore] public IAvnString AutomationId => throw new NotSupportedException();
+    [MonoModIgnore] public AvnRect BoundingRectangle => throw new NotSupportedException();
+    [MonoModIgnore] public IAvnAutomationPeerArray Children => throw new NotSupportedException();
+    [MonoModIgnore] public IAvnString ClassName => throw new NotSupportedException();
+    [MonoModIgnore] public IAvnAutomationPeer LabeledBy => throw new NotSupportedException();
+    [MonoModIgnore] public IAvnString Name => throw new NotSupportedException();
+    [MonoModIgnore] public IAvnAutomationPeer Parent => throw new NotSupportedException();
+    [MonoModIgnore] public IAvnAutomationPeer TemplatedParent => throw new NotSupportedException();
+    [MonoModIgnore] public IAvnAutomationPeer VisualRoot => throw new NotSupportedException();
+    [MonoModIgnore] public IAvnAutomationPeer RootPeer => throw new NotSupportedException();
+    [MonoModIgnore] public IAvnString HelpText => throw new NotSupportedException();
+    [MonoModIgnore] public IAvnString PlaceholderText => throw new NotSupportedException();
+    [MonoModIgnore] public AvnLandmarkType LandmarkType => throw new NotSupportedException();
+    [MonoModIgnore] public int HeadingLevel => throw new NotSupportedException();
+    [MonoModIgnore] public AvnLiveSetting LiveSetting => throw new NotSupportedException();
 
     [MonoModIgnore]
-    public void Dispose() { }
+    public void Dispose()
+    {
+        throw new NotSupportedException();
+    }
 }
 
 #endif
