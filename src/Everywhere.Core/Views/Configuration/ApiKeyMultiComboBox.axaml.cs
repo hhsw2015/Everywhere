@@ -56,6 +56,7 @@ public sealed partial class ApiKeyMultiComboBox : TemplatedControl
     public ObservableCollection<Row> AvailableKeys { get; } = [];
 
     private readonly ObservableCollection<ApiKey> _source;
+    private bool _suppressRebuild;
 
     public ApiKeyMultiComboBox(ObservableCollection<ApiKey> source)
     {
@@ -67,6 +68,10 @@ public sealed partial class ApiKeyMultiComboBox : TemplatedControl
     {
         base.OnAttachedToVisualTree(e);
         _source.CollectionChanged += OnSourceChanged;
+        // Re-subscribe to SelectedIds — same instance survives the
+        // detach/re-attach cycle and OnPropertyChanged won't fire because
+        // the property reference is unchanged.
+        if (SelectedIds is { } col) col.CollectionChanged += OnSelectedChanged;
         Rebuild();
     }
 
@@ -91,12 +96,29 @@ public sealed partial class ApiKeyMultiComboBox : TemplatedControl
         }
         else if (change.Property == ExcludedIdProperty)
         {
+            // Primary key just changed — if it was in our extra set, drop
+            // it so BuildPool doesn't see the same key twice.
+            if (change.NewValue is Guid newExcluded && newExcluded != Guid.Empty)
+                SelectedIds?.Remove(newExcluded);
             Rebuild();
         }
     }
 
     private void OnSourceChanged(object? sender, NotifyCollectionChangedEventArgs e) => Rebuild();
-    private void OnSelectedChanged(object? sender, NotifyCollectionChangedEventArgs e) => Rebuild();
+
+    private void OnSelectedChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        // Self-induced changes (a user clicking a checkbox) only need a
+        // summary refresh — the Row state is already correct. Skip the
+        // full Rebuild which would re-template every flyout entry and
+        // flicker / close the popup.
+        if (_suppressRebuild)
+        {
+            UpdateSummary();
+            return;
+        }
+        Rebuild();
+    }
 
     private void DetachSelectedIds()
     {
@@ -139,13 +161,23 @@ public sealed partial class ApiKeyMultiComboBox : TemplatedControl
         var col = SelectedIds;
         if (col is null) return;
 
-        if (row.IsChecked)
+        // Mutation about to fire OnSelectedChanged — short-circuit it so
+        // the flyout doesn't re-template on every click.
+        _suppressRebuild = true;
+        try
         {
-            if (!col.Contains(row.Id)) col.Add(row.Id);
+            if (row.IsChecked)
+            {
+                if (!col.Contains(row.Id)) col.Add(row.Id);
+            }
+            else
+            {
+                col.Remove(row.Id);
+            }
         }
-        else
+        finally
         {
-            col.Remove(row.Id);
+            _suppressRebuild = false;
         }
         UpdateSummary();
     }
