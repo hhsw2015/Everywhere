@@ -5,8 +5,8 @@ using Microsoft.SemanticKernel.Data;
 
 namespace Everywhere.Web;
 
-public sealed partial class TavilyConnector(string apiKey, HttpClient httpClient, Uri uri)
-    : WebSearchClient<TavilyConnector.Response>(httpClient, new Range(0, 20))
+public sealed partial class TavilyConnector(KeyPool keys, HttpClient httpClient, Uri uri)
+    : WebSearchClient<TavilyConnector.Response>(httpClient, new Range(0, 20), keys)
 {
     protected override JsonTypeInfo<Response> JsonTypeInfo => TavilyJsonSerializerContext.Default.Response;
 
@@ -17,7 +17,7 @@ public sealed partial class TavilyConnector(string apiKey, HttpClient httpClient
             Headers =
             {
                 { "Accept", "application/json" },
-                { "Authorization", $"Bearer {apiKey}" }
+                { "Authorization", $"Bearer {NextKey()}" }
             },
             Content = JsonContent.Create(new Request(query, count), TavilyJsonSerializerContext.Default.Request)
         };

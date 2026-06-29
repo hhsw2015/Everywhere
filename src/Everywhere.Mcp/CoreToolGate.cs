@@ -56,6 +56,21 @@ internal static class CoreToolGate
         Environment.GetEnvironmentVariable("EVERYWHERE_MCP_FULL") is not "1");
 
     /// <summary>
+    /// Native tools that are always exposed (in addition to the implicit
+    /// non-long-tail surface). Listed here only when they need to NOT be
+    /// hidden by anything else — purely documentary today. Real gating
+    /// happens through <see cref="NativeLongTail"/> below.
+    /// </summary>
+    public static readonly FrozenSet<string> CoreNativeTools = new[]
+    {
+        // web_search + web_fetch_url: content perception via configured
+        // search provider. Saves ~10× tokens vs WebFetch on viewed URLs
+        // by routing through the user's existing API quota + pool.
+        "web_search",
+        "web_fetch_url",
+    }.ToFrozenSet(StringComparer.Ordinal);
+
+    /// <summary>
     /// Native tools hidden from default tools/list. Reached via call_tool.
     /// These are duplicates / aliases / niche tools that don't earn their
     /// description-token budget for a typical agent task.

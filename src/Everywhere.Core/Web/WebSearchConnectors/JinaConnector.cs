@@ -5,8 +5,8 @@ using Microsoft.SemanticKernel.Data;
 
 namespace Everywhere.Web;
 
-public sealed partial class JinaConnector(string apiKey, HttpClient httpClient, Uri uri)
-    : WebSearchClient<JinaConnector.Response>(httpClient, new Range(0, 50))
+public sealed partial class JinaConnector(KeyPool keys, HttpClient httpClient, Uri uri)
+    : WebSearchClient<JinaConnector.Response>(httpClient, new Range(0, 50), keys)
 {
     protected override JsonTypeInfo<Response> JsonTypeInfo => JinaJsonSerializerContext.Default.Response;
 
@@ -17,7 +17,7 @@ public sealed partial class JinaConnector(string apiKey, HttpClient httpClient, 
             Headers =
             {
                 { "Accept", "application/json" },
-                { "Authorization", $"Bearer {apiKey}" }
+                { "Authorization", $"Bearer {NextKey()}" }
             },
             Content = JsonContent.Create(new Request(query, count), JinaJsonSerializerContext.Default.Request)
         };

@@ -10,7 +10,7 @@ namespace Everywhere.Web;
 /// <param name="httpClient"></param>
 /// <param name="uri"></param>
 public sealed partial class SearxngConnector(HttpClient httpClient, Uri uri)
-    : WebSearchClient<SearxngConnector.Response>(httpClient, new Range(0, 50))
+    : WebSearchClient<SearxngConnector.Response>(httpClient, new Range(0, 50), new KeyPool([]))
 {
     protected override JsonTypeInfo<Response> JsonTypeInfo => SearxngJsonSerializerContext.Default.Response;
 

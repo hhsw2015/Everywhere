@@ -13,7 +13,7 @@ namespace Everywhere.Web;
 public sealed partial class OfficialConnector(
     HttpClient httpClient,
     OfficialWebSearchEngineSettings settings
-) : WebSearchClient<OfficialConnector.Response>(httpClient, new Range(0, 20))
+) : WebSearchClient<OfficialConnector.Response>(httpClient, new Range(0, 20), new KeyPool([]))
 {
     private readonly JsonSerializerOptions _requestJsonSerializerOptions = new()
     {

@@ -5,8 +5,8 @@ using Microsoft.SemanticKernel.Data;
 
 namespace Everywhere.Web;
 
-public sealed partial class BraveConnector(string apiKey, HttpClient httpClient, Uri uri)
-    : WebSearchClient<BraveConnector.Response>(httpClient, new Range(0, 20))
+public sealed partial class BraveConnector(KeyPool keys, HttpClient httpClient, Uri uri)
+    : WebSearchClient<BraveConnector.Response>(httpClient, new Range(0, 20), keys)
 {
     protected override JsonTypeInfo<Response> JsonTypeInfo => BraveJsonSerializerContext.Default.Response;
 
@@ -17,7 +17,7 @@ public sealed partial class BraveConnector(string apiKey, HttpClient httpClient,
             Headers =
             {
                 { "Accept", "application/json" },
-                { "X-Subscription-Token", apiKey }
+                { "X-Subscription-Token", NextKey() ?? "" }
             },
             Content = JsonContent.Create(new Request(query, count), BraveJsonSerializerContext.Default.Request)
         };

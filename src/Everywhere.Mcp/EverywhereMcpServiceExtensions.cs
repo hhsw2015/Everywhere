@@ -43,6 +43,11 @@ public static class EverywhereMcpServiceExtensions
         // Meta tools (list_more_tools / call_tool) — depend on OpenDiaBridge
         // for the long-tail browser_* surface listing + dispatch.
         services.TryAddSingleton<Tools.MetaTools>();
+        // Web search/fetch via the user's configured Everywhere provider —
+        // depends on IWebSearchService + IHttpClientFactory registered in
+        // Everywhere.Core. Inner host re-registers on the SDK container
+        // (see EverywhereMcpHttpHost).
+        services.TryAddSingleton<Tools.WebSearchTool>();
         // OpenDiaToolSync needs IOptions<McpServerOptions> from the inner
         // MCP container — it's instantiated from there in
         // EverywhereMcpHttpHost.BuildApp(), not here.

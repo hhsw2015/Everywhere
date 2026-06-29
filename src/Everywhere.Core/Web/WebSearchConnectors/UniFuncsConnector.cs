@@ -5,8 +5,8 @@ using Microsoft.SemanticKernel.Data;
 
 namespace Everywhere.Web;
 
-public sealed partial class UniFuncsConnector(string apiKey, HttpClient httpClient, Uri uri)
-    : WebSearchClient<UniFuncsConnector.Response>(httpClient, new Range(1, 50))
+public sealed partial class UniFuncsConnector(KeyPool keys, HttpClient httpClient, Uri uri)
+    : WebSearchClient<UniFuncsConnector.Response>(httpClient, new Range(1, 50), keys)
 {
     protected override JsonTypeInfo<Response> JsonTypeInfo => UniFuncsJsonSerializerContext.Default.Response;
 
@@ -17,7 +17,7 @@ public sealed partial class UniFuncsConnector(string apiKey, HttpClient httpClie
             Headers =
             {
                 { "Accept", "application/json" },
-                { "Authorization", $"Bearer {apiKey}" }
+                { "Authorization", $"Bearer {NextKey()}" }
             },
             Content = JsonContent.Create(new Request(query, count), UniFuncsJsonSerializerContext.Default.Request)
         };

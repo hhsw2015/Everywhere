@@ -108,7 +108,12 @@ public static class ServiceExtensions
                 .AddTransient<BuiltInChatPlugin, VisualContextPlugin>()
                 .AddTransient<BuiltInChatPlugin, FileSystemPlugin>()
                 .AddTransient<BuiltInChatPlugin, WebPlugin>()
-                .AddTransient<BuiltInChatPlugin, TerminalPlugin>();
+                .AddTransient<BuiltInChatPlugin, TerminalPlugin>()
+
+                // Web search service used by both the chat WebPlugin and the
+                // MCP web_search tool. Singleton: stateless apart from the
+                // settings reference; resolves a fresh connector per call.
+                .AddSingleton<IWebSearchService, WebSearchService>();
 
     }
 }

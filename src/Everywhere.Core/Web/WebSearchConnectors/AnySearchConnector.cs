@@ -6,8 +6,8 @@ using Microsoft.SemanticKernel.Data;
 
 namespace Everywhere.Web;
 
-public sealed partial class AnySearchConnector(string? apiKey, HttpClient httpClient, Uri uri)
-    : WebSearchClient<AnySearchConnector.Response>(httpClient, new Range(0, 100))
+public sealed partial class AnySearchConnector(KeyPool keys, HttpClient httpClient, Uri uri)
+    : WebSearchClient<AnySearchConnector.Response>(httpClient, new Range(0, 100), keys)
 {
     protected override JsonTypeInfo<Response> JsonTypeInfo => AnySearchJsonSerializerContext.Default.Response;
 
@@ -22,9 +22,10 @@ public sealed partial class AnySearchConnector(string? apiKey, HttpClient httpCl
             Content = JsonContent.Create(new Request(query, count), AnySearchJsonSerializerContext.Default.Request)
         };
 
-        if (!apiKey.IsNullOrWhiteSpace())
+        var key = NextKey();
+        if (!string.IsNullOrWhiteSpace(key))
         {
-            requestMessage.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
+            requestMessage.Headers.Authorization = new AuthenticationHeaderValue("Bearer", key);
         }
 
         return requestMessage;

@@ -73,68 +73,38 @@ public sealed partial class WebPlugin : BuiltInChatPlugin
                 showDetails: false);
         }
 
-        return provider switch
+        try
         {
-            OfficialWebSearchEngineProvider official => new OfficialConnector(
-                _httpClientFactory.CreateClient(nameof(ICloudClient)),
-                official.Settings),
-            OptionalApiKeyWebSearchEngineProvider { Id: WebSearchEngineProviderId.AnySearch } anySearch =>
-                new AnySearchConnector(
-                    apiKey: anySearch.ApiKey != Guid.Empty ? EnsureApiKey(anySearch.ApiKey) : null,
-                    _httpClientFactory.CreateClient(),
-                    EnsureUri(anySearch.EndPoint)),
-            // ReSharper disable once IdentifierTypo
-            ApiKeyWebSearchEngineProvider { Id: WebSearchEngineProviderId.Bocha } bocha =>
-                new BoChaConnector(EnsureApiKey(bocha.ApiKey), _httpClientFactory.CreateClient(), EnsureUri(bocha.EndPoint)),
-            ApiKeyWebSearchEngineProvider { Id: WebSearchEngineProviderId.Brave } brave =>
-                new BraveConnector(EnsureApiKey(brave.ApiKey), _httpClientFactory.CreateClient(), EnsureUri(brave.EndPoint)),
-            GoogleWebSearchEngineProvider google => new GoogleConnector(
-                EnsureApiKey(google.ApiKey),
-                google.SearchEngineId ??
-                throw new HandledException(
-                    new UnauthorizedAccessException("Search Engine ID is not set."),
-                    new DynamicLocaleKey(LocaleKey.BuiltInChatPlugin_Web_GoogleSearchEngineIdNotSet_ErrorMessage),
-                    showDetails: false),
-                _httpClientFactory.CreateClient(),
-                EnsureUri(google.EndPoint)),
-            ApiKeyWebSearchEngineProvider { Id: WebSearchEngineProviderId.Jina } jina =>
-                new JinaConnector(EnsureApiKey(jina.ApiKey), _httpClientFactory.CreateClient(), EnsureUri(jina.EndPoint)),
-            // ReSharper disable once InconsistentNaming
-            SearXNGWebSearchEngineProvider searXNG =>
-                new SearxngConnector(_httpClientFactory.CreateClient(), EnsureUri(searXNG.EndPoint)),
-            ApiKeyWebSearchEngineProvider { Id: WebSearchEngineProviderId.Tavily } tavily =>
-                new TavilyConnector(EnsureApiKey(tavily.ApiKey), _httpClientFactory.CreateClient(), EnsureUri(tavily.EndPoint)),
-            // ReSharper disable once IdentifierTypo
-            ApiKeyWebSearchEngineProvider { Id: WebSearchEngineProviderId.UniFuncs } uniFuncs =>
-                new UniFuncsConnector(EnsureApiKey(uniFuncs.ApiKey), _httpClientFactory.CreateClient(), EnsureUri(uniFuncs.EndPoint)),
-            _ => throw new HandledException(
-                new NotSupportedException($"Web search engine provider '{provider.Id}' is not supported."),
-                new DynamicLocaleKey(LocaleKey.BuiltInChatPlugin_Web_UnsupportedWebSearchEngineProvider_ErrorMessage),
-                showDetails: false)
-        };
-
-        Uri EnsureUri(Customizable<string> url)
-        {
-            if (!Uri.TryCreate(url.ActualValue, UriKind.Absolute, out var uri) ||
-                uri.Scheme is not "http" and not "https")
-            {
-                throw new HandledException(
-                    new ArgumentException(
-                        "Endpoint is not a valid absolute http/https URI. Please instruct the user to correct in Main Window > Web Search."),
-                    new DynamicLocaleKey(LocaleKey.BuiltInChatPlugin_Web_InvalidWebSearchEngineEndpoint_ErrorMessage),
-                    showDetails: false);
-            }
-
-            // Extract only the base URI without query parameters
-            return new UriBuilder(uri) { Query = string.Empty }.Uri;
+            return WebSearchConnectorFactory.Create(provider, _httpClientFactory);
         }
-
-        string EnsureApiKey(Guid id) =>
-            ApiKey.GetKey(id) ??
+        catch (InvalidOperationException ex) when (ex.Message.Contains("API key"))
+        {
             throw new HandledException(
-                new UnauthorizedAccessException("API key is not set. Please instruct the user to configure in Main Window > Web Search."),
+                ex,
                 new DynamicLocaleKey(LocaleKey.BuiltInChatPlugin_Web_WebSearchEngineApiKeyNotSet_ErrorMessage),
                 showDetails: false);
+        }
+        catch (InvalidOperationException ex) when (ex.Message.Contains("Search Engine ID"))
+        {
+            throw new HandledException(
+                ex,
+                new DynamicLocaleKey(LocaleKey.BuiltInChatPlugin_Web_GoogleSearchEngineIdNotSet_ErrorMessage),
+                showDetails: false);
+        }
+        catch (InvalidOperationException ex) when (ex.Message.Contains("endpoint"))
+        {
+            throw new HandledException(
+                ex,
+                new DynamicLocaleKey(LocaleKey.BuiltInChatPlugin_Web_InvalidWebSearchEngineEndpoint_ErrorMessage),
+                showDetails: false);
+        }
+        catch (NotSupportedException ex)
+        {
+            throw new HandledException(
+                ex,
+                new DynamicLocaleKey(LocaleKey.BuiltInChatPlugin_Web_UnsupportedWebSearchEngineProvider_ErrorMessage),
+                showDetails: false);
+        }
     }
 
     /// <summary>

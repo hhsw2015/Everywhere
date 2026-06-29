@@ -15,8 +15,8 @@ namespace Everywhere.Web;
 /// <param name="searchEngineId">Google Search Engine ID (looks like "a12b345...")</param>
 /// <param name="httpClient">The HTTP client to use for requests.</param>
 /// <param name="uri">The URI of the Google Custom Search API. Defaults to https://customsearch.googleapis.com</param>
-public sealed partial class GoogleConnector(string apiKey, string searchEngineId, HttpClient httpClient, Uri uri)
-    : WebSearchClient<GoogleConnector.Response>(httpClient, new Range(1, 10))
+public sealed partial class GoogleConnector(KeyPool keys, string searchEngineId, HttpClient httpClient, Uri uri)
+    : WebSearchClient<GoogleConnector.Response>(httpClient, new Range(1, 10), keys)
 {
     protected override JsonTypeInfo<Response> JsonTypeInfo => GoogleJsonSerializerContext.Default.Response;
 
@@ -27,7 +27,7 @@ public sealed partial class GoogleConnector(string apiKey, string searchEngineId
             new UriBuilder(uri)
             {
                 Path = "/customsearch/v1",
-                Query = $"key={HttpUtility.UrlEncode(apiKey)}" +
+                Query = $"key={HttpUtility.UrlEncode(NextKey() ?? string.Empty)}" +
                     $"&cx={HttpUtility.UrlEncode(searchEngineId)}" +
                     $"&q={HttpUtility.UrlEncode(query)}" +
                     $"&num={count}",

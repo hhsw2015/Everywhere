@@ -9,8 +9,8 @@ namespace Everywhere.Web;
 ///     BoCha Web Search API
 ///     https://bocha-ai.feishu.cn/wiki/RXEOw02rFiwzGSkd9mUcqoeAnNK
 /// </summary>
-public sealed partial class BoChaConnector(string apiKey, HttpClient httpClient, Uri uri)
-    : WebSearchClient<BoChaConnector.Response>(httpClient, new Range(1, 50))
+public sealed partial class BoChaConnector(KeyPool keys, HttpClient httpClient, Uri uri)
+    : WebSearchClient<BoChaConnector.Response>(httpClient, new Range(1, 50), keys)
 {
     protected override JsonTypeInfo<Response> JsonTypeInfo => BoChaJsonSerializerContext.Default.Response;
 
@@ -20,7 +20,7 @@ public sealed partial class BoChaConnector(string apiKey, HttpClient httpClient,
         {
             Headers =
             {
-                { "Authorization", $"Bearer {apiKey}" }
+                { "Authorization", $"Bearer {NextKey()}" }
             },
             Content = JsonContent.Create(new Request(query, count, true), BoChaJsonSerializerContext.Default.Request)
         };

@@ -22,6 +22,7 @@ public enum WebSearchEngineProviderId
     SearXNG,
     Tavily,
     UniFuncs,
+    TinyFish,
 }
 
 public interface IWebSearchEngineProvider
@@ -160,6 +161,15 @@ public sealed partial class GoogleWebSearchEngineProvider(ObservableCollection<A
     [CustomValidation(typeof(ApiKey), nameof(Configuration.ApiKey.Validate))]
     public partial Guid ApiKey { get; set; }
 
+    /// <summary>
+    /// Optional extra ApiKey ids that join the primary <see cref="ApiKey"/>
+    /// in a rotating pool (rate-limit aware, 60s cooldown on 429). Edit
+    /// directly in settings.json today; a multi-select UI lands in a later
+    /// release. Empty by default — single-key behaviour unchanged.
+    /// </summary>
+    [SettingsItemIgnore]
+    public List<Guid> ExtraApiKeyIds { get; set; } = new();
+
     [JsonIgnore]
     [DynamicLocaleKey(
         LocaleKey.WebSearchEngineProvider_ApiKey_Header,
@@ -231,6 +241,10 @@ public sealed partial class ApiKeyWebSearchEngineProvider(
     [CustomValidation(typeof(ApiKey), nameof(Configuration.ApiKey.Validate))]
     public partial Guid ApiKey { get; set; }
 
+    /// <summary>See GoogleWebSearchEngineProvider.ExtraApiKeyIds for semantics.</summary>
+    [SettingsItemIgnore]
+    public List<Guid> ExtraApiKeyIds { get; set; } = new();
+
     [JsonIgnore]
     [DynamicLocaleKey(
         LocaleKey.WebSearchEngineProvider_ApiKey_Header,
@@ -280,6 +294,10 @@ public sealed partial class OptionalApiKeyWebSearchEngineProvider(
     [ObservableProperty]
     [SettingsItemIgnore]
     public partial Guid ApiKey { get; set; }
+
+    /// <summary>See GoogleWebSearchEngineProvider.ExtraApiKeyIds for semantics.</summary>
+    [SettingsItemIgnore]
+    public List<Guid> ExtraApiKeyIds { get; set; } = new();
 
     [JsonIgnore]
     [DynamicLocaleKey(
@@ -427,6 +445,17 @@ public sealed partial class WebSearchEngineSettings : ObservableObject
                     ApiKeys)
                 {
                     EndPoint = new Customizable<string>("https://api.unifuncs.com/api/web-search/search", isDefaultValueReadonly: true)
+                }),
+            new KeyValuePair<WebSearchEngineProviderId, IWebSearchEngineProvider>(
+                WebSearchEngineProviderId.TinyFish,
+                new ApiKeyWebSearchEngineProvider(
+                    WebSearchEngineProviderId.TinyFish,
+                    new DirectLocaleKey("TinyFish"),
+                    "avares://Everywhere.Core/Assets/Icons/tinyfish-color.svg",
+                    "https://tinyfish.ai",
+                    ApiKeys)
+                {
+                    EndPoint = new Customizable<string>("https://api.search.tinyfish.ai", isDefaultValueReadonly: true)
                 }),
         ]);
     }

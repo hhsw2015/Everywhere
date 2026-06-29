@@ -228,6 +228,14 @@ public sealed class EverywhereMcpHttpHost : IHostedService, IAsyncDisposable
         // [McpServerToolType] like BatchTool/ClipboardTools — register here
         // so the SDK constructor injection resolves the optional bridge.
         builder.Services.AddSingleton<Tools.MetaTools>();
+        // WebSearchTool (web_search + web_fetch_url): forward
+        // IWebSearchService + IHttpClientFactory from the parent container
+        // so the inner SDK ctor injection resolves them.
+        var webSearch = _parentServices.GetService<Everywhere.Web.IWebSearchService>();
+        if (webSearch is not null) builder.Services.AddSingleton(webSearch);
+        var httpClientFactory = _parentServices.GetService<IHttpClientFactory>();
+        if (httpClientFactory is not null) builder.Services.AddSingleton(httpClientFactory);
+        builder.Services.AddSingleton<Tools.WebSearchTool>();
         builder.Services.AddSingleton(_idle);
         builder.Services.AddSingleton(_browserUrl);
         builder.Services.AddSingleton(_finder);
