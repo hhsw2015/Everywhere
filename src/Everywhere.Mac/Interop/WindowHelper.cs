@@ -248,11 +248,6 @@ public sealed class WindowHelper : IWindowHelper
         return window.TryGetPlatformHandle()?.Handle is { } handle ? Runtime.GetNSObject<NSWindow>(handle) : null;
     }
 
-    public void RequestUserAttention(Window window)
-    {
-        NSApplication.SharedApplication.RequestUserAttention(NSRequestUserAttentionType.InformationalRequest);
-    }
-
     public void RaiseOverlayAboveTarget(Window window, int? targetProcessId)
     {
         if (GetNativeWindow(window) is not { } nw) return;
