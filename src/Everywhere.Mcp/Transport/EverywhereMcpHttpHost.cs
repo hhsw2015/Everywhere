@@ -216,6 +216,14 @@ public sealed class EverywhereMcpHttpHost : IHostedService, IAsyncDisposable
         builder.Services.AddSingleton(_highlighter);
         builder.Services.AddSingleton(_selectionCache);
         builder.Services.AddSingleton(_clipboard);
+        // IClipboardWriter (Mac NSPasteboard writer) + OpenDiaBridge must
+        // also be forwarded so ClipboardTools / BatchTool constructors
+        // can resolve them; previously DI threw a generic
+        // 'An error occurred invoking <tool>' on every call.
+        var clipboardWriter = _parentServices.GetService<Everywhere.Mcp.Input.IClipboardWriter>();
+        if (clipboardWriter is not null) builder.Services.AddSingleton(clipboardWriter);
+        var openDiaBridge = _parentServices.GetService<OpenDia.OpenDiaBridge>();
+        if (openDiaBridge is not null) builder.Services.AddSingleton(openDiaBridge);
         builder.Services.AddSingleton(_idle);
         builder.Services.AddSingleton(_browserUrl);
         builder.Services.AddSingleton(_finder);
