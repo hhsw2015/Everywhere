@@ -14,9 +14,19 @@ run_set() {
   local toks=() answers=()
   for i in $(seq 1 $N); do
     echo "  run $i/$N..." >&2
-    local out
-    out="$(timeout 300 bash "$ROOT/bench/runner/run-ours.sh" "$FIXTURE")" || {
-      echo "  run $i failed" >&2; return 1; }
+    for j in 1 2 3 4 5 6 7 8 9 10; do
+      if ! lsof -nP -iTCP:7977 -sTCP:LISTEN >/dev/null 2>&1; then break; fi
+      sleep 0.5
+    done
+    local out=""
+    for attempt in 1 2; do
+      if out="$(timeout 300 bash "$ROOT/bench/runner/run-ours.sh" "$FIXTURE")"; then
+        break
+      fi
+      out=""
+      [[ $attempt -lt 2 ]] && { echo "  run $i attempt $attempt failed; retrying..." >&2; sleep 5; }
+    done
+    [[ -n "$out" ]] || { echo "  run $i failed twice" >&2; return 1; }
     toks+=("$(jq -r '.tokens' <<<"$out")")
     answers+=("$(jq -r '.answer' <<<"$out")")
   done
