@@ -16,15 +16,31 @@ public sealed class MacClipboardWriter : IClipboardWriter
     {
         var pb = General();
         if (pb == nint.Zero) return;
-        objc_msgSend_get(pb, sel_registerName("clearContents"));
 
         var nsString = objc_getClass("NSString");
         var sel_stringWith = sel_registerName("stringWithUTF8String:");
+
+        var typeStr = objc_msgSend_str(nsString, sel_stringWith, "public.utf8-plain-text");
+        if (typeStr == nint.Zero) return;
+
+        // clearContents (modern API) — bumps changeCount, drops prior items.
+        objc_msgSend_get(pb, sel_registerName("clearContents"));
+
+        // declareTypes:owner: must precede setString:forType: or the
+        // setter returns NO and the pasteboard silently keeps prior
+        // (post-clear empty) state. The autorelease pool then drains
+        // the NSString before another reader sees it.
+        var nsArray = objc_getClass("NSArray");
+        var sel_arrayWithObject = sel_registerName("arrayWithObject:");
+        var typesArr = objc_msgSend_obj(nsArray, sel_arrayWithObject, typeStr);
+        if (typesArr == nint.Zero) return;
+        var sel_declareTypes = sel_registerName("declareTypes:owner:");
+        objc_msgSend_obj_obj(pb, sel_declareTypes, typesArr, nint.Zero);
+
         var nsText = objc_msgSend_str(nsString, sel_stringWith, text ?? string.Empty);
         if (nsText == nint.Zero) return;
 
         var sel_setStringForType = sel_registerName("setString:forType:");
-        var typeStr = objc_msgSend_str(nsString, sel_stringWith, "public.utf8-plain-text");
         objc_msgSend_obj_obj(pb, sel_setStringForType, nsText, typeStr);
     }
 
@@ -55,4 +71,7 @@ public sealed class MacClipboardWriter : IClipboardWriter
 
     [DllImport(Objc, EntryPoint = "objc_msgSend")]
     private static extern nint objc_msgSend_obj_obj(nint receiver, nint selector, nint a, nint b);
+
+    [DllImport(Objc, EntryPoint = "objc_msgSend")]
+    private static extern nint objc_msgSend_obj(nint receiver, nint selector, nint a);
 }
