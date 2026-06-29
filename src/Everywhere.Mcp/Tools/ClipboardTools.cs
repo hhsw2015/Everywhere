@@ -21,58 +21,45 @@ public static class ClipboardTools
         "Read the macOS general pasteboard as plain text. " +
         "Returns {has_text:bool, text:string}. " +
         "Cheap; prefer this for inspecting the clipboard. SPEC ab agent_browser_clipboard_read.")]
-    public static CallToolResult ClipboardRead(IClipboardReader reader)
-    {
-        try
-        {
-            var text = reader.GetText() ?? string.Empty;
-            return JsonOk(new { has_text = !string.IsNullOrEmpty(text), text });
-        }
-        catch (Exception ex) { return ToolErrors.FromException(ex, "clipboard_read"); }
-    }
+    public static CallToolResult ClipboardRead(IClipboardReader reader) => DoRead(reader, "clipboard_read");
+
+    [McpServerTool(Name = "clipboard_paste", ReadOnly = true)]
+    [Description(
+        "Read the macOS general pasteboard (alias for clipboard_read). " +
+        "SPEC ab agent_browser_clipboard_paste.")]
+    public static CallToolResult ClipboardPaste(IClipboardReader reader) => DoRead(reader, "clipboard_paste");
 
     [McpServerTool(Name = "clipboard_write")]
     [Description(
         "DANGEROUS: replace the macOS general pasteboard with the given text. " +
         "SPEC ab agent_browser_clipboard_write.")]
-    public static CallToolResult ClipboardWrite(IClipboardWriter writer, string text)
-    {
-        try
-        {
-            if (!writer.IsAvailable) return JsonOk(new { ok = false, error = "clipboard write not available on this host" });
-            writer.SetText(text ?? string.Empty);
-            return JsonOk(new { ok = true, bytes = (text ?? string.Empty).Length });
-        }
-        catch (Exception ex) { return ToolErrors.FromException(ex, "clipboard_write"); }
-    }
+    public static CallToolResult ClipboardWrite(IClipboardWriter writer, string text) => DoWrite(writer, text, "clipboard_write");
 
     [McpServerTool(Name = "clipboard_copy")]
     [Description(
         "DANGEROUS: copy a string to the macOS general pasteboard (alias for clipboard_write). " +
         "SPEC ab agent_browser_clipboard_copy.")]
-    public static CallToolResult ClipboardCopy(IClipboardWriter writer, string text)
-    {
-        try
-        {
-            if (!writer.IsAvailable) return JsonOk(new { ok = false, error = "clipboard write not available on this host" });
-            writer.SetText(text ?? string.Empty);
-            return JsonOk(new { ok = true, bytes = (text ?? string.Empty).Length });
-        }
-        catch (Exception ex) { return ToolErrors.FromException(ex, "clipboard_copy"); }
-    }
+    public static CallToolResult ClipboardCopy(IClipboardWriter writer, string text) => DoWrite(writer, text, "clipboard_copy");
 
-    [McpServerTool(Name = "clipboard_paste")]
-    [Description(
-        "Read the macOS general pasteboard (alias for clipboard_read). " +
-        "SPEC ab agent_browser_clipboard_paste.")]
-    public static CallToolResult ClipboardPaste(IClipboardReader reader)
+    private static CallToolResult DoRead(IClipboardReader reader, string label)
     {
         try
         {
             var text = reader.GetText() ?? string.Empty;
             return JsonOk(new { has_text = !string.IsNullOrEmpty(text), text });
         }
-        catch (Exception ex) { return ToolErrors.FromException(ex, "clipboard_paste"); }
+        catch (Exception ex) { return ToolErrors.FromException(ex, label); }
+    }
+
+    private static CallToolResult DoWrite(IClipboardWriter writer, string text, string label)
+    {
+        try
+        {
+            if (!writer.IsAvailable) return JsonOk(new { ok = false, error = "clipboard write not available on this host" });
+            writer.SetText(text ?? string.Empty);
+            return JsonOk(new { ok = true, bytes = (text ?? string.Empty).Length });
+        }
+        catch (Exception ex) { return ToolErrors.FromException(ex, label); }
     }
 
     private static CallToolResult JsonOk(object payload) => new()

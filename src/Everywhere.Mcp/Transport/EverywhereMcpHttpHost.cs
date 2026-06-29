@@ -259,7 +259,7 @@ public sealed class EverywhereMcpHttpHost : IHostedService, IAsyncDisposable
                 .WithCallToolHandler(async (ctx, ct) =>
                 {
                     var name = ctx.Params?.Name ?? string.Empty;
-                    if (!name.StartsWith("browser_", StringComparison.Ordinal))
+                    if (!name.StartsWith(OpenDia.OpenDiaToolListBuilder.Prefix, StringComparison.Ordinal))
                     {
                         return new ModelContextProtocol.Protocol.CallToolResult
                         {
@@ -270,7 +270,7 @@ public sealed class EverywhereMcpHttpHost : IHostedService, IAsyncDisposable
                             }],
                         };
                     }
-                    var origName = name.Substring("browser_".Length);
+                    var origName = name.Substring(OpenDia.OpenDiaToolListBuilder.Prefix.Length);
                     System.Text.Json.Nodes.JsonNode? args = null;
                     var argsDict = ctx.Params?.Arguments;
                     if (argsDict is { Count: > 0 })

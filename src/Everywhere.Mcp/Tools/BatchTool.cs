@@ -61,10 +61,9 @@ public static class BatchTool
 
             try
             {
-                if (name!.StartsWith("browser_", StringComparison.Ordinal))
+                if (name!.StartsWith(OpenDiaToolListBuilder.Prefix, StringComparison.Ordinal))
                 {
-                    var origName = name.Substring("browser_".Length);
-                    results.Add(await bridge.CallToolAsync(origName, argsNode, ct: ct));
+                    results.Add(await bridge.InvokeByPrefixedName(name, argsNode, ct: ct));
                 }
                 else if (name.StartsWith("everywhere.", StringComparison.Ordinal))
                 {

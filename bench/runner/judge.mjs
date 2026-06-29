@@ -35,9 +35,11 @@ async function llmVote(expected, actual) {
     method: "POST",
     headers: {
       "content-type": "application/json",
+      // The user's ANTHROPIC_AUTH_TOKEN works with x-api-key against
+      // the upstream API and most LiteLLM-style proxies; sending both
+      // x-api-key and Authorization Bearer trips strict OAuth proxies.
       "x-api-key": token,
       "anthropic-version": "2023-06-01",
-      "authorization": `Bearer ${token}`,
     },
     body: JSON.stringify({
       model: "claude-sonnet-4-6",
