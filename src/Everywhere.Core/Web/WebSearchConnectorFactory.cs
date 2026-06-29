@@ -52,10 +52,15 @@ internal static class WebSearchConnectorFactory
 
     private static Uri EnsureUri(Customizable<string> endpoint)
     {
-        var s = endpoint?.Value;
-        if (string.IsNullOrWhiteSpace(s))
-            throw new InvalidOperationException("Web search endpoint is empty.");
-        return new Uri(s, UriKind.Absolute);
+        if (!Uri.TryCreate(endpoint?.ActualValue, UriKind.Absolute, out var uri) ||
+            uri.Scheme is not "http" and not "https")
+        {
+            throw new InvalidOperationException(
+                "Web search endpoint is not a valid absolute http/https URI.");
+        }
+
+        // Strip query so per-call request can append its own.
+        return new UriBuilder(uri) { Query = string.Empty }.Uri;
     }
 
     private static KeyPool BuildPool(Guid primary, IEnumerable<Guid>? extras, bool required = true)
