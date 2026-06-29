@@ -42,8 +42,8 @@ DO NOT EDIT BY HAND. Run `node scripts/render-parity-matrix.mjs`.
 | agent_browser_dblclick | niche | in-browser | opendia | browser_dblclick | in-progress | bench:dblclick |
 | agent_browser_deny | value-add | in-browser | opendia | browser_deny | missing | bench:deny |
 | agent_browser_device | niche | in-browser | opendia | browser_device | missing | bench:device |
-| agent_browser_dialog_accept | value-add | in-browser | opendia | browser_dialog_accept | missing | bench:dialog_accept |
-| agent_browser_dialog_dismiss | value-add | in-browser | opendia | browser_dialog_dismiss | missing | bench:dialog_dismiss |
+| agent_browser_dialog_accept | value-add | in-browser | opendia | browser_dialog_accept | in-progress | bench:dialog_accept |
+| agent_browser_dialog_dismiss | value-add | in-browser | opendia | browser_dialog_dismiss | in-progress | bench:dialog_dismiss |
 | agent_browser_dialog_status | value-add | in-browser | opendia | browser_dialog_status | missing | bench:dialog_status |
 | agent_browser_diff_screenshot | value-add | in-browser | universal | browser_diff_screenshot | missing | bench:diff_screenshot |
 | agent_browser_diff_snapshot | value-add | in-browser | universal | browser_diff_snapshot | missing | bench:diff_snapshot |

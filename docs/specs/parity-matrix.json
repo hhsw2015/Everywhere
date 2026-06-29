@@ -446,10 +446,10 @@
       "est_effort": "S",
       "opendia_prereq": null,
       "acceptance": "bench:dialog_accept",
-      "status": "missing",
-      "last_push_sha": null,
+      "status": "in-progress",
+      "last_push_sha": "22227be904bc87bb63916b2638ce84c73ead9dfd",
       "last_bench_run": null,
-      "notes": ""
+      "notes": "Extension WS op landed in opendia @ 22227be. Forwarded as browser_dialog_accept. Bench fixture pending."
     },
     {
       "ab_command": "agent_browser_dialog_dismiss",
@@ -462,10 +462,10 @@
       "est_effort": "S",
       "opendia_prereq": null,
       "acceptance": "bench:dialog_dismiss",
-      "status": "missing",
-      "last_push_sha": null,
+      "status": "in-progress",
+      "last_push_sha": "22227be904bc87bb63916b2638ce84c73ead9dfd",
       "last_bench_run": null,
-      "notes": ""
+      "notes": "Extension WS op landed in opendia @ 22227be. Forwarded as browser_dialog_dismiss. Bench fixture pending."
     },
     {
       "ab_command": "agent_browser_dialog_status",
