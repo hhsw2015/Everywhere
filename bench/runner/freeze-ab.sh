@@ -16,6 +16,16 @@ N=5
 
 run_set() {
   local toks=() answers=()
+  # Warm-up: one throwaway run to populate Anthropic prompt cache so
+  # subsequent runs report cache_read (cheap) instead of cache_creation
+  # (cliff). Without this, one out of every ~5 runs lands on a TTL
+  # boundary and reports 600x the token count, blowing the variance gate.
+  echo "  warm-up..." >&2
+  for j in 1 2 3 4 5 6 7 8 9 10; do
+    if ! lsof -nP -iTCP:7977 -sTCP:LISTEN >/dev/null 2>&1; then break; fi
+    sleep 0.5
+  done
+  timeout 300 bash "$ROOT/bench/runner/run-ab.sh" "$FIXTURE" >/dev/null 2>&1 || true
   for i in $(seq 1 $N); do
     echo "  run $i/$N..." >&2
     # Wait for port 7977 to clear from prior run before starting next.

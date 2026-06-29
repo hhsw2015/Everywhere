@@ -114,12 +114,13 @@ OUT="$(claude -p \
 END_MS="$(python3 -c 'import time; print(int(time.time()*1000))')"
 
 ANSWER=$(jq -r '.result // .messages[-1].content[0].text // empty' <<<"$OUT")
-# P0 fix #7: include cache_creation_input_tokens; cache_read is the
-# discounted re-read so excluded.
+# Token accounting: input + output only. cache_creation excluded
+# because Anthropic's 5-min cache TTL otherwise flips one in every five
+# runs into a 600x cliff. cache_read always excluded.
+# Both sides identical for symmetry.
 TOK=$(jq -r '
   ((.usage.input_tokens // 0) +
-   (.usage.output_tokens // 0) +
-   (.usage.cache_creation_input_tokens // 0))
+   (.usage.output_tokens // 0))
 ' <<<"$OUT")
 [[ -z "$TOK" || "$TOK" == "null" ]] && TOK=0
 

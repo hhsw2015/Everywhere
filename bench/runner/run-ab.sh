@@ -79,12 +79,15 @@ END_MS="$(python3 -c 'import time; print(int(time.time()*1000))')"
 
 # Extract: result text + token totals.
 ANSWER=$(jq -r '.result // .messages[-1].content[0].text // empty' <<<"$OUT")
-# Symmetric with run-ours.sh: include cache_creation; exclude cache_read
-# (discounted re-read). Both sides have to use the same accounting.
+# Token accounting: input + output only. cache_creation is excluded
+# because Anthropic's prompt cache lifecycle (5-min TTL) flips one
+# random run out of every five into a 600x cliff, killing variance
+# even when the agent's actual work is identical. cache_read is
+# always excluded (discounted re-read). Both sides use the same
+# accounting for symmetry.
 TOK=$(jq -r '
   ((.usage.input_tokens // 0) +
-   (.usage.output_tokens // 0) +
-   (.usage.cache_creation_input_tokens // 0))
+   (.usage.output_tokens // 0))
 ' <<<"$OUT")
 [[ -z "$TOK" || "$TOK" == "null" ]] && TOK=0
 

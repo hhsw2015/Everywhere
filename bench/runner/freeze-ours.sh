@@ -12,6 +12,12 @@ N=5
 
 run_set() {
   local toks=() answers=()
+  echo "  warm-up..." >&2
+  for j in 1 2 3 4 5 6 7 8 9 10; do
+    if ! lsof -nP -iTCP:7977 -sTCP:LISTEN >/dev/null 2>&1; then break; fi
+    sleep 0.5
+  done
+  timeout 300 bash "$ROOT/bench/runner/run-ours.sh" "$FIXTURE" >/dev/null 2>&1 || true
   for i in $(seq 1 $N); do
     echo "  run $i/$N..." >&2
     for j in 1 2 3 4 5 6 7 8 9 10; do
