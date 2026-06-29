@@ -32,10 +32,19 @@ if [[ ! -x "$AB_BIN" ]]; then
 fi
 
 PORT="${BENCH_PORT:-7977}"
+# Port collision = silent stale-fixture serving. Detect.
+if lsof -nP -iTCP:"$PORT" -sTCP:LISTEN >/dev/null 2>&1; then
+  echo "preflight: port $PORT already in use; bench cannot start replay-server" >&2
+  exit 7
+fi
 node "$ROOT/bench/runner/replay-server.mjs" --fixture "$FIXTURE" --port "$PORT" 2>/dev/null &
 SRV=$!
 trap 'kill $SRV 2>/dev/null || true' EXIT
-sleep 1
+# Active wait — Node startup can exceed 1s on a cold cache.
+for i in 1 2 3 4 5 6 7 8 9 10; do
+  if curl -sf "http://127.0.0.1:$PORT/" >/dev/null 2>&1; then break; fi
+  sleep 0.5
+done
 
 # Strip front-matter, keep task body.
 TASK_BODY="$(awk 'BEGIN{n=0} /^---$/{n++; next} n==2{print}' "$FX_DIR/task.md")"
@@ -70,10 +79,13 @@ END_MS="$(python3 -c 'import time; print(int(time.time()*1000))')"
 
 # Extract: result text + token totals.
 ANSWER=$(jq -r '.result // .messages[-1].content[0].text // empty' <<<"$OUT")
+# Symmetric with run-ours.sh: include cache_creation; exclude cache_read
+# (discounted re-read). Both sides have to use the same accounting.
 TOK=$(jq -r '
-  (.usage.input_tokens // 0) + (.usage.output_tokens // 0)
-  // (.total_tokens // 0)
-' <<<"$OUT" | head -1)
+  ((.usage.input_tokens // 0) +
+   (.usage.output_tokens // 0) +
+   (.usage.cache_creation_input_tokens // 0))
+' <<<"$OUT")
 [[ -z "$TOK" || "$TOK" == "null" ]] && TOK=0
 
 jq -c -n \
