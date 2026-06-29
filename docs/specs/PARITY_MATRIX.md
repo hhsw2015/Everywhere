@@ -29,7 +29,7 @@ DO NOT EDIT BY HAND. Run `node scripts/render-parity-matrix.mjs`.
 | agent_browser_clipboard_paste | value-add | out-of-browser | everywhere | everywhere.clipboard_paste | missing | bench:clipboard_paste |
 | agent_browser_clipboard_read | value-add | out-of-browser | everywhere | everywhere.clipboard_read | missing | bench:clipboard_read |
 | agent_browser_clipboard_write | value-add | out-of-browser | everywhere | everywhere.clipboard_write | missing | bench:clipboard_write |
-| agent_browser_close | core | in-browser | opendia | browser_close | missing | bench:close |
+| agent_browser_close | core | in-browser | opendia | browser_close | in-progress | bench:close |
 | agent_browser_confirm | value-add | in-browser | opendia | browser_confirm | missing | bench:confirm |
 | agent_browser_connect | value-add | in-browser | wont-do |  | wont-do | none |
 | agent_browser_console | value-add | in-browser | opendia | browser_console | missing | bench:console |
@@ -96,7 +96,7 @@ DO NOT EDIT BY HAND. Run `node scripts/render-parity-matrix.mjs`.
 | agent_browser_plugin_list | value-add | in-browser | wont-do |  | wont-do | none |
 | agent_browser_plugin_run | value-add | in-browser | wont-do |  | wont-do | none |
 | agent_browser_plugin_show | value-add | in-browser | wont-do |  | wont-do | none |
-| agent_browser_press | core | in-browser | opendia | browser_press | missing | bench:press |
+| agent_browser_press | core | in-browser | opendia | browser_press | in-progress | bench:press |
 | agent_browser_profiler_start | value-add | in-browser | opendia | browser_profiler_start | missing | bench:profiler_start |
 | agent_browser_profiler_stop | value-add | in-browser | opendia | browser_profiler_stop | missing | bench:profiler_stop |
 | agent_browser_profiles | value-add | in-browser | wont-do |  | wont-do | none |
@@ -112,8 +112,8 @@ DO NOT EDIT BY HAND. Run `node scripts/render-parity-matrix.mjs`.
 | agent_browser_record_stop | value-add | in-browser | wont-do |  | wont-do | none |
 | agent_browser_reload | core | in-browser | opendia | browser_reload | in-progress | bench:reload |
 | agent_browser_remove_init_script | niche | in-browser | opendia | browser_remove_init_script | missing | manual:user |
-| agent_browser_screenshot | core | both | universal | browser_screenshot | missing | bench:screenshot |
-| agent_browser_scroll | core | in-browser | opendia | browser_scroll | missing | bench:scroll |
+| agent_browser_screenshot | core | both | universal | browser_screenshot | in-progress | bench:screenshot |
+| agent_browser_scroll | core | in-browser | opendia | browser_scroll | in-progress | bench:scroll |
 | agent_browser_scroll_into_view | niche | in-browser | opendia | browser_scroll_into_view | missing | bench:scroll_into_view |
 | agent_browser_select | core | in-browser | opendia | browser_select | missing | bench:select |
 | agent_browser_session | value-add | in-browser | wont-do |  | wont-do | none |
@@ -147,7 +147,7 @@ DO NOT EDIT BY HAND. Run `node scripts/render-parity-matrix.mjs`.
 | agent_browser_swipe | niche | in-browser | opendia | browser_swipe | missing | bench:swipe |
 | agent_browser_tab_close | core | in-browser | opendia | browser_tab_close | missing | bench:tab_close |
 | agent_browser_tab_list | core | in-browser | opendia | browser_tab_list | missing | bench:tab_list |
-| agent_browser_tab_new | core | in-browser | opendia | browser_tab_new | missing | bench:tab_new |
+| agent_browser_tab_new | core | in-browser | opendia | browser_tab_new | in-progress | bench:tab_new |
 | agent_browser_tab_switch | core | in-browser | opendia | browser_tab_switch | missing | bench:tab_switch |
 | agent_browser_tap | niche | in-browser | opendia | browser_tap | missing | bench:tap |
 | agent_browser_tools_profiles | core | in-browser | wont-do |  | wont-do | none |
