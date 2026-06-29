@@ -87,11 +87,11 @@ DO NOT EDIT BY HAND. Run `node scripts/render-parity-matrix.mjs`.
 | agent_browser_network_har_start | value-add | in-browser | opendia | browser_network_har_start | missing | manual:user |
 | agent_browser_network_har_stop | value-add | in-browser | opendia | browser_network_har_stop | missing | manual:user |
 | agent_browser_network_request | value-add | in-browser | opendia | browser_network_request | missing | bench:network_request |
-| agent_browser_network_requests | value-add | in-browser | opendia | browser_network_requests | missing | bench:network_requests |
+| agent_browser_network_requests | value-add | in-browser | opendia | browser_network_requests | in-progress | bench:network_requests |
 | agent_browser_network_route | value-add | in-browser | opendia | browser_network_route | missing | manual:user |
 | agent_browser_network_unroute | value-add | in-browser | opendia | browser_network_unroute | missing | manual:user |
 | agent_browser_open | core | in-browser | opendia | browser_open | in-progress | bench:open |
-| agent_browser_pdf | value-add | both | opendia | browser_pdf | missing | bench:pdf |
+| agent_browser_pdf | value-add | both | opendia | browser_pdf | in-progress | bench:pdf |
 | agent_browser_plugin_add | value-add | in-browser | wont-do |  | wont-do | none |
 | agent_browser_plugin_list | value-add | in-browser | wont-do |  | wont-do | none |
 | agent_browser_plugin_run | value-add | in-browser | wont-do |  | wont-do | none |
@@ -101,11 +101,11 @@ DO NOT EDIT BY HAND. Run `node scripts/render-parity-matrix.mjs`.
 | agent_browser_profiler_stop | value-add | in-browser | opendia | browser_profiler_stop | missing | bench:profiler_stop |
 | agent_browser_profiles | value-add | in-browser | wont-do |  | wont-do | none |
 | agent_browser_pushstate | niche | in-browser | opendia | browser_pushstate | in-progress | bench:pushstate |
-| agent_browser_react_inspect | niche | in-browser | opendia | browser_react_inspect | missing | bench:react_inspect |
-| agent_browser_react_renders_start | niche | in-browser | opendia | browser_react_renders_start | missing | bench:react_renders_start |
-| agent_browser_react_renders_stop | niche | in-browser | opendia | browser_react_renders_stop | missing | bench:react_renders_stop |
-| agent_browser_react_suspense | niche | in-browser | opendia | browser_react_suspense | missing | bench:react_suspense |
-| agent_browser_react_tree | niche | in-browser | opendia | browser_react_tree | missing | bench:react_tree |
+| agent_browser_react_inspect | niche | in-browser | opendia | browser_react_inspect | in-progress | bench:react_inspect |
+| agent_browser_react_renders_start | niche | in-browser | opendia | browser_react_renders_start | in-progress | bench:react_renders_start |
+| agent_browser_react_renders_stop | niche | in-browser | opendia | browser_react_renders_stop | in-progress | bench:react_renders_stop |
+| agent_browser_react_suspense | niche | in-browser | opendia | browser_react_suspense | in-progress | bench:react_suspense |
+| agent_browser_react_tree | niche | in-browser | opendia | browser_react_tree | in-progress | bench:react_tree |
 | agent_browser_read | core | in-browser | universal | browser_read | blocked | bench:read |
 | agent_browser_record_restart | value-add | in-browser | wont-do |  | wont-do | none |
 | agent_browser_record_start | value-add | in-browser | wont-do |  | wont-do | none |
