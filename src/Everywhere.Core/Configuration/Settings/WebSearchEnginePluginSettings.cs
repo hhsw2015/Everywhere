@@ -162,13 +162,12 @@ public sealed partial class GoogleWebSearchEngineProvider(ObservableCollection<A
     public partial Guid ApiKey { get; set; }
 
     /// <summary>
-    /// Optional extra ApiKey ids that join the primary <see cref="ApiKey"/>
-    /// in a rotating pool (rate-limit aware, 60s cooldown on 429). Edit
-    /// directly in settings.json today; a multi-select UI lands in a later
-    /// release. Empty by default — single-key behaviour unchanged.
+    /// Extra ApiKey ids that join the primary <see cref="ApiKey"/> in a
+    /// rotating pool (rate-limit aware, 60s cooldown on 429).
+    /// Empty = single-key behaviour unchanged.
     /// </summary>
     [SettingsItemIgnore]
-    public List<Guid> ExtraApiKeyIds { get; set; } = new();
+    public ObservableCollection<Guid> ExtraApiKeyIds { get; init; } = new();
 
     [JsonIgnore]
     [DynamicLocaleKey(
@@ -182,6 +181,21 @@ public sealed partial class GoogleWebSearchEngineProvider(ObservableCollection<A
                 (GoogleWebSearchEngineProvider x) => x.ApiKey,
                 source: this,
                 mode: BindingMode.TwoWay)
+        });
+
+    [JsonIgnore]
+    [DynamicLocaleKey(
+        LocaleKey.WebSearchEngineProvider_ApiKey_Header,
+        LocaleKey.WebSearchEngineProvider_ApiKey_Description)]
+    [SettingsItem(Group = "_")]
+    public SettingsControl<ApiKeyMultiComboBox> ExtraApiKeysControl => new(
+        new ApiKeyMultiComboBox(apiKeys)
+        {
+            SelectedIds = ExtraApiKeyIds,
+            [!ApiKeyMultiComboBox.ExcludedIdProperty] = CompiledBinding.Create(
+                (GoogleWebSearchEngineProvider x) => x.ApiKey,
+                source: this,
+                mode: BindingMode.OneWay)
         });
 
     [ObservableProperty]
@@ -243,7 +257,7 @@ public sealed partial class ApiKeyWebSearchEngineProvider(
 
     /// <summary>See GoogleWebSearchEngineProvider.ExtraApiKeyIds for semantics.</summary>
     [SettingsItemIgnore]
-    public List<Guid> ExtraApiKeyIds { get; set; } = new();
+    public ObservableCollection<Guid> ExtraApiKeyIds { get; init; } = new();
 
     [JsonIgnore]
     [DynamicLocaleKey(
@@ -257,6 +271,21 @@ public sealed partial class ApiKeyWebSearchEngineProvider(
                 (ApiKeyWebSearchEngineProvider x) => x.ApiKey,
                 source: this,
                 mode: BindingMode.TwoWay)
+        });
+
+    [JsonIgnore]
+    [DynamicLocaleKey(
+        LocaleKey.WebSearchEngineProvider_ApiKey_Header,
+        LocaleKey.WebSearchEngineProvider_ApiKey_Description)]
+    [SettingsItem(Group = "_")]
+    public SettingsControl<ApiKeyMultiComboBox> ExtraApiKeysControl => new(
+        new ApiKeyMultiComboBox(apiKeys)
+        {
+            SelectedIds = ExtraApiKeyIds,
+            [!ApiKeyMultiComboBox.ExcludedIdProperty] = CompiledBinding.Create(
+                (ApiKeyWebSearchEngineProvider x) => x.ApiKey,
+                source: this,
+                mode: BindingMode.OneWay)
         });
 }
 
@@ -297,7 +326,7 @@ public sealed partial class OptionalApiKeyWebSearchEngineProvider(
 
     /// <summary>See GoogleWebSearchEngineProvider.ExtraApiKeyIds for semantics.</summary>
     [SettingsItemIgnore]
-    public List<Guid> ExtraApiKeyIds { get; set; } = new();
+    public ObservableCollection<Guid> ExtraApiKeyIds { get; init; } = new();
 
     [JsonIgnore]
     [DynamicLocaleKey(
@@ -311,6 +340,21 @@ public sealed partial class OptionalApiKeyWebSearchEngineProvider(
                 (OptionalApiKeyWebSearchEngineProvider x) => x.ApiKey,
                 source: this,
                 mode: BindingMode.TwoWay)
+        });
+
+    [JsonIgnore]
+    [DynamicLocaleKey(
+        LocaleKey.WebSearchEngineProvider_ApiKey_Header_Optional,
+        LocaleKey.WebSearchEngineProvider_ApiKey_Description)]
+    [SettingsItem(Group = "_")]
+    public SettingsControl<ApiKeyMultiComboBox> ExtraApiKeysControl => new(
+        new ApiKeyMultiComboBox(apiKeys)
+        {
+            SelectedIds = ExtraApiKeyIds,
+            [!ApiKeyMultiComboBox.ExcludedIdProperty] = CompiledBinding.Create(
+                (OptionalApiKeyWebSearchEngineProvider x) => x.ApiKey,
+                source: this,
+                mode: BindingMode.OneWay)
         });
 }
 
