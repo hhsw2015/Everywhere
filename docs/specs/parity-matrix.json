@@ -478,10 +478,10 @@
       "est_effort": "S",
       "opendia_prereq": null,
       "acceptance": "bench:dialog_status",
-      "status": "missing",
-      "last_push_sha": null,
+      "status": "in-progress",
+      "last_push_sha": "e00daac57dd9c44b9016f6e29947ec3237de8ddc",
       "last_bench_run": null,
-      "notes": ""
+      "notes": "Extension WS op landed in opendia @ e00daac. Forwarded as browser_dialog_status. Bench fixture pending."
     },
     {
       "ab_command": "agent_browser_diff_screenshot",
@@ -702,10 +702,10 @@
       "est_effort": "M",
       "opendia_prereq": null,
       "acceptance": "bench:frame_switch",
-      "status": "missing",
-      "last_push_sha": null,
+      "status": "in-progress",
+      "last_push_sha": "e00daac57dd9c44b9016f6e29947ec3237de8ddc",
       "last_bench_run": null,
-      "notes": ""
+      "notes": "Extension WS op landed in opendia @ e00daac. Forwarded as browser_frame_switch. Bench fixture pending."
     },
     {
       "ab_command": "agent_browser_get_attr",
@@ -1118,10 +1118,10 @@
       "est_effort": "M",
       "opendia_prereq": null,
       "acceptance": "manual:user",
-      "status": "missing",
-      "last_push_sha": null,
+      "status": "in-progress",
+      "last_push_sha": "e00daac57dd9c44b9016f6e29947ec3237de8ddc",
       "last_bench_run": null,
-      "notes": ""
+      "notes": "Extension WS op landed in opendia @ e00daac. Forwarded as browser_network_har_start. Bench fixture pending."
     },
     {
       "ab_command": "agent_browser_network_har_stop",
@@ -1134,10 +1134,10 @@
       "est_effort": "M",
       "opendia_prereq": null,
       "acceptance": "manual:user",
-      "status": "missing",
-      "last_push_sha": null,
+      "status": "in-progress",
+      "last_push_sha": "e00daac57dd9c44b9016f6e29947ec3237de8ddc",
       "last_bench_run": null,
-      "notes": ""
+      "notes": "Extension WS op landed in opendia @ e00daac. Forwarded as browser_network_har_stop. Bench fixture pending."
     },
     {
       "ab_command": "agent_browser_network_request",
@@ -1326,10 +1326,10 @@
       "est_effort": "M",
       "opendia_prereq": null,
       "acceptance": "bench:profiler_start",
-      "status": "missing",
-      "last_push_sha": null,
+      "status": "in-progress",
+      "last_push_sha": "e00daac57dd9c44b9016f6e29947ec3237de8ddc",
       "last_bench_run": null,
-      "notes": ""
+      "notes": "Extension WS op landed in opendia @ e00daac. Forwarded as browser_profiler_start. Bench fixture pending."
     },
     {
       "ab_command": "agent_browser_profiler_stop",
@@ -1342,10 +1342,10 @@
       "est_effort": "M",
       "opendia_prereq": null,
       "acceptance": "bench:profiler_stop",
-      "status": "missing",
-      "last_push_sha": null,
+      "status": "in-progress",
+      "last_push_sha": "e00daac57dd9c44b9016f6e29947ec3237de8ddc",
       "last_bench_run": null,
-      "notes": ""
+      "notes": "Extension WS op landed in opendia @ e00daac. Forwarded as browser_profiler_stop. Bench fixture pending."
     },
     {
       "ab_command": "agent_browser_profiles",
@@ -1774,10 +1774,10 @@
       "est_effort": "M",
       "opendia_prereq": null,
       "acceptance": "manual:user",
-      "status": "missing",
-      "last_push_sha": null,
+      "status": "in-progress",
+      "last_push_sha": "e00daac57dd9c44b9016f6e29947ec3237de8ddc",
       "last_bench_run": null,
-      "notes": ""
+      "notes": "Extension WS op landed in opendia @ e00daac. Forwarded as browser_set_offline. Bench fixture pending."
     },
     {
       "ab_command": "agent_browser_set_viewport",
@@ -1998,10 +1998,10 @@
       "est_effort": "M",
       "opendia_prereq": null,
       "acceptance": "bench:storage_get",
-      "status": "missing",
-      "last_push_sha": null,
+      "status": "in-progress",
+      "last_push_sha": "e00daac57dd9c44b9016f6e29947ec3237de8ddc",
       "last_bench_run": null,
-      "notes": ""
+      "notes": "Extension WS op landed in opendia @ e00daac. Forwarded as browser_storage_get. Bench fixture pending."
     },
     {
       "ab_command": "agent_browser_storage_set",
@@ -2190,10 +2190,10 @@
       "est_effort": "M",
       "opendia_prereq": null,
       "acceptance": "bench:trace_start",
-      "status": "missing",
-      "last_push_sha": null,
+      "status": "in-progress",
+      "last_push_sha": "e00daac57dd9c44b9016f6e29947ec3237de8ddc",
       "last_bench_run": null,
-      "notes": ""
+      "notes": "Extension WS op landed in opendia @ e00daac. Forwarded as browser_trace_start. Bench fixture pending."
     },
     {
       "ab_command": "agent_browser_trace_stop",
@@ -2206,10 +2206,10 @@
       "est_effort": "M",
       "opendia_prereq": null,
       "acceptance": "bench:trace_stop",
-      "status": "missing",
-      "last_push_sha": null,
+      "status": "in-progress",
+      "last_push_sha": "e00daac57dd9c44b9016f6e29947ec3237de8ddc",
       "last_bench_run": null,
-      "notes": ""
+      "notes": "Extension WS op landed in opendia @ e00daac. Forwarded as browser_trace_stop. Bench fixture pending."
     },
     {
       "ab_command": "agent_browser_type",
@@ -2302,10 +2302,10 @@
       "est_effort": "S",
       "opendia_prereq": null,
       "acceptance": "bench:wait_for_download",
-      "status": "missing",
-      "last_push_sha": null,
+      "status": "in-progress",
+      "last_push_sha": "e00daac57dd9c44b9016f6e29947ec3237de8ddc",
       "last_bench_run": null,
-      "notes": ""
+      "notes": "Extension WS op landed in opendia @ e00daac. Forwarded as browser_wait_for_download. Bench fixture pending."
     },
     {
       "ab_command": "agent_browser_wait_for_function",
@@ -2414,10 +2414,10 @@
       "est_effort": "M",
       "opendia_prereq": null,
       "acceptance": "bench:window_new",
-      "status": "missing",
-      "last_push_sha": null,
+      "status": "in-progress",
+      "last_push_sha": "e00daac57dd9c44b9016f6e29947ec3237de8ddc",
       "last_bench_run": null,
-      "notes": ""
+      "notes": "Extension WS op landed in opendia @ e00daac. Forwarded as browser_window_new. Bench fixture pending."
     }
   ]
 }
