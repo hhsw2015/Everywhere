@@ -35,6 +35,11 @@ public static class EverywhereMcpServiceExtensions
         // McpServerSettings.OpenDiaEnabled). The bridge is a singleton so
         // status surfaces and the MCP tool sync read its state.
         services.TryAddSingleton<OpenDia.OpenDiaBridge>();
+        // Instance-based [McpServerToolType] classes need to be in DI
+        // for the MCP SDK to resolve their constructors. (Static
+        // [McpServerToolType] don't need this.)
+        services.TryAddSingleton<Tools.BatchTool>();
+        services.TryAddSingleton<Tools.ClipboardTools>();
         // OpenDiaToolSync needs IOptions<McpServerOptions> from the inner
         // MCP container — it's instantiated from there in
         // EverywhereMcpHttpHost.BuildApp(), not here.
