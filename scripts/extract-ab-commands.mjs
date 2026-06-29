@@ -16,15 +16,27 @@ import { resolve, join } from "node:path";
 
 const AB_SHA = "ed2e10598c9064aecfaeb7cf21b540684db4be2c";
 
-const argv = Object.fromEntries(
-  process.argv.slice(2).map((a) => {
-    const m = a.match(/^--([^=]+)=(.*)$/);
-    return m ? [m[1], m[2]] : [a.replace(/^--/, ""), true];
-  }),
-);
-const src = resolve(argv.src || "/tmp/agent-browser");
-const expectedSha = argv.sha || AB_SHA;
-const outPath = resolve(argv.out || "docs/specs/parity-matrix.json");
+function parseArgv(av) {
+  const out = {};
+  for (let i = 0; i < av.length; i++) {
+    const a = av[i];
+    if (!a.startsWith("--")) continue;
+    const eq = a.indexOf("=");
+    if (eq !== -1) {
+      out[a.slice(2, eq)] = a.slice(eq + 1);
+    } else {
+      const k = a.slice(2);
+      const next = av[i + 1];
+      if (next && !next.startsWith("--")) { out[k] = next; i++; }
+      else out[k] = true;
+    }
+  }
+  return out;
+}
+const argv = parseArgv(process.argv.slice(2));
+const src = resolve(typeof argv.src === "string" ? argv.src : "/tmp/agent-browser");
+const expectedSha = typeof argv.sha === "string" ? argv.sha : AB_SHA;
+const outPath = resolve(typeof argv.out === "string" ? argv.out : "docs/specs/parity-matrix.json");
 
 function die(msg) {
   console.error(`extract-ab-commands: ${msg}`);
