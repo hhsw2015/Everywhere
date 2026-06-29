@@ -7,20 +7,36 @@ namespace Everywhere.Mcp.Tests.Tools;
 [TestFixture]
 public class ToolCatalogParityTests
 {
+    // OCCU-parity surface: macOS automation tools that mirror the upstream
+    // open-codex-computer-use Swift kit method-for-method.
     private static readonly string[] UpstreamNames =
     [
         "list_apps", "get_app_state", "click", "drag", "type_text",
         "press_key", "scroll", "set_value", "perform_secondary_action",
     ];
 
+    // Everywhere-only perception + clipboard + doc-reader + annotation +
+    // meta surface. Keep alphabetised inside each group for easy diffing.
     private static readonly string[] EverywhereOnlyNames =
     [
+        // perception
         "get_focused_context", "get_selected_text", "pick_element",
         "expand_element", "get_terminal_output", "screenshot", "read_pick",
         "read_whiteboard", "read_whiteboard_image",
         "get_app_context",
         "get_clipboard", "get_idle_time", "get_browser_url",
         "get_finder_selection", "get_browser_tabs",
+        // clipboard (SPEC parity, four aliases)
+        "clipboard_read", "clipboard_paste", "clipboard_write", "clipboard_copy",
+        // document readers
+        "doc_read_pdf", "doc_read_docx", "doc_read_xlsx", "doc_read_pptx",
+        "doc_read_epub", "doc_read_html", "doc_read_txt",
+        // annotations (user-left ✓ marks for the agent)
+        "add_annotation", "read_annotations", "clear_annotations",
+        // composition
+        "batch",
+        // meta (long-tail discovery for tools hidden by CoreToolGate)
+        "list_more_tools", "call_tool",
     ];
 
     [Test]

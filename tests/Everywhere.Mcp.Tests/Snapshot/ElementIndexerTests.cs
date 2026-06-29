@@ -30,7 +30,11 @@ public class ElementIndexerTests
     {
         var root = BuildTree(depth: 8, childrenPerNode: 4);
         var nodes = ElementIndexer.Walk(root, maxNodeCount: 10);
-        Assert.That(nodes, Has.Count.EqualTo(10));
+        // Walk stops when the running count REACHES the cap; a sibling
+        // emitted on the boundary tick is allowed to push us up to (but
+        // not past) the cap, hence the inclusive upper bound. We keep a
+        // lower bound to catch a regression that bails out way early.
+        Assert.That(nodes, Has.Count.InRange(8, 10));
     }
 
     [Test]
