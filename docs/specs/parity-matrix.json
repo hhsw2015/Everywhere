@@ -254,10 +254,10 @@
       "est_effort": "M",
       "opendia_prereq": null,
       "acceptance": "bench:confirm",
-      "status": "missing",
-      "last_push_sha": null,
+      "status": "in-progress",
+      "last_push_sha": "3eb970c578b9ff2182c28b1cc5ab9545e8d71691",
       "last_bench_run": null,
-      "notes": ""
+      "notes": "Extension WS op landed in opendia @ 3eb970c. Forwarded as browser_confirm. Bench fixture pending."
     },
     {
       "ab_command": "agent_browser_connect",
@@ -286,10 +286,10 @@
       "est_effort": "M",
       "opendia_prereq": null,
       "acceptance": "bench:console",
-      "status": "missing",
-      "last_push_sha": null,
+      "status": "in-progress",
+      "last_push_sha": "3eb970c578b9ff2182c28b1cc5ab9545e8d71691",
       "last_bench_run": null,
-      "notes": ""
+      "notes": "Extension WS op landed in opendia @ 3eb970c. Forwarded as browser_console. Bench fixture pending."
     },
     {
       "ab_command": "agent_browser_cookies_clear",
@@ -302,10 +302,10 @@
       "est_effort": "M",
       "opendia_prereq": null,
       "acceptance": "manual:user",
-      "status": "missing",
-      "last_push_sha": null,
+      "status": "in-progress",
+      "last_push_sha": "3eb970c578b9ff2182c28b1cc5ab9545e8d71691",
       "last_bench_run": null,
-      "notes": ""
+      "notes": "Extension WS op landed in opendia @ 3eb970c. Forwarded as browser_cookies_clear. Bench fixture pending."
     },
     {
       "ab_command": "agent_browser_cookies_get",
@@ -318,10 +318,10 @@
       "est_effort": "M",
       "opendia_prereq": null,
       "acceptance": "manual:user",
-      "status": "missing",
-      "last_push_sha": null,
+      "status": "in-progress",
+      "last_push_sha": "3eb970c578b9ff2182c28b1cc5ab9545e8d71691",
       "last_bench_run": null,
-      "notes": ""
+      "notes": "Extension WS op landed in opendia @ 3eb970c. Forwarded as browser_cookies_get. Bench fixture pending."
     },
     {
       "ab_command": "agent_browser_cookies_set",
@@ -750,10 +750,10 @@
       "est_effort": "S",
       "opendia_prereq": null,
       "acceptance": "bench:get_cdp_url",
-      "status": "missing",
-      "last_push_sha": null,
+      "status": "in-progress",
+      "last_push_sha": "3eb970c578b9ff2182c28b1cc5ab9545e8d71691",
       "last_bench_run": null,
-      "notes": ""
+      "notes": "Extension WS op landed in opendia @ 3eb970c. Forwarded as browser_get_cdp_url. Bench fixture pending."
     },
     {
       "ab_command": "agent_browser_get_count",
@@ -910,10 +910,10 @@
       "est_effort": "L",
       "opendia_prereq": "browser_snapshot",
       "acceptance": "bench:inspect",
-      "status": "missing",
-      "last_push_sha": null,
+      "status": "in-progress",
+      "last_push_sha": "3eb970c578b9ff2182c28b1cc5ab9545e8d71691",
       "last_bench_run": null,
-      "notes": ""
+      "notes": "Extension WS op landed in opendia @ 3eb970c. Forwarded as browser_inspect. Bench fixture pending."
     },
     {
       "ab_command": "agent_browser_install",
@@ -2286,10 +2286,10 @@
       "est_effort": "M",
       "opendia_prereq": null,
       "acceptance": "bench:vitals",
-      "status": "missing",
-      "last_push_sha": null,
+      "status": "in-progress",
+      "last_push_sha": "3eb970c578b9ff2182c28b1cc5ab9545e8d71691",
       "last_bench_run": null,
-      "notes": ""
+      "notes": "Extension WS op landed in opendia @ 3eb970c. Forwarded as browser_vitals. Bench fixture pending."
     },
     {
       "ab_command": "agent_browser_wait_for_download",
@@ -2318,10 +2318,10 @@
       "est_effort": "S",
       "opendia_prereq": null,
       "acceptance": "bench:wait_for_function",
-      "status": "missing",
-      "last_push_sha": null,
+      "status": "in-progress",
+      "last_push_sha": "3eb970c578b9ff2182c28b1cc5ab9545e8d71691",
       "last_bench_run": null,
-      "notes": ""
+      "notes": "Extension WS op landed in opendia @ 3eb970c. Forwarded as browser_wait_for_function. Bench fixture pending."
     },
     {
       "ab_command": "agent_browser_wait_for_load",

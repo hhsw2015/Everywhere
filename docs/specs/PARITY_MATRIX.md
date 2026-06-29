@@ -30,11 +30,11 @@ DO NOT EDIT BY HAND. Run `node scripts/render-parity-matrix.mjs`.
 | agent_browser_clipboard_read | value-add | out-of-browser | everywhere | everywhere.clipboard_read | missing | bench:clipboard_read |
 | agent_browser_clipboard_write | value-add | out-of-browser | everywhere | everywhere.clipboard_write | missing | bench:clipboard_write |
 | agent_browser_close | core | in-browser | opendia | browser_close | in-progress | bench:close |
-| agent_browser_confirm | value-add | in-browser | opendia | browser_confirm | missing | bench:confirm |
+| agent_browser_confirm | value-add | in-browser | opendia | browser_confirm | in-progress | bench:confirm |
 | agent_browser_connect | value-add | in-browser | wont-do |  | wont-do | none |
-| agent_browser_console | value-add | in-browser | opendia | browser_console | missing | bench:console |
-| agent_browser_cookies_clear | value-add | in-browser | opendia | browser_cookies_clear | missing | manual:user |
-| agent_browser_cookies_get | value-add | in-browser | opendia | browser_cookies_get | missing | manual:user |
+| agent_browser_console | value-add | in-browser | opendia | browser_console | in-progress | bench:console |
+| agent_browser_cookies_clear | value-add | in-browser | opendia | browser_cookies_clear | in-progress | manual:user |
+| agent_browser_cookies_get | value-add | in-browser | opendia | browser_cookies_get | in-progress | manual:user |
 | agent_browser_cookies_set | value-add | in-browser | opendia | browser_cookies_set | missing | manual:user |
 | agent_browser_cookies_set_curl | value-add | in-browser | opendia | browser_cookies_set_curl | missing | manual:user |
 | agent_browser_dashboard_start | value-add | in-browser | wont-do |  | wont-do | none |
@@ -61,7 +61,7 @@ DO NOT EDIT BY HAND. Run `node scripts/render-parity-matrix.mjs`.
 | agent_browser_frame_switch | value-add | in-browser | opendia | browser_frame_switch | missing | bench:frame_switch |
 | agent_browser_get_attr | niche | in-browser | opendia | browser_get_attr | in-progress | bench:get_attr |
 | agent_browser_get_box | niche | in-browser | opendia | browser_get_box | in-progress | bench:get_box |
-| agent_browser_get_cdp_url | niche | in-browser | opendia | browser_get_cdp_url | missing | bench:get_cdp_url |
+| agent_browser_get_cdp_url | niche | in-browser | opendia | browser_get_cdp_url | in-progress | bench:get_cdp_url |
 | agent_browser_get_count | niche | in-browser | opendia | browser_get_count | in-progress | bench:get_count |
 | agent_browser_get_html | niche | in-browser | universal | browser_get_html | in-progress | bench:get_html |
 | agent_browser_get_styles | niche | in-browser | opendia | browser_get_styles | in-progress | bench:get_styles |
@@ -71,7 +71,7 @@ DO NOT EDIT BY HAND. Run `node scripts/render-parity-matrix.mjs`.
 | agent_browser_get_value | niche | in-browser | opendia | browser_get_value | in-progress | bench:get_value |
 | agent_browser_highlight | value-add | in-browser | universal | browser_highlight | missing | bench:highlight |
 | agent_browser_hover | niche | in-browser | opendia | browser_hover | in-progress | bench:hover |
-| agent_browser_inspect | value-add | in-browser | universal | browser_inspect | missing | bench:inspect |
+| agent_browser_inspect | value-add | in-browser | universal | browser_inspect | in-progress | bench:inspect |
 | agent_browser_install | value-add | in-browser | wont-do |  | wont-do | none |
 | agent_browser_is_checked | niche | in-browser | opendia | browser_is_checked | in-progress | bench:is_checked |
 | agent_browser_is_enabled | niche | in-browser | opendia | browser_is_enabled | in-progress | bench:is_enabled |
@@ -157,9 +157,9 @@ DO NOT EDIT BY HAND. Run `node scripts/render-parity-matrix.mjs`.
 | agent_browser_uncheck | core | in-browser | opendia | browser_uncheck | in-progress | bench:uncheck |
 | agent_browser_upgrade | value-add | in-browser | wont-do |  | wont-do | none |
 | agent_browser_upload | value-add | both | opendia | browser_upload | missing | bench:upload |
-| agent_browser_vitals | niche | in-browser | opendia | browser_vitals | missing | bench:vitals |
+| agent_browser_vitals | niche | in-browser | opendia | browser_vitals | in-progress | bench:vitals |
 | agent_browser_wait_for_download | value-add | in-browser | opendia | browser_wait_for_download | missing | bench:wait_for_download |
-| agent_browser_wait_for_function | niche | in-browser | universal | browser_wait_for_function | missing | bench:wait_for_function |
+| agent_browser_wait_for_function | niche | in-browser | universal | browser_wait_for_function | in-progress | bench:wait_for_function |
 | agent_browser_wait_for_load | core | in-browser | universal | browser_wait_for_load | in-progress | bench:wait_for_load |
 | agent_browser_wait_for_selector | core | in-browser | universal | browser_wait_for_selector | in-progress | bench:wait_for_selector |
 | agent_browser_wait_for_text | core | in-browser | universal | browser_wait_for_text | in-progress | bench:wait_for_text |
