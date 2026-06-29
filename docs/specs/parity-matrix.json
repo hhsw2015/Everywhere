@@ -49,7 +49,7 @@
       "status": "in-progress",
       "last_push_sha": "1c22c130e1d10c7232d56022748c1774a46ab6b5",
       "last_bench_run": null,
-      "notes": "DANGEROUS — implemented in opendia @ 1c22c13; user-approved per /goal session. SPEC §6 step 7 keeps row at in-progress (not have) until human merge to main. Bench fixture pending. | tested-ok 2026-06-29 via direct RPC suite (115 calls, 112 PASS)"
+      "notes": "DANGEROUS — implemented in opendia @ 1c22c13; user-approved per /goal session. SPEC §6 step 7 keeps row at in-progress (not have) until human merge to main. Bench fixture pending. | tested-ok 2026-06-29 via direct RPC suite (115 calls, 112 PASS) | E2E-verified 2026-06-29 (real fixture, real React 18, real iframe, real interception)"
     },
     {
       "ab_command": "agent_browser_auth_save",
@@ -705,7 +705,7 @@
       "status": "in-progress",
       "last_push_sha": "72212f6b3df22731566f75c192745326cde17b0e",
       "last_bench_run": null,
-      "notes": "Real implementation in opendia @ 72212f6. Forwarded as browser_frame_switch. Bench fixture pending. | tested-ok 2026-06-29 via direct RPC suite (115 calls, 112 PASS)"
+      "notes": "Real implementation in opendia @ 72212f6. Forwarded as browser_frame_switch. Bench fixture pending. | tested-ok 2026-06-29 via direct RPC suite (115 calls, 112 PASS) | E2E-verified 2026-06-29 (real fixture, real React 18, real iframe, real interception)"
     },
     {
       "ab_command": "agent_browser_get_attr",
@@ -1185,7 +1185,7 @@
       "status": "in-progress",
       "last_push_sha": "72212f6b3df22731566f75c192745326cde17b0e",
       "last_bench_run": null,
-      "notes": "Real implementation in opendia @ 72212f6. Forwarded as browser_network_route. Bench fixture pending. | tested-ok 2026-06-29 via direct RPC suite (115 calls, 112 PASS)"
+      "notes": "Real implementation in opendia @ 72212f6. Forwarded as browser_network_route. Bench fixture pending. | tested-ok 2026-06-29 via direct RPC suite (115 calls, 112 PASS) | E2E-verified 2026-06-29 (real fixture, real React 18, real iframe, real interception)"
     },
     {
       "ab_command": "agent_browser_network_unroute",
@@ -1201,7 +1201,7 @@
       "status": "in-progress",
       "last_push_sha": "72212f6b3df22731566f75c192745326cde17b0e",
       "last_bench_run": null,
-      "notes": "Real implementation in opendia @ 72212f6. Forwarded as browser_network_unroute. Bench fixture pending. | tested-ok 2026-06-29 via direct RPC suite (115 calls, 112 PASS)"
+      "notes": "Real implementation in opendia @ 72212f6. Forwarded as browser_network_unroute. Bench fixture pending. | tested-ok 2026-06-29 via direct RPC suite (115 calls, 112 PASS) | E2E-verified 2026-06-29 (real fixture, real React 18, real iframe, real interception)"
     },
     {
       "ab_command": "agent_browser_open",
@@ -1393,7 +1393,7 @@
       "status": "in-progress",
       "last_push_sha": "72212f6b3df22731566f75c192745326cde17b0e",
       "last_bench_run": null,
-      "notes": "Real implementation in opendia @ 72212f6. Forwarded as browser_react_inspect. Bench fixture pending."
+      "notes": "Real implementation in opendia @ 72212f6. Forwarded as browser_react_inspect. Bench fixture pending. | E2E-verified 2026-06-29 (real fixture, real React 18, real iframe, real interception)"
     },
     {
       "ab_command": "agent_browser_react_renders_start",
@@ -1409,7 +1409,7 @@
       "status": "in-progress",
       "last_push_sha": "72212f6b3df22731566f75c192745326cde17b0e",
       "last_bench_run": null,
-      "notes": "Real implementation in opendia @ 72212f6. Forwarded as browser_react_renders_start. Bench fixture pending."
+      "notes": "Real implementation in opendia @ 72212f6. Forwarded as browser_react_renders_start. Bench fixture pending. | E2E-verified 2026-06-29 (real fixture, real React 18, real iframe, real interception)"
     },
     {
       "ab_command": "agent_browser_react_renders_stop",
@@ -1425,7 +1425,7 @@
       "status": "in-progress",
       "last_push_sha": "72212f6b3df22731566f75c192745326cde17b0e",
       "last_bench_run": null,
-      "notes": "Real implementation in opendia @ 72212f6. Forwarded as browser_react_renders_stop. Bench fixture pending."
+      "notes": "Real implementation in opendia @ 72212f6. Forwarded as browser_react_renders_stop. Bench fixture pending. | E2E-verified 2026-06-29 (real fixture, real React 18, real iframe, real interception)"
     },
     {
       "ab_command": "agent_browser_react_suspense",
@@ -1441,7 +1441,7 @@
       "status": "in-progress",
       "last_push_sha": "72212f6b3df22731566f75c192745326cde17b0e",
       "last_bench_run": null,
-      "notes": "Real implementation in opendia @ 72212f6. Forwarded as browser_react_suspense. Bench fixture pending."
+      "notes": "Real implementation in opendia @ 72212f6. Forwarded as browser_react_suspense. Bench fixture pending. | E2E-verified 2026-06-29 (real fixture, real React 18, real iframe, real interception)"
     },
     {
       "ab_command": "agent_browser_react_tree",
@@ -1457,7 +1457,7 @@
       "status": "in-progress",
       "last_push_sha": "72212f6b3df22731566f75c192745326cde17b0e",
       "last_bench_run": null,
-      "notes": "Real implementation in opendia @ 72212f6. Forwarded as browser_react_tree. Bench fixture pending. | tested-ok 2026-06-29 via direct RPC suite (115 calls, 112 PASS)"
+      "notes": "Real implementation in opendia @ 72212f6. Forwarded as browser_react_tree. Bench fixture pending. | tested-ok 2026-06-29 via direct RPC suite (115 calls, 112 PASS) | E2E-verified 2026-06-29 (real fixture, real React 18, real iframe, real interception)"
     },
     {
       "ab_command": "agent_browser_read",
@@ -1921,7 +1921,7 @@
       "status": "in-progress",
       "last_push_sha": "1c22c130e1d10c7232d56022748c1774a46ab6b5",
       "last_bench_run": null,
-      "notes": "DANGEROUS — implemented in opendia @ 1c22c13; user-approved per /goal session. SPEC §6 step 7 keeps row at in-progress (not have) until human merge to main. Bench fixture pending. | tested-ok 2026-06-29 via direct RPC suite (115 calls, 112 PASS)"
+      "notes": "DANGEROUS — implemented in opendia @ 1c22c13; user-approved per /goal session. SPEC §6 step 7 keeps row at in-progress (not have) until human merge to main. Bench fixture pending. | tested-ok 2026-06-29 via direct RPC suite (115 calls, 112 PASS) | E2E-verified 2026-06-29 (real fixture, real React 18, real iframe, real interception)"
     },
     {
       "ab_command": "agent_browser_state_rename",
