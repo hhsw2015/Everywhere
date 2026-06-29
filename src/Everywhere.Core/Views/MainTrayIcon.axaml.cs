@@ -73,7 +73,8 @@ public sealed partial class MainTrayIcon : TrayIcon
                 [!NativeMenuItem.IsCheckedProperty] = CompiledBinding.Create(
                     (CompositeKeyboardShortcut shortcut) => shortcut.IsEnabled,
                     source: _shortcutSettings.ChatWindow,
-                    mode: BindingMode.TwoWay),
+                    mode: BindingMode.OneWay),
+                Command = new RelayCommand(() => _shortcutSettings.ChatWindow.IsEnabled = !_shortcutSettings.ChatWindow.IsEnabled),
                 ToggleType = MenuItemToggleType.CheckBox,
             });
 

@@ -12,8 +12,8 @@
   x:DataType="vm:ChatWindowViewModel" x:TypeArguments="vm:ChatWindowViewModel"
   Background="{DynamicResource AcrylicWindowBackgroundColor}"
   BorderBrush="{DynamicResource BorderColor}"
-  ExtendClientAreaToDecorationsHint="True" SizeToContent="WidthAndHeight"
-  TransparencyLevelHint="AcrylicBlur,Blur,None" WindowStartupLocation="CenterScreen">
+  SizeToContent="WidthAndHeight" TransparencyLevelHint="AcrylicBlur,Blur,None"
+  WindowDecorations="BorderOnly" WindowStartupLocation="CenterScreen">
 
   <v:ReactiveShadWindow.BorderThickness>
     <OnPlatform
@@ -27,7 +27,7 @@
       x:Name="PART_ToastHost" Margin="0,36,0,0"/>
   </v:ReactiveShadWindow.Hosts>
 
-  <v:ReactiveShadWindow.TitleBarContentOverride>
+  <v:ReactiveShadWindow.TitleBarContent>
     <Border
       x:Name="TitleBarBorder" Grid.Row="0"
       Height="44" Padding="8,0"
@@ -235,7 +235,7 @@
         </TextBlock>
       </DockPanel>
     </Border>
-  </v:ReactiveShadWindow.TitleBarContentOverride>
+  </v:ReactiveShadWindow.TitleBarContent>
 
   <v:ReactiveShadWindow.Styles>
     <Style Selector=":is(Button).Rounded">
@@ -252,7 +252,7 @@
     </Style>
   </v:ReactiveShadWindow.Styles>
 
-  <Panel Margin="0,12,0,0">
+  <Panel Margin="0,48,0,0">
     <shadui:ResponsiveDrawer
       DrawerHeight="{Binding PersistentState.ChatWindowHistoryDrawerHeight, Mode=TwoWay}"
       DrawerMaxHeight="260" DrawerMaxWidth="450"

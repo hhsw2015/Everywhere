@@ -10,7 +10,7 @@ namespace Everywhere.Windows.Interop;
 /// <summary>
 /// Reference: Powertoys
 /// </summary>
-public class WindowHelper : IWindowHelper
+public sealed class WindowHelper : IWindowHelper
 {
     public void SetFocusable(Window window, bool focusable)
     {
@@ -240,5 +240,10 @@ public class WindowHelper : IWindowHelper
             dwTimeout = 0
         };
         PInvoke.FlashWindowEx(&info);
+    }
+
+    public void InitializeWindow(Window window)
+    {
+        // Do nothing
     }
 }

@@ -112,6 +112,7 @@ public partial class ChatWindow :
         ApplyStyling();
         ApplyTemplate();
 
+        _windowHelper.InitializeWindow(this);
         _windowHelper.SetCloaked(this, true);
 
         // Setup window placement saving after initialization

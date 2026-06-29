@@ -45,6 +45,7 @@ public class App(IServiceProvider serviceProvider) : Application, IRecipient<App
     private static ThemeManager? _themeManager;
 
     private readonly Dictionary<Type, TransientWindow> _transientWindows = new();
+    private readonly IWindowHelper _windowHelper = serviceProvider.GetRequiredService<IWindowHelper>();
 
     /// <summary>
     /// Flag to prevent multiple calls to ShowWindow method from event loop.
@@ -212,8 +213,6 @@ public class App(IServiceProvider serviceProvider) : Application, IRecipient<App
         persistentState.PreviousLaunchVersion = currentVersion.ToString();
     }
 
-
-
     private void ShowWindow<TContent>() where TContent : Control
     {
         if (_isShowWindowBusy) return;
@@ -254,6 +253,7 @@ public class App(IServiceProvider serviceProvider) : Application, IRecipient<App
                 };
                 _transientWindows[windowType] = window;
 
+                _windowHelper.InitializeWindow(window);
                 window.Show();
             }
         }
