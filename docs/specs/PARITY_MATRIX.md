@@ -54,7 +54,7 @@ DO NOT EDIT BY HAND. Run `node scripts/render-parity-matrix.mjs`.
 | agent_browser_errors | value-add | in-browser | opendia | browser_errors | missing | bench:errors |
 | agent_browser_eval | core | in-browser | opendia | browser_eval | missing | manual:user |
 | agent_browser_fill | core | in-browser | opendia | browser_fill | in-progress | bench:fill |
-| agent_browser_find | niche | in-browser | opendia | browser_find | missing | bench:find |
+| agent_browser_find | niche | in-browser | opendia | browser_find | in-progress | bench:find |
 | agent_browser_focus | niche | in-browser | opendia | browser_focus | in-progress | bench:focus |
 | agent_browser_forward | core | in-browser | opendia | browser_forward | in-progress | bench:forward |
 | agent_browser_frame_main | value-add | in-browser | opendia | browser_frame_main | missing | bench:frame_main |
@@ -76,14 +76,14 @@ DO NOT EDIT BY HAND. Run `node scripts/render-parity-matrix.mjs`.
 | agent_browser_is_checked | niche | in-browser | opendia | browser_is_checked | in-progress | bench:is_checked |
 | agent_browser_is_enabled | niche | in-browser | opendia | browser_is_enabled | in-progress | bench:is_enabled |
 | agent_browser_is_visible | niche | in-browser | opendia | browser_is_visible | in-progress | bench:is_visible |
-| agent_browser_keyboard_insert_text | niche | in-browser | opendia | browser_keyboard_insert_text | missing | bench:keyboard_insert_text |
-| agent_browser_keyboard_type | niche | in-browser | opendia | browser_keyboard_type | missing | bench:keyboard_type |
-| agent_browser_keydown | niche | in-browser | opendia | browser_keydown | missing | bench:keydown |
-| agent_browser_keyup | niche | in-browser | opendia | browser_keyup | missing | bench:keyup |
-| agent_browser_mouse_down | niche | in-browser | opendia | browser_mouse_down | missing | bench:mouse_down |
-| agent_browser_mouse_move | niche | in-browser | opendia | browser_mouse_move | missing | bench:mouse_move |
-| agent_browser_mouse_up | niche | in-browser | opendia | browser_mouse_up | missing | bench:mouse_up |
-| agent_browser_mouse_wheel | niche | in-browser | opendia | browser_mouse_wheel | missing | bench:mouse_wheel |
+| agent_browser_keyboard_insert_text | niche | in-browser | opendia | browser_keyboard_insert_text | in-progress | bench:keyboard_insert_text |
+| agent_browser_keyboard_type | niche | in-browser | opendia | browser_keyboard_type | in-progress | bench:keyboard_type |
+| agent_browser_keydown | niche | in-browser | opendia | browser_keydown | in-progress | bench:keydown |
+| agent_browser_keyup | niche | in-browser | opendia | browser_keyup | in-progress | bench:keyup |
+| agent_browser_mouse_down | niche | in-browser | opendia | browser_mouse_down | in-progress | bench:mouse_down |
+| agent_browser_mouse_move | niche | in-browser | opendia | browser_mouse_move | in-progress | bench:mouse_move |
+| agent_browser_mouse_up | niche | in-browser | opendia | browser_mouse_up | in-progress | bench:mouse_up |
+| agent_browser_mouse_wheel | niche | in-browser | opendia | browser_mouse_wheel | in-progress | bench:mouse_wheel |
 | agent_browser_network_har_start | value-add | in-browser | opendia | browser_network_har_start | missing | manual:user |
 | agent_browser_network_har_stop | value-add | in-browser | opendia | browser_network_har_stop | missing | manual:user |
 | agent_browser_network_request | value-add | in-browser | opendia | browser_network_request | missing | bench:network_request |
@@ -100,7 +100,7 @@ DO NOT EDIT BY HAND. Run `node scripts/render-parity-matrix.mjs`.
 | agent_browser_profiler_start | value-add | in-browser | opendia | browser_profiler_start | missing | bench:profiler_start |
 | agent_browser_profiler_stop | value-add | in-browser | opendia | browser_profiler_stop | missing | bench:profiler_stop |
 | agent_browser_profiles | value-add | in-browser | wont-do |  | wont-do | none |
-| agent_browser_pushstate | niche | in-browser | opendia | browser_pushstate | missing | bench:pushstate |
+| agent_browser_pushstate | niche | in-browser | opendia | browser_pushstate | in-progress | bench:pushstate |
 | agent_browser_react_inspect | niche | in-browser | opendia | browser_react_inspect | missing | bench:react_inspect |
 | agent_browser_react_renders_start | niche | in-browser | opendia | browser_react_renders_start | missing | bench:react_renders_start |
 | agent_browser_react_renders_stop | niche | in-browser | opendia | browser_react_renders_stop | missing | bench:react_renders_stop |
@@ -122,11 +122,11 @@ DO NOT EDIT BY HAND. Run `node scripts/render-parity-matrix.mjs`.
 | agent_browser_session_list | value-add | in-browser | wont-do |  | wont-do | none |
 | agent_browser_set_credentials | value-add | in-browser | opendia | browser_set_credentials | missing | manual:user |
 | agent_browser_set_device | niche | in-browser | wont-do |  | wont-do | none |
-| agent_browser_set_geo | niche | in-browser | opendia | browser_set_geo | missing | bench:set_geo |
+| agent_browser_set_geo | niche | in-browser | opendia | browser_set_geo | in-progress | bench:set_geo |
 | agent_browser_set_headers | value-add | in-browser | opendia | browser_set_headers | missing | manual:user |
-| agent_browser_set_media | niche | in-browser | opendia | browser_set_media | missing | bench:set_media |
+| agent_browser_set_media | niche | in-browser | opendia | browser_set_media | in-progress | bench:set_media |
 | agent_browser_set_offline | value-add | in-browser | opendia | browser_set_offline | missing | manual:user |
-| agent_browser_set_viewport | niche | in-browser | opendia | browser_set_viewport | missing | bench:set_viewport |
+| agent_browser_set_viewport | niche | in-browser | opendia | browser_set_viewport | in-progress | bench:set_viewport |
 | agent_browser_skills_get | value-add | in-browser | wont-do |  | wont-do | none |
 | agent_browser_skills_list | value-add | in-browser | wont-do |  | wont-do | none |
 | agent_browser_skills_path | value-add | in-browser | wont-do |  | wont-do | none |
@@ -144,7 +144,7 @@ DO NOT EDIT BY HAND. Run `node scripts/render-parity-matrix.mjs`.
 | agent_browser_stream_disable | value-add | in-browser | wont-do |  | wont-do | none |
 | agent_browser_stream_enable | value-add | in-browser | wont-do |  | wont-do | none |
 | agent_browser_stream_status | value-add | in-browser | wont-do |  | wont-do | none |
-| agent_browser_swipe | niche | in-browser | opendia | browser_swipe | missing | bench:swipe |
+| agent_browser_swipe | niche | in-browser | opendia | browser_swipe | in-progress | bench:swipe |
 | agent_browser_tab_close | core | in-browser | opendia | browser_tab_close | in-progress | bench:tab_close |
 | agent_browser_tab_list | core | in-browser | opendia | browser_tab_list | in-progress | bench:tab_list |
 | agent_browser_tab_new | core | in-browser | opendia | browser_tab_new | in-progress | bench:tab_new |
