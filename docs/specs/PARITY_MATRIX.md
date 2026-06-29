@@ -39,7 +39,7 @@ DO NOT EDIT BY HAND. Run `node scripts/render-parity-matrix.mjs`.
 | agent_browser_cookies_set_curl | value-add | in-browser | opendia | browser_cookies_set_curl | missing | manual:user |
 | agent_browser_dashboard_start | value-add | in-browser | wont-do |  | wont-do | none |
 | agent_browser_dashboard_stop | value-add | in-browser | wont-do |  | wont-do | none |
-| agent_browser_dblclick | niche | in-browser | opendia | browser_dblclick | missing | bench:dblclick |
+| agent_browser_dblclick | niche | in-browser | opendia | browser_dblclick | in-progress | bench:dblclick |
 | agent_browser_deny | value-add | in-browser | opendia | browser_deny | missing | bench:deny |
 | agent_browser_device | niche | in-browser | opendia | browser_device | missing | bench:device |
 | agent_browser_dialog_accept | value-add | in-browser | opendia | browser_dialog_accept | missing | bench:dialog_accept |
@@ -50,7 +50,7 @@ DO NOT EDIT BY HAND. Run `node scripts/render-parity-matrix.mjs`.
 | agent_browser_diff_url | value-add | in-browser | opendia | browser_diff_url | missing | bench:diff_url |
 | agent_browser_doctor | value-add | in-browser | wont-do |  | wont-do | none |
 | agent_browser_download | value-add | both | opendia | browser_download | missing | bench:download |
-| agent_browser_drag | niche | in-browser | opendia | browser_drag | missing | bench:drag |
+| agent_browser_drag | niche | in-browser | opendia | browser_drag | in-progress | bench:drag |
 | agent_browser_errors | value-add | in-browser | opendia | browser_errors | missing | bench:errors |
 | agent_browser_eval | core | in-browser | opendia | browser_eval | missing | manual:user |
 | agent_browser_fill | core | in-browser | opendia | browser_fill | in-progress | bench:fill |
@@ -59,23 +59,23 @@ DO NOT EDIT BY HAND. Run `node scripts/render-parity-matrix.mjs`.
 | agent_browser_forward | core | in-browser | opendia | browser_forward | in-progress | bench:forward |
 | agent_browser_frame_main | value-add | in-browser | opendia | browser_frame_main | missing | bench:frame_main |
 | agent_browser_frame_switch | value-add | in-browser | opendia | browser_frame_switch | missing | bench:frame_switch |
-| agent_browser_get_attr | niche | in-browser | opendia | browser_get_attr | missing | bench:get_attr |
+| agent_browser_get_attr | niche | in-browser | opendia | browser_get_attr | in-progress | bench:get_attr |
 | agent_browser_get_box | niche | in-browser | opendia | browser_get_box | missing | bench:get_box |
 | agent_browser_get_cdp_url | niche | in-browser | opendia | browser_get_cdp_url | missing | bench:get_cdp_url |
 | agent_browser_get_count | niche | in-browser | opendia | browser_get_count | missing | bench:get_count |
-| agent_browser_get_html | niche | in-browser | universal | browser_get_html | missing | bench:get_html |
+| agent_browser_get_html | niche | in-browser | universal | browser_get_html | in-progress | bench:get_html |
 | agent_browser_get_styles | niche | in-browser | opendia | browser_get_styles | missing | bench:get_styles |
-| agent_browser_get_text | core | in-browser | universal | browser_get_text | missing | bench:get_text |
+| agent_browser_get_text | core | in-browser | universal | browser_get_text | in-progress | bench:get_text |
 | agent_browser_get_title | core | in-browser | opendia | browser_get_title | in-progress | bench:get_title |
 | agent_browser_get_url | core | in-browser | opendia | browser_get_url | in-progress | bench:get_url |
-| agent_browser_get_value | niche | in-browser | opendia | browser_get_value | missing | bench:get_value |
+| agent_browser_get_value | niche | in-browser | opendia | browser_get_value | in-progress | bench:get_value |
 | agent_browser_highlight | value-add | in-browser | universal | browser_highlight | missing | bench:highlight |
 | agent_browser_hover | niche | in-browser | opendia | browser_hover | in-progress | bench:hover |
 | agent_browser_inspect | value-add | in-browser | universal | browser_inspect | missing | bench:inspect |
 | agent_browser_install | value-add | in-browser | wont-do |  | wont-do | none |
-| agent_browser_is_checked | niche | in-browser | opendia | browser_is_checked | missing | bench:is_checked |
-| agent_browser_is_enabled | niche | in-browser | opendia | browser_is_enabled | missing | bench:is_enabled |
-| agent_browser_is_visible | niche | in-browser | opendia | browser_is_visible | missing | bench:is_visible |
+| agent_browser_is_checked | niche | in-browser | opendia | browser_is_checked | in-progress | bench:is_checked |
+| agent_browser_is_enabled | niche | in-browser | opendia | browser_is_enabled | in-progress | bench:is_enabled |
+| agent_browser_is_visible | niche | in-browser | opendia | browser_is_visible | in-progress | bench:is_visible |
 | agent_browser_keyboard_insert_text | niche | in-browser | opendia | browser_keyboard_insert_text | missing | bench:keyboard_insert_text |
 | agent_browser_keyboard_type | niche | in-browser | opendia | browser_keyboard_type | missing | bench:keyboard_type |
 | agent_browser_keydown | niche | in-browser | opendia | browser_keydown | missing | bench:keydown |
@@ -114,8 +114,8 @@ DO NOT EDIT BY HAND. Run `node scripts/render-parity-matrix.mjs`.
 | agent_browser_remove_init_script | niche | in-browser | opendia | browser_remove_init_script | missing | manual:user |
 | agent_browser_screenshot | core | both | universal | browser_screenshot | in-progress | bench:screenshot |
 | agent_browser_scroll | core | in-browser | opendia | browser_scroll | in-progress | bench:scroll |
-| agent_browser_scroll_into_view | niche | in-browser | opendia | browser_scroll_into_view | missing | bench:scroll_into_view |
-| agent_browser_select | core | in-browser | opendia | browser_select | missing | bench:select |
+| agent_browser_scroll_into_view | niche | in-browser | opendia | browser_scroll_into_view | in-progress | bench:scroll_into_view |
+| agent_browser_select | core | in-browser | opendia | browser_select | in-progress | bench:select |
 | agent_browser_session | value-add | in-browser | wont-do |  | wont-do | none |
 | agent_browser_session_id | value-add | in-browser | wont-do |  | wont-do | none |
 | agent_browser_session_info | value-add | in-browser | wont-do |  | wont-do | none |
