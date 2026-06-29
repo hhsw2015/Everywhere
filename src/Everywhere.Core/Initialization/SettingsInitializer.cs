@@ -39,6 +39,11 @@ public sealed class SettingsInitializer : IAsyncInitializer
 
     public Task InitializeAsync()
     {
+        // v0.9.251+ migration: lift the legacy global WebSearch vault +
+        // per-provider ApiKey Guid + ExtraApiKeyIds into each provider's
+        // private ApiKeys list. No-op once migration has taken effect.
+        _settings.Plugin.WebSearchEngine.MigrateLegacyVault();
+
         InitializeObserver();
 
         return Task.CompletedTask;

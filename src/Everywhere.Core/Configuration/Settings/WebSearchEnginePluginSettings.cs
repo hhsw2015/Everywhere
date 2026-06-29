@@ -361,7 +361,7 @@ public sealed partial class SearXNGWebSearchEngineProvider : ThirdPartyWebSearch
 }
 
 [GeneratedSettingsItems]
-public sealed partial class WebSearchEngineSettings : ObservableObject, System.Text.Json.Serialization.IJsonOnDeserialized
+public sealed partial class WebSearchEngineSettings : ObservableObject
 {
     [SettingsItemIgnore]
     public ObservableImmutableDictionary<WebSearchEngineProviderId, IWebSearchEngineProvider> Providers { get; }
@@ -400,8 +400,6 @@ public sealed partial class WebSearchEngineSettings : ObservableObject, System.T
     /// when ApiKeys is already populated (fresh install or already
     /// migrated). Safe to call multiple times.
     /// </summary>
-    void System.Text.Json.Serialization.IJsonOnDeserialized.OnDeserialized() => MigrateLegacyVault();
-
     public void MigrateLegacyVault()
     {
         if (ApiKeys.Count == 0) return;
