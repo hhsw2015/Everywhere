@@ -55,7 +55,7 @@ public static class ClipboardTools
     {
         try
         {
-            if (!writer.IsAvailable) return JsonOk(new { ok = false, error = "clipboard write not available on this host" });
+            if (!writer.IsAvailable()) return JsonOk(new { ok = false, error = "clipboard write not available on this host" });
             writer.SetText(text ?? string.Empty);
             return JsonOk(new { ok = true, bytes = (text ?? string.Empty).Length });
         }

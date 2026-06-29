@@ -10,7 +10,7 @@ namespace Everywhere.Mac.Mcp;
 /// </summary>
 public sealed class MacClipboardWriter : IClipboardWriter
 {
-    public bool IsAvailable => true;
+    public bool IsAvailable() => true;
 
     public void SetText(string text)
     {

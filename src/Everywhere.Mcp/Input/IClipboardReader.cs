@@ -24,8 +24,11 @@ public interface IClipboardWriter
 {
     /// <summary>True when the implementation actually touches the OS clipboard;
     /// false for the null fallback used on hosts without platform support.
-    /// Tools surface this so the caller never sees a silent no-op success.</summary>
-    bool IsAvailable { get; }
+    /// METHOD form (not property): the MCP server SDK reflects on
+    /// properties to build the input schema, so an `IsAvailable {get;}`
+    /// property would make IClipboardWriter parameters appear in the
+    /// tool input schema instead of being DI-injected.</summary>
+    bool IsAvailable();
     /// <summary>Replace the clipboard contents with the given text.</summary>
     void SetText(string text);
     /// <summary>Clear the clipboard.</summary>
@@ -34,7 +37,7 @@ public interface IClipboardWriter
 
 internal sealed class NullClipboardWriter : IClipboardWriter
 {
-    public bool IsAvailable => false;
+    public bool IsAvailable() => false;
     public void SetText(string text) { }
     public void Clear() { }
 }

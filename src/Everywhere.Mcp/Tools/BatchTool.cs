@@ -13,12 +13,22 @@ namespace Everywhere.Mcp.Tools;
 /// (the WS pipe to the extension) and report a `note` for everywhere_*
 /// steps until the local-tool reflective dispatcher lands in Phase 2.
 ///
-/// On any step error the batch stops; partial results are returned with
-/// {error, step_index} alongside the completed steps.
+/// IMPORTANT: instance class, not static — the MCP server SDK reflects
+/// on PUBLIC PROPERTIES of method parameters to build the input schema.
+/// OpenDiaBridge has IsConnected / AvailableTools properties, so passing
+/// it as a method param made it appear as a JSON input to the agent.
+/// Resolving via constructor injection keeps it out of the schema.
 /// </summary>
 [McpServerToolType]
-public static class BatchTool
+public sealed class BatchTool
 {
+    private readonly OpenDiaBridge _bridge;
+
+    public BatchTool(OpenDiaBridge bridge)
+    {
+        _bridge = bridge;
+    }
+
     [McpServerTool(Name = "batch")]
     [Description(
         "Run a sequence of tool calls in one round-trip. " +
@@ -26,8 +36,7 @@ public static class BatchTool
         "'[{\"tool\":\"browser_snapshot\",\"args\":{}}, {\"tool\":\"browser_click\",\"args\":{\"ref\":\"@ref3\"}}]'. " +
         "browser_* steps forward via the OpenDia WS bridge; everywhere.* are dispatched locally. " +
         "Stops on first error and returns the partial result list. SPEC §3.3 ab agent_browser_batch.")]
-    public static async Task<CallToolResult> Batch(
-        OpenDiaBridge bridge,
+    public async Task<CallToolResult> Batch(
         string steps_json,
         CancellationToken ct = default)
     {
@@ -63,13 +72,10 @@ public static class BatchTool
             {
                 if (name!.StartsWith(OpenDiaToolListBuilder.Prefix, StringComparison.Ordinal))
                 {
-                    results.Add(await bridge.InvokeByPrefixedName(name, argsNode, ct: ct));
+                    results.Add(await _bridge.InvokeByPrefixedName(name, argsNode, ct: ct));
                 }
                 else if (name.StartsWith("everywhere.", StringComparison.Ordinal))
                 {
-                    // Phase 2: a local-tool reflective dispatcher will let
-                    // batch sequence everywhere.* steps too. For now flag the
-                    // step so callers know it was a no-op.
                     results.Add(JsonNode.Parse(JsonSerializer.Serialize(new
                     {
                         note = "everywhere.* dispatch not yet wired in batch (Phase 2)",
