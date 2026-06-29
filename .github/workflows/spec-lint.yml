@@ -28,8 +28,12 @@ jobs:
           [ -d /tmp/agent-browser ] || git clone https://github.com/vercel-labs/agent-browser.git /tmp/agent-browser
           ( cd /tmp/agent-browser && git fetch && git checkout ed2e10598c9064aecfaeb7cf21b540684db4be2c )
           node scripts/extract-ab-commands.mjs --out /tmp/parity-matrix.regen.json
-          diff <(jq -S 'del(.generated_at)' docs/specs/parity-matrix.json) \
-               <(jq -S 'del(.generated_at)' /tmp/parity-matrix.regen.json)
+          # Compare immutable extractor output only: drop generated_at and
+          # the per-row mutable fields the /goal loop owns (status, notes,
+          # last_push_sha, last_bench_run, opendia_prereq).
+          MUTABLE='del(.generated_at) | .rows |= map(del(.status, .notes, .last_push_sha, .last_bench_run, .opendia_prereq))'
+          diff <(jq -S "$MUTABLE" docs/specs/parity-matrix.json) \
+               <(jq -S "$MUTABLE" /tmp/parity-matrix.regen.json)
 
       - name: Verify PARITY_MATRIX.md regenerates deterministically
         run: |
