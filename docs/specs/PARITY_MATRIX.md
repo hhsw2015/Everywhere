@@ -90,7 +90,7 @@ DO NOT EDIT BY HAND. Run `node scripts/render-parity-matrix.mjs`.
 | agent_browser_network_requests | value-add | in-browser | opendia | opendia.network_requests | missing | bench:network_requests |
 | agent_browser_network_route | value-add | in-browser | opendia | opendia.network_route | missing | manual:user |
 | agent_browser_network_unroute | value-add | in-browser | opendia | opendia.network_unroute | missing | manual:user |
-| agent_browser_open | core | in-browser | opendia | opendia.open | missing | bench:open |
+| agent_browser_open | core | in-browser | opendia | opendia.open | in-progress | bench:open |
 | agent_browser_pdf | value-add | both | opendia | opendia.pdf | missing | bench:pdf |
 | agent_browser_plugin_add | value-add | in-browser | wont-do |  | wont-do | none |
 | agent_browser_plugin_list | value-add | in-browser | wont-do |  | wont-do | none |
