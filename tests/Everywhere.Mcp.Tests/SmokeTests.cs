@@ -60,11 +60,11 @@ public class SmokeTests
 
     private sealed class TestInputSimulator : IInputSimulator
     {
-        public void MoveTo(double x, double y) { }
-        public void Click(double x, double y, int clickCount = 1, MouseButton button = MouseButton.Left) { }
-        public void DragTo(double fromX, double fromY, double toX, double toY) { }
-        public void TypeText(string text) { }
-        public void PressKey(string xdotoolKeyName) { }
+        public void MoveTo(double x, double y, int? targetPid = null) { }
+        public void Click(double x, double y, int clickCount = 1, MouseButton button = MouseButton.Left, int? targetPid = null) { }
+        public void DragTo(double fromX, double fromY, double toX, double toY, int? targetPid = null) { }
+        public void TypeText(string text, int? targetPid = null) { }
+        public void PressKey(string xdotoolKeyName, int? targetPid = null) { }
     }
 
     private sealed class TestFocusBackend : IFocusBackend
