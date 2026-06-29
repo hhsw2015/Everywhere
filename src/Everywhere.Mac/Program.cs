@@ -91,6 +91,7 @@ public static class Program
                         sp.GetRequiredService<Everywhere.Mcp.Input.CursorTrace>()))
                     .AddSingleton<IFocusBackend, MacFocusBackend>()
                     .AddSingleton<IClipboardReader, MacClipboardReader>()
+                    .AddSingleton<IClipboardWriter, MacClipboardWriter>()
                     .AddSingleton<IIdleTimeReader, MacIdleTimeReader>()
                     .AddSingleton<IBrowserUrlReader, MacBrowserUrlReader>()
                     .AddSingleton<IAppleScriptRunner, MacAppleScriptRunner>()

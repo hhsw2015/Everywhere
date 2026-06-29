@@ -14,10 +14,10 @@
       "est_effort": "M",
       "opendia_prereq": null,
       "acceptance": "bench:auth_delete",
-      "status": "missing",
-      "last_push_sha": null,
+      "status": "in-progress",
+      "last_push_sha": "1c22c130e1d10c7232d56022748c1774a46ab6b5",
       "last_bench_run": null,
-      "notes": ""
+      "notes": "DANGEROUS — implemented in opendia @ 1c22c13; user-approved per /goal session. SPEC §6 step 7 keeps row at in-progress (not have) until human merge to main. Bench fixture pending."
     },
     {
       "ab_command": "agent_browser_auth_list",
@@ -30,10 +30,10 @@
       "est_effort": "M",
       "opendia_prereq": null,
       "acceptance": "bench:auth_list",
-      "status": "missing",
-      "last_push_sha": null,
+      "status": "in-progress",
+      "last_push_sha": "1c22c130e1d10c7232d56022748c1774a46ab6b5",
       "last_bench_run": null,
-      "notes": ""
+      "notes": "DANGEROUS — implemented in opendia @ 1c22c13; user-approved per /goal session. SPEC §6 step 7 keeps row at in-progress (not have) until human merge to main. Bench fixture pending."
     },
     {
       "ab_command": "agent_browser_auth_login",
@@ -46,10 +46,10 @@
       "est_effort": "M",
       "opendia_prereq": null,
       "acceptance": "manual:user",
-      "status": "missing",
-      "last_push_sha": null,
+      "status": "in-progress",
+      "last_push_sha": "1c22c130e1d10c7232d56022748c1774a46ab6b5",
       "last_bench_run": null,
-      "notes": ""
+      "notes": "DANGEROUS — implemented in opendia @ 1c22c13; user-approved per /goal session. SPEC §6 step 7 keeps row at in-progress (not have) until human merge to main. Bench fixture pending."
     },
     {
       "ab_command": "agent_browser_auth_save",
@@ -62,10 +62,10 @@
       "est_effort": "M",
       "opendia_prereq": null,
       "acceptance": "manual:user",
-      "status": "missing",
-      "last_push_sha": null,
+      "status": "in-progress",
+      "last_push_sha": "1c22c130e1d10c7232d56022748c1774a46ab6b5",
       "last_bench_run": null,
-      "notes": ""
+      "notes": "DANGEROUS — implemented in opendia @ 1c22c13; user-approved per /goal session. SPEC §6 step 7 keeps row at in-progress (not have) until human merge to main. Bench fixture pending."
     },
     {
       "ab_command": "agent_browser_auth_show",
@@ -78,10 +78,10 @@
       "est_effort": "M",
       "opendia_prereq": null,
       "acceptance": "bench:auth_show",
-      "status": "missing",
-      "last_push_sha": null,
+      "status": "in-progress",
+      "last_push_sha": "1c22c130e1d10c7232d56022748c1774a46ab6b5",
       "last_bench_run": null,
-      "notes": ""
+      "notes": "DANGEROUS — implemented in opendia @ 1c22c13; user-approved per /goal session. SPEC §6 step 7 keeps row at in-progress (not have) until human merge to main. Bench fixture pending."
     },
     {
       "ab_command": "agent_browser_back",
@@ -110,10 +110,10 @@
       "est_effort": "L",
       "opendia_prereq": null,
       "acceptance": "bench:batch",
-      "status": "missing",
+      "status": "in-progress",
       "last_push_sha": null,
       "last_bench_run": null,
-      "notes": ""
+      "notes": "C# tool landed in src/Everywhere.Mcp/Tools/BatchTool.cs; routes browser_* via OpenDiaBridge, everywhere.* dispatch deferred to Phase 2. Bench fixture pending."
     },
     {
       "ab_command": "agent_browser_chat",
@@ -174,10 +174,10 @@
       "est_effort": "M",
       "opendia_prereq": null,
       "acceptance": "bench:clipboard_copy",
-      "status": "missing",
+      "status": "in-progress",
       "last_push_sha": null,
       "last_bench_run": null,
-      "notes": ""
+      "notes": "C# tool landed in src/Everywhere.Mcp/Tools/ClipboardTools.cs; IClipboardWriter abstraction added; macOS impl in src/Everywhere.Mac/Mcp/MacClipboardWriter.cs. Bench fixture pending."
     },
     {
       "ab_command": "agent_browser_clipboard_paste",
@@ -190,10 +190,10 @@
       "est_effort": "M",
       "opendia_prereq": null,
       "acceptance": "bench:clipboard_paste",
-      "status": "missing",
+      "status": "in-progress",
       "last_push_sha": null,
       "last_bench_run": null,
-      "notes": ""
+      "notes": "C# tool landed in src/Everywhere.Mcp/Tools/ClipboardTools.cs; IClipboardWriter abstraction added; macOS impl in src/Everywhere.Mac/Mcp/MacClipboardWriter.cs. Bench fixture pending."
     },
     {
       "ab_command": "agent_browser_clipboard_read",
@@ -206,10 +206,10 @@
       "est_effort": "M",
       "opendia_prereq": null,
       "acceptance": "bench:clipboard_read",
-      "status": "missing",
+      "status": "in-progress",
       "last_push_sha": null,
       "last_bench_run": null,
-      "notes": ""
+      "notes": "C# tool landed in src/Everywhere.Mcp/Tools/ClipboardTools.cs; IClipboardWriter abstraction added; macOS impl in src/Everywhere.Mac/Mcp/MacClipboardWriter.cs. Bench fixture pending."
     },
     {
       "ab_command": "agent_browser_clipboard_write",
@@ -222,10 +222,10 @@
       "est_effort": "M",
       "opendia_prereq": null,
       "acceptance": "bench:clipboard_write",
-      "status": "missing",
+      "status": "in-progress",
       "last_push_sha": null,
       "last_bench_run": null,
-      "notes": ""
+      "notes": "C# tool landed in src/Everywhere.Mcp/Tools/ClipboardTools.cs; IClipboardWriter abstraction added; macOS impl in src/Everywhere.Mac/Mcp/MacClipboardWriter.cs. Bench fixture pending."
     },
     {
       "ab_command": "agent_browser_close",
@@ -334,10 +334,10 @@
       "est_effort": "M",
       "opendia_prereq": null,
       "acceptance": "manual:user",
-      "status": "missing",
-      "last_push_sha": null,
+      "status": "in-progress",
+      "last_push_sha": "1c22c130e1d10c7232d56022748c1774a46ab6b5",
       "last_bench_run": null,
-      "notes": ""
+      "notes": "DANGEROUS — implemented in opendia @ 1c22c13; user-approved per /goal session. SPEC §6 step 7 keeps row at in-progress (not have) until human merge to main. Bench fixture pending."
     },
     {
       "ab_command": "agent_browser_cookies_set_curl",
@@ -350,10 +350,10 @@
       "est_effort": "M",
       "opendia_prereq": null,
       "acceptance": "manual:user",
-      "status": "missing",
-      "last_push_sha": null,
+      "status": "in-progress",
+      "last_push_sha": "1c22c130e1d10c7232d56022748c1774a46ab6b5",
       "last_bench_run": null,
-      "notes": ""
+      "notes": "DANGEROUS — implemented in opendia @ 1c22c13; user-approved per /goal session. SPEC §6 step 7 keeps row at in-progress (not have) until human merge to main. Bench fixture pending."
     },
     {
       "ab_command": "agent_browser_dashboard_start",
@@ -606,10 +606,10 @@
       "est_effort": "M",
       "opendia_prereq": null,
       "acceptance": "manual:user",
-      "status": "missing",
-      "last_push_sha": null,
+      "status": "in-progress",
+      "last_push_sha": "1c22c130e1d10c7232d56022748c1774a46ab6b5",
       "last_bench_run": null,
-      "notes": ""
+      "notes": "DANGEROUS — implemented in opendia @ 1c22c13; user-approved per /goal session. SPEC §6 step 7 keeps row at in-progress (not have) until human merge to main. Bench fixture pending."
     },
     {
       "ab_command": "agent_browser_fill",
@@ -1150,10 +1150,10 @@
       "est_effort": "M",
       "opendia_prereq": null,
       "acceptance": "bench:network_request",
-      "status": "missing",
-      "last_push_sha": null,
+      "status": "in-progress",
+      "last_push_sha": "1c22c130e1d10c7232d56022748c1774a46ab6b5",
       "last_bench_run": null,
-      "notes": ""
+      "notes": "DANGEROUS — implemented in opendia @ 1c22c13; user-approved per /goal session. SPEC §6 step 7 keeps row at in-progress (not have) until human merge to main. Bench fixture pending."
     },
     {
       "ab_command": "agent_browser_network_requests",
@@ -1182,10 +1182,10 @@
       "est_effort": "M",
       "opendia_prereq": null,
       "acceptance": "manual:user",
-      "status": "missing",
-      "last_push_sha": null,
+      "status": "in-progress",
+      "last_push_sha": "1c22c130e1d10c7232d56022748c1774a46ab6b5",
       "last_bench_run": null,
-      "notes": ""
+      "notes": "DANGEROUS — implemented in opendia @ 1c22c13; user-approved per /goal session. SPEC §6 step 7 keeps row at in-progress (not have) until human merge to main. Bench fixture pending."
     },
     {
       "ab_command": "agent_browser_network_unroute",
@@ -1198,10 +1198,10 @@
       "est_effort": "M",
       "opendia_prereq": null,
       "acceptance": "manual:user",
-      "status": "missing",
-      "last_push_sha": null,
+      "status": "in-progress",
+      "last_push_sha": "1c22c130e1d10c7232d56022748c1774a46ab6b5",
       "last_bench_run": null,
-      "notes": ""
+      "notes": "DANGEROUS — implemented in opendia @ 1c22c13; user-approved per /goal session. SPEC §6 step 7 keeps row at in-progress (not have) until human merge to main. Bench fixture pending."
     },
     {
       "ab_command": "agent_browser_open",
@@ -1694,10 +1694,10 @@
       "est_effort": "M",
       "opendia_prereq": null,
       "acceptance": "manual:user",
-      "status": "missing",
-      "last_push_sha": null,
+      "status": "in-progress",
+      "last_push_sha": "1c22c130e1d10c7232d56022748c1774a46ab6b5",
       "last_bench_run": null,
-      "notes": ""
+      "notes": "DANGEROUS — implemented in opendia @ 1c22c13; user-approved per /goal session. SPEC §6 step 7 keeps row at in-progress (not have) until human merge to main. Bench fixture pending."
     },
     {
       "ab_command": "agent_browser_set_device",
@@ -1742,10 +1742,10 @@
       "est_effort": "M",
       "opendia_prereq": null,
       "acceptance": "manual:user",
-      "status": "missing",
-      "last_push_sha": null,
+      "status": "in-progress",
+      "last_push_sha": "1c22c130e1d10c7232d56022748c1774a46ab6b5",
       "last_bench_run": null,
-      "notes": ""
+      "notes": "DANGEROUS — implemented in opendia @ 1c22c13; user-approved per /goal session. SPEC §6 step 7 keeps row at in-progress (not have) until human merge to main. Bench fixture pending."
     },
     {
       "ab_command": "agent_browser_set_media",
@@ -1870,10 +1870,10 @@
       "est_effort": "M",
       "opendia_prereq": null,
       "acceptance": "manual:user",
-      "status": "missing",
-      "last_push_sha": null,
+      "status": "in-progress",
+      "last_push_sha": "1c22c130e1d10c7232d56022748c1774a46ab6b5",
       "last_bench_run": null,
-      "notes": ""
+      "notes": "DANGEROUS — implemented in opendia @ 1c22c13; user-approved per /goal session. SPEC §6 step 7 keeps row at in-progress (not have) until human merge to main. Bench fixture pending."
     },
     {
       "ab_command": "agent_browser_state_clear",
@@ -1886,10 +1886,10 @@
       "est_effort": "M",
       "opendia_prereq": null,
       "acceptance": "manual:user",
-      "status": "missing",
-      "last_push_sha": null,
+      "status": "in-progress",
+      "last_push_sha": "1c22c130e1d10c7232d56022748c1774a46ab6b5",
       "last_bench_run": null,
-      "notes": ""
+      "notes": "DANGEROUS — implemented in opendia @ 1c22c13; user-approved per /goal session. SPEC §6 step 7 keeps row at in-progress (not have) until human merge to main. Bench fixture pending."
     },
     {
       "ab_command": "agent_browser_state_list",
@@ -1902,10 +1902,10 @@
       "est_effort": "M",
       "opendia_prereq": null,
       "acceptance": "manual:user",
-      "status": "missing",
-      "last_push_sha": null,
+      "status": "in-progress",
+      "last_push_sha": "1c22c130e1d10c7232d56022748c1774a46ab6b5",
       "last_bench_run": null,
-      "notes": ""
+      "notes": "DANGEROUS — implemented in opendia @ 1c22c13; user-approved per /goal session. SPEC §6 step 7 keeps row at in-progress (not have) until human merge to main. Bench fixture pending."
     },
     {
       "ab_command": "agent_browser_state_load",
@@ -1918,10 +1918,10 @@
       "est_effort": "M",
       "opendia_prereq": null,
       "acceptance": "manual:user",
-      "status": "missing",
-      "last_push_sha": null,
+      "status": "in-progress",
+      "last_push_sha": "1c22c130e1d10c7232d56022748c1774a46ab6b5",
       "last_bench_run": null,
-      "notes": ""
+      "notes": "DANGEROUS — implemented in opendia @ 1c22c13; user-approved per /goal session. SPEC §6 step 7 keeps row at in-progress (not have) until human merge to main. Bench fixture pending."
     },
     {
       "ab_command": "agent_browser_state_rename",
@@ -1934,10 +1934,10 @@
       "est_effort": "M",
       "opendia_prereq": null,
       "acceptance": "manual:user",
-      "status": "missing",
-      "last_push_sha": null,
+      "status": "in-progress",
+      "last_push_sha": "1c22c130e1d10c7232d56022748c1774a46ab6b5",
       "last_bench_run": null,
-      "notes": ""
+      "notes": "DANGEROUS — implemented in opendia @ 1c22c13; user-approved per /goal session. SPEC §6 step 7 keeps row at in-progress (not have) until human merge to main. Bench fixture pending."
     },
     {
       "ab_command": "agent_browser_state_save",
@@ -1950,10 +1950,10 @@
       "est_effort": "M",
       "opendia_prereq": null,
       "acceptance": "manual:user",
-      "status": "missing",
-      "last_push_sha": null,
+      "status": "in-progress",
+      "last_push_sha": "1c22c130e1d10c7232d56022748c1774a46ab6b5",
       "last_bench_run": null,
-      "notes": ""
+      "notes": "DANGEROUS — implemented in opendia @ 1c22c13; user-approved per /goal session. SPEC §6 step 7 keeps row at in-progress (not have) until human merge to main. Bench fixture pending."
     },
     {
       "ab_command": "agent_browser_state_show",
@@ -1966,10 +1966,10 @@
       "est_effort": "M",
       "opendia_prereq": null,
       "acceptance": "manual:user",
-      "status": "missing",
-      "last_push_sha": null,
+      "status": "in-progress",
+      "last_push_sha": "1c22c130e1d10c7232d56022748c1774a46ab6b5",
       "last_bench_run": null,
-      "notes": ""
+      "notes": "DANGEROUS — implemented in opendia @ 1c22c13; user-approved per /goal session. SPEC §6 step 7 keeps row at in-progress (not have) until human merge to main. Bench fixture pending."
     },
     {
       "ab_command": "agent_browser_storage_clear",
@@ -1982,10 +1982,10 @@
       "est_effort": "M",
       "opendia_prereq": null,
       "acceptance": "manual:user",
-      "status": "missing",
-      "last_push_sha": null,
+      "status": "in-progress",
+      "last_push_sha": "1c22c130e1d10c7232d56022748c1774a46ab6b5",
       "last_bench_run": null,
-      "notes": ""
+      "notes": "DANGEROUS — implemented in opendia @ 1c22c13; user-approved per /goal session. SPEC §6 step 7 keeps row at in-progress (not have) until human merge to main. Bench fixture pending."
     },
     {
       "ab_command": "agent_browser_storage_get",
@@ -2014,10 +2014,10 @@
       "est_effort": "M",
       "opendia_prereq": null,
       "acceptance": "manual:user",
-      "status": "missing",
-      "last_push_sha": null,
+      "status": "in-progress",
+      "last_push_sha": "1c22c130e1d10c7232d56022748c1774a46ab6b5",
       "last_bench_run": null,
-      "notes": ""
+      "notes": "DANGEROUS — implemented in opendia @ 1c22c13; user-approved per /goal session. SPEC §6 step 7 keeps row at in-progress (not have) until human merge to main. Bench fixture pending."
     },
     {
       "ab_command": "agent_browser_stream_disable",
@@ -2270,10 +2270,10 @@
       "est_effort": "M",
       "opendia_prereq": null,
       "acceptance": "bench:upload",
-      "status": "missing",
-      "last_push_sha": null,
+      "status": "in-progress",
+      "last_push_sha": "1c22c130e1d10c7232d56022748c1774a46ab6b5",
       "last_bench_run": null,
-      "notes": ""
+      "notes": "DANGEROUS — implemented in opendia @ 1c22c13; user-approved per /goal session. SPEC §6 step 7 keeps row at in-progress (not have) until human merge to main. Bench fixture pending."
     },
     {
       "ab_command": "agent_browser_vitals",

@@ -77,6 +77,7 @@ public static class EverywhereMcpServiceExtensions
         services.TryAddSingleton<FocusBorrow>();
         services.TryAddSingleton<SelectionCache>();
         services.TryAddSingleton<IClipboardReader, NullClipboardReader>();
+        services.TryAddSingleton<IClipboardWriter, NullClipboardWriter>();
         services.TryAddSingleton<IIdleTimeReader, NullIdleTimeReader>();
         services.TryAddSingleton<IBrowserUrlReader, NullBrowserUrlReader>();
         services.TryAddSingleton<IAppleScriptRunner, NullAppleScriptRunner>();

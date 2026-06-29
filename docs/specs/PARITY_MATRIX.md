@@ -15,28 +15,28 @@ DO NOT EDIT BY HAND. Run `node scripts/render-parity-matrix.mjs`.
 
 | ab_command | tier | scope | ownership | our_tool | status | acceptance |
 |---|---|---|---|---|---|---|
-| agent_browser_auth_delete | value-add | in-browser | opendia | browser_auth_delete | missing | bench:auth_delete |
-| agent_browser_auth_list | value-add | in-browser | opendia | browser_auth_list | missing | bench:auth_list |
-| agent_browser_auth_login | value-add | in-browser | opendia | browser_auth_login | missing | manual:user |
-| agent_browser_auth_save | value-add | in-browser | opendia | browser_auth_save | missing | manual:user |
-| agent_browser_auth_show | value-add | in-browser | opendia | browser_auth_show | missing | bench:auth_show |
+| agent_browser_auth_delete | value-add | in-browser | opendia | browser_auth_delete | in-progress | bench:auth_delete |
+| agent_browser_auth_list | value-add | in-browser | opendia | browser_auth_list | in-progress | bench:auth_list |
+| agent_browser_auth_login | value-add | in-browser | opendia | browser_auth_login | in-progress | manual:user |
+| agent_browser_auth_save | value-add | in-browser | opendia | browser_auth_save | in-progress | manual:user |
+| agent_browser_auth_show | value-add | in-browser | opendia | browser_auth_show | in-progress | bench:auth_show |
 | agent_browser_back | core | in-browser | opendia | browser_back | in-progress | bench:back |
-| agent_browser_batch | value-add | in-browser | universal | browser_batch | missing | bench:batch |
+| agent_browser_batch | value-add | in-browser | universal | browser_batch | in-progress | bench:batch |
 | agent_browser_chat | value-add | in-browser | wont-do |  | wont-do | none |
 | agent_browser_check | core | in-browser | opendia | browser_check | in-progress | bench:check |
 | agent_browser_click | core | in-browser | opendia | browser_click | in-progress | bench:click |
-| agent_browser_clipboard_copy | value-add | out-of-browser | everywhere | everywhere.clipboard_copy | missing | bench:clipboard_copy |
-| agent_browser_clipboard_paste | value-add | out-of-browser | everywhere | everywhere.clipboard_paste | missing | bench:clipboard_paste |
-| agent_browser_clipboard_read | value-add | out-of-browser | everywhere | everywhere.clipboard_read | missing | bench:clipboard_read |
-| agent_browser_clipboard_write | value-add | out-of-browser | everywhere | everywhere.clipboard_write | missing | bench:clipboard_write |
+| agent_browser_clipboard_copy | value-add | out-of-browser | everywhere | everywhere.clipboard_copy | in-progress | bench:clipboard_copy |
+| agent_browser_clipboard_paste | value-add | out-of-browser | everywhere | everywhere.clipboard_paste | in-progress | bench:clipboard_paste |
+| agent_browser_clipboard_read | value-add | out-of-browser | everywhere | everywhere.clipboard_read | in-progress | bench:clipboard_read |
+| agent_browser_clipboard_write | value-add | out-of-browser | everywhere | everywhere.clipboard_write | in-progress | bench:clipboard_write |
 | agent_browser_close | core | in-browser | opendia | browser_close | in-progress | bench:close |
 | agent_browser_confirm | value-add | in-browser | opendia | browser_confirm | in-progress | bench:confirm |
 | agent_browser_connect | value-add | in-browser | wont-do |  | wont-do | none |
 | agent_browser_console | value-add | in-browser | opendia | browser_console | in-progress | bench:console |
 | agent_browser_cookies_clear | value-add | in-browser | opendia | browser_cookies_clear | in-progress | manual:user |
 | agent_browser_cookies_get | value-add | in-browser | opendia | browser_cookies_get | in-progress | manual:user |
-| agent_browser_cookies_set | value-add | in-browser | opendia | browser_cookies_set | missing | manual:user |
-| agent_browser_cookies_set_curl | value-add | in-browser | opendia | browser_cookies_set_curl | missing | manual:user |
+| agent_browser_cookies_set | value-add | in-browser | opendia | browser_cookies_set | in-progress | manual:user |
+| agent_browser_cookies_set_curl | value-add | in-browser | opendia | browser_cookies_set_curl | in-progress | manual:user |
 | agent_browser_dashboard_start | value-add | in-browser | wont-do |  | wont-do | none |
 | agent_browser_dashboard_stop | value-add | in-browser | wont-do |  | wont-do | none |
 | agent_browser_dblclick | niche | in-browser | opendia | browser_dblclick | in-progress | bench:dblclick |
@@ -52,7 +52,7 @@ DO NOT EDIT BY HAND. Run `node scripts/render-parity-matrix.mjs`.
 | agent_browser_download | value-add | both | opendia | browser_download | in-progress | bench:download |
 | agent_browser_drag | niche | in-browser | opendia | browser_drag | in-progress | bench:drag |
 | agent_browser_errors | value-add | in-browser | opendia | browser_errors | in-progress | bench:errors |
-| agent_browser_eval | core | in-browser | opendia | browser_eval | missing | manual:user |
+| agent_browser_eval | core | in-browser | opendia | browser_eval | in-progress | manual:user |
 | agent_browser_fill | core | in-browser | opendia | browser_fill | in-progress | bench:fill |
 | agent_browser_find | niche | in-browser | opendia | browser_find | in-progress | bench:find |
 | agent_browser_focus | niche | in-browser | opendia | browser_focus | in-progress | bench:focus |
@@ -86,10 +86,10 @@ DO NOT EDIT BY HAND. Run `node scripts/render-parity-matrix.mjs`.
 | agent_browser_mouse_wheel | niche | in-browser | opendia | browser_mouse_wheel | in-progress | bench:mouse_wheel |
 | agent_browser_network_har_start | value-add | in-browser | opendia | browser_network_har_start | in-progress | manual:user |
 | agent_browser_network_har_stop | value-add | in-browser | opendia | browser_network_har_stop | in-progress | manual:user |
-| agent_browser_network_request | value-add | in-browser | opendia | browser_network_request | missing | bench:network_request |
+| agent_browser_network_request | value-add | in-browser | opendia | browser_network_request | in-progress | bench:network_request |
 | agent_browser_network_requests | value-add | in-browser | opendia | browser_network_requests | in-progress | bench:network_requests |
-| agent_browser_network_route | value-add | in-browser | opendia | browser_network_route | missing | manual:user |
-| agent_browser_network_unroute | value-add | in-browser | opendia | browser_network_unroute | missing | manual:user |
+| agent_browser_network_route | value-add | in-browser | opendia | browser_network_route | in-progress | manual:user |
+| agent_browser_network_unroute | value-add | in-browser | opendia | browser_network_unroute | in-progress | manual:user |
 | agent_browser_open | core | in-browser | opendia | browser_open | in-progress | bench:open |
 | agent_browser_pdf | value-add | both | opendia | browser_pdf | in-progress | bench:pdf |
 | agent_browser_plugin_add | value-add | in-browser | wont-do |  | wont-do | none |
@@ -120,10 +120,10 @@ DO NOT EDIT BY HAND. Run `node scripts/render-parity-matrix.mjs`.
 | agent_browser_session_id | value-add | in-browser | wont-do |  | wont-do | none |
 | agent_browser_session_info | value-add | in-browser | wont-do |  | wont-do | none |
 | agent_browser_session_list | value-add | in-browser | wont-do |  | wont-do | none |
-| agent_browser_set_credentials | value-add | in-browser | opendia | browser_set_credentials | missing | manual:user |
+| agent_browser_set_credentials | value-add | in-browser | opendia | browser_set_credentials | in-progress | manual:user |
 | agent_browser_set_device | niche | in-browser | wont-do |  | wont-do | none |
 | agent_browser_set_geo | niche | in-browser | opendia | browser_set_geo | in-progress | bench:set_geo |
-| agent_browser_set_headers | value-add | in-browser | opendia | browser_set_headers | missing | manual:user |
+| agent_browser_set_headers | value-add | in-browser | opendia | browser_set_headers | in-progress | manual:user |
 | agent_browser_set_media | niche | in-browser | opendia | browser_set_media | in-progress | bench:set_media |
 | agent_browser_set_offline | value-add | in-browser | opendia | browser_set_offline | in-progress | manual:user |
 | agent_browser_set_viewport | niche | in-browser | opendia | browser_set_viewport | in-progress | bench:set_viewport |
@@ -131,16 +131,16 @@ DO NOT EDIT BY HAND. Run `node scripts/render-parity-matrix.mjs`.
 | agent_browser_skills_list | value-add | in-browser | wont-do |  | wont-do | none |
 | agent_browser_skills_path | value-add | in-browser | wont-do |  | wont-do | none |
 | agent_browser_snapshot | core | in-browser | universal | browser_snapshot | in-progress | bench:snapshot |
-| agent_browser_state_clean | value-add | in-browser | opendia | browser_state_clean | missing | manual:user |
-| agent_browser_state_clear | value-add | in-browser | opendia | browser_state_clear | missing | manual:user |
-| agent_browser_state_list | value-add | in-browser | opendia | browser_state_list | missing | manual:user |
-| agent_browser_state_load | value-add | in-browser | opendia | browser_state_load | missing | manual:user |
-| agent_browser_state_rename | value-add | in-browser | opendia | browser_state_rename | missing | manual:user |
-| agent_browser_state_save | value-add | in-browser | opendia | browser_state_save | missing | manual:user |
-| agent_browser_state_show | value-add | in-browser | opendia | browser_state_show | missing | manual:user |
-| agent_browser_storage_clear | value-add | in-browser | opendia | browser_storage_clear | missing | manual:user |
+| agent_browser_state_clean | value-add | in-browser | opendia | browser_state_clean | in-progress | manual:user |
+| agent_browser_state_clear | value-add | in-browser | opendia | browser_state_clear | in-progress | manual:user |
+| agent_browser_state_list | value-add | in-browser | opendia | browser_state_list | in-progress | manual:user |
+| agent_browser_state_load | value-add | in-browser | opendia | browser_state_load | in-progress | manual:user |
+| agent_browser_state_rename | value-add | in-browser | opendia | browser_state_rename | in-progress | manual:user |
+| agent_browser_state_save | value-add | in-browser | opendia | browser_state_save | in-progress | manual:user |
+| agent_browser_state_show | value-add | in-browser | opendia | browser_state_show | in-progress | manual:user |
+| agent_browser_storage_clear | value-add | in-browser | opendia | browser_storage_clear | in-progress | manual:user |
 | agent_browser_storage_get | value-add | in-browser | opendia | browser_storage_get | in-progress | bench:storage_get |
-| agent_browser_storage_set | value-add | in-browser | opendia | browser_storage_set | missing | manual:user |
+| agent_browser_storage_set | value-add | in-browser | opendia | browser_storage_set | in-progress | manual:user |
 | agent_browser_stream_disable | value-add | in-browser | wont-do |  | wont-do | none |
 | agent_browser_stream_enable | value-add | in-browser | wont-do |  | wont-do | none |
 | agent_browser_stream_status | value-add | in-browser | wont-do |  | wont-do | none |
@@ -156,7 +156,7 @@ DO NOT EDIT BY HAND. Run `node scripts/render-parity-matrix.mjs`.
 | agent_browser_type | core | in-browser | opendia | browser_type | in-progress | bench:type |
 | agent_browser_uncheck | core | in-browser | opendia | browser_uncheck | in-progress | bench:uncheck |
 | agent_browser_upgrade | value-add | in-browser | wont-do |  | wont-do | none |
-| agent_browser_upload | value-add | both | opendia | browser_upload | missing | bench:upload |
+| agent_browser_upload | value-add | both | opendia | browser_upload | in-progress | bench:upload |
 | agent_browser_vitals | niche | in-browser | opendia | browser_vitals | in-progress | bench:vitals |
 | agent_browser_wait_for_download | value-add | in-browser | opendia | browser_wait_for_download | in-progress | bench:wait_for_download |
 | agent_browser_wait_for_function | niche | in-browser | universal | browser_wait_for_function | in-progress | bench:wait_for_function |
