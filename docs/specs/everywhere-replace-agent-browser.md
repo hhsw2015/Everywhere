@@ -22,14 +22,42 @@ Verifiable signal: every `bench:*` fixture passes both
 
 ## 2. Invariants
 
+### 2.0 Topology (HARD)
+
+Claude Code sees **one** MCP server: Everywhere (`http://127.0.0.1:7878/mcp`).
+Everywhere's MCP surface is the union of:
+- **Local tools** — macOS a11y, Finder, clipboard, doc readers, etc.
+  prefixed `everywhere.<name>`.
+- **Forwarded tools** — browser capabilities prefixed `browser_<name>`.
+  Everywhere holds a WebSocket client to the OpenDia browser extension
+  (the extension is the WS server) and proxies these tool calls through
+  that WS link.
+
+OpenDia is a **standalone WS service** (the browser extension is the WS
+server). Everywhere is a WS client; any other process speaking the same
+WS protocol is equally a client. OpenDia is **not** packaged or used as
+an MCP server in this SPEC, and the `opendia-mcp/` directory in the
+OpenDia repo (its own legacy MCP shim) is not part of this design.
+Cross-repo lint Rule 4 therefore inspects `src/Everywhere.Mcp/Tools/`
+(C# tool registrations on the Everywhere side), not `opendia-mcp/`.
+
 ### 2.1 Independence (HARD)
 
-- **OpenDia** must run with zero Everywhere involvement. Any ab
-  capability claimed replaceable by OpenDia must close-loop inside
-  OpenDia (extension + its MCP host), including HTML→md, a11y tree
-  rendering with refs, `diff_snapshot`, `annotate_screenshot`, `batch`.
-- **Everywhere** must run with OpenDia uninstalled. Any duplicated
-  capability must not depend on OpenDia.
+- **OpenDia (browser extension)** is a standalone WS service.
+  Everywhere is one client of that service; any other process speaking
+  the same WS protocol gets the same surface. OpenDia is **not** an
+  MCP server in this SPEC, and no SPEC artifact assumes one. Any ab
+  capability claimed replaceable by OpenDia must close-loop inside the
+  extension's WS API alone — HTML→md, a11y tree rendering with refs,
+  `diff_snapshot`, `annotate_screenshot`, `batch`. From the
+  Everywhere-as-client side, every `browser_<name>` MCP tool MUST be
+  exactly one WS round-trip — no chained extension calls and no
+  Everywhere-side fallbacks.
+- **Everywhere** must run with OpenDia uninstalled. Local
+  (`everywhere.*`) tools must not depend on the extension being
+  present. Calling an `browser_*` tool with no extension connected
+  returns `{ok:false, error:"opendia-not-connected"}`, never an
+  Everywhere-side simulation.
 - **OpenDia bundle budget**: extension assets +≤ 50 KB minified above
   pre-SPEC baseline (turndown-lite + fast-diff inlined). Documented in
   OpenDia README delta as OpenDia's own product invariant.
@@ -37,7 +65,7 @@ Verifiable signal: every `bench:*` fixture passes both
 ### 2.2 MCP tool naming
 
 Universal capabilities use substrate prefix at the MCP boundary:
-`opendia.click`, `everywhere.click`. Exclusive-substrate tools use
+`browser_click`, `everywhere.click`. Exclusive-substrate tools use
 unprefixed names (no clash exists).
 
 ### 2.3 Anti-temptation (HARD)
@@ -71,6 +99,15 @@ description follows §3.4 templates.
 Three disjoint classes. Every tool fits exactly one.
 
 ### 3.1 Universal (both substrates implement)
+
+A universal capability ships **twice** — once inside the OpenDia browser
+extension (so the extension stays usable by any WS client that isn't
+Everywhere) and once on the Everywhere side (so Everywhere's own
+cross-substrate flows, `everywhere.batch`, and local-only macOS paths
+work). The two implementations are independent; neither calls the other
+back. The Everywhere `browser_<name>` MCP tool forwards to the
+extension's WS op of the same name; the `everywhere.<name>` tool runs
+the macOS-side equivalent.
 
 | capability | OpenDia | Everywhere |
 |---|---|---|
@@ -143,7 +180,7 @@ Default `format=jpeg quality=70`.
 
 ### 4.3 `read_text`
 ```json
-{ "schema_version": "1", "text":"string", "metadata":{"title":"string|null","url":"string|null","source":"opendia.read_text|everywhere.web_read_url|everywhere.doc_read_html","truncated":false} }
+{ "schema_version": "1", "text":"string", "metadata":{"title":"string|null","url":"string|null","source":"browser_read_text|everywhere.web_read_url|everywhere.doc_read_html","truncated":false} }
 ```
 Cross-implementation Jaccard ≥ 0.85 asserted only on `kind:static_html`
 fixtures (lint Rule 16).
@@ -192,15 +229,15 @@ Phase 0 sanity-checks count ∈ [140, 170]; out-of-range → HANDOFF.
 
 ```
 DANGEROUS_TOOLS = {
-  opendia.eval, opendia.cdp_evaluate,
-  opendia.cookies_set, opendia.cookies_clear, opendia.cookies_get,
-  opendia.auth_save, opendia.auth_login,
-  opendia.state_save, opendia.state_load,
-  opendia.route_mock,
-  opendia.set_headers, opendia.set_credentials,
-  opendia.network_capture, opendia.har_export,
-  opendia.add_init_script, opendia.add_style,
-  opendia.localStorage_set, opendia.sessionStorage_set
+  browser_eval, browser_cdp_evaluate,
+  browser_cookies_set, browser_cookies_clear, browser_cookies_get,
+  browser_auth_save, browser_auth_login,
+  browser_state_save, browser_state_load,
+  browser_route_mock,
+  browser_set_headers, browser_set_credentials,
+  browser_network_capture, browser_har_export,
+  browser_add_init_script, browser_add_style,
+  browser_localStorage_set, browser_sessionStorage_set
 }
 ```
 
@@ -221,7 +258,7 @@ profiler / record / react / vitals) | `ios-mobile` (Appium / iOS) |
   "scope": "in-browser|out-of-browser|both",
   "ownership": "opendia|everywhere|universal|wont-do",
   "wont_do_reason": "code or null",
-  "our_tool": "opendia.navigate or null",
+  "our_tool": "browser_navigate or null",
   "impact": "high|medium|low",
   "est_effort": "S|M|L",
   "opendia_prereq": "tool-id or null",
@@ -280,10 +317,13 @@ Each `/goal` enters step 1.
 9. Goto step 2. Stop per §7.
 ```
 
-**Cross-repo sequencing**: universal row's OpenDia half merges first.
-Lint Rule 4 derives the OpenDia tool list by grepping
-`~/Dev/opendia/opendia-mcp/server.js` directly — no intermediate
-manifest, no race.
+**Cross-repo sequencing**: the OpenDia browser extension lands the WS
+op first (in `opendia-extension/src/`), then Everywhere lands the C#
+parity tool that calls it. Lint Rule 4 grep target is
+`Everywhere.Mcp/Tools/Parity/**/*.cs` — looking for an
+`[McpServerTool(Name = "browser_<name>")]` (or the project's
+equivalent attribute) for every universal-row `our_tool`. No
+intermediate manifest, no race.
 
 **Everywhere-exclusive rows** are NOT subject to this lock; they run
 in parallel with Phase 1.
@@ -375,9 +415,9 @@ server; freeze `bench/fixtures/<id>/expected.json` with
 Rows where `ownership ∈ {opendia, universal}`. State-machine sort
 (§6 step 3) drives order. HARD dep constraints override sort:
 
-1. `opendia.snapshot` before any ref-dependent tool (click, fill,
+1. `browser_snapshot` before any ref-dependent tool (click, fill,
    hover, wait_for[predicate], diff_snapshot, annotate_screenshot).
-2. `opendia.wait_for` before any bench fixture needing DOM quiescence,
+2. `browser_wait_for` before any bench fixture needing DOM quiescence,
    specifically before any `diff_snapshot` bench fixture (Rule 11).
 3. `read_text` inlines turndown-lite (≤ 30 KB) + fast-diff (≤ 8 KB)
    into bundle. Rule 8 enforces.
@@ -385,12 +425,20 @@ Rows where `ownership ∈ {opendia, universal}`. State-machine sort
 First OpenDia PR records `docs/specs/opendia-bundle-baseline.txt`
 (byte size of `dist/` pre-SPEC). Rule 8 lints against it.
 
-Each PR: new MCP tool with `opendia.<name>` prefix; handler in
-`background.js` / `content.js`; Vitest unit test; tool description
-follows §3.4 templates.
+Each PR is **two halves**:
+- **OpenDia half** (in `~/Dev/opendia/opendia-extension/`): add the WS
+  op (handler in `background.js` / `content.js`); Vitest unit test;
+  bump `dist/` baseline if needed.
+- **Everywhere half** (in `~/Dev/Everywhere/Everywhere.Mcp/Tools/Parity/`):
+  add the `[McpServerTool(Name="browser_<name>")]` C# class that calls
+  Everywhere's WS client to the OpenDia extension; xUnit unit test;
+  tool description follows §3.4 templates.
 
-Cross-repo visibility: SPEC-lint reads OpenDia tools via direct grep of
-`opendia-mcp/server.js`. No manifest file.
+Cross-repo visibility: SPEC-lint reads the Everywhere C# parity surface
+directly (grep `Everywhere.Mcp/Tools/Parity/**/*.cs` for `Name =
+"browser_<short>"`). The OpenDia repo carries no SPEC-driven manifest;
+its half of the contract is the WS protocol it implements, verified by
+its own Vitest suite.
 
 ### Phase 2: Everywhere (in `~/Dev/Everywhere`, parallel with Phase 1
 for ownership=everywhere; sequenced for ownership=universal)
@@ -429,15 +477,17 @@ Generate `docs/specs/HANDOFF.md`. Stop.
 2. `ownership ∈ {opendia, everywhere, universal, wont-do}`.
 3. `wont_do_reason` ∈ §5.3 enum OR regex `^superseded-by:[a-z]+\.[a-z_]+$`,
    IFF `ownership=wont-do`.
-4. Universal-row Everywhere half requires the OpenDia counterpart to
-   exist in `~/Dev/opendia/opendia-mcp/server.js` (or
-   `./opendia-readonly/` in CI). Grep
-   `register\(\s*"opendia\.<name>"`.
+4. Every non-`wont-do` row with `our_tool=browser_<name>` must have a
+   matching `[McpServerTool(Name = "browser_<name>")]` (case-insensitive
+   spaces around `=`) somewhere under
+   `Everywhere.Mcp/Tools/Parity/**/*.cs`. The OpenDia WS-op
+   counterpart is verified by OpenDia's own Vitest CI; SPEC-lint does
+   not look at the OpenDia repo for this rule.
 5. Every `bench:<id>` has matching `bench/fixtures/<id>/{task.md,
    page/}`.
 6. §3.1/3.2/3.3 lists are subsets of matrix rows with matching
    ownership.
-7. Universal tools use `opendia.` or `everywhere.` prefix.
+7. Universal tools use `browser_` or `everywhere.` prefix.
 8. OpenDia `dist/` byte size ≤ baseline + 50 KB (baseline written by
    first OpenDia PR in `docs/specs/opendia-bundle-baseline.txt`).
 9. No `task.md` references `https://` URL not also vendored in `page/`.
@@ -446,16 +496,20 @@ Generate `docs/specs/HANDOFF.md`. Stop.
     it) MUST declare `wait_for:` predicate in front-matter.
 12. Bidirectional: bench ids in non-wont-do rows == dirs in
     `bench/fixtures/`.
-13. Tool description templates (§3.4) regex match. Cross-repo: reads
-    `opendia-mcp/server.js` and `Everywhere.Mcp/Tools/*.cs`.
+13. Tool description templates (§3.4) regex match against
+    `Everywhere.Mcp/Tools/**/*.cs` (both `everywhere.*` and `browser_*`
+    parity wrappers live here). OpenDia extension descriptions are not
+    SPEC-driven (its own product surface).
 14. JSON-aware secret scan on `bench-results.json`: flag string values
     matching `^(?i:authorization|cookie|set-cookie)\s*[:=]\s*\S+`.
 15. For every `status=have` bench row,
     `bench-results.json.ab.tokens_median ==
     expected.json.tokens_median` byte-for-byte.
 16. Every fixture front-matter has `kind ∈ {static_html, har_replay}`.
-17. `ci_tier=ci` fixtures invoke OpenDia tools only (no `everywhere.*`
-    references in `task.md`).
+17. `ci_tier=ci` fixtures invoke `browser_*` tools only (no
+    `everywhere.*` references in `task.md`) — `browser_*` is the
+    browser-only subset of Everywhere's MCP surface, runnable in
+    headless CI; `everywhere.*` needs a macOS host.
 18. Anti-temptation (§2.3) enforced **by code review only**, not by
     lint. Acknowledged debt.
 

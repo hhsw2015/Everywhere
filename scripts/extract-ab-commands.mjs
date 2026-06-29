@@ -243,14 +243,16 @@ function wontDoReason(n) {
   return null;
 }
 
-// our_tool mapping: short name with substrate prefix; wont-do rows null.
 function ourTool(n, own) {
   if (own === "wont-do") return null;
   const sn = shortName(n);
   if (own === "everywhere") return `everywhere.${sn}`;
-  // opendia or universal → opendia side carries the canonical name; the
-  // universal everywhere counterpart shares the short name in its row.
-  return `opendia.${sn}`;
+  // opendia / universal → Everywhere exposes the tool with the
+  // `browser_` prefix (matches OpenDiaToolListBuilder.Prefix in
+  // src/Everywhere.Mcp/OpenDia/). For universal rows, an
+  // `everywhere.<sn>` counterpart also exists; the matrix tracks the
+  // `browser_<sn>` half as canonical (universal-twice clause, SPEC §3.1).
+  return `browser_${sn}`;
 }
 
 function acceptance(n, own) {
@@ -327,7 +329,7 @@ const SNAPSHOT_DEPENDENTS = new Set([
 ]);
 for (const r of rows) {
   if (SNAPSHOT_DEPENDENTS.has(r.ab_command) && r.ownership !== "wont-do") {
-    r.opendia_prereq = "opendia.snapshot";
+    r.opendia_prereq = "browser_snapshot";
   }
 }
 

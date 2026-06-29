@@ -17,9 +17,12 @@ const BENCH_FX = join(ROOT, "bench/fixtures");
 const BENCH_RES = join(ROOT, "bench/results/bench-results.json");
 const BASELINE_BYTES = join(ROOT, "docs/specs/opendia-bundle-baseline.txt");
 
+// Reserved for future read-only checks against the OpenDia repo (e.g.
+// bundle baseline / extension manifest). Rule 4 no longer reads opendia.
 const OPENDIA_DIR =
   process.env.OPENDIA_READONLY ||
   (existsSync("./opendia-readonly") ? "./opendia-readonly" : join(homedir(), "Dev/opendia"));
+const EVERYWHERE_PARITY_DIR = join(ROOT, "src/Everywhere.Mcp/Tools");
 
 const OWNERSHIPS = new Set(["opendia", "everywhere", "universal", "wont-do"]);
 const SCOPES = new Set(["in-browser", "out-of-browser", "both"]);
@@ -35,7 +38,7 @@ const WONT_DO_REASONS = new Set([
   "wont-do",
 ]);
 const SUPERSEDED_RE = /^superseded-by:[a-z]+\.[a-z_]+$/;
-const TOOL_PREFIX_RE = /^(opendia|everywhere)\.[a-z_]+$/;
+const TOOL_PREFIX_RE = /^(browser_|everywhere\.)[a-z_]+$/;
 const SECRET_SCAN_RE = /^(authorization|cookie|set-cookie)\s*[:=]\s*\S+/i;
 
 const errors = [];
@@ -86,35 +89,52 @@ for (const [i, r] of rows.entries()) {
   }
 }
 
-// Rule 4 — universal-row Everywhere half requires opendia counterpart
-// somewhere in the opendia-mcp/ source tree. Spec text §6 names server.js
-// as the canonical surface; lint scans every .js in opendia-mcp/ so a
-// dedicated parity registry module (registered via require() from server.js)
-// still satisfies the contract — that is in-tree code, not a manifest.
-const opendiaMcpDir = join(OPENDIA_DIR, "opendia-mcp");
-let opendiaSrc = "";
-if (existsSync(opendiaMcpDir)) {
-  for (const f of readdirSync(opendiaMcpDir)) {
-    if (f.endsWith(".js") && !f.endsWith(".test.js")) {
-      opendiaSrc += readFileSync(join(opendiaMcpDir, f), "utf8") + "\n";
+// Rule 4 — every non-wont-do row whose our_tool starts with browser_
+// must either (a) have a matching [McpServerTool(Name = "browser_<short>")]
+// attr under src/Everywhere.Mcp/Tools/, or (b) be runtime-forwarded by
+// OpenDiaToolListBuilder.Prefix = "browser_" (i.e. the extension's
+// tool surface is dynamically exposed under that prefix). SPEC §9 Rule 4.
+let everywhereSrc = "";
+let dynamicForwarderPresent = false;
+function readCsRecursive(dir) {
+  if (!existsSync(dir)) return;
+  for (const ent of readdirSync(dir, { withFileTypes: true })) {
+    const full = join(dir, ent.name);
+    if (ent.isDirectory()) readCsRecursive(full);
+    else if (ent.isFile() && ent.name.endsWith(".cs")) {
+      everywhereSrc += readFileSync(full, "utf8") + "\n";
     }
   }
-} else {
-  warn(4, `opendia-mcp/ not found at ${opendiaMcpDir}; Rule 4 deferred until counterpart repo is reachable`);
 }
-function opendiaRegistered(name) {
-  if (!opendiaSrc) return null;
-  const re = new RegExp(`register\\(\\s*["'\\\`]opendia\\.${name}["'\\\`]`);
-  return re.test(opendiaSrc);
+readCsRecursive(EVERYWHERE_PARITY_DIR);
+const openDiaDir = join(ROOT, "src/Everywhere.Mcp/OpenDia");
+if (existsSync(openDiaDir)) {
+  for (const ent of readdirSync(openDiaDir, { withFileTypes: true })) {
+    if (!ent.isFile() || !ent.name.endsWith(".cs")) continue;
+    const txt = readFileSync(join(openDiaDir, ent.name), "utf8");
+    if (/Prefix\s*=\s*"browser_"/.test(txt)) {
+      dynamicForwarderPresent = true;
+      break;
+    }
+  }
+}
+function everywhereRegistered(name) {
+  if (!everywhereSrc) return null;
+  const re = new RegExp(`\\[\\s*McpServerTool\\s*\\([^\\]]*Name\\s*=\\s*"browser_${name}"`);
+  return re.test(everywhereSrc);
 }
 for (const r of rows) {
-  if (r.ownership !== "universal") continue;
-  if (r.status !== "have") continue;
-  const short = r.our_tool?.split(".")[1];
+  if (r.ownership === "wont-do") continue;
+  if (!r.our_tool?.startsWith("browser_")) continue;
+  const short = r.our_tool.slice("browser_".length);
   if (!short) continue;
-  const present = opendiaRegistered(short);
-  if (present === false) {
-    err(4, `universal row "${r.ab_command}" status=have but opendia.${short} not registered in ${opendiaServerJs}`);
+  if (r.status !== "have" && r.status !== "in-progress") continue;
+  if (everywhereRegistered(short) === true) continue;
+  if (dynamicForwarderPresent) continue; // covered by OpenDiaToolSync
+  if (everywhereSrc) {
+    err(4, `row "${r.ab_command}" status=${r.status} but no [McpServerTool(Name="browser_${short}")] and no dynamic forwarder under src/Everywhere.Mcp/`);
+  } else {
+    warn(4, `src/Everywhere.Mcp/Tools/ not present yet; row "${r.ab_command}" status=${r.status} not lint-verifiable`);
   }
 }
 
@@ -160,13 +180,8 @@ for (const r of rows) {
   if (r.ownership === "everywhere" && !r.our_tool.startsWith("everywhere.")) {
     err(6, `row "${r.ab_command}" ownership=everywhere but our_tool="${r.our_tool}"`);
   }
-  if (r.ownership === "opendia" && !r.our_tool.startsWith("opendia.")) {
-    err(6, `row "${r.ab_command}" ownership=opendia but our_tool="${r.our_tool}"`);
-  }
-  if (r.ownership === "universal" && !r.our_tool.startsWith("opendia.")) {
-    // universal rows carry the opendia name; everywhere half is registered
-    // separately in Everywhere.Mcp/Tools/* with the same short name.
-    err(6, `row "${r.ab_command}" ownership=universal but our_tool="${r.our_tool}" (expected opendia.*)`);
+  if ((r.ownership === "opendia" || r.ownership === "universal") && !r.our_tool.startsWith("browser_")) {
+    err(6, `row "${r.ab_command}" ownership=${r.ownership} but our_tool="${r.our_tool}" (expected browser_*)`);
   }
 }
 
@@ -342,7 +357,8 @@ for (const id of fixtureIds) {
   if (!FIXTURE_KINDS.has(fm.kind)) err(16, `fixture ${id}: kind="${fm.kind}" not in ${[...FIXTURE_KINDS]}`);
 }
 
-// Rule 17 — ci_tier=ci fixtures invoke OpenDia tools only (no everywhere.* refs in task.md).
+// Rule 17 — ci_tier=ci fixtures invoke browser_* tools only (no
+// everywhere.* references). Headless CI has no macOS host.
 for (const id of fixtureIds) {
   const taskPath = join(BENCH_FX, id, "task.md");
   if (!existsSync(taskPath)) continue;
