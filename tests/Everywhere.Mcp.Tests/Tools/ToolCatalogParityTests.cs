@@ -37,6 +37,8 @@ public class ToolCatalogParityTests
         "batch",
         // meta (long-tail discovery for tools hidden by CoreToolGate)
         "list_more_tools", "call_tool",
+        // web (routed through user-configured search provider + Jina reader)
+        "web_search", "web_fetch_url",
     ];
 
     [Test]
