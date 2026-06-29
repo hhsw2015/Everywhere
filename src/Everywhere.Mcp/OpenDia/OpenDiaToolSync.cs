@@ -17,7 +17,9 @@ namespace Everywhere.Mcp.OpenDia;
 /// </summary>
 public sealed class OpenDiaToolSync
 {
-    private const string Prefix = "browser_";
+    // Stay in lockstep with OpenDiaToolListBuilder.Prefix so a future
+    // rename only edits one constant.
+    private const string Prefix = OpenDiaToolListBuilder.Prefix;
 
     private static string EnsurePrefix(string name) =>
         // Guard against opendia tools that already happen to start with

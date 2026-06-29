@@ -371,6 +371,20 @@ public sealed class OpenDiaBridge : IAsyncDisposable
     /// matched id response with a 30s cap. No retry, no replace-time
     /// rejection — those were our bugs.
     /// </summary>
+    /// <summary>
+    /// Drop the SPEC `browser_` prefix and dispatch via <see cref="CallToolAsync"/>.
+    /// Shared by <c>EverywhereMcpHttpHost</c>'s tools/call path and
+    /// <c>BatchTool</c>'s per-step routing — keeps the prefix-strip logic
+    /// in lockstep with <see cref="OpenDiaToolListBuilder.Prefix"/>.
+    /// </summary>
+    public Task<JsonNode?> InvokeByPrefixedName(string prefixedName, JsonNode? args, TimeSpan? timeout = null, CancellationToken ct = default)
+    {
+        var origName = prefixedName.StartsWith(OpenDiaToolListBuilder.Prefix, StringComparison.Ordinal)
+            ? prefixedName.Substring(OpenDiaToolListBuilder.Prefix.Length)
+            : prefixedName;
+        return CallToolAsync(origName, args, timeout, ct);
+    }
+
     public async Task<JsonNode?> CallToolAsync(string toolName, JsonNode? args, TimeSpan? timeout = null, CancellationToken ct = default)
     {
         WebSocket? socket;
