@@ -41,12 +41,12 @@ DO NOT EDIT BY HAND. Run `node scripts/render-parity-matrix.mjs`.
 | agent_browser_dashboard_stop | value-add | in-browser | wont-do |  | wont-do | none |
 | agent_browser_dblclick | niche | in-browser | opendia | browser_dblclick | in-progress | bench:dblclick |
 | agent_browser_deny | value-add | in-browser | opendia | browser_deny | missing | bench:deny |
-| agent_browser_device | niche | in-browser | opendia | browser_device | missing | bench:device |
+| agent_browser_device | niche | in-browser | opendia | browser_device | in-progress | bench:device |
 | agent_browser_dialog_accept | value-add | in-browser | opendia | browser_dialog_accept | in-progress | bench:dialog_accept |
 | agent_browser_dialog_dismiss | value-add | in-browser | opendia | browser_dialog_dismiss | in-progress | bench:dialog_dismiss |
 | agent_browser_dialog_status | value-add | in-browser | opendia | browser_dialog_status | missing | bench:dialog_status |
 | agent_browser_diff_screenshot | value-add | in-browser | universal | browser_diff_screenshot | missing | bench:diff_screenshot |
-| agent_browser_diff_snapshot | value-add | in-browser | universal | browser_diff_snapshot | missing | bench:diff_snapshot |
+| agent_browser_diff_snapshot | value-add | in-browser | universal | browser_diff_snapshot | in-progress | bench:diff_snapshot |
 | agent_browser_diff_url | value-add | in-browser | opendia | browser_diff_url | missing | bench:diff_url |
 | agent_browser_doctor | value-add | in-browser | wont-do |  | wont-do | none |
 | agent_browser_download | value-add | both | opendia | browser_download | missing | bench:download |
@@ -60,11 +60,11 @@ DO NOT EDIT BY HAND. Run `node scripts/render-parity-matrix.mjs`.
 | agent_browser_frame_main | value-add | in-browser | opendia | browser_frame_main | missing | bench:frame_main |
 | agent_browser_frame_switch | value-add | in-browser | opendia | browser_frame_switch | missing | bench:frame_switch |
 | agent_browser_get_attr | niche | in-browser | opendia | browser_get_attr | in-progress | bench:get_attr |
-| agent_browser_get_box | niche | in-browser | opendia | browser_get_box | missing | bench:get_box |
+| agent_browser_get_box | niche | in-browser | opendia | browser_get_box | in-progress | bench:get_box |
 | agent_browser_get_cdp_url | niche | in-browser | opendia | browser_get_cdp_url | missing | bench:get_cdp_url |
-| agent_browser_get_count | niche | in-browser | opendia | browser_get_count | missing | bench:get_count |
+| agent_browser_get_count | niche | in-browser | opendia | browser_get_count | in-progress | bench:get_count |
 | agent_browser_get_html | niche | in-browser | universal | browser_get_html | in-progress | bench:get_html |
-| agent_browser_get_styles | niche | in-browser | opendia | browser_get_styles | missing | bench:get_styles |
+| agent_browser_get_styles | niche | in-browser | opendia | browser_get_styles | in-progress | bench:get_styles |
 | agent_browser_get_text | core | in-browser | universal | browser_get_text | in-progress | bench:get_text |
 | agent_browser_get_title | core | in-browser | opendia | browser_get_title | in-progress | bench:get_title |
 | agent_browser_get_url | core | in-browser | opendia | browser_get_url | in-progress | bench:get_url |
@@ -149,7 +149,7 @@ DO NOT EDIT BY HAND. Run `node scripts/render-parity-matrix.mjs`.
 | agent_browser_tab_list | core | in-browser | opendia | browser_tab_list | in-progress | bench:tab_list |
 | agent_browser_tab_new | core | in-browser | opendia | browser_tab_new | in-progress | bench:tab_new |
 | agent_browser_tab_switch | core | in-browser | opendia | browser_tab_switch | in-progress | bench:tab_switch |
-| agent_browser_tap | niche | in-browser | opendia | browser_tap | missing | bench:tap |
+| agent_browser_tap | niche | in-browser | opendia | browser_tap | in-progress | bench:tap |
 | agent_browser_tools_profiles | core | in-browser | wont-do |  | wont-do | none |
 | agent_browser_trace_start | value-add | in-browser | opendia | browser_trace_start | missing | bench:trace_start |
 | agent_browser_trace_stop | value-add | in-browser | opendia | browser_trace_stop | missing | bench:trace_stop |
