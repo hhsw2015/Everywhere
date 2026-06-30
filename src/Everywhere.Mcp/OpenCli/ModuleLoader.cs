@@ -1,4 +1,5 @@
 using Microsoft.ClearScript;
+using Microsoft.ClearScript.JavaScript;
 
 namespace Everywhere.Mcp.OpenCli;
 

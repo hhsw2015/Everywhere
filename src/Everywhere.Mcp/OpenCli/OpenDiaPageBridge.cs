@@ -41,6 +41,11 @@ public sealed class OpenDiaPageBridge(OpenDiaBridge bridge) : IPage
         _ => DefaultTimeout,
     };
 
+    private static JsonObject? CloneObj(JsonObject? o) =>
+        o is null ? null : (JsonObject)o.DeepClone();
+    private static JsonObject CloneObjOrEmpty(JsonObject? o) =>
+        o is null ? new JsonObject() : (JsonObject)o.DeepClone();
+
     private static JsonObject Pack(params (string Key, JsonNode? Value)[] kvs)
     {
         var o = new JsonObject();
@@ -153,18 +158,18 @@ public sealed class OpenDiaPageBridge(OpenDiaBridge bridge) : IPage
     }
 
     public Task CloseWindow(JsonObject? opts = null) =>
-        Call("browser_close_window", opts?.DeepClone() ?? new JsonObject());
+        Call("browser_close_window", CloneObjOrEmpty(opts));
 
     public async Task<string?> Screenshot(JsonObject? opts = null)
     {
-        var resp = await Call("browser_screenshot", opts?.DeepClone() ?? new JsonObject()).ConfigureAwait(false);
+        var resp = await Call("browser_screenshot", CloneObjOrEmpty(opts)).ConfigureAwait(false);
         return AsString(resp);
     }
 
     // ---------- SPEC §3.4 tail surface ----------
 
     public Task<JsonNode?> AutoScroll(JsonObject? opts = null) =>
-        Call("browser_auto_scroll", opts?.DeepClone() ?? new JsonObject());
+        Call("browser_auto_scroll", CloneObjOrEmpty(opts));
 
     public Task<JsonNode?> Cdp(string method, JsonObject? args) =>
         Call("browser_cdp", Pack(("method", method), ("params", args?.DeepClone())));
@@ -172,11 +177,11 @@ public sealed class OpenDiaPageBridge(OpenDiaBridge bridge) : IPage
     public Task<JsonNode?> Find(JsonObject opts)
     {
         ArgumentNullException.ThrowIfNull(opts);
-        return Call("browser_find", opts.DeepClone());
+        return Call("browser_find", CloneObjOrEmpty(opts));
     }
 
     public Task<JsonNode?> GetCookies(JsonObject? opts = null) =>
-        Call("browser_cookies_get", opts?.DeepClone() ?? new JsonObject());
+        Call("browser_cookies_get", CloneObjOrEmpty(opts));
 
     public async Task<string?> GetCurrentUrl()
     {
@@ -185,7 +190,7 @@ public sealed class OpenDiaPageBridge(OpenDiaBridge bridge) : IPage
     }
 
     public Task<JsonNode?> GetInterceptedRequests(JsonObject? opts = null) =>
-        Call("browser_intercepted_get", opts?.DeepClone() ?? new JsonObject());
+        Call("browser_intercepted_get", CloneObjOrEmpty(opts));
 
     public Task InsertText(string text, JsonObject? opts = null) =>
         Call("browser_insert_text", Pack(("text", text), ("options", opts?.DeepClone())));
@@ -193,7 +198,7 @@ public sealed class OpenDiaPageBridge(OpenDiaBridge bridge) : IPage
     public Task InstallInterceptor(JsonObject opts)
     {
         ArgumentNullException.ThrowIfNull(opts);
-        return Call("browser_interceptor_install", opts.DeepClone());
+        return Call("browser_interceptor_install", CloneObjOrEmpty(opts));
     }
 
     public Task Keys(JsonNode keys, JsonObject? opts = null)
@@ -220,7 +225,7 @@ public sealed class OpenDiaPageBridge(OpenDiaBridge bridge) : IPage
         Call("browser_press", Pack(("key", key), ("options", opts?.DeepClone())));
 
     public Task<JsonNode?> ReadNetworkCapture(JsonObject? opts = null) =>
-        Call("browser_network_read", opts?.DeepClone() ?? new JsonObject());
+        Call("browser_network_read", CloneObjOrEmpty(opts));
 
     public Task SelectTab(JsonNode tab)
     {
@@ -238,13 +243,13 @@ public sealed class OpenDiaPageBridge(OpenDiaBridge bridge) : IPage
     }
 
     public Task<JsonNode?> Snapshot(JsonObject? opts = null) =>
-        Call("browser_snapshot", opts?.DeepClone() ?? new JsonObject());
+        Call("browser_snapshot", CloneObjOrEmpty(opts));
 
     public Task StartNetworkCapture(JsonObject? opts = null) =>
-        Call("browser_network_start", opts?.DeepClone() ?? new JsonObject());
+        Call("browser_network_start", CloneObjOrEmpty(opts));
 
     public Task<JsonNode?> Tabs(JsonObject? opts = null) =>
-        Call("browser_tabs", opts?.DeepClone() ?? new JsonObject());
+        Call("browser_tabs", CloneObjOrEmpty(opts));
 
     public Task Type(string text, JsonObject? opts = null) =>
         Call("browser_fill", Pack(("value", text), ("options", opts?.DeepClone())));
@@ -252,7 +257,7 @@ public sealed class OpenDiaPageBridge(OpenDiaBridge bridge) : IPage
     public Task<JsonNode?> WaitForCapture(JsonObject opts)
     {
         ArgumentNullException.ThrowIfNull(opts);
-        return Call("browser_network_wait", opts.DeepClone());
+        return Call("browser_network_wait", CloneObjOrEmpty(opts));
     }
 
     public Task WaitForTimeout(int ms) => DelayClamped(ms);
