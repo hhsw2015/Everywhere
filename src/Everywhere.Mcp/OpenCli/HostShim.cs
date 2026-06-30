@@ -35,6 +35,9 @@ public sealed class HostShim
             if (!def || typeof def.site !== 'string' || typeof def.name !== 'string')
                 throw new Error('cli({...}): site/name required');
             const id = fullName(def.site, def.name);
+            if (_commands.has(id)) {
+                try { globalThis.__opencliHost && globalThis.__opencliHost.warn('cli({...}): duplicate registration for ' + id + ', overwriting'); } catch {}
+            }
             _commands.set(id, def);
             try {
                 globalThis.__opencliHost && globalThis.__opencliHost.register(id, JSON.stringify({
@@ -136,6 +139,9 @@ public sealed class HostShim
         // Sufficient for adapter `description` / inline-content fields.
         const htmlToMarkdown = (html) => {
             if (!html || typeof html !== 'string') return '';
+            // Cap input size at 1 MiB — the regex-based conversion is
+            // vulnerable to catastrophic backtracking on hostile input.
+            if (html.length > 1_048_576) html = html.slice(0, 1_048_576);
             return html
                 .replace(/<\s*br\s*\/?>/gi, '\n')
                 .replace(/<\s*\/p\s*>/gi, '\n\n')
@@ -319,13 +325,16 @@ public sealed class HostShim
 
     /// <summary>Polyfill of `os` — values that have a sane meaning inside
     /// a sandbox.</summary>
+    /// <summary>Polyfill of `os` — values reflect the actual host so
+    /// adapters that branch on `os.platform()` make the right choice
+    /// (e.g. shell-quoting on Windows).</summary>
     public const string NodeOsSource = """
-        const platform = () => 'darwin';
-        const arch = () => 'arm64';
-        const tmpdir = () => '/tmp';
-        const homedir = () => '/';
-        const EOL = '\n';
-        const hostname = () => 'opencli';
+        const platform = () => __opencliHost.osPlatform();
+        const arch = () => __opencliHost.osArch();
+        const tmpdir = () => __opencliHost.osTmpDir();
+        const homedir = () => __opencliHost.osHomeDir();
+        const EOL = __opencliHost.osEol();
+        const hostname = () => __opencliHost.osHostName();
         const cpus = () => [];
         const totalmem = () => 0;
         const freemem = () => 0;
@@ -494,11 +503,35 @@ public sealed class HostShim
 
     public string cryptoRandomBytes(int n)
     {
+        if (n < 0 || n > 1 << 20)
+            throw new ArgumentOutOfRangeException(nameof(n), "crypto.randomBytes: size out of range (0..1 MiB)");
         var bytes = System.Security.Cryptography.RandomNumberGenerator.GetBytes(n);
         return Convert.ToBase64String(bytes);
     }
 
     public string cryptoUuid() => Guid.NewGuid().ToString();
+
+    // -------- os polyfill helpers --------
+
+    public string osPlatform() =>
+        OperatingSystem.IsWindows() ? "win32" :
+        OperatingSystem.IsMacOS() ? "darwin" :
+        OperatingSystem.IsLinux() ? "linux" :
+        "unknown";
+
+    public string osArch() => System.Runtime.InteropServices.RuntimeInformation.OSArchitecture switch
+    {
+        System.Runtime.InteropServices.Architecture.X64 => "x64",
+        System.Runtime.InteropServices.Architecture.Arm64 => "arm64",
+        System.Runtime.InteropServices.Architecture.X86 => "ia32",
+        System.Runtime.InteropServices.Architecture.Arm => "arm",
+        _ => "unknown",
+    };
+
+    public string osTmpDir() => Path.GetTempPath();
+    public string osHomeDir() => Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+    public string osHostName() => Environment.MachineName;
+    public string osEol() => Environment.NewLine;
 
     public string bytesToBase64(object input)
     {
@@ -512,7 +545,7 @@ public sealed class HostShim
         "hex" => Convert.ToHexString(bytes).ToLowerInvariant(),
         "base64" => Convert.ToBase64String(bytes),
         "base64url" => Convert.ToBase64String(bytes).Replace('+', '-').Replace('/', '_').TrimEnd('='),
-        _ => Convert.ToHexString(bytes).ToLowerInvariant(),
+        _ => throw new ArgumentException($"crypto: unsupported digest encoding '{encoding}'"),
     };
 
     /// <summary>
@@ -612,10 +645,10 @@ public sealed class HostShim
             }
             else
             {
-                headersOut[h.Key] = string.Join(",", h.Value);
+                headersOut[h.Key] = string.Join(", ", h.Value);
             }
         }
-        foreach (var h in resp.Content.Headers) headersOut[h.Key] = string.Join(",", h.Value);
+        foreach (var h in resp.Content.Headers) headersOut[h.Key] = string.Join(", ", h.Value);
 
         // Reset the deadline for body read.
         using var bodyCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
@@ -753,23 +786,26 @@ public sealed class HeadersMap
         _setCookies = setCookies ?? Array.Empty<string>();
     }
 
-    public string? get(string name)
+    public string? get(string? name)
     {
+        if (name is null) return null;
         if (name.Equals("Set-Cookie", StringComparison.OrdinalIgnoreCase))
             return _setCookies.Count == 0 ? null : _setCookies[0];
         return _headers.TryGetValue(name, out var v) ? v : null;
     }
 
-    public bool has(string name)
+    public bool has(string? name)
     {
+        if (name is null) return false;
         if (name.Equals("Set-Cookie", StringComparison.OrdinalIgnoreCase))
             return _setCookies.Count > 0;
         return _headers.ContainsKey(name);
     }
 
     /// <summary>Multi-value access — required for Set-Cookie (RFC 6265).</summary>
-    public IReadOnlyList<string> getAll(string name)
+    public IReadOnlyList<string> getAll(string? name)
     {
+        if (name is null) return Array.Empty<string>();
         if (name.Equals("Set-Cookie", StringComparison.OrdinalIgnoreCase))
             return _setCookies;
         return _headers.TryGetValue(name, out var v) ? new[] { v } : Array.Empty<string>();

@@ -29,7 +29,11 @@ public sealed class OpenCliRuntime : IAsyncDisposable
     private readonly ILogger<OpenCliRuntime>? _log;
     private readonly string _clisDir;
     private readonly string _manifestPath;
-    private readonly Lazy<Task<V8ScriptEngine>> _engine;
+    // Engine boot is refreshable on failure — Lazy<Task<>> would cache
+    // a faulted Task forever and permanently poison every subsequent
+    // call after a transient boot error.
+    private Task<V8ScriptEngine>? _engineTask;
+    private readonly object _engineBootLock = new();
     private readonly ConcurrentDictionary<string, AdapterDef> _registry = new(StringComparer.Ordinal);
     // Manifest-only metadata, populated from cli-manifest.json BEFORE V8
     // boots. We never load any adapter .js until opencli_run hits one —
@@ -37,8 +41,17 @@ public sealed class OpenCliRuntime : IAsyncDisposable
     // turns "loaded=263 failed=1029" into "loaded=N where N = adapters
     // the user actually used".
     private readonly ConcurrentDictionary<string, ManifestEntry> _manifest = new(StringComparer.Ordinal);
+    // Cached unloaded AdapterDef per manifest entry — avoids paying
+    // O(meta-size) DeepClone on every ListAsync/Resolve.
+    private readonly ConcurrentDictionary<string, AdapterDef> _unloadedDefs = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<string, SemaphoreSlim> _loadGates = new(StringComparer.Ordinal);
-    private int _manifestLoaded;
+    // Manifest load is shared via a single Task so concurrent callers
+    // never observe the half-loaded state. Cancellation passed in by
+    // any one caller is intentionally ignored on the shared load (the
+    // Task uses CancellationToken.None) — otherwise one caller could
+    // poison the load for everyone else.
+    private Task? _manifestLoadTask;
+    private readonly object _manifestLoadLock = new();
     private readonly HttpClient _http;
     private readonly SemaphoreSlim _invokeGate = new(1, 1);
     private readonly CancellationTokenSource _disposeCts = new();
@@ -57,7 +70,18 @@ public sealed class OpenCliRuntime : IAsyncDisposable
         _manifestPath = manifestPath;
         _http = http;
         _log = log;
-        _engine = new Lazy<Task<V8ScriptEngine>>(BootEngineAsync, LazyThreadSafetyMode.ExecutionAndPublication);
+    }
+
+    private Task<V8ScriptEngine> GetEngineTask()
+    {
+        lock (_engineBootLock)
+        {
+            if (_engineTask is null || (_engineTask.IsCompleted && _engineTask.IsFaulted))
+            {
+                _engineTask = Task.Run(BootEngineAsync);
+            }
+            return _engineTask;
+        }
     }
 
     /// <summary>SPEC §4.1 — return the registry sorted by site/name.
@@ -68,7 +92,9 @@ public sealed class OpenCliRuntime : IAsyncDisposable
     {
         await EnsureManifestLoadedAsync(ct).ConfigureAwait(false);
         return _manifest.Values
-            .Select(e => _registry.TryGetValue(e.Site + "/" + e.Name, out var def) ? def : ManifestEntryToDef(e))
+            .Select(e => _registry.TryGetValue(e.Site + "/" + e.Name, out var def)
+                ? def
+                : _unloadedDefs.GetOrAdd(e.Site + "/" + e.Name, _ => ManifestEntryToDef(e)))
             .OrderBy(d => d.Site, StringComparer.Ordinal)
             .ThenBy(d => d.Name, StringComparer.Ordinal)
             .ToArray();
@@ -81,23 +107,28 @@ public sealed class OpenCliRuntime : IAsyncDisposable
         await EnsureManifestLoadedAsync(ct).ConfigureAwait(false);
         var key = site + "/" + name;
         if (_registry.TryGetValue(key, out var loaded)) return loaded;
-        if (_manifest.TryGetValue(key, out var entry)) return ManifestEntryToDef(entry);
+        if (_manifest.TryGetValue(key, out var entry))
+            return _unloadedDefs.GetOrAdd(key, _ => ManifestEntryToDef(entry));
         return null;
     }
 
-    private async Task EnsureManifestLoadedAsync(CancellationToken ct)
+    private Task EnsureManifestLoadedAsync(CancellationToken ct)
     {
-        if (Volatile.Read(ref _manifestLoaded) == 1) return;
-        if (Interlocked.CompareExchange(ref _manifestLoaded, 1, 0) != 0) return;
-        try
+        // Shared in-flight Task — concurrent callers all await the same
+        // load and observe a fully-populated _manifest before continuing.
+        // The shared load itself uses CancellationToken.None so a single
+        // caller's cancellation cannot poison the result for others.
+        Task? task;
+        lock (_manifestLoadLock)
         {
-            await LoadManifestAsync(ct).ConfigureAwait(false);
+            if (_manifestLoadTask is { IsCompletedSuccessfully: true }) return Task.CompletedTask;
+            if (_manifestLoadTask is null || _manifestLoadTask.IsFaulted || _manifestLoadTask.IsCanceled)
+            {
+                _manifestLoadTask = Task.Run(() => LoadManifestAsync(CancellationToken.None));
+            }
+            task = _manifestLoadTask;
         }
-        catch
-        {
-            Interlocked.Exchange(ref _manifestLoaded, 0);
-            throw;
-        }
+        return task.WaitAsync(ct);
     }
 
     private async Task LoadManifestAsync(CancellationToken ct)
@@ -148,18 +179,18 @@ public sealed class OpenCliRuntime : IAsyncDisposable
             if (list.Count > 0) aliases = list;
         }
         return new AdapterDef(
-            Site: e.Site,
-            Name: e.Name,
-            Description: meta["description"]?.GetValue<string>() ?? "",
-            Strategy: (meta["strategy"]?.GetValue<string>() ?? "public").Trim().ToLowerInvariant(),
-            Browser: TryBoolFromManifest(meta, "browser") ?? false,
-            Access: meta["access"]?.GetValue<string?>(),
-            Domain: meta["domain"]?.GetValue<string?>(),
-            Aliases: aliases,
-            Args: (meta["args"] as JsonArray)?.DeepClone() as JsonArray,
-            Columns: (meta["columns"] as JsonArray)?.DeepClone() as JsonArray,
-            Func: null, // not loaded yet
-            Pipeline: meta["pipeline"]?.DeepClone());
+            site: e.Site,
+            name: e.Name,
+            description: meta["description"]?.GetValue<string>() ?? "",
+            strategy: (meta["strategy"]?.GetValue<string>() ?? "public").Trim().ToLowerInvariant(),
+            browser: TryBoolFromManifest(meta, "browser") ?? false,
+            access: meta["access"]?.GetValue<string?>(),
+            domain: meta["domain"]?.GetValue<string?>(),
+            aliases: aliases,
+            args: (meta["args"] as JsonArray)?.DeepClone() as JsonArray,
+            columns: (meta["columns"] as JsonArray)?.DeepClone() as JsonArray,
+            func: null, // not loaded yet
+            pipeline: meta["pipeline"]?.DeepClone());
     }
 
     private static bool? TryBoolFromManifest(JsonObject o, string key)
@@ -194,7 +225,7 @@ public sealed class OpenCliRuntime : IAsyncDisposable
             if (!File.Exists(path))
                 throw new FileNotFoundException($"adapter source not found: {path}", path);
 
-            var engine = await _engine.Value.ConfigureAwait(false);
+            var engine = await GetEngineTask().ConfigureAwait(false);
             var src = await File.ReadAllTextAsync(path, ct).ConfigureAwait(false);
             var info = new DocumentInfo(new Uri(path)) { Category = ModuleCategory.Standard };
             engine.Execute(info, src);
@@ -255,31 +286,35 @@ public sealed class OpenCliRuntime : IAsyncDisposable
         await _invokeGate.WaitAsync(linked.Token).ConfigureAwait(false);
         try
         {
-            var engine = await _engine.Value.ConfigureAwait(false);
-            engine.Script.__opencliPage = page;
-            engine.Script.__opencliArgs = args.DeepClone().ToJsonString();
-            engine.Script.__opencliFn = def.Func;
-            // Serialise the result inside the IIFE so JSON.stringify errors
-            // (circular structures, Date / BigInt) surface as adapter
-            // exceptions rather than silently flipping a successful run
-            // into RUNTIME_SCRIPT_ERROR after the fact.
-            engine.Execute("""
-                let __opencliCallArgs = JSON.parse(__opencliArgs);
-                let __opencliCallResultJson = null;
-                let __opencliCallError = null;
-                let __opencliCallPromise = (async () => {
-                    try {
-                        const r = await __opencliFn(__opencliCallArgs, __opencliPage);
-                        __opencliCallResultJson = JSON.stringify(r === undefined ? null : r);
-                    } catch (e) {
-                        const code = (e && e.code != null) ? String(e.code) : 'RUNTIME_ERROR';
-                        const msg  = (e && e.message != null) ? String(e.message) : String(e);
-                        __opencliCallError = { code, message: msg };
-                    }
-                })();
-            """);
+            var engine = await GetEngineTask().ConfigureAwait(false);
             try
             {
+                engine.Script.__opencliPage = page;
+                engine.Script.__opencliArgs = args.DeepClone().ToJsonString();
+                engine.Script.__opencliFn = def.Func;
+                // Serialise the result inside the IIFE so JSON.stringify
+                // errors (circular structures, Date / BigInt) surface as
+                // adapter exceptions rather than silently flipping a
+                // successful run into RUNTIME_SCRIPT_ERROR after the fact.
+                // JSON.parse on the args is inside the inner try so a
+                // malformed serialisation surfaces through __opencliCallError
+                // rather than masquerading as a clean `{data:null,ok:true}`.
+                engine.Execute("""
+                    let __opencliCallArgs = null;
+                    let __opencliCallResultJson = null;
+                    let __opencliCallError = null;
+                    let __opencliCallPromise = (async () => {
+                        try {
+                            __opencliCallArgs = JSON.parse(__opencliArgs);
+                            const r = await __opencliFn(__opencliCallArgs, __opencliPage);
+                            __opencliCallResultJson = JSON.stringify(r === undefined ? null : r);
+                        } catch (e) {
+                            const code = (e && e.code != null) ? String(e.code) : 'RUNTIME_ERROR';
+                            const msg  = (e && e.message != null) ? String(e.message) : String(e);
+                            __opencliCallError = { code, message: msg };
+                        }
+                    })();
+                """);
                 await ((Task)engine.Script.__opencliCallPromise).ConfigureAwait(false);
 
                 var err = engine.Script.__opencliCallError as ScriptObject;
@@ -452,22 +487,22 @@ public sealed class OpenCliRuntime : IAsyncDisposable
         var siteName = id.Split('/', 2);
         var site = TryString(meta, "site") ?? siteName[0];
         var name = TryString(meta, "name") ?? (siteName.Length > 1 ? siteName[1] : id);
+        // Clone JSON nodes so the cached AdapterDef owns detachable
+        // copies; otherwise sharing parents with `meta` produces
+        // "node already has a parent" the first time we re-emit them.
         return new AdapterDef(
-            Site: site,
-            Name: name,
-            Description: TryString(meta, "description") ?? "",
-            Strategy: (TryString(meta, "strategy") ?? "public").Trim().ToLowerInvariant(),
-            Browser: TryBool(meta, "browser") ?? false,
-            Access: TryString(meta, "access"),
-            Domain: TryString(meta, "domain"),
-            Aliases: TryStringArray(meta, "aliases"),
-            // Clone JSON nodes so the cached AdapterDef owns detachable
-            // copies; otherwise sharing parents with `meta` produces
-            // "node already has a parent" the first time we re-emit them.
-            Args: (meta["args"] as JsonArray)?.DeepClone() as JsonArray,
-            Columns: (meta["columns"] as JsonArray)?.DeepClone() as JsonArray,
-            Func: func,
-            Pipeline: meta["pipeline"]?.DeepClone());
+            site: site,
+            name: name,
+            description: TryString(meta, "description") ?? "",
+            strategy: (TryString(meta, "strategy") ?? "public").Trim().ToLowerInvariant(),
+            browser: TryBool(meta, "browser") ?? false,
+            access: TryString(meta, "access"),
+            domain: TryString(meta, "domain"),
+            aliases: TryStringArray(meta, "aliases"),
+            args: (meta["args"] as JsonArray)?.DeepClone() as JsonArray,
+            columns: (meta["columns"] as JsonArray)?.DeepClone() as JsonArray,
+            func: func,
+            pipeline: meta["pipeline"]?.DeepClone());
     }
 
     private static string? TryString(JsonObject meta, string key)
@@ -501,7 +536,17 @@ public sealed class OpenCliRuntime : IAsyncDisposable
     public async ValueTask DisposeAsync()
     {
         try { _disposeCts.Cancel(); } catch { }
-        // Dispose via the tracked field so a faulted boot still releases V8.
+        // Wait for the invoke gate before disposing V8 / the gate itself,
+        // otherwise an in-flight InvokeAsync would (a) execute JS against
+        // a disposed isolate, or (b) call _invokeGate.Release() on a
+        // disposed semaphore in its finally block.
+        try
+        {
+            await _invokeGate.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+        }
+        catch (ObjectDisposedException) { /* already disposed */ }
+        catch (Exception ex) { _log?.LogDebug(ex, "opencli runtime: gate wait failed"); }
+
         var engine = _engineInstance;
         if (engine is not null)
         {
@@ -509,13 +554,21 @@ public sealed class OpenCliRuntime : IAsyncDisposable
             catch (Exception ex) { _log?.LogDebug(ex, "opencli runtime dispose failed"); }
             _engineInstance = null;
         }
-        else if (_engine.IsValueCreated && _engine.Value.IsCompletedSuccessfully)
+        else if (_engineTask is { IsCompletedSuccessfully: true })
         {
-            try { _engine.Value.Result.Dispose(); }
+            try { _engineTask!.Result.Dispose(); }
             catch (Exception ex) { _log?.LogDebug(ex, "opencli runtime dispose failed"); }
         }
-        _invokeGate.Dispose();
+
+        // Dispose accumulated per-adapter load gates so their lazy wait
+        // handles release.
+        foreach (var gate in _loadGates.Values)
+        {
+            try { gate.Dispose(); } catch { }
+        }
+        _loadGates.Clear();
+
+        try { _invokeGate.Dispose(); } catch { }
         _disposeCts.Dispose();
-        await Task.CompletedTask;
     }
 }

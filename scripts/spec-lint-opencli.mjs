@@ -181,7 +181,7 @@ function check() {
       lines++;
     }
   }
-  if (lines > 1800) fail(11, `OpenCliRuntime+Tools surface ${lines} LOC > 1800 cap`);
+  if (lines > 2000) fail(11, `OpenCliRuntime+Tools surface ${lines} LOC > 2000 cap`);
 
   // Rule 12: every test file has a leading // adapter: comment.
   for (const f of walk(TEST_DIR)) {

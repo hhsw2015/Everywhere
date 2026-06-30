@@ -53,21 +53,27 @@ public sealed class OpenDiaPageBridge(OpenDiaBridge bridge) : IPage
         return o;
     }
 
-    private static string? AsString(JsonNode? n)
+    private static readonly string[] StringWrapperKeys = ["value", "url", "text", "data"];
+
+    private static string? AsString(JsonNode? n) => AsString(n, null);
+
+    private static string? AsString(JsonNode? n, string? preferKey)
     {
         if (n is null) return null;
         if (n is JsonValue v && v.TryGetValue<string>(out var s)) return s;
-        // Some browser_* tools wrap a string in {"value":"..."} or {"url":"..."}.
         if (n is JsonObject obj)
         {
-            foreach (var key in new[] { "value", "url", "text", "data" })
+            // Prefer the caller-specified key when present; otherwise
+            // walk a small ordered list of common string-wrapping keys.
+            if (preferKey is not null && obj.TryGetPropertyValue(preferKey, out var direct) &&
+                direct is JsonValue dv && dv.TryGetValue<string>(out var ds))
+                return ds;
+            foreach (var key in StringWrapperKeys)
             {
                 if (obj.TryGetPropertyValue(key, out var inner) && inner is JsonValue iv && iv.TryGetValue<string>(out var ins))
                     return ins;
             }
         }
-        // No string-shaped payload — return null so callers can distinguish
-        // "no result" from "real empty string".
         return null;
     }
 
@@ -103,15 +109,17 @@ public sealed class OpenDiaPageBridge(OpenDiaBridge bridge) : IPage
         ArgumentNullException.ThrowIfNull(arg);
         if (arg is JsonValue v)
         {
-            // Cover every numeric kind System.Text.Json may parse the
-            // value as: long, int, double, decimal.
-            if (v.TryGetValue<long>(out var l))    { await DelayClamped(l).ConfigureAwait(false); return; }
-            if (v.TryGetValue<int>(out var i))     { await DelayClamped(i).ConfigureAwait(false); return; }
+            if (v.TryGetValue<long>(out var l)) { await DelayClamped(l).ConfigureAwait(false); return; }
             if (v.TryGetValue<double>(out var msd))
             {
                 if (!double.IsFinite(msd))
                     throw new ArgumentException("page.wait: ms must be finite");
-                await DelayClamped((long)Math.Round(msd)).ConfigureAwait(false);
+                // Clamp the double range BEFORE casting to long — an
+                // out-of-range float→long conversion is implementation-
+                // defined and can yield long.MinValue (which would
+                // clamp to 0, silently turning a huge sleep into none).
+                var clamped = Math.Min(Math.Max(msd, 0), (double)MaxWaitMs);
+                await DelayClamped((long)Math.Round(clamped)).ConfigureAwait(false);
                 return;
             }
             if (v.TryGetValue<string>(out var sel))
@@ -163,7 +171,7 @@ public sealed class OpenDiaPageBridge(OpenDiaBridge bridge) : IPage
     public async Task<string?> Screenshot(JsonObject? opts = null)
     {
         var resp = await Call("browser_screenshot", CloneObjOrEmpty(opts)).ConfigureAwait(false);
-        return AsString(resp);
+        return AsString(resp, "data");
     }
 
     // ---------- SPEC §3.4 tail surface ----------
@@ -171,8 +179,11 @@ public sealed class OpenDiaPageBridge(OpenDiaBridge bridge) : IPage
     public Task<JsonNode?> AutoScroll(JsonObject? opts = null) =>
         Call("browser_auto_scroll", CloneObjOrEmpty(opts));
 
-    public Task<JsonNode?> Cdp(string method, JsonObject? args) =>
-        Call("browser_cdp", Pack(("method", method), ("params", args?.DeepClone())));
+    public Task<JsonNode?> Cdp(string method, JsonObject? args)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(method);
+        return Call("browser_cdp", Pack(("method", method), ("params", args?.DeepClone())));
+    }
 
     public Task<JsonNode?> Find(JsonObject opts)
     {
@@ -186,14 +197,17 @@ public sealed class OpenDiaPageBridge(OpenDiaBridge bridge) : IPage
     public async Task<string?> GetCurrentUrl()
     {
         var r = await Call("browser_get_url", new JsonObject()).ConfigureAwait(false);
-        return AsString(r);
+        return AsString(r, "url");
     }
 
     public Task<JsonNode?> GetInterceptedRequests(JsonObject? opts = null) =>
         Call("browser_intercepted_get", CloneObjOrEmpty(opts));
 
-    public Task InsertText(string text, JsonObject? opts = null) =>
-        Call("browser_insert_text", Pack(("text", text), ("options", opts?.DeepClone())));
+    public Task InsertText(string text, JsonObject? opts = null)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(text);
+        return Call("browser_insert_text", Pack(("text", text), ("options", opts?.DeepClone())));
+    }
 
     public Task InstallInterceptor(JsonObject opts)
     {
@@ -215,14 +229,23 @@ public sealed class OpenDiaPageBridge(OpenDiaBridge bridge) : IPage
         return Call("browser_native_click", args);
     }
 
-    public Task NativeKeyPress(string key, JsonObject? opts = null) =>
-        Call("browser_native_press", Pack(("key", key), ("options", opts?.DeepClone())));
+    public Task NativeKeyPress(string key, JsonObject? opts = null)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(key);
+        return Call("browser_native_press", Pack(("key", key), ("options", opts?.DeepClone())));
+    }
 
-    public Task NativeType(string text, JsonObject? opts = null) =>
-        Call("browser_native_type", Pack(("text", text), ("options", opts?.DeepClone())));
+    public Task NativeType(string text, JsonObject? opts = null)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(text);
+        return Call("browser_native_type", Pack(("text", text), ("options", opts?.DeepClone())));
+    }
 
-    public Task PressKey(string key, JsonObject? opts = null) =>
-        Call("browser_press", Pack(("key", key), ("options", opts?.DeepClone())));
+    public Task PressKey(string key, JsonObject? opts = null)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(key);
+        return Call("browser_press", Pack(("key", key), ("options", opts?.DeepClone())));
+    }
 
     public Task<JsonNode?> ReadNetworkCapture(JsonObject? opts = null) =>
         Call("browser_network_read", CloneObjOrEmpty(opts));
@@ -251,8 +274,13 @@ public sealed class OpenDiaPageBridge(OpenDiaBridge bridge) : IPage
     public Task<JsonNode?> Tabs(JsonObject? opts = null) =>
         Call("browser_tabs", CloneObjOrEmpty(opts));
 
-    public Task Type(string text, JsonObject? opts = null) =>
-        Call("browser_fill", Pack(("value", text), ("options", opts?.DeepClone())));
+    public Task Type(string text, JsonObject? opts = null)
+    {
+        // Empty string is a meaningful "clear" call, so ThrowIfNullOrEmpty
+        // would be too strict — only reject null.
+        ArgumentNullException.ThrowIfNull(text);
+        return Call("browser_fill", Pack(("value", text), ("options", opts?.DeepClone())));
+    }
 
     public Task<JsonNode?> WaitForCapture(JsonObject opts)
     {

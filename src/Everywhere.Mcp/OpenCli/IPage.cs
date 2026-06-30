@@ -19,7 +19,7 @@ namespace Everywhere.Mcp.OpenCli;
 public interface IPage
 {
     Task<JsonNode?> AutoScroll(JsonObject? opts = null);
-    Task<JsonNode?> Cdp(string method, JsonObject? args);
+    Task<JsonNode?> Cdp(string method, JsonObject? args = null);
     Task Click(JsonNode refOrSelector, JsonObject? opts = null);
     Task CloseWindow(JsonObject? opts = null);
     Task<JsonNode?> Evaluate(string js);
@@ -58,21 +58,24 @@ public interface IPage
 public sealed class Phase2NotReadyException : Exception
 {
     public Phase2NotReadyException(string method)
-        : base(BuildMessage(method))
+        : base(BuildSafeMessage(method))
     {
-        Method = method;
+        Method = method ?? string.Empty;
     }
     public Phase2NotReadyException(string method, Exception inner)
-        : base(BuildMessage(method), inner)
+        : base(BuildSafeMessage(method), inner)
     {
-        Method = method;
+        Method = method ?? string.Empty;
     }
     public string Method { get; }
-    private static string BuildMessage(string method)
-    {
-        ArgumentException.ThrowIfNullOrEmpty(method);
-        return $"page.{method}: browser surface not ready (Phase 2 of SPEC docs/specs/everywhere-opencli-adapters.md)";
-    }
+
+    // Validation that throws would lose the inner exception when called
+    // from the (string, Exception) ctor. Tolerate null/empty `method`
+    // and emit a placeholder so the wrapped cause survives.
+    private static string BuildSafeMessage(string? method)
+        => string.IsNullOrEmpty(method)
+            ? "page.<unknown>: browser surface not ready (Phase 2 of SPEC docs/specs/everywhere-opencli-adapters.md)"
+            : $"page.{method}: browser surface not ready (Phase 2 of SPEC docs/specs/everywhere-opencli-adapters.md)";
 }
 
 /// <summary>Phase 1 stub IPage — every method returns a faulted
@@ -81,6 +84,7 @@ public sealed class Phase2NotReadyException : Exception
 /// throw across the V8 boundary.</summary>
 public sealed class Phase1StubPage : IPage
 {
+    public static readonly Phase1StubPage Instance = new();
     private static Task Fail(string method) => Task.FromException(new Phase2NotReadyException(method));
     private static Task<T> Fail<T>(string method) => Task.FromException<T>(new Phase2NotReadyException(method));
 

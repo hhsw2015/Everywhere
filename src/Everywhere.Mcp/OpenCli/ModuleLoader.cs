@@ -27,8 +27,31 @@ public sealed class OpenCliDocumentLoader : DefaultDocumentLoader
     {
         ArgumentException.ThrowIfNullOrEmpty(rootDir);
         ArgumentNullException.ThrowIfNull(shims);
-        _rootDir = Path.GetFullPath(rootDir);
+        _rootDir = ResolveLinkChain(Path.GetFullPath(rootDir));
         _shims = new Dictionary<string, string>(shims, StringComparer.Ordinal);
+    }
+
+    // Walk symlinks to the canonical on-disk path so the containment
+    // check covers intermediate junctions / symlinks as well as the leaf.
+    private static string ResolveLinkChain(string path)
+    {
+        try
+        {
+            if (Directory.Exists(path))
+            {
+                var di = new DirectoryInfo(path);
+                var resolved = di.ResolveLinkTarget(returnFinalTarget: true);
+                if (resolved is DirectoryInfo dir) return dir.FullName;
+            }
+            else if (File.Exists(path))
+            {
+                var fi = new FileInfo(path);
+                var resolved = fi.ResolveLinkTarget(returnFinalTarget: true);
+                if (resolved is FileInfo f) return f.FullName;
+            }
+        }
+        catch { /* fall back to lexical path */ }
+        return path;
     }
 
     public override async Task<Document> LoadDocumentAsync(
@@ -88,15 +111,31 @@ public sealed class OpenCliDocumentLoader : DefaultDocumentLoader
                     $"opencli loader: relative import '{specifier}' did not resolve to any file under {_rootDir} (tried {resolved} + {string.Join("/", CandidateExtensions)})",
                     resolved);
 
-            // Block symlinks pointing outside the adapter root.
+            // Resolve the candidate's link target and re-validate it
+            // sits under the adapter root. This closes the gap where an
+            // intermediate junction inside _rootDir points outside.
             try
             {
                 var fi = new FileInfo(candidate);
                 if ((fi.Attributes & FileAttributes.ReparsePoint) != 0)
-                    throw new UnauthorizedAccessException($"opencli loader: refusing to follow symlink '{candidate}'");
+                {
+                    var target = fi.ResolveLinkTarget(returnFinalTarget: true);
+                    var canonical = (target as FileInfo)?.FullName ?? fi.FullName;
+                    if (!canonical.StartsWith(rootWithSep, pathCmp))
+                        throw new UnauthorizedAccessException(
+                            $"opencli loader: symlink '{candidate}' resolves outside the adapter root");
+                    candidate = canonical;
+                }
             }
             catch (UnauthorizedAccessException) { throw; }
-            catch { /* attribute read failed — proceed and let read fail loudly */ }
+            catch (Exception ex)
+            {
+                // Fail closed — attribute reads on the sandbox boundary
+                // must succeed, otherwise an attacker can disable the
+                // guard by triggering an exception.
+                throw new UnauthorizedAccessException(
+                    $"opencli loader: refusing to load '{candidate}' (could not verify link target: {ex.Message})", ex);
+            }
 
             var info = new DocumentInfo(new Uri(candidate))
             {

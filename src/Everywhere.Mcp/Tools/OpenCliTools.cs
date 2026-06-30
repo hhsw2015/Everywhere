@@ -70,21 +70,24 @@ public sealed class OpenCliTools(OpenCliRuntime runtime, OpenDiaBridge? bridge =
             // Fuzzy match.
             if (!string.IsNullOrWhiteSpace(query))
             {
+                const int Cap = 60;
                 var q = query.Trim();
-                var matches = defs
+                var allMatches = defs
                     .Where(d => d.Site.Contains(q, StringComparison.OrdinalIgnoreCase)
                              || d.Name.Contains(q, StringComparison.OrdinalIgnoreCase)
                              || (d.Description?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false))
-                    .Take(60)
                     .ToList();
+                var shown = allMatches.Take(Cap).ToList();
                 var arr = new JsonArray();
-                foreach (var d in matches) arr.Add(d.ToListEntry());
+                foreach (var d in shown) arr.Add(d.ToListEntry());
                 return new JsonObject
                 {
                     ["schema_version"] = "1",
                     ["mode"] = "query",
                     ["query"] = q,
                     ["commands"] = arr,
+                    ["total_matches"] = allMatches.Count,
+                    ["truncated"] = allMatches.Count > Cap,
                     ["upstream_sha"] = runtime.UpstreamSha,
                 }.ToJsonString();
             }
@@ -163,7 +166,13 @@ public sealed class OpenCliTools(OpenCliRuntime runtime, OpenDiaBridge? bridge =
         {
             try
             {
-                if (JsonNode.Parse(arguments_json) is JsonObject parsed)
+                // Cap parser depth — untrusted tool-call payload could
+                // be deeply nested and blow the default reader limit
+                // or excessively allocate.
+                var node = JsonNode.Parse(arguments_json,
+                    nodeOptions: null,
+                    documentOptions: new JsonDocumentOptions { MaxDepth = 64 });
+                if (node is JsonObject parsed)
                 {
                     argsObj = parsed;
                 }
@@ -172,7 +181,7 @@ public sealed class OpenCliTools(OpenCliRuntime runtime, OpenDiaBridge? bridge =
                     return Envelope(false, site, name, "arguments_json must be a JSON object", "BAD_ARGS");
                 }
             }
-            catch (JsonException ex)
+            catch (Exception ex) when (ex is JsonException or ArgumentException or InvalidOperationException)
             {
                 return Envelope(false, site, name, $"arguments_json invalid JSON: {ex.Message}", "BAD_ARGS");
             }
@@ -193,9 +202,15 @@ public sealed class OpenCliTools(OpenCliRuntime runtime, OpenDiaBridge? bridge =
             return Envelope(false, site, name, ex.Message, "RUNTIME_HOST_ERROR");
         }
 
+        // Surface unknown adapters with a clear envelope BEFORE routing
+        // — otherwise a missing site/name silently lands on the stub
+        // page and only opencli_run reports the failure deep inside V8.
+        if (def is null)
+            return Envelope(false, site, name, $"adapter {site}/{name} not registered", "RUNTIME_NOT_FOUND");
+
         IPage page;
-        var strategy = def?.Strategy?.Trim().ToLowerInvariant();
-        if (def?.Browser == true || strategy is "cookie" or "intercept" or "ui")
+        var strategy = def.Strategy?.Trim().ToLowerInvariant();
+        if (def.Browser || strategy is "cookie" or "intercept" or "ui")
         {
             if (bridge is null || !bridge.IsConnected)
                 return Envelope(false, site, name, "opendia-not-connected", "BROWSER_NOT_READY");
@@ -203,9 +218,17 @@ public sealed class OpenCliTools(OpenCliRuntime runtime, OpenDiaBridge? bridge =
         }
         else
         {
-            page = new Phase1StubPage();
+            page = Phase1StubPage.Instance;
         }
-        var resp = await runtime.InvokeAsync(site, name, argsObj, page, ct).ConfigureAwait(false);
-        return resp.ToJsonString();
+        try
+        {
+            var resp = await runtime.InvokeAsync(site, name, argsObj, page, ct).ConfigureAwait(false);
+            return resp.ToJsonString();
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception ex)
+        {
+            return Envelope(false, site, name, ex.Message, "RUNTIME_HOST_ERROR");
+        }
     }
 }

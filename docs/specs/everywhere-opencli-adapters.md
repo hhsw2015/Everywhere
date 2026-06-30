@@ -496,15 +496,13 @@ Generate `docs/specs/HANDOFF.md`. Stop.
     `Resources/opencli/clis/`).
 11. `OpenCliRuntime.cs` + `HostShim.cs` + `ModuleLoader.cs` +
     `IPage.cs` + `OpenDiaPageBridge.cs` + `OpenCliTools.cs` total ≤
-    1800 LOC (post-trim, excluding comments). The cap forces the team
-    to keep the surface thin; bumping it requires SPEC change. (Originally
-    1000; raised to 1200 in the round-2 OCR-review hardening pass; 1300
-    after adding `utils` / `logger` / `launcher` / `download` shim sources;
-    1800 in the lazy-load + Node-builtin polyfill pass that achieved
-    99.92% adapter loadability — added Node `path`/`os`/`crypto`/`fs`/
-    `child_process`/`http(s)` shims, lazy `EnsureAdapterLoadedAsync`
-    with manifest-only boot, and the full set of error / utils /
-    download / browser exports v1.8.5 adapters import.)
+    2000 LOC (post-trim, excluding comments). The cap forces the team
+    to keep the surface thin; bumping it requires SPEC change. (1000 →
+    1200 → 1300 → 1800 → 2000 across successive OCR-review hardening
+    passes — the round-3 pass added Task-based manifest load, refreshable
+    engine boot, real os.platform()/arch() polyfills, AdapterDef as a
+    sealed class with FullName equality, and broader input validation
+    on the OpenDia bridge surface.)
 12. Every test in `tests/Everywhere.Mcp.Tests/OpenCli/` has a frontmatter-style
     leading comment indicating the adapter name(s) under test.
 13. Each `bench/opencli/fixtures/<id>/expected.json` declares
