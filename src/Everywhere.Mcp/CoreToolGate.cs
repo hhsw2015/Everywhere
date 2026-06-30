@@ -45,14 +45,18 @@ internal static class CoreToolGate
     }
 
     /// <summary>
-    /// SPEC §6.7. Default off; set <c>EVERYWHERE_MCP_OPENCLI=1</c> to
-    /// expose <c>opencli_list/describe/run</c> in <c>tools/list</c>.
-    /// Phase 4 may flip this default by editing the field below.
+    /// SPEC §6.7. Default ON — the surface is only 3 tools
+    /// (opencli_list / describe / run), so the system-prompt token cost
+    /// is bounded (≈600 tokens for the descriptions). The 1257
+    /// individual adapter commands are reachable via opencli_list +
+    /// opencli_run, mirroring the list_more_tools / call_tool lazy
+    /// pattern used for the long-tail browser_* surface. Set
+    /// <c>EVERYWHERE_MCP_OPENCLI=0</c> to opt out.
     /// </summary>
     public static bool OpenCliEnabled => _openCliEnabled.Value;
 
     private static readonly Lazy<bool> _openCliEnabled = new(() =>
-        Environment.GetEnvironmentVariable("EVERYWHERE_MCP_OPENCLI") is "1");
+        Environment.GetEnvironmentVariable("EVERYWHERE_MCP_OPENCLI") is not "0");
 
     /// <summary>
     /// Convenience inverse for code that prefers a positive predicate.
