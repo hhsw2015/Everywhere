@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "opencli_list.v1",
+  "title": "opencli_list",
+  "type": "object",
+  "required": ["schema_version", "commands"],
+  "properties": {
+    "schema_version": { "const": "1" },
+    "commands": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["site", "name", "description", "strategy", "browser"],
+        "properties": {
+          "site": { "type": "string" },
+          "name": { "type": "string" },
+          "description": { "type": "string" },
+          "strategy": { "enum": ["public", "cookie", "intercept", "ui", "local"] },
+          "browser": { "type": "boolean" },
+          "args": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["name", "type"],
+              "properties": {
+                "name": { "type": "string" },
+                "type": { "type": "string" },
+                "default": {},
+                "help": { "type": "string" }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

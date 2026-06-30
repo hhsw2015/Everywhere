@@ -48,6 +48,31 @@ public static class EverywhereMcpServiceExtensions
         // Everywhere.Core. Inner host re-registers on the SDK container
         // (see EverywhereMcpHttpHost).
         services.TryAddSingleton<Tools.WebSearchTool>();
+        // SPEC docs/specs/everywhere-opencli-adapters.md — OpenCLI adapter
+        // runtime. The V8 engine is lazy-booted on first opencli_* call, so
+        // Everywhere installs that never use it pay no startup cost.
+        services.TryAddSingleton<OpenCli.OpenCliRuntime>(sp =>
+        {
+            var baseDir = AppContext.BaseDirectory;
+            // Publish-side layout (Resources/opencli/{clis,cli-manifest.json}).
+            string clis = Path.Combine(baseDir, "Resources", "opencli", "clis");
+            string manifest = Path.Combine(baseDir, "Resources", "opencli", "cli-manifest.json");
+            if (!Directory.Exists(clis))
+            {
+                // Dev fallback: 3rd/opencli/ in the repo root.
+                var dir = new DirectoryInfo(baseDir);
+                while (dir != null && !Directory.Exists(Path.Combine(dir.FullName, "3rd", "opencli", "clis")))
+                    dir = dir.Parent;
+                if (dir != null)
+                {
+                    clis = Path.Combine(dir.FullName, "3rd", "opencli", "clis");
+                    manifest = Path.Combine(dir.FullName, "3rd", "opencli", "cli-manifest.json");
+                }
+            }
+            return new OpenCli.OpenCliRuntime(clis, manifest, new HttpClient(),
+                sp.GetService<Microsoft.Extensions.Logging.ILogger<OpenCli.OpenCliRuntime>>());
+        });
+        services.TryAddSingleton<Tools.OpenCliTools>();
         // OpenDiaToolSync needs IOptions<McpServerOptions> from the inner
         // MCP container — it's instantiated from there in
         // EverywhereMcpHttpHost.BuildApp(), not here.

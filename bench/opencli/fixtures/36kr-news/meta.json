@@ -1,0 +1,9 @@
+{
+  "site": "36kr",
+  "name": "news",
+  "strategy": "public",
+  "browser": false,
+  "compare": "byte-equal",
+  "ci_tier": "ci",
+  "args_defaults": [{ "name": "limit", "default": 3 }]
+}

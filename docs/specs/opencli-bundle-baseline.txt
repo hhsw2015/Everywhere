@@ -1,0 +1,13 @@
+# OpenCLI bundle baseline — recorded by Phase 0 of SPEC
+# docs/specs/everywhere-opencli-adapters.md.
+#
+# Format: one platform per line, "<rid> <bytes>".
+# Read by scripts/check-bundle-delta.py and lint Rule 6.
+#
+# Numbers populated by the first OpenCLI PR — this file is the
+# pre-spec snapshot. Values of 0 mean "not yet measured on that
+# platform"; lint Rule 6 skips the delta check on 0.
+osx-arm64 0
+osx-x64 0
+linux-x64 0
+win-x64 0

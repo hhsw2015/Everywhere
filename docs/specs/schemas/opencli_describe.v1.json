@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "opencli_describe.v1",
+  "title": "opencli_describe",
+  "type": "object",
+  "required": ["schema_version", "site", "name", "description", "strategy", "browser"],
+  "properties": {
+    "schema_version": { "const": "1" },
+    "site": { "type": "string" },
+    "name": { "type": "string" },
+    "description": { "type": "string" },
+    "strategy": { "enum": ["public", "cookie", "intercept", "ui", "local"] },
+    "browser": { "type": "boolean" },
+    "args": { "type": "array" },
+    "columns": { "type": "array", "items": { "type": "string" } },
+    "access": { "type": "string" },
+    "domain": { "type": "string" },
+    "aliases": { "type": "array", "items": { "type": "string" } }
+  }
+}

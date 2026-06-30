@@ -1,0 +1,57 @@
+name: spec-lint-opencli
+on:
+  push:
+    branches: [main]
+    paths:
+      - '3rd/opencli/**'
+      - 'docs/specs/everywhere-opencli-adapters.md'
+      - 'docs/specs/parity-matrix-opencli.json'
+      - 'docs/specs/PARITY_MATRIX_OPENCLI.md'
+      - 'docs/specs/opencli-bundle-baseline.txt'
+      - 'docs/specs/schemas/opencli_*.v1.json'
+      - 'scripts/spec-lint-opencli.mjs'
+      - 'scripts/render-parity-matrix-opencli.mjs'
+      - 'scripts/sync-opencli.mjs'
+      - 'scripts/build-opencli-bundle.mjs'
+      - 'src/Everywhere.Mcp/OpenCli/**'
+      - 'src/Everywhere.Mcp/Tools/OpenCliTools.cs'
+      - 'tests/Everywhere.Mcp.Tests/OpenCli/**'
+      - 'bench/opencli/**'
+      - '.github/workflows/spec-lint-opencli.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - '3rd/opencli/**'
+      - 'docs/specs/everywhere-opencli-adapters.md'
+      - 'docs/specs/parity-matrix-opencli.json'
+      - 'docs/specs/PARITY_MATRIX_OPENCLI.md'
+      - 'docs/specs/opencli-bundle-baseline.txt'
+      - 'docs/specs/schemas/opencli_*.v1.json'
+      - 'scripts/spec-lint-opencli.mjs'
+      - 'scripts/render-parity-matrix-opencli.mjs'
+      - 'scripts/sync-opencli.mjs'
+      - 'scripts/build-opencli-bundle.mjs'
+      - 'src/Everywhere.Mcp/OpenCli/**'
+      - 'src/Everywhere.Mcp/Tools/OpenCliTools.cs'
+      - 'tests/Everywhere.Mcp.Tests/OpenCli/**'
+      - 'bench/opencli/**'
+      - '.github/workflows/spec-lint-opencli.yml'
+
+jobs:
+  spec-lint-opencli:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Verify PARITY_MATRIX_OPENCLI.md regenerates deterministically
+        run: |
+          node scripts/render-parity-matrix-opencli.mjs
+          git diff --exit-code docs/specs/PARITY_MATRIX_OPENCLI.md
+
+      - name: Run spec-lint-opencli
+        run: node scripts/spec-lint-opencli.mjs

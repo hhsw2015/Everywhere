@@ -1,0 +1,37 @@
+{
+  "schema_version": "1",
+  "compare": "schema-equal",
+  "meta": {
+    "site": "pypi",
+    "name": "downloads",
+    "strategy": "public",
+    "browser": false
+  },
+  "args": {
+    "name": "requests",
+    "period": "recent"
+  },
+  "data": [
+    {
+      "rank": 1,
+      "package": "requests",
+      "period": "last_day",
+      "date": "",
+      "downloads": 60664677
+    },
+    {
+      "rank": 2,
+      "package": "requests",
+      "period": "last_week",
+      "date": "",
+      "downloads": 380354925
+    },
+    {
+      "rank": 3,
+      "package": "requests",
+      "period": "last_month",
+      "date": "",
+      "downloads": 1558411949
+    }
+  ]
+}

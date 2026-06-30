@@ -1,0 +1,34 @@
+<Project>
+  <!--
+    SPEC §8 Phase 0 step 4 — copy 3rd/opencli/* into the publish output
+    so the V8 runtime can find adapters at runtime. Shared across the
+    three platform projects to keep the bundle layout identical.
+  -->
+  <PropertyGroup>
+    <_OpenCliSourceDir>$(MSBuildThisFileDirectory)../3rd/opencli</_OpenCliSourceDir>
+  </PropertyGroup>
+
+  <ItemGroup Condition="Exists('$(_OpenCliSourceDir)/clis')">
+    <None Include="$(_OpenCliSourceDir)/clis/**/*.js"
+          Exclude="$(_OpenCliSourceDir)/clis/**/*.test.js">
+      <Link>Resources/opencli/clis/%(RecursiveDir)%(Filename)%(Extension)</Link>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="$(_OpenCliSourceDir)/cli-manifest.json">
+      <Link>Resources/opencli/cli-manifest.json</Link>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="$(_OpenCliSourceDir)/UPSTREAM_SHA">
+      <Link>Resources/opencli/UPSTREAM_SHA</Link>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="$(_OpenCliSourceDir)/UPSTREAM_REF" Condition="Exists('$(_OpenCliSourceDir)/UPSTREAM_REF')">
+      <Link>Resources/opencli/UPSTREAM_REF</Link>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+</Project>

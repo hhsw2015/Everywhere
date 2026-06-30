@@ -161,6 +161,7 @@
 
   <Import Project="..\Build.Watchdog.targets"/>
   <Import Project="..\Build.ContextHook.targets"/>
+  <Import Project="..\Build.OpenCliBundle.targets"/>
 
   <ItemGroup>
     <None Include="..\..\img\Everywhere.ico">

@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "opencli_run.v1",
+  "title": "opencli_run",
+  "type": "object",
+  "required": ["schema_version", "ok", "site", "name"],
+  "properties": {
+    "schema_version": { "const": "1" },
+    "ok": { "type": "boolean" },
+    "site": { "type": "string" },
+    "name": { "type": "string" },
+    "data": {},
+    "elapsed_ms": { "type": "number" },
+    "error": { "type": "string" },
+    "code": { "type": "string" }
+  }
+}

@@ -17,6 +17,15 @@
     <PackageReference Include="DocumentFormat.OpenXml" />
     <PackageReference Include="VersOne.Epub" />
     <PackageReference Include="AngleSharp" />
+
+    <!-- ClearScript V8 — OpenCLI adapter runtime (SPEC §8 Phase 0).
+         The platform .Native.* packages ship the right .dylib/.so/.dll
+         per-RID via the publish step. -->
+    <PackageReference Include="Microsoft.ClearScript.V8" />
+    <PackageReference Include="Microsoft.ClearScript.V8.Native.osx-arm64" />
+    <PackageReference Include="Microsoft.ClearScript.V8.Native.osx-x64" />
+    <PackageReference Include="Microsoft.ClearScript.V8.Native.linux-x64" />
+    <PackageReference Include="Microsoft.ClearScript.V8.Native.win-x64" />
   </ItemGroup>
 
   <ItemGroup>

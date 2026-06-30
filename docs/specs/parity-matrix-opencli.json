@@ -1,0 +1,79 @@
+{
+  "_schema": "see SPEC §5.4 (everywhere-opencli-adapters.md)",
+  "upstream_sha": "9161d99d96ec107cd77f13a30315614129179a1a",
+  "upstream_ref": "v1.8.5",
+  "rows": [
+    {
+      "site": "36kr",
+      "name": "news",
+      "strategy": "public",
+      "browser": false,
+      "tier": "core",
+      "status": "have",
+      "wont_do_reason": null,
+      "acceptance": "bench:36kr-news",
+      "last_run_ts": null,
+      "notes": "RSS feed; PUBLIC strategy; bench CI tier."
+    },
+    {
+      "site": "pypi",
+      "name": "downloads",
+      "strategy": "public",
+      "browser": false,
+      "tier": "core",
+      "status": "have",
+      "wont_do_reason": null,
+      "acceptance": "bench:pypi-downloads",
+      "last_run_ts": null,
+      "notes": "JSON API; PUBLIC strategy; replaces hackernews/top which moved to pipeline DSL in v1.8.5."
+    },
+    {
+      "site": "hackernews",
+      "name": "top",
+      "strategy": "public",
+      "browser": false,
+      "tier": "core",
+      "status": "wont-do",
+      "wont_do_reason": "upstream-flake",
+      "acceptance": "none",
+      "last_run_ts": null,
+      "notes": "v1.8.5 moved HN adapters to the pipeline DSL; SPEC §2.4 #1 keeps the pipeline runner out-of-scope. Revisit if upstream restores the func shape."
+    },
+    {
+      "site": "36kr",
+      "name": "hot",
+      "strategy": "public",
+      "browser": true,
+      "tier": "value-add",
+      "status": "blocked",
+      "wont_do_reason": null,
+      "acceptance": "bench:36kr-hot",
+      "last_run_ts": null,
+      "notes": "DOM scrape; lands in Phase 2 once OpenDiaPageBridge is wired."
+    },
+    {
+      "site": "bilibili",
+      "name": "hot",
+      "strategy": "public",
+      "browser": true,
+      "tier": "value-add",
+      "status": "blocked",
+      "wont_do_reason": null,
+      "acceptance": "bench:bilibili-hot",
+      "last_run_ts": null,
+      "notes": "Second DOM scrape; Phase 2."
+    },
+    {
+      "site": "bilibili",
+      "name": "me",
+      "strategy": "cookie",
+      "browser": true,
+      "tier": "niche",
+      "status": "blocked",
+      "wont_do_reason": null,
+      "acceptance": "manual:agent-host",
+      "last_run_ts": null,
+      "notes": "Cookie-via-evaluate; manual tier (requires a logged-in session)."
+    }
+  ]
+}

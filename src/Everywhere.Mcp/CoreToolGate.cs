@@ -35,8 +35,24 @@ internal static class CoreToolGate
         if (!FilterEnabled) return false;
         if (toolName!.StartsWith(OpenDiaToolListBuilder.Prefix, StringComparison.Ordinal))
             return !CoreBrowserTools.Contains(toolName);
+        // SPEC docs/specs/everywhere-opencli-adapters.md §6.7 — opencli_*
+        // tools are filtered out by the gate until the user opts in by
+        // setting EVERYWHERE_MCP_OPENCLI=1 (or flipping the default after
+        // Phase 2 ships). Reaches via call_tool stays available.
+        if (toolName!.StartsWith("opencli_", StringComparison.Ordinal))
+            return !OpenCliEnabled;
         return NativeLongTail.Contains(toolName);
     }
+
+    /// <summary>
+    /// SPEC §6.7. Default off; set <c>EVERYWHERE_MCP_OPENCLI=1</c> to
+    /// expose <c>opencli_list/describe/run</c> in <c>tools/list</c>.
+    /// Phase 4 may flip this default by editing the field below.
+    /// </summary>
+    public static bool OpenCliEnabled => _openCliEnabled.Value;
+
+    private static readonly Lazy<bool> _openCliEnabled = new(() =>
+        Environment.GetEnvironmentVariable("EVERYWHERE_MCP_OPENCLI") is "1");
 
     /// <summary>
     /// Convenience inverse for code that prefers a positive predicate.

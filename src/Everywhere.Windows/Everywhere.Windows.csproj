@@ -65,6 +65,7 @@
 
   <Import Project="..\Build.Patches.targets" />
   <Import Project="..\Build.Watchdog.targets"/>
+  <Import Project="..\Build.OpenCliBundle.targets"/>
 
   <ItemGroup>
     <TrimmerRootAssembly Include="Everywhere"/>

@@ -1,0 +1,9 @@
+{
+  "site": "36kr",
+  "name": "hot",
+  "strategy": "public",
+  "browser": true,
+  "compare": "schema-equal",
+  "ci_tier": "ci",
+  "args_defaults": [{ "name": "limit", "default": 3 }]
+}

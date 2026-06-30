@@ -228,12 +228,16 @@ Phase 0 sanity-checks: site count ∈ [120, 250], command count ∈
 ```
 DANGEROUS_ADAPTERS = {
   # Adapters that mutate state on the user's behalf — comment posts,
-  # likes, follows, payments. Auto-merge is too dangerous; user must
-  # eyeball the run.
+  # likes, follows. Auto-merge is too dangerous; user must eyeball
+  # the run. Verified to exist in upstream cli-manifest.json @ v1.8.5;
+  # lint Rule 8 fails if a name drifts out from under the SPEC.
   "bilibili/comment", "bilibili/follow", "bilibili/favorite",
-  "twitter/post",     "weibo/post",      "weibo/comment",
-  "discord/post",     "tg/post",         "wx/post",
-  "12306/order",
+  "twitter/post",     "twitter/follow",  "twitter/unfollow",
+  "weibo/post",       "weibo/publish",
+  "instagram/comment","instagram/post",  "instagram/follow", "instagram/unfollow",
+  "tiktok/comment",   "tiktok/follow",   "tiktok/unfollow",
+  "reddit/comment",
+  "jike/post",        "jike/comment",    "jike/repost",
 }
 ```
 Lint Rule 8 enforces by name match against the manifest at sync time.
@@ -492,8 +496,12 @@ Generate `docs/specs/HANDOFF.md`. Stop.
     `Resources/opencli/clis/`).
 11. `OpenCliRuntime.cs` + `HostShim.cs` + `ModuleLoader.cs` +
     `IPage.cs` + `OpenDiaPageBridge.cs` + `OpenCliTools.cs` total ≤
-    1000 LOC (post-trim, excluding comments). The cap forces the team
-    to keep the surface thin; bumping it requires SPEC change.
+    1200 LOC (post-trim, excluding comments). The cap forces the team
+    to keep the surface thin; bumping it requires SPEC change. (Originally
+    1000; raised to 1200 in the round-2 OCR-review hardening pass that
+    added the SSRF guard, 16 MiB response cap, Set-Cookie multi-value
+    handling, charset / Content-Type fixes, symlink-aware loader, and
+    `Task.FromException`-shaped Phase 2 stubs.)
 12. Every test in `tests/Everywhere.Mcp.Tests/OpenCli/` has a frontmatter-style
     leading comment indicating the adapter name(s) under test.
 13. Each `bench/opencli/fixtures/<id>/expected.json` declares
@@ -555,11 +563,11 @@ bench/opencli/
 
 | id | site/name | strategy | why |
 |----|-----------|----------|-----|
-| `36kr-news`   | 36kr/news      | public   | RSS path; tests fetch + xml parsing |
-| `hn-top`      | hackernews/top | public   | JSON API; tests JSON shape |
-| `36kr-hot`    | 36kr/hot       | public   | DOM scrape; tests page.evaluate |
-| `bilibili-hot`| bilibili/hot   | public   | second DOM scrape, different site |
-| `bilibili-me` | bilibili/me    | cookie   | tests cookie-via-evaluate path |
+| `36kr-news`        | 36kr/news        | public   | RSS path; tests fetch + xml parsing |
+| `pypi-downloads`   | pypi/downloads   | public   | JSON API; tests JSON shape (replaces `hn-top` — upstream v1.8.5 moved HN adapters to the pipeline DSL, which §2.4 #1 keeps out-of-scope) |
+| `36kr-hot`         | 36kr/hot         | public   | DOM scrape; tests page.evaluate |
+| `bilibili-hot`     | bilibili/hot     | public   | second DOM scrape, different site |
+| `bilibili-me`      | bilibili/me      | cookie   | tests cookie-via-evaluate path |
 
 The first four are CI-tier (`ci_tier: ci`); the cookie one is `manual`
 because it needs a real bilibili session.

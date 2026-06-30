@@ -1,0 +1,10 @@
+{
+  "site": "pypi",
+  "name": "downloads",
+  "strategy": "public",
+  "browser": false,
+  "compare": "schema-equal",
+  "ci_tier": "ci",
+  "args_defaults": [{ "name": "period", "default": "recent" }],
+  "compare_reason": "JSON API but download counts vary over time; the schema is stable, the values aren't."
+}

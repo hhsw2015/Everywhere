@@ -1,0 +1,9 @@
+{
+  "site": "bilibili",
+  "name": "me",
+  "strategy": "cookie",
+  "browser": true,
+  "compare": "schema-equal",
+  "ci_tier": "manual",
+  "args_defaults": []
+}
