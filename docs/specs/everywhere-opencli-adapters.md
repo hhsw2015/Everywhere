@@ -496,12 +496,13 @@ Generate `docs/specs/HANDOFF.md`. Stop.
     `Resources/opencli/clis/`).
 11. `OpenCliRuntime.cs` + `HostShim.cs` + `ModuleLoader.cs` +
     `IPage.cs` + `OpenDiaPageBridge.cs` + `OpenCliTools.cs` total ≤
-    2200 LOC (post-trim, excluding comments). The cap forces the team
+    2400 LOC (post-trim, excluding comments). The cap forces the team
     to keep the surface thin; bumping it requires SPEC change. 1000 →
-    1200 → 1300 → 1800 → 2000 → 2200 across successive hardening
-    passes — the latest bump covers fs/child_process unlock + the
-    pipeline-runner bridge that synthesises a `func` from a vendored
-    upstream `executePipeline` for adapters that ship only a `pipeline`.
+    1200 → 1300 → 1800 → 2000 → 2200 → 2400 across successive
+    hardening passes — round-4 covers per-adapter pipeline closure,
+    Task-cached pipeline runner load, manifest path-traversal guard,
+    BufferLike binary fs reads, concurrent stdout/stderr, cross-platform
+    shell, and the unified `engine.Execute` gate.
 12. Every test in `tests/Everywhere.Mcp.Tests/OpenCli/` has a frontmatter-style
     leading comment indicating the adapter name(s) under test.
 13. Each `bench/opencli/fixtures/<id>/expected.json` declares

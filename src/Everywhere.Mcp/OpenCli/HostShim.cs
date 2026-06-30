@@ -433,11 +433,13 @@ public sealed class HostShim
     /// that need it currently fall back to <c>execFileSync</c>.</summary>
     public const string NodeChildProcessSource = """
         const _runSync = (cmd, args, opts) => __opencliHost.cpExecFileSync(cmd, args || null, opts || null);
-        const execSync = (cmd, opts) => _runSync('/bin/sh', ['-c', cmd], opts);
+        // execSync routes through the platform's shell — /bin/sh on POSIX,
+        // cmd.exe on Windows. The host helper resolves the right shell.
+        const execSync = (cmd, opts) => __opencliHost.cpShellSync(cmd, opts || null);
         const exec = (cmd, opts, cb) => {
             if (typeof opts === 'function') { cb = opts; opts = null; }
             return new Promise((res, rej) => {
-                try { const r = _runSync('/bin/sh', ['-c', cmd], opts); cb && cb(null, r, ''); res({ stdout: r, stderr: '' }); }
+                try { const r = __opencliHost.cpShellSync(cmd, opts || null); cb && cb(null, r, ''); res({ stdout: r, stderr: '' }); }
                 catch (err) { cb && cb(err, '', ''); rej(err); }
             });
         };
@@ -580,12 +582,15 @@ public sealed class HostShim
     public object fsReadFileSync(string path, string? encoding)
     {
         var bytes = File.ReadAllBytes(path);
+        // No encoding (or "buffer") → return a Buffer-like object the JS
+        // shim can wrap. We pass base64 + length so the wrapper can expose
+        // .toString('hex'), .toString('base64'), .length, etc. without
+        // mojibake — UTF-8 decoding raw bytes silently corrupts images,
+        // zip archives, cookies, etc.
         if (string.IsNullOrEmpty(encoding) || encoding.Equals("buffer", StringComparison.OrdinalIgnoreCase))
-            // V8 has no native Buffer; return bytes as base64 + a marker
-            // adapters that pass `null` encoding overwhelmingly want
-            // string anyway. Default to utf-8 for ergonomics; adapters
-            // that need bytes pass 'base64'.
-            return Encoding.UTF8.GetString(bytes);
+        {
+            return new BufferLike(bytes);
+        }
         return encoding.ToLowerInvariant() switch
         {
             "utf8" or "utf-8" => Encoding.UTF8.GetString(bytes),
@@ -602,16 +607,33 @@ public sealed class HostShim
         var dir = Path.GetDirectoryName(path);
         if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
         byte[] bytes;
-        var s = data as string ?? data?.ToString() ?? "";
-        bytes = (encoding ?? "utf8").ToLowerInvariant() switch
+        // BufferLike (returned from fsReadFileSync for binary blobs) →
+        // write the raw bytes back without re-encoding. byte[] arrives
+        // when adapters pass a .NET array directly. Otherwise use the
+        // declared text encoding.
+        switch (data)
         {
-            "utf8" or "utf-8" or null => Encoding.UTF8.GetBytes(s),
-            "ascii" => Encoding.ASCII.GetBytes(s),
-            "latin1" or "binary" => Encoding.Latin1.GetBytes(s),
-            "base64" => Convert.FromBase64String(s),
-            "hex" => Convert.FromHexString(s),
-            _ => Encoding.GetEncoding(encoding).GetBytes(s),
-        };
+            case BufferLike buf:
+                bytes = buf.toBytes();
+                break;
+            case byte[] raw:
+                bytes = raw;
+                break;
+            case string s:
+                bytes = (encoding ?? "utf8").ToLowerInvariant() switch
+                {
+                    "utf8" or "utf-8" => Encoding.UTF8.GetBytes(s),
+                    "ascii" => Encoding.ASCII.GetBytes(s),
+                    "latin1" or "binary" => Encoding.Latin1.GetBytes(s),
+                    "base64" => Convert.FromBase64String(s),
+                    "hex" => Convert.FromHexString(s),
+                    _ => Encoding.GetEncoding(encoding).GetBytes(s),
+                };
+                break;
+            default:
+                throw new ArgumentException(
+                    $"fsWriteFileSync: unsupported data type '{data?.GetType().Name ?? "null"}' (pass string / Buffer / byte[])");
+        }
         File.WriteAllBytes(path, bytes);
     }
 
@@ -670,10 +692,40 @@ public sealed class HostShim
         var args = new List<string>();
         if (argsRef is ScriptObject so)
         {
-            foreach (var key in so.PropertyNames)
-                if (int.TryParse(key, out _))
-                    args.Add(so.GetProperty(key)?.ToString() ?? "");
+            // V8 typically reports integer-indexed keys ascending, but
+            // rely on `length` for argv assembly to match Node.
+            if (so.GetProperty("length") is int len)
+            {
+                for (int i = 0; i < len; i++)
+                {
+                    var v = so.GetProperty(i.ToString());
+                    args.Add(v?.ToString() ?? "");
+                }
+            }
+            else
+            {
+                foreach (var key in so.PropertyNames)
+                    if (int.TryParse(key, out _))
+                        args.Add(so.GetProperty(key)?.ToString() ?? "");
+            }
         }
+        return RunProcess(file, args, optsRef);
+    }
+
+    /// <summary>Shell-out helper used by `child_process.exec`/`execSync`.
+    /// Picks the platform shell (cmd.exe on Windows, /bin/sh elsewhere).</summary>
+    public string cpShellSync(string command, object? optsRef)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(command);
+        if (OperatingSystem.IsWindows())
+        {
+            return RunProcess("cmd.exe", new() { "/d", "/s", "/c", command }, optsRef);
+        }
+        return RunProcess("/bin/sh", new() { "-c", command }, optsRef);
+    }
+
+    private static string RunProcess(string file, List<string> args, object? optsRef)
+    {
         var psi = new System.Diagnostics.ProcessStartInfo
         {
             FileName = file,
@@ -683,6 +735,11 @@ public sealed class HostShim
             CreateNoWindow = true,
         };
         foreach (var a in args) psi.ArgumentList.Add(a);
+        // Default behaviour: inherit parent env. Node also inherits when
+        // opts.env is omitted — only if the caller explicitly hands us
+        // an env object do we replace it. Wiping unconditionally would
+        // strip PATH / SystemRoot etc. and the child would fail to launch.
+        TimeSpan timeout = TimeSpan.FromMinutes(2);
         if (optsRef is ScriptObject opts)
         {
             if (opts.GetProperty("cwd") is string cwd && !string.IsNullOrEmpty(cwd)) psi.WorkingDirectory = cwd;
@@ -692,12 +749,24 @@ public sealed class HostShim
                 foreach (var k in env.PropertyNames)
                     psi.EnvironmentVariables[k] = env.GetProperty(k)?.ToString();
             }
+            if (opts.GetProperty("timeout") is int t && t > 0) timeout = TimeSpan.FromMilliseconds(t);
+            else if (opts.GetProperty("timeout") is double td && td > 0) timeout = TimeSpan.FromMilliseconds(td);
         }
+
         using var p = System.Diagnostics.Process.Start(psi)
             ?? throw new InvalidOperationException($"failed to start '{file}'");
-        var stdout = p.StandardOutput.ReadToEnd();
-        var stderr = p.StandardError.ReadToEnd();
-        p.WaitForExit();
+        // Read stdout AND stderr concurrently — reading one fully before
+        // the other deadlocks any child that emits more than the OS pipe
+        // buffer (~64 KiB) on the unread stream.
+        var stdoutTask = p.StandardOutput.ReadToEndAsync();
+        var stderrTask = p.StandardError.ReadToEndAsync();
+        if (!p.WaitForExit((int)timeout.TotalMilliseconds))
+        {
+            try { p.Kill(entireProcessTree: true); } catch { }
+            throw new TimeoutException($"'{file}' did not exit within {timeout.TotalSeconds}s");
+        }
+        var stdout = stdoutTask.GetAwaiter().GetResult();
+        var stderr = stderrTask.GetAwaiter().GetResult();
         if (p.ExitCode != 0)
             throw new InvalidOperationException($"'{file}' exited {p.ExitCode}: {stderr.Trim()}");
         return stdout;
@@ -942,6 +1011,26 @@ public sealed class FetchResponse
         try { return Task.FromResult<object?>(JsonSerializer.Deserialize<JsonNode>(_text)); }
         catch (JsonException ex) { return Task.FromException<object?>(ex); }
     }
+}
+
+/// <summary>Buffer-like object exposed to JS for binary file reads.
+/// Keeps the raw bytes so callers can re-encode without going through
+/// a lossy UTF-8 round trip.</summary>
+public sealed class BufferLike
+{
+    private readonly byte[] _bytes;
+    public BufferLike(byte[] bytes) { _bytes = bytes; length = bytes.Length; }
+    public int length { get; }
+    public string toString(string? encoding = null) => encoding?.ToLowerInvariant() switch
+    {
+        "base64" => Convert.ToBase64String(_bytes),
+        "hex" => Convert.ToHexString(_bytes).ToLowerInvariant(),
+        "ascii" => Encoding.ASCII.GetString(_bytes),
+        "latin1" or "binary" => Encoding.Latin1.GetString(_bytes),
+        null or "" or "utf8" or "utf-8" => Encoding.UTF8.GetString(_bytes),
+        _ => Encoding.GetEncoding(encoding).GetString(_bytes),
+    };
+    public byte[] toBytes() => _bytes;
 }
 
 /// <summary>Minimal `Headers`-shaped map (case-insensitive get).</summary>

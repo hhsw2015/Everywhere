@@ -222,13 +222,39 @@ public sealed class OpenCliRuntime : IAsyncDisposable
             if (string.IsNullOrEmpty(rel))
                 rel = $"{site}/{name}.js";
             var path = Path.Combine(_clisDir, rel);
-            if (!File.Exists(path))
-                throw new FileNotFoundException($"adapter source not found: {path}", path);
+            // Containment guard — manifest.modulePath is untrusted-ish
+            // (it lives in 3rd/opencli/cli-manifest.json which we vendor,
+            // but a poisoned or hand-edited manifest could absolute-path
+            // its way out). Path.Combine of (".../clis", "/etc/passwd")
+            // happily returns "/etc/passwd"; canonicalise first.
+            var canonical = Path.GetFullPath(path);
+            var clisCanonical = Path.GetFullPath(_clisDir);
+            var clisWithSep = clisCanonical.EndsWith(Path.DirectorySeparatorChar)
+                ? clisCanonical : clisCanonical + Path.DirectorySeparatorChar;
+            var pathCmp = OperatingSystem.IsWindows() || OperatingSystem.IsMacOS()
+                ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+            if (!canonical.StartsWith(clisWithSep, pathCmp))
+                throw new UnauthorizedAccessException(
+                    $"adapter {key}: manifest.modulePath '{rel}' resolves outside _clisDir ({clisCanonical})");
+            if (!File.Exists(canonical))
+                throw new FileNotFoundException($"adapter source not found: {canonical}", canonical);
 
             var engine = await GetEngineTask().ConfigureAwait(false);
-            var src = await File.ReadAllTextAsync(path, ct).ConfigureAwait(false);
-            var info = new DocumentInfo(new Uri(path)) { Category = ModuleCategory.Standard };
-            engine.Execute(info, src);
+            var src = await File.ReadAllTextAsync(canonical, ct).ConfigureAwait(false);
+            var info = new DocumentInfo(new Uri(canonical)) { Category = ModuleCategory.Standard };
+            // Serialize against in-flight invokes — V8 isolate is single-
+            // threaded and concurrent Execute against another InvokeAsync's
+            // _invokeGate-held call would corrupt the script state machine.
+            using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, _disposeCts.Token);
+            await _invokeGate.WaitAsync(linked.Token).ConfigureAwait(false);
+            try
+            {
+                engine.Execute(info, src);
+            }
+            finally
+            {
+                _invokeGate.Release();
+            }
 
             // The shim's cli({...}) callback writes into _registry.
             if (_registry.TryGetValue(key, out var loaded))
@@ -240,17 +266,37 @@ public sealed class OpenCliRuntime : IAsyncDisposable
                 if (loaded.Func is null && loaded.Pipeline is not null)
                 {
                     await EnsurePipelineRunnerLoadedAsync(engine).ConfigureAwait(false);
-                    var pipelineJson = loaded.Pipeline.ToJsonString();
-                    engine.Script.__opencliPipelineJson = pipelineJson;
-                    // Build a JS func that runs the pipeline. ExecuteCommand
-                    // returns a fresh promise per call; we capture the func
-                    // as a ScriptObject and stash it under the synthesised
-                    // adapter def.
-                    engine.Execute("""
-                        globalThis.__opencliSynthFn = (args, page) => globalThis.__opencliPipelineRunner.executePipeline(
-                            page, JSON.parse(__opencliPipelineJson), { args: args ?? {} });
-                    """);
-                    var synth = engine.Script.__opencliSynthFn as ScriptObject;
+                    // CRITICAL: bake the pipeline config into a per-adapter
+                    // closure via a factory, NOT a shared global. A previous
+                    // version stashed the JSON on `__opencliPipelineJson`
+                    // and every synthesised func re-read that global —
+                    // so all pipeline-only adapters ended up running
+                    // whichever pipeline was loaded LAST.
+                    using var linkedSynth = CancellationTokenSource.CreateLinkedTokenSource(ct, _disposeCts.Token);
+                    await _invokeGate.WaitAsync(linkedSynth.Token).ConfigureAwait(false);
+                    ScriptObject? synth;
+                    try
+                    {
+                        engine.Script.__opencliFactoryArg = loaded.Pipeline.ToJsonString();
+                        engine.Execute("""
+                            globalThis.__opencliFactoryResult = (function (jsonStr) {
+                                const cfg = JSON.parse(jsonStr);
+                                const runner = globalThis.__opencliPipelineRunner;
+                                return (args, page) => runner.executePipeline(page, cfg, { args: args ?? {} });
+                            })(__opencliFactoryArg);
+                        """);
+                        synth = engine.Script.__opencliFactoryResult as ScriptObject;
+                        try
+                        {
+                            engine.Script.__opencliFactoryArg = null;
+                            engine.Script.__opencliFactoryResult = null;
+                        }
+                        catch { }
+                    }
+                    finally
+                    {
+                        _invokeGate.Release();
+                    }
                     if (synth is null)
                         throw new InvalidOperationException($"adapter {key}: failed to synthesise pipeline func");
                     var withFunc = new AdapterDef(
@@ -260,9 +306,16 @@ public sealed class OpenCliRuntime : IAsyncDisposable
                         args: loaded.Args, columns: loaded.Columns,
                         func: synth, pipeline: loaded.Pipeline);
                     _registry[key] = withFunc;
+                    // The unloaded snapshot is now stale — drop it so the
+                    // JSON clones it carries can be GC'd.
+                    _unloadedDefs.TryRemove(key, out _);
                     return withFunc;
                 }
-                if (loaded.Func is not null) return loaded;
+                if (loaded.Func is not null)
+                {
+                    _unloadedDefs.TryRemove(key, out _);
+                    return loaded;
+                }
             }
             throw new InvalidOperationException($"adapter {key} did not register after load");
         }
@@ -272,36 +325,57 @@ public sealed class OpenCliRuntime : IAsyncDisposable
         }
     }
 
-    private bool _pipelineRunnerLoaded;
+    private Task? _pipelineRunnerLoadTask;
     private readonly object _pipelineRunnerLock = new();
 
-    private async Task EnsurePipelineRunnerLoadedAsync(V8ScriptEngine engine)
+    private Task EnsurePipelineRunnerLoadedAsync(V8ScriptEngine engine)
     {
-        bool needLoad;
-        lock (_pipelineRunnerLock) { needLoad = !_pipelineRunnerLoaded; }
-        if (!needLoad) return;
-        // Load the upstream pipeline runner once and pin it on globalThis
-        // so synthesised funcs can re-use it. Loaded as a Standard module
-        // — module loader resolves '@jackwener/opencli/pipeline' via the
-        // fileRoutes map to the vendored dist.
-        engine.Execute("""
-            (async () => {
-                const m = await import('@jackwener/opencli/pipeline');
-                globalThis.__opencliPipelineRunner = m;
-            })();
-        """);
-        // Wait for the dynamic import to settle. ClearScript routes
-        // dynamic import through the same loader — it returns a Promise.
-        // The simplest reliable wait: poll. Cheap because runner loads in
-        // a few ms.
-        for (int i = 0; i < 200; i++)
+        // Cache the load Task itself so concurrent callers all await the
+        // same import. A failed load can be retried by the next caller —
+        // we don't poison the slot.
+        Task t;
+        lock (_pipelineRunnerLock)
         {
-            if (engine.Script.__opencliPipelineRunner is not null) break;
+            if (_pipelineRunnerLoadTask is { IsCompletedSuccessfully: true }) return Task.CompletedTask;
+            if (_pipelineRunnerLoadTask is null || _pipelineRunnerLoadTask.IsFaulted || _pipelineRunnerLoadTask.IsCanceled)
+            {
+                _pipelineRunnerLoadTask = LoadPipelineRunnerAsync(engine);
+            }
+            t = _pipelineRunnerLoadTask;
+        }
+        return t;
+    }
+
+    private async Task LoadPipelineRunnerAsync(V8ScriptEngine engine)
+    {
+        // Surface import errors via a sentinel global so the polling loop
+        // doesn't have to depend on the fire-and-forget promise reaching us.
+        await _invokeGate.WaitAsync(_disposeCts.Token).ConfigureAwait(false);
+        try
+        {
+            engine.Execute("""
+                (async () => {
+                    try {
+                        const m = await import('@jackwener/opencli/pipeline');
+                        globalThis.__opencliPipelineRunner = m;
+                    } catch (e) {
+                        globalThis.__opencliPipelineRunnerError = String((e && e.message) || e);
+                    }
+                })();
+            """);
+        }
+        finally
+        {
+            _invokeGate.Release();
+        }
+        for (int i = 0; i < 500; i++)
+        {
+            if (engine.Script.__opencliPipelineRunner is not null) return;
+            if (engine.Script.__opencliPipelineRunnerError is string err)
+                throw new InvalidOperationException($"pipeline runner import failed: {err}");
             await Task.Delay(10).ConfigureAwait(false);
         }
-        if (engine.Script.__opencliPipelineRunner is null)
-            throw new InvalidOperationException("pipeline runner failed to load (module @jackwener/opencli/pipeline not found in vendored runtime?)");
-        lock (_pipelineRunnerLock) { _pipelineRunnerLoaded = true; }
+        throw new InvalidOperationException("pipeline runner failed to load within 5s (module @jackwener/opencli/pipeline missing from vendored runtime?)");
     }
 
     /// <summary>
@@ -634,7 +708,12 @@ public sealed class OpenCliRuntime : IAsyncDisposable
         // disposed semaphore in its finally block.
         try
         {
-            await _invokeGate.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+            // If the wait times out we still proceed to dispose — the
+            // logged warning surfaces the rare case where an in-flight
+            // adapter is wedged in V8.
+            var acquired = await _invokeGate.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+            if (!acquired)
+                _log?.LogWarning("opencli runtime: invoke gate did not drain within 5s; disposing engine while a JS call may be in-flight");
         }
         catch (ObjectDisposedException) { /* already disposed */ }
         catch (Exception ex) { _log?.LogDebug(ex, "opencli runtime: gate wait failed"); }

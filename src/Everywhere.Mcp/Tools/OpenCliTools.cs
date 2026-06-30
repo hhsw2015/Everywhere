@@ -55,6 +55,8 @@ public sealed class OpenCliTools(OpenCliRuntime runtime, OpenDiaBridge? bridge =
             {
                 var siteKey = site.Trim();
                 var matches = defs.Where(d => string.Equals(d.Site, siteKey, StringComparison.OrdinalIgnoreCase)).ToList();
+                if (matches.Count == 0)
+                    return Envelope(false, siteKey, null, $"site '{siteKey}' not registered", "RUNTIME_NOT_FOUND");
                 var arr = new JsonArray();
                 foreach (var d in matches) arr.Add(d.ToListEntry());
                 return new JsonObject
@@ -166,12 +168,13 @@ public sealed class OpenCliTools(OpenCliRuntime runtime, OpenDiaBridge? bridge =
         {
             try
             {
-                // Cap parser depth — untrusted tool-call payload could
-                // be deeply nested and blow the default reader limit
-                // or excessively allocate.
+                // Cap parser depth at 16 — adapter args are flat-ish in
+                // practice (limit / page / filter scalars), so a stricter
+                // bound than the default 64 hardens against deeply-nested
+                // untrusted payloads without breaking real adapters.
                 var node = JsonNode.Parse(arguments_json,
                     nodeOptions: null,
-                    documentOptions: new JsonDocumentOptions { MaxDepth = 64 });
+                    documentOptions: new JsonDocumentOptions { MaxDepth = 16 });
                 if (node is JsonObject parsed)
                 {
                     argsObj = parsed;
@@ -181,7 +184,7 @@ public sealed class OpenCliTools(OpenCliRuntime runtime, OpenDiaBridge? bridge =
                     return Envelope(false, site, name, "arguments_json must be a JSON object", "BAD_ARGS");
                 }
             }
-            catch (Exception ex) when (ex is JsonException or ArgumentException or InvalidOperationException)
+            catch (JsonException ex)
             {
                 return Envelope(false, site, name, $"arguments_json invalid JSON: {ex.Message}", "BAD_ARGS");
             }
@@ -209,7 +212,7 @@ public sealed class OpenCliTools(OpenCliRuntime runtime, OpenDiaBridge? bridge =
             return Envelope(false, site, name, $"adapter {site}/{name} not registered", "RUNTIME_NOT_FOUND");
 
         IPage page;
-        var strategy = def.Strategy?.Trim().ToLowerInvariant();
+        var strategy = def.Strategy.Trim().ToLowerInvariant();
         if (def.Browser || strategy is "cookie" or "intercept" or "ui")
         {
             if (bridge is null || !bridge.IsConnected)

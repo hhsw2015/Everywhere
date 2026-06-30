@@ -38,11 +38,37 @@ public sealed class OpenCliDocumentLoader : DefaultDocumentLoader
         ArgumentNullException.ThrowIfNull(shims);
         _rootDir = ResolveLinkChain(Path.GetFullPath(rootDir));
         _shims = new Dictionary<string, string>(shims, StringComparer.Ordinal);
-        _fileRoutes = fileRoutes is null ? new(StringComparer.Ordinal) : new Dictionary<string, string>(fileRoutes, StringComparer.Ordinal);
         _extraRoots = (extraRoots ?? Array.Empty<string>())
             .Where(r => !string.IsNullOrEmpty(r))
             .Select(r => ResolveLinkChain(Path.GetFullPath(r)))
             .ToList();
+        // Canonicalize routed paths (resolve symlinks + absolute) at
+        // construction time and verify each lives under one of the
+        // allowed roots. Skip routes that fall outside — they would be
+        // an arbitrary-file-read primitive otherwise.
+        _fileRoutes = new Dictionary<string, string>(StringComparer.Ordinal);
+        if (fileRoutes is not null)
+        {
+            foreach (var kv in fileRoutes)
+            {
+                var canon = ResolveLinkChain(Path.GetFullPath(kv.Value));
+                if (IsUnderAnyRoot(canon)) _fileRoutes[kv.Key] = canon;
+            }
+        }
+    }
+
+    private bool IsUnderAnyRoot(string path)
+    {
+        var pathCmp = OperatingSystem.IsWindows() || OperatingSystem.IsMacOS()
+            ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+        var rootWithSep = _rootDir.EndsWith(Path.DirectorySeparatorChar) ? _rootDir : _rootDir + Path.DirectorySeparatorChar;
+        if (path.StartsWith(rootWithSep, pathCmp)) return true;
+        foreach (var er in _extraRoots)
+        {
+            var erWithSep = er.EndsWith(Path.DirectorySeparatorChar) ? er : er + Path.DirectorySeparatorChar;
+            if (path.StartsWith(erWithSep, pathCmp)) return true;
+        }
+        return false;
     }
 
     // Walk symlinks to the canonical on-disk path so the containment

@@ -13,8 +13,15 @@ namespace Everywhere.Mcp.OpenCli;
 /// in that case; <see cref="OpenCliRuntime"/> wraps it into the
 /// <c>{ok:false, error:"opendia-not-connected"}</c> envelope from §2.1.
 /// </summary>
-public sealed class OpenDiaPageBridge(OpenDiaBridge bridge) : IPage
+public sealed class OpenDiaPageBridge : IPage
 {
+    private readonly OpenDiaBridge bridge;
+    public OpenDiaPageBridge(OpenDiaBridge bridge)
+    {
+        ArgumentNullException.ThrowIfNull(bridge);
+        this.bridge = bridge;
+    }
+
     private static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan WaitTimeout = TimeSpan.FromMinutes(11); // > MaxWaitMs slack
     private const int MaxWaitMs = 10 * 60 * 1000; // 10 min — bigger than any sane adapter sleep
@@ -41,8 +48,6 @@ public sealed class OpenDiaPageBridge(OpenDiaBridge bridge) : IPage
         _ => DefaultTimeout,
     };
 
-    private static JsonObject? CloneObj(JsonObject? o) =>
-        o is null ? null : (JsonObject)o.DeepClone();
     private static JsonObject CloneObjOrEmpty(JsonObject? o) =>
         o is null ? new JsonObject() : (JsonObject)o.DeepClone();
 
@@ -63,11 +68,17 @@ public sealed class OpenDiaPageBridge(OpenDiaBridge bridge) : IPage
         if (n is JsonValue v && v.TryGetValue<string>(out var s)) return s;
         if (n is JsonObject obj)
         {
-            // Prefer the caller-specified key when present; otherwise
-            // walk a small ordered list of common string-wrapping keys.
-            if (preferKey is not null && obj.TryGetPropertyValue(preferKey, out var direct) &&
-                direct is JsonValue dv && dv.TryGetValue<string>(out var ds))
-                return ds;
+            // If the caller asked for a specific key, honour it strictly
+            // and DO NOT fall back to other wrapper keys. Returning a
+            // different field (e.g. {url:"about:blank",data:0} → "about:blank"
+            // for a screenshot) is exactly the silent-corruption mode SPEC §2.1
+            // wants to avoid.
+            if (preferKey is not null)
+            {
+                return obj.TryGetPropertyValue(preferKey, out var direct) &&
+                       direct is JsonValue dv && dv.TryGetValue<string>(out var ds)
+                    ? ds : null;
+            }
             foreach (var key in StringWrapperKeys)
             {
                 if (obj.TryGetPropertyValue(key, out var inner) && inner is JsonValue iv && iv.TryGetValue<string>(out var ins))
@@ -81,9 +92,13 @@ public sealed class OpenDiaPageBridge(OpenDiaBridge bridge) : IPage
 
     public Task Goto(string url, JsonObject? opts = null)
     {
-        ArgumentException.ThrowIfNullOrEmpty(url);
+        // Surface validation as a faulted Task so adapters using
+        // page.goto(...).catch(...) see a normal Promise rejection,
+        // matching Phase1StubPage's contract.
+        if (string.IsNullOrEmpty(url))
+            return Task.FromException(new ArgumentException("page.goto: url required"));
         if (!Uri.TryCreate(url, UriKind.Absolute, out var u) || u.Scheme is not ("http" or "https"))
-            throw new ArgumentException($"page.goto: only http(s) urls allowed, got '{url}'");
+            return Task.FromException(new ArgumentException($"page.goto: only http(s) urls allowed, got '{url}'"));
         return Call("browser_page_navigate", Pack(("url", url), ("options", opts?.DeepClone())));
     }
 
@@ -182,7 +197,13 @@ public sealed class OpenDiaPageBridge(OpenDiaBridge bridge) : IPage
     public Task<JsonNode?> Cdp(string method, JsonObject? args)
     {
         ArgumentException.ThrowIfNullOrEmpty(method);
-        return Call("browser_cdp", Pack(("method", method), ("params", args?.DeepClone())));
+        // Send `params: {}` rather than omitting — many CDP handlers
+        // require the field to be present even when empty.
+        return Call("browser_cdp", new JsonObject
+        {
+            ["method"] = method,
+            ["params"] = (args is null ? new JsonObject() : (JsonObject)args.DeepClone()),
+        });
     }
 
     public Task<JsonNode?> Find(JsonObject opts)

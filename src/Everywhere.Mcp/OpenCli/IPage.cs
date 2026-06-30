@@ -60,14 +60,18 @@ public sealed class Phase2NotReadyException : Exception
     public Phase2NotReadyException(string method)
         : base(BuildSafeMessage(method))
     {
-        Method = method ?? string.Empty;
+        Method = NormalizeMethod(method);
     }
     public Phase2NotReadyException(string method, Exception inner)
         : base(BuildSafeMessage(method), inner)
     {
-        Method = method ?? string.Empty;
+        Method = NormalizeMethod(method);
     }
+    /// <summary>Always non-null. Set to <c>"&lt;unknown&gt;"</c> when
+    /// the caller passed null/empty so structured fields agree with
+    /// the human-readable message.</summary>
     public string Method { get; }
+    private static string NormalizeMethod(string? method) => string.IsNullOrEmpty(method) ? "<unknown>" : method;
 
     // Validation that throws would lose the inner exception when called
     // from the (string, Exception) ctor. Tolerate null/empty `method`
@@ -85,11 +89,12 @@ public sealed class Phase2NotReadyException : Exception
 public sealed class Phase1StubPage : IPage
 {
     public static readonly Phase1StubPage Instance = new();
+    private Phase1StubPage() { }
     private static Task Fail(string method) => Task.FromException(new Phase2NotReadyException(method));
     private static Task<T> Fail<T>(string method) => Task.FromException<T>(new Phase2NotReadyException(method));
 
     public Task<JsonNode?> AutoScroll(JsonObject? opts = null) => Fail<JsonNode?>("autoScroll");
-    public Task<JsonNode?> Cdp(string method, JsonObject? args) => Fail<JsonNode?>("cdp");
+    public Task<JsonNode?> Cdp(string method, JsonObject? args = null) => Fail<JsonNode?>("cdp");
     public Task Click(JsonNode refOrSelector, JsonObject? opts = null) => Fail("click");
     public Task CloseWindow(JsonObject? opts = null) => Fail("closeWindow");
     public Task<JsonNode?> Evaluate(string js) => Fail<JsonNode?>("evaluate");

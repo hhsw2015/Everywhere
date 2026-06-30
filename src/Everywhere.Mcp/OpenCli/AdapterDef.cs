@@ -27,10 +27,17 @@ public sealed class AdapterDef : IEquatable<AdapterDef>
     {
         if (string.IsNullOrEmpty(site)) throw new ArgumentException("site required", nameof(site));
         if (string.IsNullOrEmpty(name)) throw new ArgumentException("name required", nameof(name));
+        if (site.Contains('/')) throw new ArgumentException("site must not contain '/' — would collide with FullName routing key", nameof(site));
         if (name.Contains('/')) throw new ArgumentException("name must not contain '/' — would collide with FullName routing key", nameof(name));
-        Site = site; Name = name; Description = description; Strategy = strategy; Browser = browser;
+        Site = site; Name = name;
+        // Normalize null → empty so ToDescribeJson never emits a JSON
+        // null where SPEC §4.2 requires a string.
+        Description = description ?? string.Empty;
+        Strategy = strategy ?? string.Empty;
+        Browser = browser;
         Access = access; Domain = domain; Aliases = aliases;
         Args = args; Columns = columns; Func = func; Pipeline = pipeline;
+        FullName = site + "/" + name;
     }
 
     public string Site { get; }
@@ -46,7 +53,7 @@ public sealed class AdapterDef : IEquatable<AdapterDef>
     public ScriptObject? Func { get; }
     public JsonNode? Pipeline { get; }
 
-    public string FullName => $"{Site}/{Name}";
+    public string FullName { get; }
 
     public bool Equals(AdapterDef? other) => other is not null && other.FullName == FullName;
     public override bool Equals(object? obj) => Equals(obj as AdapterDef);
