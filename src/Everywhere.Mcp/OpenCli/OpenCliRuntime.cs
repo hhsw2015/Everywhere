@@ -448,19 +448,22 @@ public sealed class OpenCliRuntime : IAsyncDisposable
                 // JSON.parse on the args is inside the inner try so a
                 // malformed serialisation surfaces through __opencliCallError
                 // rather than masquerading as a clean `{data:null,ok:true}`.
+                // Use globalThis assignments (not `let`) so a second call
+                // doesn't trip "Identifier has already been declared" — V8
+                // keeps top-level `let` bindings alive across Execute() calls
+                // on the same engine.
                 engine.Execute("""
-                    let __opencliCallArgs = null;
-                    let __opencliCallResultJson = null;
-                    let __opencliCallError = null;
-                    let __opencliCallPromise = (async () => {
+                    globalThis.__opencliCallResultJson = null;
+                    globalThis.__opencliCallError = null;
+                    globalThis.__opencliCallPromise = (async () => {
                         try {
-                            __opencliCallArgs = JSON.parse(__opencliArgs);
-                            const r = await __opencliFn(__opencliCallArgs, __opencliPage);
-                            __opencliCallResultJson = JSON.stringify(r === undefined ? null : r);
+                            const cargs = JSON.parse(globalThis.__opencliArgs);
+                            const r = await globalThis.__opencliFn(cargs, globalThis.__opencliPage);
+                            globalThis.__opencliCallResultJson = JSON.stringify(r === undefined ? null : r);
                         } catch (e) {
                             const code = (e && e.code != null) ? String(e.code) : 'RUNTIME_ERROR';
                             const msg  = (e && e.message != null) ? String(e.message) : String(e);
-                            __opencliCallError = { code, message: msg };
+                            globalThis.__opencliCallError = { code, message: msg };
                         }
                     })();
                 """);
