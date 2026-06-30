@@ -101,6 +101,23 @@ public sealed class OpenCliDocumentLoader : DefaultDocumentLoader
         DocumentCategory? category,
         DocumentContextCallback? contextCallback)
     {
+        // File routes have priority — when the vendored runtime tree
+        // is present, the upstream errors.js / utils.js / pipeline/*
+        // files MUST take precedence over our hand-rolled inline shims.
+        // Otherwise adapter-side `import { CliError } from
+        // '@jackwener/opencli/errors'` and runtime-side
+        // `from '../../errors.js'` resolve to different class
+        // definitions; `new CliError(code, message)` produces a wrong-
+        // shaped error (e.g. message="INVALID_ARGUMENT" because the
+        // inline shim's ctor is `(message, opts)`).
+        if (_fileRoutes.TryGetValue(specifier, out var routedPath))
+        {
+            if (!File.Exists(routedPath))
+                throw new FileNotFoundException($"opencli loader: routed file missing for '{specifier}': {routedPath}", routedPath);
+            var info = new DocumentInfo(new Uri(routedPath)) { Category = ModuleCategory.Standard, ContextCallback = contextCallback };
+            return new StringDocument(info, await File.ReadAllTextAsync(routedPath).ConfigureAwait(false));
+        }
+
         if (_shims.TryGetValue(specifier, out var src))
         {
             var info = new DocumentInfo(new Uri($"opencli-shim:{specifier}"))
@@ -109,18 +126,6 @@ public sealed class OpenCliDocumentLoader : DefaultDocumentLoader
                 ContextCallback = contextCallback,
             };
             return new StringDocument(info, src);
-        }
-
-        // Bare specifiers routed to vendored runtime files — we read
-        // the file from disk so adapter-side imports and the runtime's
-        // internal relative imports observe the SAME module instance
-        // (instanceof CliError works across the boundary).
-        if (_fileRoutes.TryGetValue(specifier, out var routedPath))
-        {
-            if (!File.Exists(routedPath))
-                throw new FileNotFoundException($"opencli loader: routed file missing for '{specifier}': {routedPath}", routedPath);
-            var info = new DocumentInfo(new Uri(routedPath)) { Category = ModuleCategory.Standard, ContextCallback = contextCallback };
-            return new StringDocument(info, await File.ReadAllTextAsync(routedPath).ConfigureAwait(false));
         }
 
         if (specifier.StartsWith("./", StringComparison.Ordinal) ||
