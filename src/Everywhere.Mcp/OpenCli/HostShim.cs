@@ -62,7 +62,10 @@ public sealed class HostShim
         export { cli, Strategy, getRegistry, fullName, registerCommand, onStartup, onBeforeExecute, onAfterExecute };
         """;
 
-    /// <summary>Source for <c>@jackwener/opencli/errors</c>.</summary>
+    /// <summary>Source for <c>@jackwener/opencli/errors</c> — covers
+    /// every error class actually imported by the v1.8.5 adapter tree
+    /// (ArgumentError, AuthRequiredError, CliError, CommandExecutionError,
+    /// ConfigError, EmptyResultError, TimeoutError).</summary>
     public const string ErrorsSource = """
         class CliError extends Error {
             constructor(message, opts) {
@@ -72,9 +75,78 @@ public sealed class HostShim
                 this.details = (opts && opts.details) || null;
             }
         }
-        function isCliError(e) { return e && e.name === 'CliError'; }
+        class ArgumentError extends CliError {
+            constructor(message, opts) { super(message, { ...opts, code: (opts && opts.code) || 'INVALID_ARGUMENT' }); this.name = 'ArgumentError'; }
+        }
+        class AuthRequiredError extends CliError {
+            constructor(message, opts) { super(message || 'authentication required', { ...opts, code: (opts && opts.code) || 'AUTH_REQUIRED' }); this.name = 'AuthRequiredError'; }
+        }
+        class CommandExecutionError extends CliError {
+            constructor(message, opts) { super(message, { ...opts, code: (opts && opts.code) || 'EXECUTION_FAILED' }); this.name = 'CommandExecutionError'; }
+        }
+        class ConfigError extends CliError {
+            constructor(message, opts) { super(message, { ...opts, code: (opts && opts.code) || 'BAD_CONFIG' }); this.name = 'ConfigError'; }
+        }
+        class EmptyResultError extends CliError {
+            constructor(message, opts) { super(message || 'no results', { ...opts, code: (opts && opts.code) || 'NO_DATA' }); this.name = 'EmptyResultError'; }
+        }
+        class TimeoutError extends CliError {
+            constructor(message, opts) { super(message || 'timeout', { ...opts, code: (opts && opts.code) || 'TIMEOUT' }); this.name = 'TimeoutError'; }
+        }
+        function isCliError(e) { return e && (e.name === 'CliError' || e instanceof CliError); }
         function cliError(code, message, details) { return new CliError(message, { code, details }); }
-        export { CliError, isCliError, cliError };
+        export { CliError, ArgumentError, AuthRequiredError, CommandExecutionError, ConfigError, EmptyResultError, TimeoutError, isCliError, cliError };
+        """;
+
+    /// <summary>Source for <c>@jackwener/opencli/utils</c> — empty
+    /// passthroughs so adapter imports don't fail. These helpers are
+    /// upstream-only conveniences (delay, sleep, etc.); when an adapter
+    /// actually invokes one and we haven't implemented it, the resulting
+    /// runtime error surfaces clearly via the opencli_run envelope.</summary>
+    public const string UtilsSource = """
+        const delay = (ms) => new Promise(r => setTimeout(r, ms));
+        const sleep = delay;
+        const range = (n) => Array.from({length: n}, (_, i) => i);
+        const chunk = (arr, n) => { const o = []; for (let i = 0; i < arr.length; i += n) o.push(arr.slice(i, i + n)); return o; };
+        const unique = (arr) => Array.from(new Set(arr));
+        const compact = (arr) => arr.filter(x => x != null);
+        const last = (arr) => arr.length ? arr[arr.length - 1] : undefined;
+        const first = (arr) => arr.length ? arr[0] : undefined;
+        const noop = () => {};
+        export { delay, sleep, range, chunk, unique, compact, last, first, noop };
+        """;
+
+    /// <summary>Source for <c>@jackwener/opencli/logger</c> — proxies
+    /// console.</summary>
+    public const string LoggerSource = """
+        const _make = (lvl) => (...a) => { try { console[lvl] && console[lvl](...a); } catch {} };
+        const logger = { debug: _make('debug'), info: _make('info'), warn: _make('warn'), error: _make('error'), log: _make('log') };
+        const getLogger = () => logger;
+        export { logger, getLogger };
+        export default logger;
+        """;
+
+    /// <summary>Stub for <c>@jackwener/opencli/launcher</c> — present
+    /// so adapter imports resolve. Adapters that actually invoke the
+    /// launcher to spawn a host CLI will fail with a clear runtime error
+    /// (the V8 isolate has no process spawn surface).</summary>
+    public const string LauncherSource = """
+        function _unsupported(name) { return () => { throw new Error('opencli/launcher.' + name + ' is not available in the embedded runtime'); }; }
+        const launch = _unsupported('launch');
+        const launchProcess = _unsupported('launchProcess');
+        const spawn = _unsupported('spawn');
+        export { launch, launchProcess, spawn };
+        export default { launch, launchProcess, spawn };
+        """;
+
+    /// <summary>Stub for <c>@jackwener/opencli/download</c>.</summary>
+    public const string DownloadSource = """
+        function _unsupported(name) { return () => { throw new Error('opencli/download.' + name + ' is not available in the embedded runtime'); }; }
+        const downloadFile = _unsupported('downloadFile');
+        const articleDownload = _unsupported('articleDownload');
+        const mediaDownload = _unsupported('mediaDownload');
+        export { downloadFile, articleDownload, mediaDownload };
+        export default { downloadFile, articleDownload, mediaDownload };
         """;
 
     // 16 MiB cap on the response body — protects the host from a

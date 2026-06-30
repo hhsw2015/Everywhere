@@ -218,7 +218,15 @@ public sealed class OpenCliRuntime : IAsyncDisposable
 
     private async Task<V8ScriptEngine> BootEngineInnerAsync(V8ScriptEngine engine, Stopwatch sw, CancellationToken ct)
     {
-        var loader = new OpenCliDocumentLoader(_clisDir, HostShim.RegistrySource, HostShim.ErrorsSource);
+        var loader = new OpenCliDocumentLoader(_clisDir, new Dictionary<string, string>
+        {
+            ["@jackwener/opencli/registry"] = HostShim.RegistrySource,
+            ["@jackwener/opencli/errors"]   = HostShim.ErrorsSource,
+            ["@jackwener/opencli/utils"]    = HostShim.UtilsSource,
+            ["@jackwener/opencli/logger"]   = HostShim.LoggerSource,
+            ["@jackwener/opencli/launcher"] = HostShim.LauncherSource,
+            ["@jackwener/opencli/download"] = HostShim.DownloadSource,
+        });
         engine.DocumentSettings.Loader = loader;
         engine.DocumentSettings.AccessFlags =
             DocumentAccessFlags.EnableFileLoading |

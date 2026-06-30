@@ -23,17 +23,12 @@ public sealed class OpenCliDocumentLoader : DefaultDocumentLoader
 
     public string RootDir => _rootDir;
 
-    public OpenCliDocumentLoader(string rootDir, string registryShimSource, string errorsShimSource)
+    public OpenCliDocumentLoader(string rootDir, IReadOnlyDictionary<string, string> shims)
     {
         ArgumentException.ThrowIfNullOrEmpty(rootDir);
-        ArgumentNullException.ThrowIfNull(registryShimSource);
-        ArgumentNullException.ThrowIfNull(errorsShimSource);
+        ArgumentNullException.ThrowIfNull(shims);
         _rootDir = Path.GetFullPath(rootDir);
-        _shims = new Dictionary<string, string>(StringComparer.Ordinal)
-        {
-            ["@jackwener/opencli/registry"] = registryShimSource,
-            ["@jackwener/opencli/errors"] = errorsShimSource,
-        };
+        _shims = new Dictionary<string, string>(shims, StringComparer.Ordinal);
     }
 
     public override async Task<Document> LoadDocumentAsync(
