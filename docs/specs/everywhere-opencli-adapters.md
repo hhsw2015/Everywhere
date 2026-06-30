@@ -496,13 +496,12 @@ Generate `docs/specs/HANDOFF.md`. Stop.
     `Resources/opencli/clis/`).
 11. `OpenCliRuntime.cs` + `HostShim.cs` + `ModuleLoader.cs` +
     `IPage.cs` + `OpenDiaPageBridge.cs` + `OpenCliTools.cs` total ≤
-    2000 LOC (post-trim, excluding comments). The cap forces the team
-    to keep the surface thin; bumping it requires SPEC change. (1000 →
-    1200 → 1300 → 1800 → 2000 across successive OCR-review hardening
-    passes — the round-3 pass added Task-based manifest load, refreshable
-    engine boot, real os.platform()/arch() polyfills, AdapterDef as a
-    sealed class with FullName equality, and broader input validation
-    on the OpenDia bridge surface.)
+    2200 LOC (post-trim, excluding comments). The cap forces the team
+    to keep the surface thin; bumping it requires SPEC change. 1000 →
+    1200 → 1300 → 1800 → 2000 → 2200 across successive hardening
+    passes — the latest bump covers fs/child_process unlock + the
+    pipeline-runner bridge that synthesises a `func` from a vendored
+    upstream `executePipeline` for adapters that ship only a `pipeline`.
 12. Every test in `tests/Everywhere.Mcp.Tests/OpenCli/` has a frontmatter-style
     leading comment indicating the adapter name(s) under test.
 13. Each `bench/opencli/fixtures/<id>/expected.json` declares
@@ -565,7 +564,7 @@ bench/opencli/
 | id | site/name | strategy | why |
 |----|-----------|----------|-----|
 | `36kr-news`        | 36kr/news        | public   | RSS path; tests fetch + xml parsing |
-| `pypi-downloads`   | pypi/downloads   | public   | JSON API; tests JSON shape (replaces `hn-top` — upstream v1.8.5 moved HN adapters to the pipeline DSL, which §2.4 #1 keeps out-of-scope) |
+| `pypi-downloads`   | pypi/downloads   | public   | JSON API; tests JSON shape (HN adapters work too via the vendored pipeline runner) |
 | `36kr-hot`         | 36kr/hot         | public   | DOM scrape; tests page.evaluate |
 | `bilibili-hot`     | bilibili/hot     | public   | second DOM scrape, different site |
 | `bilibili-me`      | bilibili/me      | cookie   | tests cookie-via-evaluate path |

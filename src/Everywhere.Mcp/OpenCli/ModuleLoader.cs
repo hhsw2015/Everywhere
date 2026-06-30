@@ -19,16 +19,30 @@ public sealed class OpenCliDocumentLoader : DefaultDocumentLoader
     private static readonly string[] CandidateExtensions = [".js", ".mjs", ".cjs"];
 
     private readonly string _rootDir;
+    // Extra roots — paths the loader is allowed to read from in addition
+    // to _rootDir (e.g. the vendored runtime tree at 3rd/opencli/runtime).
+    private readonly List<string> _extraRoots;
     private readonly Dictionary<string, string> _shims;
+    // Bare specifier → absolute file path. Used to point
+    // `@jackwener/opencli/pipeline` etc. at the vendored runtime tree
+    // so adapter-side imports and the runtime's internal relative
+    // imports observe the SAME module instance (instanceof works,
+    // CliError equality works, etc.).
+    private readonly Dictionary<string, string> _fileRoutes;
 
     public string RootDir => _rootDir;
 
-    public OpenCliDocumentLoader(string rootDir, IReadOnlyDictionary<string, string> shims)
+    public OpenCliDocumentLoader(string rootDir, IReadOnlyDictionary<string, string> shims, IReadOnlyDictionary<string, string>? fileRoutes = null, IReadOnlyList<string>? extraRoots = null)
     {
         ArgumentException.ThrowIfNullOrEmpty(rootDir);
         ArgumentNullException.ThrowIfNull(shims);
         _rootDir = ResolveLinkChain(Path.GetFullPath(rootDir));
         _shims = new Dictionary<string, string>(shims, StringComparer.Ordinal);
+        _fileRoutes = fileRoutes is null ? new(StringComparer.Ordinal) : new Dictionary<string, string>(fileRoutes, StringComparer.Ordinal);
+        _extraRoots = (extraRoots ?? Array.Empty<string>())
+            .Where(r => !string.IsNullOrEmpty(r))
+            .Select(r => ResolveLinkChain(Path.GetFullPath(r)))
+            .ToList();
     }
 
     // Walk symlinks to the canonical on-disk path so the containment
@@ -71,6 +85,18 @@ public sealed class OpenCliDocumentLoader : DefaultDocumentLoader
             return new StringDocument(info, src);
         }
 
+        // Bare specifiers routed to vendored runtime files — we read
+        // the file from disk so adapter-side imports and the runtime's
+        // internal relative imports observe the SAME module instance
+        // (instanceof CliError works across the boundary).
+        if (_fileRoutes.TryGetValue(specifier, out var routedPath))
+        {
+            if (!File.Exists(routedPath))
+                throw new FileNotFoundException($"opencli loader: routed file missing for '{specifier}': {routedPath}", routedPath);
+            var info = new DocumentInfo(new Uri(routedPath)) { Category = ModuleCategory.Standard, ContextCallback = contextCallback };
+            return new StringDocument(info, await File.ReadAllTextAsync(routedPath).ConfigureAwait(false));
+        }
+
         if (specifier.StartsWith("./", StringComparison.Ordinal) ||
             specifier.StartsWith("../", StringComparison.Ordinal))
         {
@@ -79,18 +105,24 @@ public sealed class OpenCliDocumentLoader : DefaultDocumentLoader
                 : _rootDir;
             var resolved = Path.GetFullPath(Path.Combine(baseDir, specifier));
 
-            // Containment guard — the resolved path must live under the
-            // adapter root. Without this an adapter could
-            // `import '../../../../etc/passwd.js'` and execute it inside
-            // the isolate. Comparison is case-insensitive on Windows /
-            // macOS where the filesystem is also case-insensitive.
+            // Containment guard — the resolved path must live under one
+            // of the allowed roots (adapter tree + vendored runtime).
             var pathCmp = OperatingSystem.IsWindows() || OperatingSystem.IsMacOS()
                 ? StringComparison.OrdinalIgnoreCase
                 : StringComparison.Ordinal;
             var rootWithSep = _rootDir.EndsWith(Path.DirectorySeparatorChar) ? _rootDir : _rootDir + Path.DirectorySeparatorChar;
-            if (!resolved.StartsWith(rootWithSep, pathCmp))
+            bool inRoot = resolved.StartsWith(rootWithSep, pathCmp);
+            if (!inRoot)
+            {
+                foreach (var er in _extraRoots)
+                {
+                    var erWithSep = er.EndsWith(Path.DirectorySeparatorChar) ? er : er + Path.DirectorySeparatorChar;
+                    if (resolved.StartsWith(erWithSep, pathCmp)) { inRoot = true; rootWithSep = erWithSep; break; }
+                }
+            }
+            if (!inRoot)
                 throw new UnauthorizedAccessException(
-                    $"opencli loader: import '{specifier}' resolves outside the adapter root ({_rootDir})");
+                    $"opencli loader: import '{specifier}' resolves outside the allowed roots (adapter={_rootDir})");
 
             // Try the literal path, then the standard JS extensions —
             // unconditionally, since adapter dirs / files can legitimately

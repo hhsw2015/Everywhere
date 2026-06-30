@@ -107,11 +107,20 @@ export default {launch,launchProcess,spawn,resolveElectronEndpoint,downloadFile,
 `;
 
 const SHIM = new URL('./host.mjs', import.meta.url).href;
+// Vendored runtime — when present, prefer it over inline shims so
+// adapter and pipeline runner observe the SAME class instances.
+import { existsSync as _exists } from 'node:fs';
+const RUNTIME = new URL('../../../3rd/opencli/runtime/', import.meta.url).pathname;
+const _R = (rel) => `file://${RUNTIME}${rel}`;
+const _hasRt = (rel) => _exists(`${RUNTIME}${rel}`);
+
 const map = new Map([
   ['@jackwener/opencli/registry',                   SHIM],
-  ['@jackwener/opencli/errors',                     SHIM],
-  ['@jackwener/opencli/utils',                      inline(UTILS)],
-  ['@jackwener/opencli/logger',                     inline(LOGGER)],
+  ['@jackwener/opencli/errors',                     _hasRt('errors.js') ? _R('errors.js') : SHIM],
+  ['@jackwener/opencli/utils',                      _hasRt('utils.js') ? _R('utils.js') : inline(UTILS)],
+  ['@jackwener/opencli/logger',                     _hasRt('logger.js') ? _R('logger.js') : inline(LOGGER)],
+  ['@jackwener/opencli/pipeline',                   _hasRt('pipeline/index.js') ? _R('pipeline/index.js') : inline(STUB)],
+  ['@jackwener/opencli/interceptor',                _hasRt('interceptor.js') ? _R('interceptor.js') : inline(STUB)],
   ['@jackwener/opencli/launcher',                   inline(STUB)],
   ['@jackwener/opencli/download',                   inline(STUB)],
   ['@jackwener/opencli/download/article-download',  inline(STUB)],

@@ -24,6 +24,12 @@
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
+    <Content Include="$(_OpenCliSourceDir)/runtime/**/*.js"
+             Exclude="$(_OpenCliSourceDir)/runtime/**/*.test.js">
+      <Link>Resources/opencli/runtime/%(RecursiveDir)%(Filename)%(Extension)</Link>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
     <Content Include="$(_OpenCliSourceDir)/cli-manifest.json">
       <Link>Resources/opencli/cli-manifest.json</Link>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>

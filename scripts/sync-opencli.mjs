@@ -11,7 +11,7 @@
 //   SYNC_REF=<tag|sha|branch>  node scripts/sync-opencli.mjs
 
 import { execFileSync, spawnSync } from 'node:child_process';
-import { mkdtempSync, rmSync, cpSync, mkdirSync, writeFileSync, readdirSync, statSync, existsSync, readFileSync, copyFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, mkdirSync, writeFileSync, readdirSync, existsSync, readFileSync, copyFileSync } from 'node:fs';
 import { join, dirname, relative } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -57,6 +57,7 @@ function main() {
     const sha = sh('git', ['-C', tmp, 'rev-parse', 'HEAD']);
 
     if (existsSync(join(DEST, 'clis'))) rmSync(join(DEST, 'clis'), { recursive: true, force: true });
+    if (existsSync(join(DEST, 'runtime'))) rmSync(join(DEST, 'runtime'), { recursive: true, force: true });
     mkdirSync(join(DEST, 'clis'), { recursive: true });
     mkdirSync(LICENSE_DEST, { recursive: true });
 
@@ -73,6 +74,61 @@ function main() {
       copied++;
       const site = rel.split('/')[0];
       if (site && !site.startsWith('_')) siteSet.add(site);
+    }
+
+    // Vendor a tiny subset of dist/src/ — only what the pipeline runner
+    // and its sibling modules need. Adapter-side bare imports of
+    // `@jackwener/opencli/{errors,utils,logger,interceptor,pipeline}`
+    // route to these files via OpenCliDocumentLoader.fileRoutes so
+    // adapter and runtime observe the SAME module instance.
+    const runtimeFiles = [
+      'errors.js', 'logger.js', 'utils.js', 'capabilityRouting.js',
+      'interceptor.js', 'manifest-types.js', 'types.js', 'version.js',
+      'constants.js',
+    ];
+    const runtimeDirs = ['pipeline', 'pipeline/steps', 'browser'];
+    for (const f of runtimeFiles) {
+      const from = join(tmp, 'dist', 'src', f);
+      if (!existsSync(from)) continue;
+      const out = join(DEST, 'runtime', f);
+      mkdirSync(dirname(out), { recursive: true });
+      copyFileSync(from, out);
+    }
+    for (const d of runtimeDirs) {
+      const dir = join(tmp, 'dist', 'src', d);
+      if (!existsSync(dir)) continue;
+      for (const ent of readdirSync(dir, { withFileTypes: true })) {
+        if (!ent.isFile() || !ent.name.endsWith('.js')) continue;
+        if (ent.name.endsWith('.test.js')) continue;
+        const out = join(DEST, 'runtime', d, ent.name);
+        mkdirSync(dirname(out), { recursive: true });
+        copyFileSync(join(dir, ent.name), out);
+      }
+    }
+    // Patches required by the embedded runtime — applied verbatim to
+    // every freshly-synced runtime tree:
+    //   1. utils.js: stub out `import TurndownService from 'turndown'`
+    //      since we don't bundle that package.
+    //   2. pipeline/steps/download.js: replace the body with a stub
+    //      that throws NOT_SUPPORTED — upstream pulls node:stream and
+    //      external CLIs we don't bundle.
+    const utilsPath = join(DEST, 'runtime', 'utils.js');
+    if (existsSync(utilsPath)) {
+      const orig = readFileSync(utilsPath, 'utf8');
+      const patched = orig.replace(
+        /^import TurndownService from 'turndown';$/m,
+        '// Embedded-runtime patch: stubbed turndown (not bundled).\n' +
+        "const TurndownService = function () { throw new Error('turndown is not bundled in the embedded runtime; use opencli/utils:htmlToMarkdown shim instead'); };");
+      writeFileSync(utilsPath, patched);
+    }
+    const dlStepPath = join(DEST, 'runtime', 'pipeline', 'steps', 'download.js');
+    if (existsSync(dlStepPath)) {
+      writeFileSync(dlStepPath,
+        "// Replaced by Everywhere — see scripts/sync-opencli.mjs.\n" +
+        "import { CliError } from '../../errors.js';\n" +
+        "export async function stepDownload(_page, _params, _data, _args) {\n" +
+        "    throw new CliError('NOT_SUPPORTED', 'pipeline.download is not implemented in the embedded runtime');\n" +
+        "}\n");
     }
 
     copyFileSync(join(tmp, 'cli-manifest.json'), join(DEST, 'cli-manifest.json'));

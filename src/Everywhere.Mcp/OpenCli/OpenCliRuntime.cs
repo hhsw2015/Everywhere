@@ -231,13 +231,77 @@ public sealed class OpenCliRuntime : IAsyncDisposable
             engine.Execute(info, src);
 
             // The shim's cli({...}) callback writes into _registry.
-            if (_registry.TryGetValue(key, out var loaded) && loaded.Func is not null) return loaded;
-            throw new InvalidOperationException($"adapter {key} did not register a func after load");
+            if (_registry.TryGetValue(key, out var loaded))
+            {
+                // Pipeline-only adapter: synthesise a func that delegates
+                // to the vendored upstream pipeline runner. Adapter never
+                // sees a func itself; we just need the C# side to have
+                // a callable handle.
+                if (loaded.Func is null && loaded.Pipeline is not null)
+                {
+                    await EnsurePipelineRunnerLoadedAsync(engine).ConfigureAwait(false);
+                    var pipelineJson = loaded.Pipeline.ToJsonString();
+                    engine.Script.__opencliPipelineJson = pipelineJson;
+                    // Build a JS func that runs the pipeline. ExecuteCommand
+                    // returns a fresh promise per call; we capture the func
+                    // as a ScriptObject and stash it under the synthesised
+                    // adapter def.
+                    engine.Execute("""
+                        globalThis.__opencliSynthFn = (args, page) => globalThis.__opencliPipelineRunner.executePipeline(
+                            page, JSON.parse(__opencliPipelineJson), { args: args ?? {} });
+                    """);
+                    var synth = engine.Script.__opencliSynthFn as ScriptObject;
+                    if (synth is null)
+                        throw new InvalidOperationException($"adapter {key}: failed to synthesise pipeline func");
+                    var withFunc = new AdapterDef(
+                        site: loaded.Site, name: loaded.Name, description: loaded.Description,
+                        strategy: loaded.Strategy, browser: loaded.Browser, access: loaded.Access,
+                        domain: loaded.Domain, aliases: loaded.Aliases,
+                        args: loaded.Args, columns: loaded.Columns,
+                        func: synth, pipeline: loaded.Pipeline);
+                    _registry[key] = withFunc;
+                    return withFunc;
+                }
+                if (loaded.Func is not null) return loaded;
+            }
+            throw new InvalidOperationException($"adapter {key} did not register after load");
         }
         finally
         {
             gate.Release();
         }
+    }
+
+    private bool _pipelineRunnerLoaded;
+    private readonly object _pipelineRunnerLock = new();
+
+    private async Task EnsurePipelineRunnerLoadedAsync(V8ScriptEngine engine)
+    {
+        bool needLoad;
+        lock (_pipelineRunnerLock) { needLoad = !_pipelineRunnerLoaded; }
+        if (!needLoad) return;
+        // Load the upstream pipeline runner once and pin it on globalThis
+        // so synthesised funcs can re-use it. Loaded as a Standard module
+        // — module loader resolves '@jackwener/opencli/pipeline' via the
+        // fileRoutes map to the vendored dist.
+        engine.Execute("""
+            (async () => {
+                const m = await import('@jackwener/opencli/pipeline');
+                globalThis.__opencliPipelineRunner = m;
+            })();
+        """);
+        // Wait for the dynamic import to settle. ClearScript routes
+        // dynamic import through the same loader — it returns a Promise.
+        // The simplest reliable wait: poll. Cheap because runner loads in
+        // a few ms.
+        for (int i = 0; i < 200; i++)
+        {
+            if (engine.Script.__opencliPipelineRunner is not null) break;
+            await Task.Delay(10).ConfigureAwait(false);
+        }
+        if (engine.Script.__opencliPipelineRunner is null)
+            throw new InvalidOperationException("pipeline runner failed to load (module @jackwener/opencli/pipeline not found in vendored runtime?)");
+        lock (_pipelineRunnerLock) { _pipelineRunnerLoaded = true; }
     }
 
     /// <summary>
@@ -255,13 +319,9 @@ public sealed class OpenCliRuntime : IAsyncDisposable
         {
             return Failure(site, name, "RUNTIME_NOT_FOUND", $"adapter {key} not in manifest", sw);
         }
-        // Pipeline-only adapters never become a func — short-circuit before
-        // we pay the V8 boot cost.
-        if (manifestEntry.Raw["pipeline"] is JsonNode && manifestEntry.Raw["type"]?.GetValue<string>() != "js")
-        {
-            return Failure(site, name, "RUNTIME_PIPELINE_ONLY",
-                "adapter ships a pipeline (no func); pipeline runner is out-of-scope for Phase 1", sw);
-        }
+        // Pipeline-only adapters used to short-circuit; now they go
+        // through EnsureAdapterLoadedAsync which synthesises a func that
+        // delegates to the vendored upstream pipeline runner.
         AdapterDef def;
         try
         {
@@ -413,30 +473,62 @@ public sealed class OpenCliRuntime : IAsyncDisposable
 
     private async Task<V8ScriptEngine> BootEngineInnerAsync(V8ScriptEngine engine, Stopwatch sw, CancellationToken ct)
     {
-        var loader = new OpenCliDocumentLoader(_clisDir, new Dictionary<string, string>
+        // Vendored upstream runtime tree — for now we know it sits one
+        // level up from clisDir. The pipeline runner + its sibling
+        // `errors`/`utils`/`logger`/`interceptor` modules live here.
+        var runtimeDir = Path.GetFullPath(Path.Combine(_clisDir, "..", "runtime"));
+
+        // File-route map: bare specifier → real .js on disk. Resolves
+        // adapter-side `import { CliError } from '@jackwener/opencli/errors'`
+        // and pipeline-side `from '../../errors.js'` to the SAME module
+        // instance, so instanceof checks across the boundary work.
+        var fileRoutes = new Dictionary<string, string>(StringComparer.Ordinal);
+        if (Directory.Exists(runtimeDir))
         {
-            ["@jackwener/opencli/registry"]                  = HostShim.RegistrySource,
-            ["@jackwener/opencli/errors"]                    = HostShim.ErrorsSource,
-            ["@jackwener/opencli/utils"]                     = HostShim.UtilsSource,
-            ["@jackwener/opencli/logger"]                    = HostShim.LoggerSource,
-            ["@jackwener/opencli/launcher"]                  = HostShim.LauncherSource,
-            ["@jackwener/opencli/download"]                  = HostShim.DownloadSource,
-            ["@jackwener/opencli/download/article-download"] = HostShim.DownloadSource,
-            ["@jackwener/opencli/download/media-download"]   = HostShim.DownloadSource,
-            ["@jackwener/opencli/download/progress"]         = HostShim.DownloadSource,
-            ["@jackwener/opencli/browser/cdp"]               = HostShim.BrowserShimSource,
-            ["@jackwener/opencli/browser/page"]              = HostShim.BrowserShimSource,
-            ["@jackwener/opencli/browser/utils"]             = HostShim.BrowserShimSource,
-            // Node built-ins — both `node:foo` and bare `foo`.
-            ["node:path"] = HostShim.NodePathSource,            ["path"] = HostShim.NodePathSource,
-            ["node:os"]   = HostShim.NodeOsSource,              ["os"]   = HostShim.NodeOsSource,
-            ["node:crypto"] = HostShim.NodeCryptoSource,        ["crypto"] = HostShim.NodeCryptoSource,
-            ["node:fs"] = HostShim.NodeFsSource,                ["fs"] = HostShim.NodeFsSource,
-            ["node:fs/promises"] = HostShim.NodeFsSource,
-            ["node:child_process"] = HostShim.NodeChildProcessSource, ["child_process"] = HostShim.NodeChildProcessSource,
-            ["node:http"]  = HostShim.NodeHttpSource,           ["http"]  = HostShim.NodeHttpSource,
-            ["node:https"] = HostShim.NodeHttpSource,           ["https"] = HostShim.NodeHttpSource,
-        });
+            string Rt(params string[] parts) => Path.Combine(new[] { runtimeDir }.Concat(parts).ToArray());
+            void Add(string specifier, string path) { if (File.Exists(path)) fileRoutes[specifier] = path; }
+            Add("@jackwener/opencli/errors",    Rt("errors.js"));
+            Add("@jackwener/opencli/utils",     Rt("utils.js"));
+            Add("@jackwener/opencli/logger",    Rt("logger.js"));
+            Add("@jackwener/opencli/pipeline",  Rt("pipeline", "index.js"));
+            Add("@jackwener/opencli/interceptor", Rt("interceptor.js"));
+        }
+
+        var loader = new OpenCliDocumentLoader(_clisDir,
+            shims: new Dictionary<string, string>
+            {
+                // Registry shim is hand-rolled — it bridges cli({...}) →
+                // __opencliHost.register, which the vendored upstream
+                // file does not do.
+                ["@jackwener/opencli/registry"]                  = HostShim.RegistrySource,
+                // Fallback shims if the vendored runtime tree is absent:
+                // these only kick in when the corresponding fileRoute
+                // didn't land (e.g. publish output missing 3rd/opencli/runtime).
+                ["@jackwener/opencli/launcher"]                  = HostShim.LauncherSource,
+                ["@jackwener/opencli/download"]                  = HostShim.DownloadSource,
+                ["@jackwener/opencli/download/article-download"] = HostShim.DownloadSource,
+                ["@jackwener/opencli/download/media-download"]   = HostShim.DownloadSource,
+                ["@jackwener/opencli/download/progress"]         = HostShim.DownloadSource,
+                ["@jackwener/opencli/browser/cdp"]               = HostShim.BrowserShimSource,
+                ["@jackwener/opencli/browser/page"]              = HostShim.BrowserShimSource,
+                ["@jackwener/opencli/browser/utils"]             = HostShim.BrowserShimSource,
+                // Inline fallbacks for these — fileRoutes will override
+                // when the vendored tree is present.
+                ["@jackwener/opencli/errors"]                    = HostShim.ErrorsSource,
+                ["@jackwener/opencli/utils"]                     = HostShim.UtilsSource,
+                ["@jackwener/opencli/logger"]                    = HostShim.LoggerSource,
+                // Node built-ins — both `node:foo` and bare `foo`.
+                ["node:path"] = HostShim.NodePathSource,            ["path"] = HostShim.NodePathSource,
+                ["node:os"]   = HostShim.NodeOsSource,              ["os"]   = HostShim.NodeOsSource,
+                ["node:crypto"] = HostShim.NodeCryptoSource,        ["crypto"] = HostShim.NodeCryptoSource,
+                ["node:fs"] = HostShim.NodeFsSource,                ["fs"] = HostShim.NodeFsSource,
+                ["node:fs/promises"] = HostShim.NodeFsSource,
+                ["node:child_process"] = HostShim.NodeChildProcessSource, ["child_process"] = HostShim.NodeChildProcessSource,
+                ["node:http"]  = HostShim.NodeHttpSource,           ["http"]  = HostShim.NodeHttpSource,
+                ["node:https"] = HostShim.NodeHttpSource,           ["https"] = HostShim.NodeHttpSource,
+            },
+            fileRoutes: fileRoutes,
+            extraRoots: new[] { runtimeDir });
         engine.DocumentSettings.Loader = loader;
         engine.DocumentSettings.AccessFlags =
             DocumentAccessFlags.EnableFileLoading |
