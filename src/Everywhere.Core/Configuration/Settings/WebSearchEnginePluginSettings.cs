@@ -186,15 +186,8 @@ public sealed partial class GoogleWebSearchEngineProvider() : ThirdPartyWebSearc
         LocaleKey.WebSearchEngineProvider_ApiKey_Header,
         LocaleKey.WebSearchEngineProvider_ApiKey_Description)]
     [SettingsItem(Group = "_")]
-    public SettingsControl<ApiKeyComboBox> ApiKeyControl => new(
-        new ApiKeyComboBox(ApiKeys)
-        {
-            IsPoolHinted = true,
-            [!ApiKeyComboBox.SelectedIdProperty] = CompiledBinding.Create(
-                (GoogleWebSearchEngineProvider x) => x.ApiKey,
-                source: this,
-                mode: BindingMode.TwoWay)
-        });
+    public SettingsControl<ApiKeyListEditor> ApiKeyControl => new(
+        new ApiKeyListEditor { ItemsSource = ApiKeys, DefaultName = "google" });
 
     [ObservableProperty]
     [DynamicLocaleKey(
@@ -267,15 +260,8 @@ public sealed partial class ApiKeyWebSearchEngineProvider(
         LocaleKey.WebSearchEngineProvider_ApiKey_Header,
         LocaleKey.WebSearchEngineProvider_ApiKey_Description)]
     [SettingsItem(Group = "_")]
-    public SettingsControl<ApiKeyComboBox> ApiKeyControl => new(
-        new ApiKeyComboBox(ApiKeys)
-        {
-            IsPoolHinted = true,
-            [!ApiKeyComboBox.SelectedIdProperty] = CompiledBinding.Create(
-                (ApiKeyWebSearchEngineProvider x) => x.ApiKey,
-                source: this,
-                mode: BindingMode.TwoWay)
-        });
+    public SettingsControl<ApiKeyListEditor> ApiKeyControl => new(
+        new ApiKeyListEditor { ItemsSource = ApiKeys, DefaultName = id.ToString().ToLowerInvariant() });
 }
 
 [GeneratedSettingsItems]
@@ -327,15 +313,8 @@ public sealed partial class OptionalApiKeyWebSearchEngineProvider(
         LocaleKey.WebSearchEngineProvider_ApiKey_Header_Optional,
         LocaleKey.WebSearchEngineProvider_ApiKey_Description)]
     [SettingsItem(Group = "_")]
-    public SettingsControl<ApiKeyComboBox> ApiKeyControl => new(
-        new ApiKeyComboBox(ApiKeys)
-        {
-            IsPoolHinted = true,
-            [!ApiKeyComboBox.SelectedIdProperty] = CompiledBinding.Create(
-                (OptionalApiKeyWebSearchEngineProvider x) => x.ApiKey,
-                source: this,
-                mode: BindingMode.TwoWay)
-        });
+    public SettingsControl<ApiKeyListEditor> ApiKeyControl => new(
+        new ApiKeyListEditor { ItemsSource = ApiKeys, DefaultName = id.ToString().ToLowerInvariant() });
 }
 
 [GeneratedSettingsItems]

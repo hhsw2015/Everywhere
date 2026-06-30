@@ -1,0 +1,54 @@
+<ResourceDictionary
+  xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+  xmlns:c="clr-namespace:Everywhere.Configuration" xmlns:shadui="clr-namespace:ShadUI.Controls;assembly=ShadUI"
+  xmlns:v="using:Everywhere.Views">
+  <ControlTheme
+    x:Key="{x:Type v:ApiKeyListEditor}"
+    TargetType="v:ApiKeyListEditor">
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Border
+          BorderBrush="{DynamicResource BorderColor}"
+          BorderThickness="1"
+          CornerRadius="6"
+          Padding="4"
+          MinWidth="240">
+          <StackPanel Spacing="2">
+            <ItemsControl
+              ItemsSource="{Binding ItemsSource, RelativeSource={RelativeSource TemplatedParent}}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="c:ApiKey">
+                  <Grid ColumnDefinitions="*,Auto" Margin="4,2">
+                    <TextBlock
+                      Grid.Column="0"
+                      VerticalAlignment="Center"
+                      Text="{Binding Name}"/>
+                    <Button
+                      Grid.Column="1"
+                      Padding="6,2"
+                      shadui:ButtonAssist.Icon="{LucideIconContent X}"
+                      BorderThickness="0"
+                      CornerRadius="4"
+                      Classes="Ghost"
+                      CommandParameter="{Binding}"
+                      Command="{Binding RemoveCommand, RelativeSource={RelativeSource AncestorType=v:ApiKeyListEditor}}"/>
+                  </Grid>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <Button
+              Padding="8,4" Margin="4,2"
+              HorizontalAlignment="Stretch"
+              HorizontalContentAlignment="Left"
+              shadui:ButtonAssist.Icon="{LucideIconContent Plus}"
+              BorderThickness="0"
+              CornerRadius="4"
+              Classes="Ghost"
+              Content="{I18N {x:Static LocaleKey.ApiKeyComboBox_AddApiKey}}"
+              Command="{Binding AddCommand, RelativeSource={RelativeSource TemplatedParent}}"/>
+          </StackPanel>
+        </Border>
+      </ControlTemplate>
+    </Setter>
+  </ControlTheme>
+</ResourceDictionary>
