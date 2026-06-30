@@ -49,7 +49,17 @@ public partial class ApiKey : ObservableValidator
     [CustomValidation(typeof(ApiKey), nameof(ValidateKey))]
     public string? SecretKey
     {
-        get => _pendingKey ?? GetKey(Id);
+        // Only return the in-memory pending key (during edit). DO NOT
+        // fall back to GetKey(Id) — the property is touched by Avalonia
+        // binding introspection / NotifyDataErrorInfo pumps, and any
+        // GetKey() call hits the macOS keychain, prompting the user for
+        // an admin password the first time per item. With ~6 ApiKey
+        // instances on startup that turned launch into a sequence of
+        // password dialogs (v0.9.251+ regression).
+        //
+        // Connectors that need the actual stored secret call GetKey(Id)
+        // directly at use-time.
+        get => _pendingKey;
         set => SetProperty(ref _pendingKey, value);
     }
 
