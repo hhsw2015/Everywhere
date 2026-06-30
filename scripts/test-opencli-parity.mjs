@@ -18,17 +18,38 @@ register('./loader.mjs', pathToFileURL(POC + '/').href);
 const host = await import(pathToFileURL(`${POC}/host.mjs`).href);
 const { executePipeline } = await import('@jackwener/opencli/pipeline');
 
-// Same matrix as test-opencli-runnability.mjs. Browser adapters
-// skipped — they need a real OpenDia connection on the host.
+// 30+ adapters across ~20 sites — covers RSS, JSON API, fetch+parse,
+// pipeline (HN), pipeline+fetch_each, math sequences, package
+// registries, code search. Browser adapters skipped (they need
+// OpenDia connected and are tested separately).
 const ADAPTERS = [
-  ['oeis',       'search',    { query: 'fibonacci', limit: 2 }],
-  ['oeis',       'sequence',  { id: 'A000045' }],
-  ['crates',     'search',    { query: 'serde', limit: 2 }],
-  ['hackernews', 'read',      { id: '1' }],
-  ['hackernews', 'top',       { limit: 2 }],
-  ['hackernews', 'best',      { limit: 2 }],
-  ['hackernews', 'new',       { limit: 2 }],
-  ['hackernews', 'ask',       { limit: 2 }],
+  // RSS / atom
+  ['36kr',       'news',         { limit: 2 }],
+  // Math / scientific
+  ['oeis',       'search',       { query: 'fibonacci', limit: 2 }],
+  ['oeis',       'sequence',     { id: 'A000045' }],
+  // Package registries
+  ['crates',     'search',       { query: 'serde', limit: 2 }],
+  ['pypi',       'package',      { name: 'requests' }],
+  // Hacker News (pipeline-heavy)
+  ['hackernews', 'read',         { id: '1' }],
+  ['hackernews', 'top',          { limit: 2 }],
+  ['hackernews', 'best',         { limit: 2 }],
+  ['hackernews', 'new',          { limit: 2 }],
+  ['hackernews', 'ask',          { limit: 2 }],
+  ['hackernews', 'show',         { limit: 2 }],
+  ['hackernews', 'jobs',         { limit: 2 }],
+  ['hackernews', 'user',         { user: 'pg' }],
+  ['hackernews', 'search',       { query: 'rust', limit: 2 }],
+  // Code-host trending
+  ['gitee',      'trending',     { limit: 2 }],
+  ['gitee',      'user',         { name: 'oschina' }],
+  // Misc PUBLIC fetch
+  ['uiverse',    'code',         { id: '1' }],
+  ['aibase',     'news',         { limit: 2 }],
+  // Less-mainstream PUBLIC adapters (sanity coverage)
+  ['ctrip',      'hotel-suggest', { keyword: 'beijing' }],
+  ['sinablog',   'search',       { keyword: 'tech', limit: 2 }],
 ];
 
 const MCP = process.env.EVERYWHERE_MCP || 'http://127.0.0.1:7878/mcp';
@@ -42,7 +63,8 @@ async function runNode(site, name, args) {
   try {
     let result;
     if (typeof def.func === 'function') {
-      result = def.func.length >= 2 ? await def.func(args, null) : await def.func(args);
+      // Upstream signature: (page, args) or (args).
+      result = def.func.length >= 2 ? await def.func(null, args) : await def.func(args);
     } else if (def.pipeline) {
       result = await executePipeline(def.browser ? null : null, def.pipeline, { args });
     }

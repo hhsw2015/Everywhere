@@ -1,5 +1,19 @@
 [
   {
+    "site": "36kr",
+    "name": "news",
+    "node": {
+      "ok": true,
+      "len": 2,
+      "type": "array"
+    },
+    "mcp": {
+      "ok": true,
+      "len": 2,
+      "type": "array"
+    }
+  },
+  {
     "site": "oeis",
     "name": "search",
     "node": {
@@ -8,9 +22,9 @@
       "type": "array"
     },
     "mcp": {
-      "ok": false,
-      "err": "SyntaxError: Identifier '__wrapPage' has already been declared",
-      "code": "RUNTIME_SCRIPT_ERROR"
+      "ok": true,
+      "len": 2,
+      "type": "array"
     }
   },
   {
@@ -22,9 +36,9 @@
       "type": "array"
     },
     "mcp": {
-      "ok": false,
-      "err": "SyntaxError: Identifier '__wrapPage' has already been declared",
-      "code": "RUNTIME_SCRIPT_ERROR"
+      "ok": true,
+      "len": 1,
+      "type": "array"
     }
   },
   {
@@ -36,9 +50,23 @@
       "type": "array"
     },
     "mcp": {
-      "ok": false,
-      "err": "SyntaxError: Identifier '__wrapPage' has already been declared",
-      "code": "RUNTIME_SCRIPT_ERROR"
+      "ok": true,
+      "len": 2,
+      "type": "array"
+    }
+  },
+  {
+    "site": "pypi",
+    "name": "package",
+    "node": {
+      "ok": true,
+      "len": 1,
+      "type": "array"
+    },
+    "mcp": {
+      "ok": true,
+      "len": 1,
+      "type": "array"
     }
   },
   {
@@ -50,9 +78,9 @@
       "type": "array"
     },
     "mcp": {
-      "ok": false,
-      "err": "SyntaxError: Identifier '__wrapPage' has already been declared",
-      "code": "RUNTIME_SCRIPT_ERROR"
+      "ok": true,
+      "len": 4,
+      "type": "array"
     }
   },
   {
@@ -64,9 +92,9 @@
       "type": "array"
     },
     "mcp": {
-      "ok": false,
-      "err": "SyntaxError: Identifier '__wrapPage' has already been declared",
-      "code": "RUNTIME_SCRIPT_ERROR"
+      "ok": true,
+      "len": 2,
+      "type": "array"
     }
   },
   {
@@ -78,9 +106,9 @@
       "type": "array"
     },
     "mcp": {
-      "ok": false,
-      "err": "SyntaxError: Identifier '__wrapPage' has already been declared",
-      "code": "RUNTIME_SCRIPT_ERROR"
+      "ok": true,
+      "len": 2,
+      "type": "array"
     }
   },
   {
@@ -92,9 +120,9 @@
       "type": "array"
     },
     "mcp": {
-      "ok": false,
-      "err": "SyntaxError: Identifier '__wrapPage' has already been declared",
-      "code": "RUNTIME_SCRIPT_ERROR"
+      "ok": true,
+      "len": 2,
+      "type": "array"
     }
   },
   {
@@ -106,9 +134,144 @@
       "type": "array"
     },
     "mcp": {
+      "ok": true,
+      "len": 2,
+      "type": "array"
+    }
+  },
+  {
+    "site": "hackernews",
+    "name": "show",
+    "node": {
+      "ok": true,
+      "len": 2,
+      "type": "array"
+    },
+    "mcp": {
+      "ok": true,
+      "len": 2,
+      "type": "array"
+    }
+  },
+  {
+    "site": "hackernews",
+    "name": "jobs",
+    "node": {
+      "ok": true,
+      "len": 2,
+      "type": "array"
+    },
+    "mcp": {
+      "ok": true,
+      "len": 2,
+      "type": "array"
+    }
+  },
+  {
+    "site": "hackernews",
+    "name": "user",
+    "node": {
+      "ok": true,
+      "len": 1,
+      "type": "array"
+    },
+    "mcp": {
+      "ok": true,
+      "len": 1,
+      "type": "array"
+    }
+  },
+  {
+    "site": "hackernews",
+    "name": "search",
+    "node": {
+      "ok": true,
+      "len": 2,
+      "type": "array"
+    },
+    "mcp": {
       "ok": false,
-      "err": "SyntaxError: Identifier '__wrapPage' has already been declared",
-      "code": "RUNTIME_SCRIPT_ERROR"
+      "err": "URLSearchParams is not defined",
+      "code": "RUNTIME_ERROR"
+    }
+  },
+  {
+    "site": "gitee",
+    "name": "trending",
+    "node": {
+      "ok": false,
+      "err": "Cannot read properties of null (reading 'limit')"
+    },
+    "mcp": {
+      "ok": false,
+      "err": "page.goto is not a function",
+      "code": "RUNTIME_ERROR"
+    }
+  },
+  {
+    "site": "gitee",
+    "name": "user",
+    "node": {
+      "ok": false,
+      "err": "Cannot read properties of null (reading 'username')"
+    },
+    "mcp": {
+      "ok": false,
+      "err": "Username is required",
+      "code": "INVALID_ARGUMENT"
+    }
+  },
+  {
+    "site": "uiverse",
+    "name": "code",
+    "node": {
+      "ok": false,
+      "err": "Cannot read properties of null (reading 'input')"
+    },
+    "mcp": {
+      "ok": false,
+      "err": "Missing component input. Pass a full Uiverse URL or an author/slug identifier.",
+      "code": "RUNTIME_ERROR"
+    }
+  },
+  {
+    "site": "aibase",
+    "name": "news",
+    "node": {
+      "ok": false,
+      "err": "Cannot read properties of null (reading 'limit')"
+    },
+    "mcp": {
+      "ok": false,
+      "err": "page.goto is not a function",
+      "code": "RUNTIME_ERROR"
+    }
+  },
+  {
+    "site": "ctrip",
+    "name": "hotel-suggest",
+    "node": {
+      "ok": false,
+      "err": "Search keyword cannot be empty"
+    },
+    "mcp": {
+      "ok": false,
+      "err": "Search keyword cannot be empty",
+      "code": "ARGUMENT"
+    }
+  },
+  {
+    "site": "sinablog",
+    "name": "search",
+    "node": {
+      "ok": true,
+      "len": 0,
+      "type": "array"
+    },
+    "mcp": {
+      "ok": false,
+      "err": "URL is not defined",
+      "code": "RUNTIME_ERROR"
     }
   }
 ]

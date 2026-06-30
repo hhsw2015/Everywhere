@@ -293,7 +293,9 @@ public sealed class OpenCliRuntime : IAsyncDisposable
                             globalThis.__opencliFactoryResult = (function (jsonStr, needsBrowser) {
                                 const cfg = JSON.parse(jsonStr);
                                 const runner = globalThis.__opencliPipelineRunner;
-                                return (args, page) => runner.executePipeline(
+                                // Synthesised func mirrors upstream
+                                // signature (page, args).
+                                return (page, args) => runner.executePipeline(
                                     needsBrowser ? page : null,
                                     cfg,
                                     { args: args ?? {} });
@@ -516,7 +518,14 @@ public sealed class OpenCliRuntime : IAsyncDisposable
                         try {
                             const cargs = JSON.parse(globalThis.__opencliArgs);
                             const cpage = globalThis.__wrapPage(globalThis.__opencliPage);
-                            const r = await globalThis.__opencliFn(cargs, cpage);
+                            // Upstream func signature is (page, args) — single-
+                            // arg variants (page) or (args) work too because
+                            // unused parameters are simply ignored. PUBLIC
+                            // adapters get a stub page but still expect it as
+                            // arg 0. Calling with (args, page) silently swapped
+                            // the slots and adapters that read args.X got
+                            // ".X is not a function" or "Unknown type".
+                            const r = await globalThis.__opencliFn(cpage, cargs);
                             globalThis.__opencliCallResultJson = JSON.stringify(r === undefined ? null : r);
                         } catch (e) {
                             const code = (e && e.code != null) ? String(e.code) : 'RUNTIME_ERROR';
@@ -700,6 +709,62 @@ public sealed class OpenCliRuntime : IAsyncDisposable
         engine.AddHostObject("__opencliHost", hostShim);
 
         engine.Execute("""
+            // V8 isolate doesn't ship URL / URLSearchParams as globals
+            // (they're WHATWG specs, not part of ES2024). Many adapters
+            // build query strings via `new URL(...)` / `new URLSearchParams(...)`.
+            globalThis.URLSearchParams = globalThis.URLSearchParams || class URLSearchParams {
+                constructor(init) {
+                    this._params = [];
+                    if (!init) return;
+                    if (typeof init === 'string') {
+                        const s = init.startsWith('?') ? init.slice(1) : init;
+                        for (const pair of s.split('&').filter(Boolean)) {
+                            const eq = pair.indexOf('=');
+                            const k = eq < 0 ? pair : pair.slice(0, eq);
+                            const v = eq < 0 ? '' : pair.slice(eq + 1);
+                            this._params.push([decodeURIComponent(k.replace(/\+/g, ' ')), decodeURIComponent(v.replace(/\+/g, ' '))]);
+                        }
+                    } else if (Array.isArray(init)) {
+                        for (const [k, v] of init) this._params.push([String(k), String(v)]);
+                    } else if (typeof init === 'object') {
+                        for (const k of Object.keys(init)) this._params.push([k, String(init[k])]);
+                    }
+                }
+                append(k, v) { this._params.push([String(k), String(v)]); }
+                delete(k) { this._params = this._params.filter(p => p[0] !== k); }
+                get(k) { const p = this._params.find(p => p[0] === k); return p ? p[1] : null; }
+                getAll(k) { return this._params.filter(p => p[0] === k).map(p => p[1]); }
+                has(k) { return this._params.some(p => p[0] === k); }
+                set(k, v) { this.delete(k); this.append(k, v); }
+                forEach(fn) { for (const [k, v] of this._params) fn(v, k, this); }
+                keys() { return this._params.map(p => p[0])[Symbol.iterator](); }
+                values() { return this._params.map(p => p[1])[Symbol.iterator](); }
+                entries() { return this._params.slice()[Symbol.iterator](); }
+                [Symbol.iterator]() { return this.entries(); }
+                toString() {
+                    return this._params
+                        .map(([k, v]) => encodeURIComponent(k) + '=' + encodeURIComponent(v))
+                        .join('&');
+                }
+            };
+            globalThis.URL = globalThis.URL || class URL {
+                constructor(url, base) {
+                    const parsed = __opencliHost.parseUrl(String(url), base ? String(base) : null);
+                    if (parsed.error) throw new TypeError('Invalid URL: ' + url);
+                    this.href = parsed.href;
+                    this.origin = parsed.origin;
+                    this.protocol = parsed.protocol;
+                    this.host = parsed.host;
+                    this.hostname = parsed.hostname;
+                    this.port = parsed.port;
+                    this.pathname = parsed.pathname;
+                    this.search = parsed.search;
+                    this.hash = parsed.hash;
+                    this.searchParams = new globalThis.URLSearchParams(parsed.search);
+                }
+                toString() { return this.href; }
+                toJSON() { return this.href; }
+            };
             // Wrap host FetchResponse so json() returns a NATIVE JS value
             // via V8's JSON.parse, not a .NET JsonNode (host object that
             // Array.isArray / Object.entries / .map can't see through).

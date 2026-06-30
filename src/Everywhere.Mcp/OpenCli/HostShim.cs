@@ -651,6 +651,36 @@ public sealed class HostShim
         return Environment.GetEnvironmentVariable(name);
     }
 
+    /// <summary>Backing helper for the JS <c>URL</c> shim — parses an
+    /// (optionally base-relative) URL via <see cref="Uri"/>. JS shim
+    /// reads back <c>href / origin / protocol / host / ...</c>.</summary>
+    public object parseUrl(string url, string? @base)
+    {
+        try
+        {
+            Uri uri = string.IsNullOrEmpty(@base)
+                ? new Uri(url, UriKind.Absolute)
+                : new Uri(new Uri(@base, UriKind.Absolute), url);
+            return new
+            {
+                error = (string?)null,
+                href = uri.AbsoluteUri,
+                origin = uri.GetLeftPart(UriPartial.Authority),
+                protocol = uri.Scheme + ":",
+                host = uri.Authority,
+                hostname = uri.Host,
+                port = uri.IsDefaultPort ? "" : uri.Port.ToString(),
+                pathname = uri.AbsolutePath,
+                search = string.IsNullOrEmpty(uri.Query) ? "" : uri.Query,
+                hash = string.IsNullOrEmpty(uri.Fragment) ? "" : uri.Fragment,
+            };
+        }
+        catch (UriFormatException ex)
+        {
+            return new { error = ex.Message };
+        }
+    }
+
     public string osTmpDir() => Path.GetTempPath();
     public string osHomeDir() => Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
     public string osHostName() => Environment.MachineName;
