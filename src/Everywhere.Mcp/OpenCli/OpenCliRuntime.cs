@@ -383,10 +383,16 @@ public sealed class OpenCliRuntime : IAsyncDisposable
         {
             _invokeGate.Release();
         }
+        // ClearScript reads undefined globals as Microsoft.ClearScript.Undefined.Value,
+        // NOT as C# null — `is not null` would always be true, so the
+        // poll would return on iteration 1 with the runner still missing.
+        // Check the type explicitly.
         for (int i = 0; i < 500; i++)
         {
-            if (engine.Script.__opencliPipelineRunner is not null) return;
-            if (engine.Script.__opencliPipelineRunnerError is string err)
+            var runner = engine.Script.__opencliPipelineRunner;
+            if (runner is not null && runner is not Undefined) return;
+            var errVal = engine.Script.__opencliPipelineRunnerError;
+            if (errVal is string err)
                 throw new InvalidOperationException($"pipeline runner import failed: {err}");
             await Task.Delay(10).ConfigureAwait(false);
         }
