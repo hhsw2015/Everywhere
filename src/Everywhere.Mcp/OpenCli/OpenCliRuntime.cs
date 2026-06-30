@@ -625,6 +625,7 @@ public sealed class OpenCliRuntime : IAsyncDisposable
                 ["node:child_process"] = HostShim.NodeChildProcessSource, ["child_process"] = HostShim.NodeChildProcessSource,
                 ["node:http"]  = HostShim.NodeHttpSource,           ["http"]  = HostShim.NodeHttpSource,
                 ["node:https"] = HostShim.NodeHttpSource,           ["https"] = HostShim.NodeHttpSource,
+                ["node:vm"] = HostShim.NodeVmSource,                ["vm"] = HostShim.NodeVmSource,
             },
             fileRoutes: fileRoutes,
             extraRoots: new[] { runtimeDir });

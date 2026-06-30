@@ -470,6 +470,62 @@ public sealed class HostShim
         export default { request, get, createServer };
         """;
 
+    /// <summary>Polyfill of Node's `vm` module — used by the vendored
+    /// upstream pipeline runner's template engine (`pipeline/template.js`).
+    /// Uses Function-constructor evaluation against a context object;
+    /// good enough for the simple expressions pipelines use (`args.limit`,
+    /// `item.title`, `$index + 1` etc.). Doesn't enforce Node's isolation
+    /// semantics — that's fine because we already pin upstream to a
+    /// vetted sha and the V8 isolate is the real sandbox boundary.</summary>
+    public const string NodeVmSource = """
+        class Script {
+            constructor(code) {
+                this.code = String(code);
+                // Pre-compile via Function constructor: the script wraps
+                // the user expression in a function that accepts the
+                // sandbox keys as positional args and returns the result.
+                this._cached = null;
+            }
+            _compile(keys) {
+                // Cache keyed by joined key signature so different
+                // sandbox shapes don't share compiled bodies.
+                const sig = keys.join(',');
+                if (this._cached && this._cachedSig === sig) return this._cached;
+                this._cached = new Function(...keys, 'return ' + this.code);
+                this._cachedSig = sig;
+                return this._cached;
+            }
+            runInContext(context, _opts) {
+                const sandbox = context && context.__vmSandbox ? context.__vmSandbox : context;
+                const keys = Object.keys(sandbox);
+                const fn = this._compile(keys);
+                return fn(...keys.map(k => sandbox[k]));
+            }
+            runInNewContext(sandbox, _opts) {
+                const keys = Object.keys(sandbox);
+                return new Function(...keys, 'return ' + this.code)(...keys.map(k => sandbox[k]));
+            }
+        }
+        function createContext(sandbox, _opts) {
+            // Return the sandbox tagged so runInContext can recover it.
+            // Node's vm.createContext mutates and returns the sandbox;
+            // we just hand it back.
+            sandbox.__vmSandbox = sandbox;
+            return sandbox;
+        }
+        function runInNewContext(code, sandbox, _opts) {
+            return new Script(code).runInNewContext(sandbox);
+        }
+        function runInContext(code, context, _opts) {
+            return new Script(code).runInContext(context);
+        }
+        function runInThisContext(code, _opts) {
+            return new Function('return ' + String(code))();
+        }
+        export { Script, createContext, runInNewContext, runInContext, runInThisContext };
+        export default { Script, createContext, runInNewContext, runInContext, runInThisContext };
+        """;
+
     // 16 MiB cap on the response body — protects the host from a
     // hostile/accidentally-large endpoint OOM-ing the process.
     private const int MaxResponseBytes = 16 * 1024 * 1024;

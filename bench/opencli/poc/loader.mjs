@@ -137,6 +137,8 @@ const map = new Map([
   ['node:child_process', inline(NODE_CHILD)], ['child_process', inline(NODE_CHILD)],
   ['node:http',  inline(NODE_HTTP)],  ['http',  inline(NODE_HTTP)],
   ['node:https', inline(NODE_HTTP)],  ['https', inline(NODE_HTTP)],
+  // node:vm — passthrough to real Node vm (Node provides isolation).
+  // The C# runtime polyfills via Function-constructor — close enough.
   // crypto: passthrough to real Node crypto in the PoC, so adapter
   // hashes match what the host produces. The C# host implements the
   // same algorithms via System.Security.Cryptography.
