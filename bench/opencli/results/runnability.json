@@ -1,0 +1,44 @@
+{
+  "publicFunc": {
+    "total": 10,
+    "ok": 5,
+    "nodata": 0,
+    "errors": {
+      "pypi downloads requests returned HTTP 429 (rate limited)": [
+        "pypi/downloads"
+      ],
+      "Search keyword cannot be empty": [
+        "ctrip/search"
+      ],
+      "page.goto is not a function": [
+        "gitee/trending",
+        "gitee/user"
+      ],
+      "Could not parse author/slug from input: () => Promise.reject(new Error('PAGE_STUB:not implemented in Node test harness'))": [
+        "uiverse/preview"
+      ]
+    }
+  },
+  "pipeline": {
+    "total": 8,
+    "ok": 8,
+    "nodata": 0,
+    "errors": {}
+  },
+  "browser": {
+    "total": 3,
+    "ok": 0,
+    "nodata": 0,
+    "errors": {
+      "Unknown type \"() => Promise.reject(new Error('PAGE_STUB:not implemented in Node test harness'))\". Valid types: renqi, zonghe, shoucang, catalog": [
+        "36kr/hot"
+      ],
+      "Cannot read properties of null (reading 'goto')": [
+        "bilibili/hot"
+      ],
+      "page.goto is not a function": [
+        "weibo/hot"
+      ]
+    }
+  }
+}

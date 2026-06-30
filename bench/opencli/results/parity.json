@@ -1,0 +1,114 @@
+[
+  {
+    "site": "oeis",
+    "name": "search",
+    "node": {
+      "ok": true,
+      "len": 2,
+      "type": "array"
+    },
+    "mcp": {
+      "ok": false,
+      "err": "SyntaxError: Identifier '__wrapPage' has already been declared",
+      "code": "RUNTIME_SCRIPT_ERROR"
+    }
+  },
+  {
+    "site": "oeis",
+    "name": "sequence",
+    "node": {
+      "ok": true,
+      "len": 1,
+      "type": "array"
+    },
+    "mcp": {
+      "ok": false,
+      "err": "SyntaxError: Identifier '__wrapPage' has already been declared",
+      "code": "RUNTIME_SCRIPT_ERROR"
+    }
+  },
+  {
+    "site": "crates",
+    "name": "search",
+    "node": {
+      "ok": true,
+      "len": 2,
+      "type": "array"
+    },
+    "mcp": {
+      "ok": false,
+      "err": "SyntaxError: Identifier '__wrapPage' has already been declared",
+      "code": "RUNTIME_SCRIPT_ERROR"
+    }
+  },
+  {
+    "site": "hackernews",
+    "name": "read",
+    "node": {
+      "ok": true,
+      "len": 4,
+      "type": "array"
+    },
+    "mcp": {
+      "ok": false,
+      "err": "SyntaxError: Identifier '__wrapPage' has already been declared",
+      "code": "RUNTIME_SCRIPT_ERROR"
+    }
+  },
+  {
+    "site": "hackernews",
+    "name": "top",
+    "node": {
+      "ok": true,
+      "len": 2,
+      "type": "array"
+    },
+    "mcp": {
+      "ok": false,
+      "err": "SyntaxError: Identifier '__wrapPage' has already been declared",
+      "code": "RUNTIME_SCRIPT_ERROR"
+    }
+  },
+  {
+    "site": "hackernews",
+    "name": "best",
+    "node": {
+      "ok": true,
+      "len": 2,
+      "type": "array"
+    },
+    "mcp": {
+      "ok": false,
+      "err": "SyntaxError: Identifier '__wrapPage' has already been declared",
+      "code": "RUNTIME_SCRIPT_ERROR"
+    }
+  },
+  {
+    "site": "hackernews",
+    "name": "new",
+    "node": {
+      "ok": true,
+      "len": 2,
+      "type": "array"
+    },
+    "mcp": {
+      "ok": false,
+      "err": "SyntaxError: Identifier '__wrapPage' has already been declared",
+      "code": "RUNTIME_SCRIPT_ERROR"
+    }
+  },
+  {
+    "site": "hackernews",
+    "name": "ask",
+    "node": {
+      "ok": true,
+      "len": 2,
+      "type": "array"
+    },
+    "mcp": {
+      "ok": false,
+      "err": "SyntaxError: Identifier '__wrapPage' has already been declared",
+      "code": "RUNTIME_SCRIPT_ERROR"
+    }
+  }
+]

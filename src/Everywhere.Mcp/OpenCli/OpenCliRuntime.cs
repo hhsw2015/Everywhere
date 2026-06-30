@@ -465,7 +465,11 @@ public sealed class OpenCliRuntime : IAsyncDisposable
                     // come through as PascalCase (page.Goto), but upstream
                     // adapters call camelCase (page.goto). Re-export each
                     // entry as a forwarding function so both names work.
-                    const __wrapPage = (host) => {
+                    // Stash on globalThis with `||=` so we install the
+                    // wrapper exactly once — top-level `const` declarations
+                    // persist across engine.Execute() calls and would throw
+                    // 'Identifier already declared' on the second invoke.
+                    globalThis.__wrapPage = globalThis.__wrapPage || ((host) => {
                         if (host === null || host === undefined) return host;
                         // Reflect the C# surface: every PascalCase method becomes
                         // a camelCase alias that forwards to it. We can't easily
@@ -507,11 +511,11 @@ public sealed class OpenCliRuntime : IAsyncDisposable
                             proxy[js] = (...args) => host[cs](...args);
                         }
                         return proxy;
-                    };
+                    });
                     globalThis.__opencliCallPromise = (async () => {
                         try {
                             const cargs = JSON.parse(globalThis.__opencliArgs);
-                            const cpage = __wrapPage(globalThis.__opencliPage);
+                            const cpage = globalThis.__wrapPage(globalThis.__opencliPage);
                             const r = await globalThis.__opencliFn(cargs, cpage);
                             globalThis.__opencliCallResultJson = JSON.stringify(r === undefined ? null : r);
                         } catch (e) {
