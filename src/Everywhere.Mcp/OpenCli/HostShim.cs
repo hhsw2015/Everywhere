@@ -598,7 +598,7 @@ public sealed class HostShim
             "latin1" or "binary" => Encoding.Latin1.GetString(bytes),
             "base64" => Convert.ToBase64String(bytes),
             "hex" => Convert.ToHexString(bytes).ToLowerInvariant(),
-            _ => Encoding.GetEncoding(encoding).GetString(bytes),
+            _ => Encoding.GetEncoding(encoding!).GetString(bytes),
         };
     }
 
@@ -627,7 +627,7 @@ public sealed class HostShim
                     "latin1" or "binary" => Encoding.Latin1.GetBytes(s),
                     "base64" => Convert.FromBase64String(s),
                     "hex" => Convert.FromHexString(s),
-                    _ => Encoding.GetEncoding(encoding).GetBytes(s),
+                    _ => Encoding.GetEncoding(encoding!).GetBytes(s),
                 };
                 break;
             default:
@@ -1028,7 +1028,7 @@ public sealed class BufferLike
         "ascii" => Encoding.ASCII.GetString(_bytes),
         "latin1" or "binary" => Encoding.Latin1.GetString(_bytes),
         null or "" or "utf8" or "utf-8" => Encoding.UTF8.GetString(_bytes),
-        _ => Encoding.GetEncoding(encoding).GetString(_bytes),
+        _ => Encoding.GetEncoding(encoding!).GetString(_bytes),
     };
     public byte[] toBytes() => _bytes;
 }
