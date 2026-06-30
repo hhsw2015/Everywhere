@@ -95,7 +95,15 @@ public sealed class HostShim
         }
         function isCliError(e) { return e && (e.name === 'CliError' || e instanceof CliError); }
         function cliError(code, message, details) { return new CliError(message, { code, details }); }
-        export { CliError, ArgumentError, AuthRequiredError, CommandExecutionError, ConfigError, EmptyResultError, TimeoutError, isCliError, cliError };
+        function getErrorMessage(e) {
+            if (!e) return '';
+            if (typeof e === 'string') return e;
+            if (e.message) return String(e.message);
+            try { return JSON.stringify(e); } catch { return String(e); }
+        }
+        function selectorError(selector, hint) { return new CommandExecutionError('selector failed: ' + selector + (hint ? ' (' + hint + ')' : '')); }
+        const EXIT_CODES = Object.freeze({ OK: 0, GENERAL: 1, INVALID_ARGUMENT: 2, AUTH_REQUIRED: 3, NO_DATA: 4, EXECUTION_FAILED: 5, TIMEOUT: 124 });
+        export { CliError, ArgumentError, AuthRequiredError, CommandExecutionError, ConfigError, EmptyResultError, TimeoutError, isCliError, cliError, getErrorMessage, selectorError, EXIT_CODES };
         """;
 
     /// <summary>Source for <c>@jackwener/opencli/utils</c> — empty
@@ -113,7 +121,46 @@ public sealed class HostShim
         const last = (arr) => arr.length ? arr[arr.length - 1] : undefined;
         const first = (arr) => arr.length ? arr[0] : undefined;
         const noop = () => {};
-        export { delay, sleep, range, chunk, unique, compact, last, first, noop };
+        const isRecord = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
+        const isString = (v) => typeof v === 'string';
+        const isNumber = (v) => typeof v === 'number' && !Number.isNaN(v);
+        const formatBytes = (n) => { if (n == null) return ''; const u=['B','KB','MB','GB','TB']; let i=0; while (n >= 1024 && i < u.length - 1) { n /= 1024; i++; } return n.toFixed(2) + ' ' + u[i]; };
+        const formatCookieHeader = (cookies) => {
+            if (!cookies) return '';
+            if (Array.isArray(cookies)) return cookies.map(c => typeof c === 'string' ? c : (c.name + '=' + c.value)).join('; ');
+            if (typeof cookies === 'string') return cookies;
+            return Object.entries(cookies).map(([k, v]) => k + '=' + v).join('; ');
+        };
+        const saveBase64ToFile = () => { throw new Error('utils.saveBase64ToFile is not available in the embedded runtime'); };
+        // Minimal HTML→Markdown — strip tags, preserve link text + URL.
+        // Sufficient for adapter `description` / inline-content fields.
+        const htmlToMarkdown = (html) => {
+            if (!html || typeof html !== 'string') return '';
+            return html
+                .replace(/<\s*br\s*\/?>/gi, '\n')
+                .replace(/<\s*\/p\s*>/gi, '\n\n')
+                .replace(/<a [^>]*?href=["']([^"']+)["'][^>]*>(.*?)<\/a>/gi, '[$2]($1)')
+                .replace(/<\s*strong[^>]*>(.*?)<\s*\/strong\s*>/gi, '**$1**')
+                .replace(/<\s*em[^>]*>(.*?)<\s*\/em\s*>/gi, '*$1*')
+                .replace(/<\s*code[^>]*>(.*?)<\s*\/code\s*>/gi, '`$1`')
+                .replace(/<[^>]+>/g, '')
+                .replace(/&nbsp;/g, ' ')
+                .replace(/&lt;/g, '<')
+                .replace(/&gt;/g, '>')
+                .replace(/&amp;/g, '&')
+                .replace(/&quot;/g, '"')
+                .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(+n))
+                .replace(/\n{3,}/g, '\n\n')
+                .trim();
+        };
+        const throwIfLoginWall = (text, hint) => {
+            const t = (text || '').toString().toLowerCase();
+            if (t.includes('login') || t.includes('sign in') || t.includes('登录')) {
+                throw new Error('login wall detected' + (hint ? ': ' + hint : ''));
+            }
+        };
+        const BROWSER_JSON_SNIFF_FN = `(() => { try { const t = document.body && document.body.innerText; if (!t) return null; const m = t.match(/\\{[\\s\\S]*\\}/); if (!m) return null; try { return JSON.parse(m[0]); } catch { return null; } } catch { return null; } })()`;
+        export { delay, sleep, range, chunk, unique, compact, last, first, noop, isRecord, isString, isNumber, formatBytes, formatCookieHeader, saveBase64ToFile, htmlToMarkdown, throwIfLoginWall, BROWSER_JSON_SNIFF_FN };
         """;
 
     /// <summary>Source for <c>@jackwener/opencli/logger</c> — proxies
@@ -122,7 +169,12 @@ public sealed class HostShim
         const _make = (lvl) => (...a) => { try { console[lvl] && console[lvl](...a); } catch {} };
         const logger = { debug: _make('debug'), info: _make('info'), warn: _make('warn'), error: _make('error'), log: _make('log') };
         const getLogger = () => logger;
-        export { logger, getLogger };
+        const log = _make('log');
+        const debug = _make('debug');
+        const info = _make('info');
+        const warn = _make('warn');
+        const error = _make('error');
+        export { logger, getLogger, log, debug, info, warn, error };
         export default logger;
         """;
 
@@ -135,18 +187,234 @@ public sealed class HostShim
         const launch = _unsupported('launch');
         const launchProcess = _unsupported('launchProcess');
         const spawn = _unsupported('spawn');
-        export { launch, launchProcess, spawn };
-        export default { launch, launchProcess, spawn };
+        const resolveElectronEndpoint = async () => null;
+        export { launch, launchProcess, spawn, resolveElectronEndpoint };
+        export default { launch, launchProcess, spawn, resolveElectronEndpoint };
         """;
 
-    /// <summary>Stub for <c>@jackwener/opencli/download</c>.</summary>
+    /// <summary>Stub for <c>@jackwener/opencli/download</c> + the
+    /// sub-paths that v1.8.5 adapters reach for (`download/media-download`,
+    /// `download/article-download`, `download/progress`).</summary>
     public const string DownloadSource = """
         function _unsupported(name) { return () => { throw new Error('opencli/download.' + name + ' is not available in the embedded runtime'); }; }
         const downloadFile = _unsupported('downloadFile');
         const articleDownload = _unsupported('articleDownload');
         const mediaDownload = _unsupported('mediaDownload');
-        export { downloadFile, articleDownload, mediaDownload };
-        export default { downloadFile, articleDownload, mediaDownload };
+        const downloadArticle = articleDownload;
+        const downloadMedia = mediaDownload;
+        const startProgress = () => ({ update: () => {}, finish: () => {} });
+        const formatBytes = (n) => { if (n == null) return ''; const u=['B','KB','MB','GB','TB']; let i=0; while (n >= 1024 && i < u.length - 1) { n /= 1024; i++; } return n.toFixed(2) + ' ' + u[i]; };
+        const formatCookieHeader = (c) => {
+            if (!c) return '';
+            if (Array.isArray(c)) return c.map(x => typeof x === 'string' ? x : (x.name + '=' + x.value)).join('; ');
+            if (typeof c === 'string') return c;
+            return Object.entries(c).map(([k, v]) => k + '=' + v).join('; ');
+        };
+        const httpDownload = _unsupported('httpDownload');
+        const checkYtdlp = async () => false;
+        const sanitizeFilename = (name) => (name || '').toString().replace(/[\/\\?%*:|"<>]/g, '_').slice(0, 200);
+        export { downloadFile, articleDownload, mediaDownload, downloadArticle, downloadMedia, startProgress, formatBytes, formatCookieHeader, httpDownload, checkYtdlp, sanitizeFilename };
+        export default { downloadFile, articleDownload, mediaDownload, downloadArticle, downloadMedia, startProgress, formatBytes, formatCookieHeader, httpDownload, checkYtdlp, sanitizeFilename };
+        """;
+
+    /// <summary>Stub for <c>@jackwener/opencli/browser/*</c> sub-paths.</summary>
+    public const string BrowserShimSource = """
+        function _unsupported(name) { return () => { throw new Error('opencli/browser.' + name + ' is not available in the embedded runtime'); }; }
+        class CDPBridge {
+            constructor() { throw new Error('CDPBridge is not available in the embedded runtime'); }
+        }
+        class Page {
+            constructor() { throw new Error('opencli/browser/page.Page is not available in the embedded runtime'); }
+        }
+        const cdp = _unsupported('cdp');
+        const page = _unsupported('page');
+        const utils = {};
+        export { cdp, page, utils, CDPBridge, Page };
+        export default { cdp, page, utils, CDPBridge, Page };
+        """;
+
+    /// <summary>Polyfill subset of Node's `path` module — pure string
+    /// algorithms, safe to expose unrestricted.</summary>
+    public const string NodePathSource = """
+        const sep = '/';
+        const delimiter = ':';
+        function normalize(p) {
+            if (!p) return '.';
+            const isAbs = p.startsWith('/');
+            const trailing = p.endsWith('/');
+            const parts = p.split('/').filter(Boolean);
+            const out = [];
+            for (const part of parts) {
+                if (part === '.') continue;
+                if (part === '..') {
+                    if (out.length && out[out.length - 1] !== '..') out.pop();
+                    else if (!isAbs) out.push('..');
+                } else out.push(part);
+            }
+            let res = out.join('/');
+            if (isAbs) res = '/' + res;
+            if (trailing && res && !res.endsWith('/')) res += '/';
+            return res || (isAbs ? '/' : '.');
+        }
+        function join(...parts) {
+            const filtered = parts.filter(p => typeof p === 'string' && p.length);
+            if (!filtered.length) return '.';
+            return normalize(filtered.join('/'));
+        }
+        function resolve(...parts) {
+            let resolved = '';
+            let abs = false;
+            for (let i = parts.length - 1; i >= 0 && !abs; i--) {
+                const p = parts[i];
+                if (typeof p !== 'string' || !p) continue;
+                resolved = p + '/' + resolved;
+                abs = p.startsWith('/');
+            }
+            if (!abs) resolved = '/' + resolved;
+            return normalize(resolved).replace(/\/$/, '') || '/';
+        }
+        function dirname(p) {
+            if (!p) return '.';
+            const i = p.lastIndexOf('/');
+            if (i < 0) return '.';
+            if (i === 0) return '/';
+            return p.slice(0, i);
+        }
+        function basename(p, ext) {
+            if (!p) return '';
+            const i = p.lastIndexOf('/');
+            let b = i >= 0 ? p.slice(i + 1) : p;
+            if (ext && b.endsWith(ext)) b = b.slice(0, -ext.length);
+            return b;
+        }
+        function extname(p) {
+            if (!p) return '';
+            const b = basename(p);
+            const i = b.lastIndexOf('.');
+            return i <= 0 ? '' : b.slice(i);
+        }
+        function isAbsolute(p) { return typeof p === 'string' && p.startsWith('/'); }
+        function relative(from, to) {
+            const f = resolve(from).split('/').filter(Boolean);
+            const t = resolve(to).split('/').filter(Boolean);
+            let i = 0; while (i < f.length && i < t.length && f[i] === t[i]) i++;
+            return [...Array(f.length - i).fill('..'), ...t.slice(i)].join('/') || '.';
+        }
+        function parse(p) {
+            const root = isAbsolute(p) ? '/' : '';
+            const dir = dirname(p);
+            const base = basename(p);
+            const ext = extname(base);
+            const name = ext ? base.slice(0, -ext.length) : base;
+            return { root, dir, base, name, ext };
+        }
+        function format(o) {
+            const dir = o.dir || o.root || '';
+            const base = o.base || ((o.name || '') + (o.ext || ''));
+            return dir ? (dir.endsWith('/') ? dir + base : dir + '/' + base) : base;
+        }
+        export { sep, delimiter, normalize, join, resolve, dirname, basename, extname, isAbsolute, relative, parse, format };
+        export default { sep, delimiter, normalize, join, resolve, dirname, basename, extname, isAbsolute, relative, parse, format };
+        """;
+
+    /// <summary>Polyfill of `os` — values that have a sane meaning inside
+    /// a sandbox.</summary>
+    public const string NodeOsSource = """
+        const platform = () => 'darwin';
+        const arch = () => 'arm64';
+        const tmpdir = () => '/tmp';
+        const homedir = () => '/';
+        const EOL = '\n';
+        const hostname = () => 'opencli';
+        const cpus = () => [];
+        const totalmem = () => 0;
+        const freemem = () => 0;
+        const networkInterfaces = () => ({});
+        export { platform, arch, tmpdir, homedir, EOL, hostname, cpus, totalmem, freemem, networkInterfaces };
+        export default { platform, arch, tmpdir, homedir, EOL, hostname, cpus, totalmem, freemem, networkInterfaces };
+        """;
+
+    /// <summary>Polyfill of `crypto` — only the algorithms adapters
+    /// actually call (md5/sha1/sha256/random). Implemented host-side via
+    /// <see cref="HostShim.cryptoHashAsync"/> / <see cref="HostShim.cryptoRandomBytes"/>.</summary>
+    public const string NodeCryptoSource = """
+        function createHash(algo) {
+            const buf = [];
+            return {
+                update(data) { buf.push(typeof data === 'string' ? data : __opencliHost.bytesToBase64(data)); return this; },
+                digest(encoding) {
+                    const joined = buf.join('');
+                    const isText = buf.every(s => typeof s === 'string');
+                    const out = __opencliHost.cryptoHash(algo, joined, isText, encoding || 'hex');
+                    return out;
+                },
+            };
+        }
+        function randomBytes(n) {
+            return __opencliHost.cryptoRandomBytes(n);
+        }
+        function randomUUID() { return __opencliHost.cryptoUuid(); }
+        function createHmac(algo, key) {
+            const buf = [];
+            return {
+                update(data) { buf.push(typeof data === 'string' ? data : __opencliHost.bytesToBase64(data)); return this; },
+                digest(encoding) {
+                    const joined = buf.join('');
+                    const isText = buf.every(s => typeof s === 'string');
+                    return __opencliHost.cryptoHmac(algo, key, joined, isText, encoding || 'hex');
+                },
+            };
+        }
+        export { createHash, randomBytes, randomUUID, createHmac };
+        export default { createHash, randomBytes, randomUUID, createHmac };
+        """;
+
+    /// <summary>Stub for `fs` — read-only operations only, and only
+    /// against paths the adapter author already trusts (no host fs
+    /// access from JS).</summary>
+    public const string NodeFsSource = """
+        function _unsupported(name) { return () => { throw new Error('fs.' + name + ' is not available in the embedded runtime'); }; }
+        const readFileSync = _unsupported('readFileSync');
+        const readFile = _unsupported('readFile');
+        const writeFileSync = _unsupported('writeFileSync');
+        const writeFile = _unsupported('writeFile');
+        const existsSync = () => false;
+        const mkdirSync = _unsupported('mkdirSync');
+        const stat = _unsupported('stat');
+        const statSync = _unsupported('statSync');
+        const promises = { readFile: _unsupported('promises.readFile'), writeFile: _unsupported('promises.writeFile'), mkdir: _unsupported('promises.mkdir'), stat: _unsupported('promises.stat') };
+        const createReadStream = _unsupported('createReadStream');
+        const createWriteStream = _unsupported('createWriteStream');
+        export { readFileSync, readFile, writeFileSync, writeFile, existsSync, mkdirSync, stat, statSync, promises, createReadStream, createWriteStream };
+        export default { readFileSync, readFile, writeFileSync, writeFile, existsSync, mkdirSync, stat, statSync, promises, createReadStream, createWriteStream };
+        """;
+
+    /// <summary>Stub for `child_process` — refused. Adapters that try
+    /// to spawn a host process get a clear error rather than a silent
+    /// hang or sandbox escape.</summary>
+    public const string NodeChildProcessSource = """
+        function _unsupported(name) { return () => { throw new Error('child_process.' + name + ' is not available in the embedded runtime'); }; }
+        const exec = _unsupported('exec');
+        const execSync = _unsupported('execSync');
+        const execFile = _unsupported('execFile');
+        const execFileSync = _unsupported('execFileSync');
+        const spawn = _unsupported('spawn');
+        const spawnSync = _unsupported('spawnSync');
+        const fork = _unsupported('fork');
+        export { exec, execSync, execFile, execFileSync, spawn, spawnSync, fork };
+        export default { exec, execSync, execFile, execFileSync, spawn, spawnSync, fork };
+        """;
+
+    /// <summary>Stub for `http`/`https` — adapters that need HTTP should
+    /// use the global <c>fetch</c>; expose minimal shape so static imports
+    /// resolve.</summary>
+    public const string NodeHttpSource = """
+        function _unsupported(name) { return () => { throw new Error('http(s).' + name + ' is not available in the embedded runtime; use global fetch instead'); }; }
+        const request = _unsupported('request');
+        const get = _unsupported('get');
+        const createServer = _unsupported('createServer');
+        export { request, get, createServer };
+        export default { request, get, createServer };
         """;
 
     // 16 MiB cap on the response body — protects the host from a
@@ -192,6 +460,60 @@ public sealed class HostShim
     }
 
     public void warn(string message) => _onWarn(message);
+
+    // -------- crypto helpers (called from NodeCryptoSource) --------
+
+    public string cryptoHash(string algo, string data, bool isText, string encoding)
+    {
+        var bytes = isText ? Encoding.UTF8.GetBytes(data) : Convert.FromBase64String(data);
+        byte[] hash = algo.ToLowerInvariant() switch
+        {
+            "md5"    => System.Security.Cryptography.MD5.HashData(bytes),
+            "sha1"   => System.Security.Cryptography.SHA1.HashData(bytes),
+            "sha256" => System.Security.Cryptography.SHA256.HashData(bytes),
+            "sha512" => System.Security.Cryptography.SHA512.HashData(bytes),
+            _ => throw new ArgumentException($"crypto: unsupported hash algorithm '{algo}'"),
+        };
+        return Encode(hash, encoding);
+    }
+
+    public string cryptoHmac(string algo, string key, string data, bool isText, string encoding)
+    {
+        var keyBytes = Encoding.UTF8.GetBytes(key);
+        var dataBytes = isText ? Encoding.UTF8.GetBytes(data) : Convert.FromBase64String(data);
+        byte[] hash = algo.ToLowerInvariant() switch
+        {
+            "sha1"   => System.Security.Cryptography.HMACSHA1.HashData(keyBytes, dataBytes),
+            "sha256" => System.Security.Cryptography.HMACSHA256.HashData(keyBytes, dataBytes),
+            "sha512" => System.Security.Cryptography.HMACSHA512.HashData(keyBytes, dataBytes),
+            "md5"    => System.Security.Cryptography.HMACMD5.HashData(keyBytes, dataBytes),
+            _ => throw new ArgumentException($"crypto: unsupported HMAC algorithm '{algo}'"),
+        };
+        return Encode(hash, encoding);
+    }
+
+    public string cryptoRandomBytes(int n)
+    {
+        var bytes = System.Security.Cryptography.RandomNumberGenerator.GetBytes(n);
+        return Convert.ToBase64String(bytes);
+    }
+
+    public string cryptoUuid() => Guid.NewGuid().ToString();
+
+    public string bytesToBase64(object input)
+    {
+        if (input is byte[] arr) return Convert.ToBase64String(arr);
+        if (input is string s) return Convert.ToBase64String(Encoding.UTF8.GetBytes(s));
+        return Convert.ToBase64String(Encoding.UTF8.GetBytes(input?.ToString() ?? ""));
+    }
+
+    private static string Encode(byte[] bytes, string encoding) => encoding.ToLowerInvariant() switch
+    {
+        "hex" => Convert.ToHexString(bytes).ToLowerInvariant(),
+        "base64" => Convert.ToBase64String(bytes),
+        "base64url" => Convert.ToBase64String(bytes).Replace('+', '-').Replace('/', '_').TrimEnd('='),
+        _ => Convert.ToHexString(bytes).ToLowerInvariant(),
+    };
 
     /// <summary>
     /// JS-visible <c>fetch(url, init)</c>. SPEC §3.1 — PUBLIC-strategy

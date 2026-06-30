@@ -1,0 +1,16 @@
+{
+  "total": 1292,
+  "ok": 1291,
+  "fail": 1,
+  "byReason": {
+    "bare-package-missing": {
+      "count": 1,
+      "samples": [
+        {
+          "rel": "test-utils.js",
+          "msg": "Cannot find package 'vitest' imported from /Users/wowdd1/Dev/Everywhere/3rd/opencli/clis/test-utils.js"
+        }
+      ]
+    }
+  }
+}
