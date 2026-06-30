@@ -648,7 +648,21 @@ public sealed class OpenCliRuntime : IAsyncDisposable
         engine.AddHostObject("__opencliHost", hostShim);
 
         engine.Execute("""
-            globalThis.fetch = (url, init) => __opencliHost.fetchAsync(url, init || null);
+            // Wrap host FetchResponse so json() returns a NATIVE JS value
+            // via V8's JSON.parse, not a .NET JsonNode (host object that
+            // Array.isArray / Object.entries / .map can't see through).
+            globalThis.fetch = async (url, init) => {
+                const hostResp = await __opencliHost.fetchAsync(url, init || null);
+                const hostText = await hostResp.text();
+                return {
+                    ok: hostResp.ok,
+                    status: hostResp.status,
+                    statusText: hostResp.statusText,
+                    headers: hostResp.headers,
+                    text: async () => hostText,
+                    json: async () => JSON.parse(hostText),
+                };
+            };
             globalThis.console = { log: (...a) => __opencliHost.warn(a.map(String).join(' ')),
                                    warn: (...a) => __opencliHost.warn(a.map(String).join(' ')),
                                    error: (...a) => __opencliHost.warn(a.map(String).join(' ')),
