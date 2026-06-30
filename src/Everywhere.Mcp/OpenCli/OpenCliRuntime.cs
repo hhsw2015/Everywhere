@@ -653,6 +653,21 @@ public sealed class OpenCliRuntime : IAsyncDisposable
                                    warn: (...a) => __opencliHost.warn(a.map(String).join(' ')),
                                    error: (...a) => __opencliHost.warn(a.map(String).join(' ')),
                                    debug: () => {}, info: () => {} };
+            // Stub Node `process` global so adapters / vendored runtime
+            // that reach for process.env.* / process.stderr.write don't
+            // ReferenceError. We honour a small allowlist of env vars via
+            // the host helper; everything else returns undefined.
+            globalThis.process = {
+                env: new Proxy({}, { get: (_t, k) => __opencliHost.getEnv(String(k)) }),
+                stderr: { write: (s) => __opencliHost.warn(String(s)) },
+                stdout: { write: (s) => __opencliHost.warn(String(s)) },
+                platform: __opencliHost.osPlatform(),
+                arch: __opencliHost.osArch(),
+                versions: { node: '20.0.0' },
+                cwd: () => '/',
+                exit: (code) => { throw new Error('process.exit(' + code + ') called'); },
+                nextTick: (fn) => Promise.resolve().then(fn),
+            };
         """);
 
         // Adapters are NOT loaded eagerly — EnsureAdapterLoadedAsync

@@ -628,6 +628,29 @@ public sealed class HostShim
         _ => "unknown",
     };
 
+    /// <summary>Allowlisted process.env lookup. Adapters only legitimately
+    /// need a small set of env vars (verbose flag, cookie jar paths, etc.);
+    /// returning <c>undefined</c> for everything else keeps secrets in the
+    /// host (e.g. ANTHROPIC_API_KEY) out of adapter reach.</summary>
+    public object? getEnv(string name)
+    {
+        if (string.IsNullOrEmpty(name)) return null;
+        // Allowlist — verbose / debug flags adapters check on a hot path.
+        bool allowed = name switch
+        {
+            "OPENCLI_VERBOSE" => true,
+            "OPENCLI_DEBUG" => true,
+            "DEBUG" => true,
+            "NODE_ENV" => true,
+            "HOME" => true,
+            "TMPDIR" => true,
+            "USER" => true,
+            _ => name.StartsWith("OPENCLI_", StringComparison.Ordinal),
+        };
+        if (!allowed) return null;
+        return Environment.GetEnvironmentVariable(name);
+    }
+
     public string osTmpDir() => Path.GetTempPath();
     public string osHomeDir() => Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
     public string osHostName() => Environment.MachineName;
