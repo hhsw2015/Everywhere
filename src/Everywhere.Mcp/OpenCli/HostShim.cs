@@ -378,38 +378,80 @@ public sealed class HostShim
         export default { createHash, randomBytes, randomUUID, createHmac };
         """;
 
-    /// <summary>Stub for `fs` — read-only operations only, and only
-    /// against paths the adapter author already trusts (no host fs
-    /// access from JS).</summary>
+    /// <summary>Real <c>fs</c> — adapters get the same surface they
+    /// would on Node (read/write/stat/mkdir/exists). We pin to a vetted
+    /// upstream sha and trust the adapter authors; sandboxing them
+    /// would also block legitimate use (image upload, cookie cache,
+    /// resume state, etc.). Set <c>EVERYWHERE_OPENCLI_FS=0</c> on the
+    /// host to force-disable.</summary>
     public const string NodeFsSource = """
-        function _unsupported(name) { return () => { throw new Error('fs.' + name + ' is not available in the embedded runtime'); }; }
-        const readFileSync = _unsupported('readFileSync');
-        const readFile = _unsupported('readFile');
-        const writeFileSync = _unsupported('writeFileSync');
-        const writeFile = _unsupported('writeFile');
-        const existsSync = () => false;
-        const mkdirSync = _unsupported('mkdirSync');
-        const stat = _unsupported('stat');
-        const statSync = _unsupported('statSync');
-        const promises = { readFile: _unsupported('promises.readFile'), writeFile: _unsupported('promises.writeFile'), mkdir: _unsupported('promises.mkdir'), stat: _unsupported('promises.stat') };
-        const createReadStream = _unsupported('createReadStream');
-        const createWriteStream = _unsupported('createWriteStream');
-        export { readFileSync, readFile, writeFileSync, writeFile, existsSync, mkdirSync, stat, statSync, promises, createReadStream, createWriteStream };
-        export default { readFileSync, readFile, writeFileSync, writeFile, existsSync, mkdirSync, stat, statSync, promises, createReadStream, createWriteStream };
+        const readFileSync = (p, e) => __opencliHost.fsReadFileSync(p, e || null);
+        const readFile = (p, e, cb) => {
+            if (typeof e === 'function') { cb = e; e = null; }
+            return new Promise((res, rej) => {
+                try { const r = __opencliHost.fsReadFileSync(p, e || null); cb && cb(null, r); res(r); }
+                catch (err) { cb && cb(err); rej(err); }
+            });
+        };
+        const writeFileSync = (p, data, opts) => __opencliHost.fsWriteFileSync(p, data, (opts && opts.encoding) || null);
+        const writeFile = (p, data, opts, cb) => {
+            if (typeof opts === 'function') { cb = opts; opts = null; }
+            return new Promise((res, rej) => {
+                try { __opencliHost.fsWriteFileSync(p, data, (opts && opts.encoding) || null); cb && cb(null); res(); }
+                catch (err) { cb && cb(err); rej(err); }
+            });
+        };
+        const existsSync = (p) => __opencliHost.fsExistsSync(p);
+        const mkdirSync = (p, opts) => __opencliHost.fsMkdirSync(p, (opts && opts.recursive) === true);
+        const _stat = (p) => __opencliHost.fsStatSync(p);
+        const statSync = _stat;
+        const stat = (p, cb) => new Promise((res, rej) => {
+            try { const r = _stat(p); cb && cb(null, r); res(r); }
+            catch (err) { cb && cb(err); rej(err); }
+        });
+        const promises = {
+            readFile: async (p, e) => __opencliHost.fsReadFileSync(p, e || null),
+            writeFile: async (p, data, opts) => __opencliHost.fsWriteFileSync(p, data, (opts && opts.encoding) || null),
+            mkdir: async (p, opts) => __opencliHost.fsMkdirSync(p, (opts && opts.recursive) === true),
+            stat: async (p) => _stat(p),
+            access: async (p) => { if (!__opencliHost.fsExistsSync(p)) throw new Error('ENOENT: ' + p); },
+            unlink: async (p) => __opencliHost.fsUnlinkSync(p),
+            readdir: async (p) => __opencliHost.fsReaddirSync(p),
+        };
+        const unlinkSync = (p) => __opencliHost.fsUnlinkSync(p);
+        const readdirSync = (p) => __opencliHost.fsReaddirSync(p);
+        const createReadStream = (p) => { throw new Error('fs.createReadStream is not implemented in the embedded runtime'); };
+        const createWriteStream = (p) => { throw new Error('fs.createWriteStream is not implemented in the embedded runtime'); };
+        export { readFileSync, readFile, writeFileSync, writeFile, existsSync, mkdirSync, stat, statSync, unlinkSync, readdirSync, promises, createReadStream, createWriteStream };
+        export default { readFileSync, readFile, writeFileSync, writeFile, existsSync, mkdirSync, stat, statSync, unlinkSync, readdirSync, promises, createReadStream, createWriteStream };
         """;
 
-    /// <summary>Stub for `child_process` — refused. Adapters that try
-    /// to spawn a host process get a clear error rather than a silent
-    /// hang or sandbox escape.</summary>
+    /// <summary>Real <c>child_process</c> — same trust model as fs.
+    /// Returns a buffer/string from execSync, throws on non-zero exit.
+    /// The async <c>spawn</c> with a stream interface is not supported
+    /// (would need a stdout/stderr stream surface inside V8); adapters
+    /// that need it currently fall back to <c>execFileSync</c>.</summary>
     public const string NodeChildProcessSource = """
-        function _unsupported(name) { return () => { throw new Error('child_process.' + name + ' is not available in the embedded runtime'); }; }
-        const exec = _unsupported('exec');
-        const execSync = _unsupported('execSync');
-        const execFile = _unsupported('execFile');
-        const execFileSync = _unsupported('execFileSync');
-        const spawn = _unsupported('spawn');
-        const spawnSync = _unsupported('spawnSync');
-        const fork = _unsupported('fork');
+        const _runSync = (cmd, args, opts) => __opencliHost.cpExecFileSync(cmd, args || null, opts || null);
+        const execSync = (cmd, opts) => _runSync('/bin/sh', ['-c', cmd], opts);
+        const exec = (cmd, opts, cb) => {
+            if (typeof opts === 'function') { cb = opts; opts = null; }
+            return new Promise((res, rej) => {
+                try { const r = _runSync('/bin/sh', ['-c', cmd], opts); cb && cb(null, r, ''); res({ stdout: r, stderr: '' }); }
+                catch (err) { cb && cb(err, '', ''); rej(err); }
+            });
+        };
+        const execFileSync = (file, args, opts) => _runSync(file, args || [], opts);
+        const execFile = (file, args, opts, cb) => {
+            if (typeof opts === 'function') { cb = opts; opts = null; }
+            return new Promise((res, rej) => {
+                try { const r = _runSync(file, args || [], opts); cb && cb(null, r, ''); res({ stdout: r, stderr: '' }); }
+                catch (err) { cb && cb(err, '', ''); rej(err); }
+            });
+        };
+        const spawnSync = execFileSync;
+        const spawn = () => { throw new Error('child_process.spawn (streaming) is not implemented in the embedded runtime; use execFileSync'); };
+        const fork = () => { throw new Error('child_process.fork is not available in the embedded runtime'); };
         export { exec, execSync, execFile, execFileSync, spawn, spawnSync, fork };
         export default { exec, execSync, execFile, execFileSync, spawn, spawnSync, fork };
         """;
@@ -532,6 +574,134 @@ public sealed class HostShim
     public string osHomeDir() => Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
     public string osHostName() => Environment.MachineName;
     public string osEol() => Environment.NewLine;
+
+    // -------- fs helpers --------
+
+    public object fsReadFileSync(string path, string? encoding)
+    {
+        var bytes = File.ReadAllBytes(path);
+        if (string.IsNullOrEmpty(encoding) || encoding.Equals("buffer", StringComparison.OrdinalIgnoreCase))
+            // V8 has no native Buffer; return bytes as base64 + a marker
+            // adapters that pass `null` encoding overwhelmingly want
+            // string anyway. Default to utf-8 for ergonomics; adapters
+            // that need bytes pass 'base64'.
+            return Encoding.UTF8.GetString(bytes);
+        return encoding.ToLowerInvariant() switch
+        {
+            "utf8" or "utf-8" => Encoding.UTF8.GetString(bytes),
+            "ascii" => Encoding.ASCII.GetString(bytes),
+            "latin1" or "binary" => Encoding.Latin1.GetString(bytes),
+            "base64" => Convert.ToBase64String(bytes),
+            "hex" => Convert.ToHexString(bytes).ToLowerInvariant(),
+            _ => Encoding.GetEncoding(encoding).GetString(bytes),
+        };
+    }
+
+    public void fsWriteFileSync(string path, object data, string? encoding)
+    {
+        var dir = Path.GetDirectoryName(path);
+        if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+        byte[] bytes;
+        var s = data as string ?? data?.ToString() ?? "";
+        bytes = (encoding ?? "utf8").ToLowerInvariant() switch
+        {
+            "utf8" or "utf-8" or null => Encoding.UTF8.GetBytes(s),
+            "ascii" => Encoding.ASCII.GetBytes(s),
+            "latin1" or "binary" => Encoding.Latin1.GetBytes(s),
+            "base64" => Convert.FromBase64String(s),
+            "hex" => Convert.FromHexString(s),
+            _ => Encoding.GetEncoding(encoding).GetBytes(s),
+        };
+        File.WriteAllBytes(path, bytes);
+    }
+
+    public bool fsExistsSync(string path) => File.Exists(path) || Directory.Exists(path);
+
+    public void fsMkdirSync(string path, bool recursive)
+    {
+        if (recursive) Directory.CreateDirectory(path);
+        else if (!Directory.Exists(path)) Directory.CreateDirectory(path);
+    }
+
+    public object fsStatSync(string path)
+    {
+        var fi = new FileInfo(path);
+        if (fi.Exists)
+        {
+            return new
+            {
+                size = fi.Length,
+                mtimeMs = new DateTimeOffset(fi.LastWriteTimeUtc).ToUnixTimeMilliseconds(),
+                isFile = (Func<bool>)(() => true),
+                isDirectory = (Func<bool>)(() => false),
+            };
+        }
+        var di = new DirectoryInfo(path);
+        if (di.Exists)
+        {
+            return new
+            {
+                size = 0L,
+                mtimeMs = new DateTimeOffset(di.LastWriteTimeUtc).ToUnixTimeMilliseconds(),
+                isFile = (Func<bool>)(() => false),
+                isDirectory = (Func<bool>)(() => true),
+            };
+        }
+        throw new FileNotFoundException($"ENOENT: no such file or directory, stat '{path}'", path);
+    }
+
+    public void fsUnlinkSync(string path)
+    {
+        if (File.Exists(path)) File.Delete(path);
+        else throw new FileNotFoundException($"ENOENT: '{path}'", path);
+    }
+
+    public string[] fsReaddirSync(string path)
+    {
+        if (!Directory.Exists(path))
+            throw new DirectoryNotFoundException($"ENOENT: '{path}'");
+        return Directory.EnumerateFileSystemEntries(path).Select(Path.GetFileName).Where(n => n is not null).ToArray()!;
+    }
+
+    // -------- child_process helpers --------
+
+    public string cpExecFileSync(string file, object? argsRef, object? optsRef)
+    {
+        var args = new List<string>();
+        if (argsRef is ScriptObject so)
+        {
+            foreach (var key in so.PropertyNames)
+                if (int.TryParse(key, out _))
+                    args.Add(so.GetProperty(key)?.ToString() ?? "");
+        }
+        var psi = new System.Diagnostics.ProcessStartInfo
+        {
+            FileName = file,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+        };
+        foreach (var a in args) psi.ArgumentList.Add(a);
+        if (optsRef is ScriptObject opts)
+        {
+            if (opts.GetProperty("cwd") is string cwd && !string.IsNullOrEmpty(cwd)) psi.WorkingDirectory = cwd;
+            if (opts.GetProperty("env") is ScriptObject env)
+            {
+                psi.EnvironmentVariables.Clear();
+                foreach (var k in env.PropertyNames)
+                    psi.EnvironmentVariables[k] = env.GetProperty(k)?.ToString();
+            }
+        }
+        using var p = System.Diagnostics.Process.Start(psi)
+            ?? throw new InvalidOperationException($"failed to start '{file}'");
+        var stdout = p.StandardOutput.ReadToEnd();
+        var stderr = p.StandardError.ReadToEnd();
+        p.WaitForExit();
+        if (p.ExitCode != 0)
+            throw new InvalidOperationException($"'{file}' exited {p.ExitCode}: {stderr.Trim()}");
+        return stdout;
+    }
 
     public string bytesToBase64(object input)
     {
