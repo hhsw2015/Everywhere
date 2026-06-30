@@ -67,7 +67,19 @@ public partial class ApiKey : ObservableValidator
     /// <returns></returns>
     public static ValidationResult? Validate(Guid apiKey)
     {
-        if (GetKey(apiKey).IsNullOrWhiteSpace())
+        // Treat Guid.Empty as "not configured". We DELIBERATELY do not
+        // resolve the secret here: every settings property carrying
+        // [CustomValidation(typeof(ApiKey), nameof(Validate))] runs this
+        // path on startup, and any GetKey() call hits the macOS keychain
+        // — which prompts the user for an admin/keychain password the
+        // first time per item. With ~10 providers × validations, that
+        // turned a single startup into a sequence of system password
+        // dialogs (reported in v0.9.251+).
+        //
+        // A persisted Guid that no longer resolves to a stored secret is
+        // an edge case (vault export / manual edit). It will surface
+        // later when the connector actually tries to use the key.
+        if (apiKey == Guid.Empty)
         {
             return new ValidationResult(LocaleResolver.ValidationErrorMessage_RequiredApiKey);
         }
