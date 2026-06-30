@@ -278,17 +278,32 @@ public sealed class OpenCliRuntime : IAsyncDisposable
                     try
                     {
                         engine.Script.__opencliFactoryArg = loaded.Pipeline.ToJsonString();
+                        engine.Script.__opencliFactoryNeedsBrowser = loaded.Browser;
+                        // The upstream pipeline `fetch` step branches on
+                        // `page === null` — when null, it uses the global
+                        // `fetch` shim; otherwise it calls `page.fetchJson`.
+                        // For PUBLIC (non-browser) pipeline adapters we
+                        // MUST pass null, otherwise the C# Phase1StubPage
+                        // gets called as `page.fetchJson(...)` and
+                        // ClearScript throws `NoExplicitConv` (no such
+                        // method on the host object). Bake the
+                        // browser-vs-public flag into each per-adapter
+                        // closure.
                         engine.Execute("""
-                            globalThis.__opencliFactoryResult = (function (jsonStr) {
+                            globalThis.__opencliFactoryResult = (function (jsonStr, needsBrowser) {
                                 const cfg = JSON.parse(jsonStr);
                                 const runner = globalThis.__opencliPipelineRunner;
-                                return (args, page) => runner.executePipeline(page, cfg, { args: args ?? {} });
-                            })(__opencliFactoryArg);
+                                return (args, page) => runner.executePipeline(
+                                    needsBrowser ? page : null,
+                                    cfg,
+                                    { args: args ?? {} });
+                            })(__opencliFactoryArg, __opencliFactoryNeedsBrowser);
                         """);
                         synth = engine.Script.__opencliFactoryResult as ScriptObject;
                         try
                         {
                             engine.Script.__opencliFactoryArg = null;
+                            engine.Script.__opencliFactoryNeedsBrowser = null;
                             engine.Script.__opencliFactoryResult = null;
                         }
                         catch { }
