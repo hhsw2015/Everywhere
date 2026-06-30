@@ -461,10 +461,58 @@ public sealed class OpenCliRuntime : IAsyncDisposable
                 engine.Execute("""
                     globalThis.__opencliCallResultJson = null;
                     globalThis.__opencliCallError = null;
+                    // Wrap the host IPage as a JS-shaped object — C# methods
+                    // come through as PascalCase (page.Goto), but upstream
+                    // adapters call camelCase (page.goto). Re-export each
+                    // entry as a forwarding function so both names work.
+                    const __wrapPage = (host) => {
+                        if (host === null || host === undefined) return host;
+                        // Reflect the C# surface: every PascalCase method becomes
+                        // a camelCase alias that forwards to it. We can't easily
+                        // enumerate host members in JS, so map the methods we
+                        // know IPage exposes (matches IPage.cs).
+                        const map = {
+                            autoScroll: 'AutoScroll',
+                            cdp: 'Cdp',
+                            click: 'Click',
+                            closeWindow: 'CloseWindow',
+                            evaluate: 'Evaluate',
+                            evaluateWithArgs: 'EvaluateWithArgs',
+                            find: 'Find',
+                            getCookies: 'GetCookies',
+                            getCurrentUrl: 'GetCurrentUrl',
+                            getInterceptedRequests: 'GetInterceptedRequests',
+                            goto: 'Goto',
+                            insertText: 'InsertText',
+                            installInterceptor: 'InstallInterceptor',
+                            keys: 'Keys',
+                            nativeClick: 'NativeClick',
+                            nativeKeyPress: 'NativeKeyPress',
+                            nativeType: 'NativeType',
+                            pressKey: 'PressKey',
+                            readNetworkCapture: 'ReadNetworkCapture',
+                            screenshot: 'Screenshot',
+                            selectTab: 'SelectTab',
+                            setFileInput: 'SetFileInput',
+                            snapshot: 'Snapshot',
+                            startNetworkCapture: 'StartNetworkCapture',
+                            tabs: 'Tabs',
+                            type: 'Type',
+                            wait: 'Wait',
+                            waitForCapture: 'WaitForCapture',
+                            waitForTimeout: 'WaitForTimeout',
+                        };
+                        const proxy = {};
+                        for (const [js, cs] of Object.entries(map)) {
+                            proxy[js] = (...args) => host[cs](...args);
+                        }
+                        return proxy;
+                    };
                     globalThis.__opencliCallPromise = (async () => {
                         try {
                             const cargs = JSON.parse(globalThis.__opencliArgs);
-                            const r = await globalThis.__opencliFn(cargs, globalThis.__opencliPage);
+                            const cpage = __wrapPage(globalThis.__opencliPage);
+                            const r = await globalThis.__opencliFn(cargs, cpage);
                             globalThis.__opencliCallResultJson = JSON.stringify(r === undefined ? null : r);
                         } catch (e) {
                             const code = (e && e.code != null) ? String(e.code) : 'RUNTIME_ERROR';
