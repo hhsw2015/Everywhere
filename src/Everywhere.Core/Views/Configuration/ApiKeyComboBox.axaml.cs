@@ -31,6 +31,33 @@ public sealed partial class ApiKeyComboBox : TemplatedControl
     }
 
     /// <summary>
+    /// When true, the selection box also renders a "+N keys" suffix once
+    /// more than one key lives in <see cref="ItemsSource"/>. Used by web
+    /// search providers where every key in the source list joins the
+    /// rotating KeyPool, not just the selected one.
+    /// </summary>
+    public static readonly StyledProperty<bool> IsPoolHintedProperty =
+        AvaloniaProperty.Register<ApiKeyComboBox, bool>(nameof(IsPoolHinted));
+
+    public bool IsPoolHinted
+    {
+        get => GetValue(IsPoolHintedProperty);
+        set => SetValue(IsPoolHintedProperty, value);
+    }
+
+    public static readonly DirectProperty<ApiKeyComboBox, string?> PoolSuffixProperty =
+        AvaloniaProperty.RegisterDirect<ApiKeyComboBox, string?>(
+            nameof(PoolSuffix),
+            o => o.PoolSuffix);
+
+    private string? _poolSuffix;
+    public string? PoolSuffix
+    {
+        get => _poolSuffix;
+        private set => SetAndRaise(PoolSuffixProperty, ref _poolSuffix, value);
+    }
+
+    /// <summary>
     /// Defines the <see cref="DefaultName"/> property.
     /// </summary>
     public static readonly StyledProperty<string?> DefaultNameProperty =
@@ -95,6 +122,12 @@ public sealed partial class ApiKeyComboBox : TemplatedControl
         _comboBox = e.NameScope.Find<ComboBox>("PART_ComboBox");
     }
 
+    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+    {
+        base.OnPropertyChanged(change);
+        if (change.Property == IsPoolHintedProperty) UpdatePoolSuffix();
+    }
+
     protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
     {
         base.OnAttachedToVisualTree(e);
@@ -132,5 +165,20 @@ public sealed partial class ApiKeyComboBox : TemplatedControl
         {
             _items.Add(apiKey);
         }
+        UpdatePoolSuffix();
+    }
+
+    private void UpdatePoolSuffix()
+    {
+        // Only show when the consumer has opted into pool semantics
+        // (web search providers). For the AI-assistant ApiKeyComboBox
+        // every selectable key is independent — surfacing a count
+        // there would be misleading.
+        if (!IsPoolHinted || _itemsSource.Count <= 1)
+        {
+            PoolSuffix = null;
+            return;
+        }
+        PoolSuffix = $" · {_itemsSource.Count} keys";
     }
 }

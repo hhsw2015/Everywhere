@@ -189,6 +189,7 @@ public sealed partial class GoogleWebSearchEngineProvider() : ThirdPartyWebSearc
     public SettingsControl<ApiKeyComboBox> ApiKeyControl => new(
         new ApiKeyComboBox(ApiKeys)
         {
+            IsPoolHinted = true,
             [!ApiKeyComboBox.SelectedIdProperty] = CompiledBinding.Create(
                 (GoogleWebSearchEngineProvider x) => x.ApiKey,
                 source: this,
@@ -269,6 +270,7 @@ public sealed partial class ApiKeyWebSearchEngineProvider(
     public SettingsControl<ApiKeyComboBox> ApiKeyControl => new(
         new ApiKeyComboBox(ApiKeys)
         {
+            IsPoolHinted = true,
             [!ApiKeyComboBox.SelectedIdProperty] = CompiledBinding.Create(
                 (ApiKeyWebSearchEngineProvider x) => x.ApiKey,
                 source: this,
@@ -328,6 +330,7 @@ public sealed partial class OptionalApiKeyWebSearchEngineProvider(
     public SettingsControl<ApiKeyComboBox> ApiKeyControl => new(
         new ApiKeyComboBox(ApiKeys)
         {
+            IsPoolHinted = true,
             [!ApiKeyComboBox.SelectedIdProperty] = CompiledBinding.Create(
                 (OptionalApiKeyWebSearchEngineProvider x) => x.ApiKey,
                 source: this,

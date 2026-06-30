@@ -55,6 +55,17 @@
             </Border>
           </shadui:ControlAssist.Footer>
 
+          <ComboBox.SelectionBoxItemTemplate>
+            <DataTemplate x:DataType="c:ApiKey">
+              <StackPanel Orientation="Horizontal" Spacing="0">
+                <TextBlock Text="{Binding Name}"/>
+                <TextBlock
+                  Opacity="0.6"
+                  Text="{Binding PoolSuffix, RelativeSource={RelativeSource AncestorType=v:ApiKeyComboBox}}"/>
+              </StackPanel>
+            </DataTemplate>
+          </ComboBox.SelectionBoxItemTemplate>
+
           <ComboBox.DataTemplates>
             <DataTemplate x:DataType="c:ApiKey">
               <TextBlock Text="{Binding Name}"/>
