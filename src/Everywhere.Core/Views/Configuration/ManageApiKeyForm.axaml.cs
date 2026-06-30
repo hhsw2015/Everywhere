@@ -148,7 +148,15 @@ public sealed partial class ManageApiKeyForm : TemplatedControl, IDisposable
 
         _sharedList = _apiKeys
             .ToObservableChangeSet()
-            .Transform(apiKey => new DataGridApiKeyModel(apiKey))
+            .Transform(apiKey =>
+            {
+                // The manage form is the only surface that legitimately
+                // resolves the stored secret on demand (eye toggle, copy,
+                // edit). Flip the gate here so SecretKey's getter can
+                // fall back to GetKey(Id); other surfaces stay quiet.
+                apiKey.IsSecretRevealable = true;
+                return new DataGridApiKeyModel(apiKey);
+            })
             .AsObservableList();
 
         ItemsSource = _sharedList.Connect().BindEx(out _itemsSourceSubscription);
@@ -214,6 +222,10 @@ public sealed partial class ManageApiKeyForm : TemplatedControl, IDisposable
 
     public void Dispose()
     {
+        // Re-arm the keychain gate on every key we touched, so future
+        // settings page renders don't pop password prompts via passive
+        // bindings.
+        foreach (var k in _apiKeys) k.IsSecretRevealable = false;
         _itemsSourceSubscription.Dispose();
         _selectionSubscription.Dispose();
         _sharedList.Dispose();

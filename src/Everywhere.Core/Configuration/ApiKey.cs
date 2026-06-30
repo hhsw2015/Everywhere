@@ -45,21 +45,26 @@ public partial class ApiKey : ObservableValidator
     [CustomValidation(typeof(ApiKey), nameof(ValidateName))]
     public partial string? Name { get; set; }
 
+    /// <summary>
+    /// When true, <see cref="SecretKey"/>'s getter resolves the stored
+    /// secret from the OS vault on demand (used by the manage-form's
+    /// reveal/edit/copy paths). When false (the default), the getter only
+    /// surfaces the in-memory pending edit — this is intentional, because
+    /// every Avalonia binding scan / NotifyDataErrorInfo pump touches the
+    /// property, and on macOS each GetKey() call prompts the user for an
+    /// admin / keychain password the first time per item.
+    /// </summary>
+    [JsonIgnore]
+    public bool IsSecretRevealable { get; set; }
+
     [JsonIgnore]
     [CustomValidation(typeof(ApiKey), nameof(ValidateKey))]
     public string? SecretKey
     {
-        // Only return the in-memory pending key (during edit). DO NOT
-        // fall back to GetKey(Id) — the property is touched by Avalonia
-        // binding introspection / NotifyDataErrorInfo pumps, and any
-        // GetKey() call hits the macOS keychain, prompting the user for
-        // an admin password the first time per item. With ~6 ApiKey
-        // instances on startup that turned launch into a sequence of
-        // password dialogs (v0.9.251+ regression).
-        //
-        // Connectors that need the actual stored secret call GetKey(Id)
-        // directly at use-time.
-        get => _pendingKey;
+        // Pending edit takes precedence; otherwise only resolve the
+        // stored secret when explicitly revealed (manage-form path).
+        // Connectors that need the secret call GetKey(Id) directly.
+        get => _pendingKey ?? (IsSecretRevealable ? GetKey(Id) : null);
         set => SetProperty(ref _pendingKey, value);
     }
 
