@@ -35,22 +35,79 @@ public sealed class OpenCliTools(OpenCliRuntime runtime, OpenDiaBridge? bridge =
 
     [McpServerTool(Name = "opencli_list")]
     [Description(
-        "List every OpenCLI site adapter Everywhere can run. " +
-        "Returns ≥150 commands across ≥100 sites — public RSS / JSON " +
-        "feeds, DOM scrapes, and (with a connected browser) cookie / " +
-        "intercept / UI strategies. Pair with opencli_describe for a " +
-        "single command's full schema; pair with opencli_run to execute one.")]
-    public async Task<string> OpenCliList(CancellationToken ct = default)
+        "List OpenCLI site adapters Everywhere can run. With no args " +
+        "returns the SITE INDEX only — site name + command count + " +
+        "small description (cheap, ~3 KB). Pass `site` to drill into " +
+        "one site and get every command on it; pass `query` to fuzzy-" +
+        "match across the full registry. Pair with opencli_describe for " +
+        "a command's full schema; pair with opencli_run to execute one.")]
+    public async Task<string> OpenCliList(
+        [Description("Optional site filter (e.g. \"bilibili\"). When set, returns every command for just that site instead of the site index.")] string? site = null,
+        [Description("Optional case-insensitive substring match against site/name/description. Caps at 60 hits.")] string? query = null,
+        CancellationToken ct = default)
     {
         try
         {
             var defs = await runtime.ListAsync(ct).ConfigureAwait(false);
-            var arr = new JsonArray();
-            foreach (var d in defs) arr.Add(d.ToListEntry());
+
+            // Site drill-down.
+            if (!string.IsNullOrWhiteSpace(site))
+            {
+                var siteKey = site.Trim();
+                var matches = defs.Where(d => string.Equals(d.Site, siteKey, StringComparison.OrdinalIgnoreCase)).ToList();
+                var arr = new JsonArray();
+                foreach (var d in matches) arr.Add(d.ToListEntry());
+                return new JsonObject
+                {
+                    ["schema_version"] = "1",
+                    ["mode"] = "site",
+                    ["site"] = siteKey,
+                    ["commands"] = arr,
+                    ["upstream_sha"] = runtime.UpstreamSha,
+                }.ToJsonString();
+            }
+
+            // Fuzzy match.
+            if (!string.IsNullOrWhiteSpace(query))
+            {
+                var q = query.Trim();
+                var matches = defs
+                    .Where(d => d.Site.Contains(q, StringComparison.OrdinalIgnoreCase)
+                             || d.Name.Contains(q, StringComparison.OrdinalIgnoreCase)
+                             || (d.Description?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false))
+                    .Take(60)
+                    .ToList();
+                var arr = new JsonArray();
+                foreach (var d in matches) arr.Add(d.ToListEntry());
+                return new JsonObject
+                {
+                    ["schema_version"] = "1",
+                    ["mode"] = "query",
+                    ["query"] = q,
+                    ["commands"] = arr,
+                    ["upstream_sha"] = runtime.UpstreamSha,
+                }.ToJsonString();
+            }
+
+            // Default: site index — collapses 1257 commands to ~170 sites.
+            var indexArr = new JsonArray();
+            foreach (var g in defs.GroupBy(d => d.Site).OrderBy(g => g.Key, StringComparer.Ordinal))
+            {
+                var sample = g.First();
+                indexArr.Add(new JsonObject
+                {
+                    ["site"] = g.Key,
+                    ["count"] = g.Count(),
+                    ["description"] = sample.Domain ?? sample.Description,
+                });
+            }
             return new JsonObject
             {
                 ["schema_version"] = "1",
-                ["commands"] = arr,
+                ["mode"] = "index",
+                ["sites"] = indexArr,
+                ["total_commands"] = defs.Count,
+                ["hint"] = "call opencli_list({site:\"<name>\"}) to drill into a site, or opencli_list({query:\"<text>\"}) for fuzzy search",
                 ["upstream_sha"] = runtime.UpstreamSha,
             }.ToJsonString();
         }
