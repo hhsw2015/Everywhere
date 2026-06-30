@@ -236,6 +236,12 @@ public sealed class EverywhereMcpHttpHost : IHostedService, IAsyncDisposable
         var httpClientFactory = _parentServices.GetService<IHttpClientFactory>();
         if (httpClientFactory is not null) builder.Services.AddSingleton(httpClientFactory);
         builder.Services.AddSingleton<Tools.WebSearchTool>();
+        // OpenCliTools needs OpenCliRuntime resolved from the inner
+        // container; forward the singleton from the parent like the other
+        // [McpServerToolType] dependencies above.
+        var openCliRuntime = _parentServices.GetService<OpenCli.OpenCliRuntime>();
+        if (openCliRuntime is not null) builder.Services.AddSingleton(openCliRuntime);
+        builder.Services.AddSingleton<Tools.OpenCliTools>();
         builder.Services.AddSingleton(_idle);
         builder.Services.AddSingleton(_browserUrl);
         builder.Services.AddSingleton(_finder);
