@@ -546,6 +546,7 @@ public sealed class OpenCliRuntime : IAsyncDisposable
         var engine = new V8ScriptEngine(
             V8ScriptEngineFlags.EnableTaskPromiseConversion |
             V8ScriptEngineFlags.EnableDateTimeConversion |
+            V8ScriptEngineFlags.EnableDynamicModuleImports |
             V8ScriptEngineFlags.DisableGlobalMembers);
         // Publish the engine reference IMMEDIATELY so a faulted boot can
         // still be torn down by DisposeAsync.
