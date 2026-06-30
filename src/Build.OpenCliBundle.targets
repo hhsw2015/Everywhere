@@ -3,32 +3,41 @@
     SPEC §8 Phase 0 step 4 — copy 3rd/opencli/* into the publish output
     so the V8 runtime can find adapters at runtime. Shared across the
     three platform projects to keep the bundle layout identical.
+
+    Uses <Content> rather than <None> because the macOS app-bundle
+    publisher only honours Content/EmbeddedResource for MonoBundle
+    contents — <None> items are dropped silently on .NET macOS publish.
+
+    On macOS the .app bundle layout puts dlls under
+    Contents/MonoBundle, so opencli/* lands at
+    Contents/MonoBundle/Resources/opencli/ — OpenCliRuntime probes
+    AppContext.BaseDirectory + Resources/opencli/clis first.
   -->
   <PropertyGroup>
     <_OpenCliSourceDir>$(MSBuildThisFileDirectory)../3rd/opencli</_OpenCliSourceDir>
   </PropertyGroup>
 
   <ItemGroup Condition="Exists('$(_OpenCliSourceDir)/clis')">
-    <None Include="$(_OpenCliSourceDir)/clis/**/*.js"
-          Exclude="$(_OpenCliSourceDir)/clis/**/*.test.js">
+    <Content Include="$(_OpenCliSourceDir)/clis/**/*.js"
+             Exclude="$(_OpenCliSourceDir)/clis/**/*.test.js">
       <Link>Resources/opencli/clis/%(RecursiveDir)%(Filename)%(Extension)</Link>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Include="$(_OpenCliSourceDir)/cli-manifest.json">
+    </Content>
+    <Content Include="$(_OpenCliSourceDir)/cli-manifest.json">
       <Link>Resources/opencli/cli-manifest.json</Link>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Include="$(_OpenCliSourceDir)/UPSTREAM_SHA">
+    </Content>
+    <Content Include="$(_OpenCliSourceDir)/UPSTREAM_SHA">
       <Link>Resources/opencli/UPSTREAM_SHA</Link>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Include="$(_OpenCliSourceDir)/UPSTREAM_REF" Condition="Exists('$(_OpenCliSourceDir)/UPSTREAM_REF')">
+    </Content>
+    <Content Include="$(_OpenCliSourceDir)/UPSTREAM_REF" Condition="Exists('$(_OpenCliSourceDir)/UPSTREAM_REF')">
       <Link>Resources/opencli/UPSTREAM_REF</Link>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
+    </Content>
   </ItemGroup>
 </Project>

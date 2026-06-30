@@ -278,8 +278,8 @@ public sealed class OpenCliRuntime : IAsyncDisposable
         catch (OperationCanceledException) { /* dispose-time cancellation is fine */ }
         catch (Exception ex) { _log?.LogDebug(ex, "opencli: UPSTREAM_SHA read failed"); }
 
-        _log?.LogInformation("opencli runtime booted in {Ms}ms loaded={Loaded} failed={Failed} sha={Sha}",
-            sw.ElapsedMilliseconds, loaded, failed, UpstreamSha);
+        _log?.LogInformation("opencli runtime booted in {Ms}ms loaded={Loaded} failed={Failed} sha={Sha} clisDir={ClisDir}",
+            sw.ElapsedMilliseconds, loaded, failed, UpstreamSha, _clisDir);
         return engine;
     }
 

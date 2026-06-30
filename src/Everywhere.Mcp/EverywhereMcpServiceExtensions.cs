@@ -54,22 +54,39 @@ public static class EverywhereMcpServiceExtensions
         services.TryAddSingleton<OpenCli.OpenCliRuntime>(sp =>
         {
             var baseDir = AppContext.BaseDirectory;
-            // Publish-side layout (Resources/opencli/{clis,cli-manifest.json}).
-            string clis = Path.Combine(baseDir, "Resources", "opencli", "clis");
-            string manifest = Path.Combine(baseDir, "Resources", "opencli", "cli-manifest.json");
-            if (!Directory.Exists(clis))
+            // Probe the published layout first, then macOS Contents/Resources
+            // (the .app bundler diverts <Content> items there), then a dev
+            // fallback that walks up to find 3rd/opencli/ in the repo root.
+            string? clisDir = null;
+            foreach (var probe in new[]
+                     {
+                         Path.Combine(baseDir, "Resources", "opencli"),
+                         Path.Combine(baseDir, "..", "Resources", "opencli"),
+                         Path.Combine(baseDir, "..", "Resources", "Resources", "opencli"),
+                     })
             {
-                // Dev fallback: 3rd/opencli/ in the repo root.
+                var canon = Path.GetFullPath(probe);
+                if (Directory.Exists(Path.Combine(canon, "clis")))
+                {
+                    clisDir = canon;
+                    break;
+                }
+            }
+            if (clisDir is null)
+            {
                 var dir = new DirectoryInfo(baseDir);
                 while (dir != null && !Directory.Exists(Path.Combine(dir.FullName, "3rd", "opencli", "clis")))
                     dir = dir.Parent;
-                if (dir != null)
-                {
-                    clis = Path.Combine(dir.FullName, "3rd", "opencli", "clis");
-                    manifest = Path.Combine(dir.FullName, "3rd", "opencli", "cli-manifest.json");
-                }
+                if (dir != null) clisDir = Path.Combine(dir.FullName, "3rd", "opencli");
             }
-            return new OpenCli.OpenCliRuntime(clis, manifest, new HttpClient(),
+            // Last resort — point at the (likely missing) publish layout so
+            // the runtime still constructs and List/Run return an empty
+            // registry instead of crashing DI at boot.
+            clisDir ??= Path.Combine(baseDir, "Resources", "opencli");
+            return new OpenCli.OpenCliRuntime(
+                Path.Combine(clisDir, "clis"),
+                Path.Combine(clisDir, "cli-manifest.json"),
+                new HttpClient(),
                 sp.GetService<Microsoft.Extensions.Logging.ILogger<OpenCli.OpenCliRuntime>>());
         });
         services.TryAddSingleton<Tools.OpenCliTools>();
