@@ -45,21 +45,28 @@ public sealed class OpenDiaPageBridge : IPage
     private static readonly TimeSpan WaitTimeout = TimeSpan.FromMinutes(11);
     private const int MaxWaitMs = 10 * 60 * 1000;
 
-    // OpenDia extension WS accepts every tool it registers by name (~161).
-    // Direct dispatch is correct; the earlier "Unknown method: X" errors
-    // I chased with a wrap were misdiagnosed:
-    //   * v0.9.278-earlier "Unknown method: browser_evaluate_js" — I was
-    //     invoking the wrong tool name; the real one is browser_cdp_evaluate
-    //     (fixed in v0.9.278).
-    //   * v0.9.280 "Unknown method: call_tool" — the wrap I added sent the
-    //     literal string "call_tool" as the extension tool name. call_tool
-    //     is a MCP-layer meta tool (see MetaTools.cs), not an extension tool.
-    // Evidence for the current path: v0.9.280 with the wrap failed on
-    // reddit/read (cookie strategy → browser_cdp_evaluate); reverting to
-    // direct dispatch — same as v0.9.278 for public strategies which have
-    // been passing parity-wide since — is the correct posture.
-    private Task<JsonNode?> Call(string method, JsonObject? args, CancellationToken ct = default) =>
-        bridge.CallToolAsync(method, args, TimeoutFor(method), ct);
+    // OpenDia extension registers its tools without the "browser_" prefix
+    // (e.g. `cdp_evaluate`, `open`, `snapshot`) — the prefix is a
+    // convention added at Everywhere's MCP-facing tools/list layer to
+    // namespace them alongside our native tools.
+    //
+    // Every OpenDiaPageBridge callsite writes the full "browser_XXX" name
+    // for readability, so strip the prefix here before handing to the
+    // extension WS pipe. This mirrors what
+    // EverywhereMcpHttpHost.WithCallToolHandler already does for direct
+    // MCP dispatch (see the `origName = name.Substring(Prefix.Length)`
+    // there).
+    //
+    // Failing to strip → "Unknown method: browser_X" from the extension
+    // (v0.9.278 through v0.9.282 hit this on cookie-strategy adapters
+    // like reddit/read that use browser_cdp_evaluate).
+    private Task<JsonNode?> Call(string method, JsonObject? args, CancellationToken ct = default)
+    {
+        var extName = method.StartsWith(OpenDiaToolListBuilder.Prefix, StringComparison.Ordinal)
+            ? method.Substring(OpenDiaToolListBuilder.Prefix.Length)
+            : method;
+        return bridge.CallToolAsync(extName, args, TimeoutFor(method), ct);
+    }
 
     private static TimeSpan TimeoutFor(string method) => method switch
     {
