@@ -449,7 +449,21 @@ public sealed class OpenCliRuntime : IAsyncDisposable
                 engine.Script.__opencliPage = page;
                 engine.Script.__opencliArgs = args.DeepClone().ToJsonString();
                 engine.Script.__opencliFn = def.Func;
-            engine.Script.__opencliFnBrowser = def.Browser;
+                engine.Script.__opencliFnBrowser = def.Browser;
+                // SPEC upstream: manifest.navigateBefore is the URL the
+                // adapter framework must navigate the browser tab to
+                // BEFORE calling the adapter func. Cookie-tier adapters
+                // (reddit/*, bilibili/*, ...) rely on this so their
+                // relative `fetch('/api/...')` calls hit the right origin
+                // with the user's logged-in cookies.
+                string? navBefore = null;
+                if (manifestEntry.Raw.TryGetPropertyValue("navigateBefore", out var nb) &&
+                    nb is JsonValue nbv && nbv.TryGetValue<string>(out var nbs) &&
+                    !string.IsNullOrEmpty(nbs))
+                {
+                    navBefore = nbs;
+                }
+                engine.Script.__opencliNavigateBefore = navBefore;
                 // Serialise the result inside the IIFE so JSON.stringify
                 // errors (circular structures, Date / BigInt) surface as
                 // adapter exceptions rather than silently flipping a
@@ -519,6 +533,16 @@ public sealed class OpenCliRuntime : IAsyncDisposable
                         try {
                             const cargs = JSON.parse(globalThis.__opencliArgs);
                             const cpage = globalThis.__wrapPage(globalThis.__opencliPage);
+                            // navigateBefore: some adapters (cookie-tier)
+                            // require the tab to be on their origin so
+                            // relative `fetch('/api/...')` works with the
+                            // logged-in cookies. Best-effort — swallow
+                            // errors so a stray failure here doesn't hide
+                            // the adapter's own errors.
+                            if (globalThis.__opencliNavigateBefore && cpage && typeof cpage.goto === 'function') {
+                                try { await cpage.goto(globalThis.__opencliNavigateBefore); }
+                                catch (e) { try { __opencliHost.warn('navigateBefore failed: ' + (e && e.message || e)); } catch {} }
+                            }
                             // Upstream func signatures observed in v1.8.5:
                             //   async (page, args)  — browser=true adapters
                             //   async (page)        — browser=true, no args

@@ -44,7 +44,7 @@ public sealed class OpenDiaPageBridge : IPage
         "browser_evaluate_js"     => TimeSpan.FromMinutes(2),
         "browser_screenshot"      => TimeSpan.FromMinutes(1),
         "browser_auto_scroll"     => TimeSpan.FromMinutes(2),
-        "browser_page_navigate"   => TimeSpan.FromMinutes(1),
+        "browser_open"   => TimeSpan.FromMinutes(1),
         _ => DefaultTimeout,
     };
 
@@ -99,7 +99,7 @@ public sealed class OpenDiaPageBridge : IPage
             return Task.FromException(new ArgumentException("page.goto: url required"));
         if (!Uri.TryCreate(url, UriKind.Absolute, out var u) || u.Scheme is not ("http" or "https"))
             return Task.FromException(new ArgumentException($"page.goto: only http(s) urls allowed, got '{url}'"));
-        return Call("browser_page_navigate", Pack(("url", url), ("options", opts?.DeepClone())));
+        return Call("browser_open", Pack(("url", url), ("options", opts?.DeepClone())));
     }
 
     public Task<JsonNode?> Evaluate(string js)
