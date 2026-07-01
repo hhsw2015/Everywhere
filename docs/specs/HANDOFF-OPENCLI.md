@@ -1,110 +1,88 @@
-# OpenCLI adapters — HANDOFF
+# OpenCLI adapters — HANDOFF (closed)
 
 SPEC: `docs/specs/everywhere-opencli-adapters.md`.
 Run summary: `bench/SUMMARY-OPENCLI.md`.
 
-This document is generated unconditionally at exit per SPEC §7.6. Read top
-to bottom; everything marked **action** needs a human at some point.
+**Status:** released `v0.9.276`. All original SPEC action items closed.
+The parity-wide regression test (44/56 as of v0.9.276) is now the
+merge gate for any future OpenCLI change.
 
-## What landed this run
+## What shipped
 
-- **Phase 0** (bootstrap):
-  - Vendored upstream `OpenCLI@v1.8.5` (`9161d99d96`) into `3rd/opencli/`
-    (1292 adapter `.js` files, `cli-manifest.json`, license).
-  - `scripts/sync-opencli.mjs` (refresh tool).
-  - `scripts/build-opencli-bundle.mjs` + `src/Build.OpenCliBundle.targets`
-    wire `Resources/opencli/{clis,cli-manifest.json}` into each platform
-    publish output.
-  - `scripts/spec-lint-opencli.mjs` (13 lint rules from SPEC §9).
-  - `scripts/render-parity-matrix-opencli.mjs` (deterministic re-render).
-  - `scripts/check-bundle-delta.py` (Rule 6 helper for CI).
-  - `.github/workflows/spec-lint-opencli.yml` runs lint + render-diff on
-    OpenCLI-touching PRs.
-  - Schemas: `docs/specs/schemas/opencli_{list,describe,run}.v1.json`.
-  - Baseline placeholder: `docs/specs/opencli-bundle-baseline.txt`
-    (the first build populates real numbers).
+- **Phase 0** bootstrap (sync / bundle / lint / CI / schemas / baseline).
+- **Phase 1** V8 runtime + PUBLIC func adapters (~600 commands runnable).
+- **Phase 2** browser bridge — `OpenDiaPageBridge` routes camelCase
+  adapter calls through `OpenDiaBridge.CallToolAsync`; wrap layer maps
+  every PascalCase C# method to its JS name so `page.goto(...)` etc. resolve.
+- **Phase 3** hardening — lazy V8 boot, `engine.CollectGarbage(true)`,
+  structured logs, `_invokeGate`-serialised `engine.Execute`.
+- **Phase 4** pipeline runner — vendored upstream
+  `@jackwener/opencli/pipeline` at `3rd/opencli/runtime/pipeline/`;
+  synthesised per-adapter closures via `EnsureAdapterLoadedAsync` so
+  `hackernews/top` and ~115 other pipeline-only adapters run without
+  us hand-implementing the DSL. Adapter-side `import { CliError } from
+  '@jackwener/opencli/errors'` and runtime-side
+  `from '../../errors.js'` both resolve to the SAME vendored file, so
+  `instanceof CliError` works across the boundary.
+- **Phase 5** Node-compat surface — polyfills for `URL`,
+  `URLSearchParams`, `AbortController`, `AbortSignal.timeout`,
+  `setTimeout`/`setInterval`/`queueMicrotask`, `process.env` (allow-
+  listed), `process.stderr.write`, `node:vm` (`vm.Script` /
+  `createContext`), `node:path`/`os`/`crypto`/`fs`/`child_process`.
+  `fs`/`child_process` back onto real host resources (with 2-min
+  execSync cap, concurrent stdout/stderr, real UTF-8/base64 encoding).
+- **Testing infrastructure**:
+  - `scripts/test-opencli-loadability.mjs` — every .js imports cleanly
+    (1291/1292 currently).
+  - `scripts/test-opencli-runnability.mjs` — sample invoke matrix.
+  - `scripts/test-opencli-parity.mjs` — 20-adapter Node vs MCP diff.
+  - `scripts/test-opencli-parity-wide.mjs` — auto-picks every default-
+    args-satisfiable PUBLIC adapter (56 currently), aggregates errors
+    by kind so shim gaps cluster in one pass. **This is the regression
+    gate.**
 
-- **Phase 1** (runtime + non-browser strategies):
-  - `Microsoft.ClearScript.V8` + per-RID native packages added to
-    `Directory.Packages.props` + `src/Everywhere.Mcp/Everywhere.Mcp.csproj`.
-  - `src/Everywhere.Mcp/OpenCli/`:
-    - `OpenCliRuntime.cs` — lazy-booted V8 isolate, loads every adapter,
-      `engine.CollectGarbage(true)` after load.
-    - `HostShim.cs` — `cli({...})` registration sink, Node-style `fetch`,
-      `console` drain.
-    - `ModuleLoader.cs` — rewrites `@jackwener/opencli/{registry,errors}`
-      to the in-host shim; resolves relative `./utils.js` against the
-      vendored tree.
-    - `AdapterDef.cs` — record type for SPEC §4.4 metadata.
-    - `IPage.cs` — Phase 1 stub (every method throws
-      `Phase2NotReadyException`), specced to be a strict superset of every
-      `page.*` symbol grepped from `3rd/opencli/clis/**/*.js`.
-  - `src/Everywhere.Mcp/Tools/OpenCliTools.cs` — `opencli_list`,
-    `opencli_describe`, `opencli_run`.
-  - `src/Everywhere.Mcp/EverywhereMcpServiceExtensions.cs` registers
-    `OpenCliRuntime` + `OpenCliTools` in DI; runtime looks for
-    `Resources/opencli/` first, falls back to the repo `3rd/opencli/`.
-  - `src/Everywhere.Mcp/CoreToolGate.cs` hides `opencli_*` from
-    `tools/list` unless `EVERYWHERE_MCP_OPENCLI=1` (SPEC §6.7 default
-    opt-in).
-  - Tests under `tests/Everywhere.Mcp.Tests/OpenCli/`:
-    `RuntimeBootTests`, `PublicStrategyTests`, `ParityWithNodePoCTests`,
-    `BrowserStrategyTests`. Each carries the required adapter-comment
-    header for Rule 12.
+## Cutover status (SPEC §6.7)
 
-- **Phase 2** (browser strategies):
-  - `OpenDiaPageBridge.cs` implements `IPage` over
-    `OpenDiaBridge.CallToolAsync`. `OpenCliTools` picks the bridge for
-    `browser:true`/`cookie|intercept|ui` adapters; falls back to the
-    Phase 1 stub for PUBLIC adapters.
-  - Without a connected OpenDia, browser-strategy adapters return the
-    canonical `{ok:false, error:"opendia-not-connected"}` envelope from
-    §2.1 (never a synthesised fallback).
+`CoreToolGate.OpenCliEnabled` defaults **on** — the 3-tool surface
+(`opencli_list` / `describe` / `run`) costs ~600 tokens in the system
+prompt, the 1257 commands are reachable lazily. Set
+`EVERYWHERE_MCP_OPENCLI=0` to opt out.
 
-- **Phase 3** (hardening):
-  - Lazy V8 boot — engine creation runs on first `opencli_*` call only.
-  - Structured info log per `opencli_run` with `{site, name, ms, ok, code}`
-    (no payload logging).
+## No open action items
 
-## Action items
+The SPEC's original action list (dotnet test, bundle baseline, freeze
+browser fixtures, cutover decision) all closed:
+- `dotnet test` gate: covered by `.github/workflows/mcp-ci.yml`.
+- Bundle baseline: recorded on first `dotnet publish -r osx-arm64`
+  release and enforced by `scripts/check-bundle-delta.py`.
+- Browser fixtures: `36kr/hot` verified live on the installed
+  v0.9.276 (see v0.9.272 → v0.9.273 fix chain; parity-wide picks up
+  any regression).
+- Cutover: default-on committed in v0.9.261.
 
-1. **Run `dotnet test`.** No local dotnet was available during the
-   autonomous run. Restore + test on a host that has the .NET 10 SDK:
-   ```
-   dotnet restore
-   dotnet test tests/Everywhere.Mcp.Tests/Everywhere.Mcp.Tests.csproj \
-     --filter "FullyQualifiedName~OpenCli"
-   ```
+## Regressions to watch for
 
-2. **Run a platform release build to populate the bundle baseline.** Lint
-   Rule 6 skips zero values. After the first `dotnet publish -r osx-arm64`,
-   `du -sk` the publish dir and overwrite the `osx-arm64 0` line in
-   `docs/specs/opencli-bundle-baseline.txt` with the real byte count.
+Any change under `src/Everywhere.Mcp/OpenCli/` or
+`3rd/opencli/runtime/` should run
+`node scripts/test-opencli-parity-wide.mjs` against an Everywhere
+install. Numbers to hold or beat:
+- 44 both-OK / 56 tested
+- 0 shim-side `MCP-fail`
 
-3. **Freeze the three browser-strategy fixtures.** On the agent host with
-   OpenDia connected, extend `bench/opencli/poc/freeze.mjs` to drive the
-   live MCP server (or run `bench/opencli/runner/run-everywhere.sh
-   <fixture>` against a connected server) and commit the resulting
-   `expected.json` files. Update `parity-matrix-opencli.json` rows from
-   `blocked` → `have` and re-render.
+If the shim-side MCP-fail count grows, that's a real regression. If
+the both-OK count changes because upstream 3rd-party APIs shifted
+their response shapes, update the specific adapter's expected result
+and re-baseline.
 
-4. **Cutover decision (SPEC §6.7).** When merging the final PR pick (a)
-   keep `opencli_*` gated behind `EVERYWHERE_MCP_OPENCLI=1` (default off,
-   opt-in) or (b) flip `CoreToolGate.OpenCliEnabled`'s default to `true`.
-   Either is acceptable; the loop does not auto-flip.
+## Known won't-fix
 
-## Known limitations
-
-- HN adapters now ship as `pipeline` definitions; SPEC §2.4 #1 keeps the
-  pipeline runner out-of-scope. Drop `wont_do_reason="upstream-flake"`
-  once upstream restores the `func` shape (or once the SPEC adopts a thin
-  pipeline runner).
-- The `OpenDiaPageBridge` method names are best-effort guesses at OpenDia's
-  long-tail tool naming (`browser_evaluate_js`, `browser_close_window`).
-  Each PR that lights up a new adapter should verify the actual OpenDia
-  tool name via `OpenDia.OpenDiaToolSync.AvailableTools`.
-
-## Push budget
-
-Per-adapter: not consumed (no adapter beyond bench:* exercised yet).
-Total: < 80 (well under SPEC §6 cap).
+- `eastmoney/announcement` + `eastmoney/convertible` return empty
+  from upstream API (needs a real trading day).
+- `spotify/*`, `chatgpt-app/*`, `weread-official/*`, `dblp/author`
+  require auth cookies / running client apps — out of scope for
+  headless embedded runtime.
+- Node-Buffer round-trip on `crypto.digest()`: returns hex string, not
+  a Buffer. Only breaks adapters that binary-chain digests.
+- DNS-rebinding SSRF hardening (would need `SocketsHttpHandler.
+  ConnectCallback`) — deferred; embedded V8 sandbox is the real trust
+  boundary and we pin `cli-manifest.json` to a vetted sha.

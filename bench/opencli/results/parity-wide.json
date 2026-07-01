@@ -1,17 +1,16 @@
 {
   "total": 56,
-  "bothOK": 41,
-  "mcpFail": 7,
-  "nodeFail": 0,
-  "bothFail": 8,
+  "bothOK": 44,
+  "mcpFail": 2,
+  "nodeFail": 1,
+  "bothFail": 9,
   "results": [
     {
       "site": "1point3acres",
       "name": "digest",
       "node": {
-        "ok": true,
-        "len": 20,
-        "type": "array"
+        "ok": false,
+        "err": "1point3acres request failed: HTTP 403 Forbidden from https://www.1point3acres.com/bbs/forum.php?mod=guide&view=digest"
       },
       "mcp": {
         "ok": false,
@@ -28,7 +27,7 @@
       },
       "mcp": {
         "ok": false,
-        "err": "1point3acres request failed: net_io_eof",
+        "err": "1point3acres request failed: HTTP 403 Forbidden from https://www.1point3acres.com/bbs/forum.php",
         "code": "COMMAND_EXEC"
       }
     },
@@ -55,9 +54,9 @@
         "type": "array"
       },
       "mcp": {
-        "ok": false,
-        "err": "Unable to reach Apple Podcasts charts for US",
-        "code": "FETCH_ERROR"
+        "ok": true,
+        "len": 20,
+        "type": "array"
       }
     },
     {
@@ -440,7 +439,7 @@
       "name": "recommend",
       "node": {
         "ok": true,
-        "len": 19,
+        "len": 20,
         "type": "array"
       },
       "mcp": {
@@ -458,9 +457,9 @@
         "type": "array"
       },
       "mcp": {
-        "ok": false,
-        "err": "setTimeout is not defined",
-        "code": "RUNTIME_ERROR"
+        "ok": true,
+        "len": 10,
+        "type": "array"
       }
     },
     {
@@ -472,9 +471,9 @@
         "type": "array"
       },
       "mcp": {
-        "ok": false,
-        "err": "setTimeout is not defined",
-        "code": "RUNTIME_ERROR"
+        "ok": true,
+        "len": 10,
+        "type": "array"
       }
     },
     {
@@ -620,13 +619,13 @@
       "name": "bounties",
       "node": {
         "ok": true,
-        "len": 1,
+        "len": 0,
         "type": "array"
       },
       "mcp": {
-        "ok": false,
-        "err": "net_io_eof",
-        "code": "RUNTIME_ERROR"
+        "ok": true,
+        "len": 0,
+        "type": "array"
       }
     },
     {
@@ -675,9 +674,8 @@
       "site": "v2ex",
       "name": "hot",
       "node": {
-        "ok": true,
-        "len": 8,
-        "type": "array"
+        "ok": false,
+        "err": "fetch failed"
       },
       "mcp": {
         "ok": true,
