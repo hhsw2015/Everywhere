@@ -545,13 +545,23 @@ public sealed class OpenCliRuntime : IAsyncDisposable
                                 proxy[js] = async (...args) => {
                                     const r = await host[cs](...args);
                                     if (r === null || r === undefined) return r;
-                                    // r is a C# JsonNode host reference — no
-                                    // JS-visible fields. Round-trip via a host
-                                    // delegate that stringifies it, then parse.
-                                    const s = globalThis.__opencliJsonify(r);
+                                    // Round-trip host JsonNode → JSON → JS.
+                                    // Throw with diagnostics so failures surface
+                                    // in the adapter envelope instead of silently
+                                    // becoming null.
+                                    const jsonify = globalThis.__opencliJsonify;
+                                    if (typeof jsonify !== 'function') {
+                                        throw new Error('page.' + js + ': __opencliJsonify not registered (typeof=' + typeof jsonify + ')');
+                                    }
+                                    const s = jsonify(r);
                                     if (s === null || s === undefined) return null;
+                                    if (typeof s !== 'string') {
+                                        throw new Error('page.' + js + ': jsonify returned non-string (typeof=' + typeof s + ')');
+                                    }
                                     try { return JSON.parse(s); }
-                                    catch { return r; }
+                                    catch (e) {
+                                        throw new Error('page.' + js + ': JSON.parse failed: ' + e.message + ' payload=' + s.slice(0, 200));
+                                    }
                                 };
                             } else {
                                 proxy[js] = (...args) => host[cs](...args);
