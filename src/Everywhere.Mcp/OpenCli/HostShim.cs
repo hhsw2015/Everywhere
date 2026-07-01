@@ -973,6 +973,24 @@ public sealed class HostShim
             }
         }
 
+        // Default headers: many upstream targets (devto, github, hf,
+        // stackoverflow, apple-podcasts) return 403 without a
+        // browser-ish User-Agent, and some also want a plausible Accept.
+        // Only set them if the caller hasn't already.
+        if (!msg.Headers.Contains("User-Agent"))
+        {
+            msg.Headers.TryAddWithoutValidation("User-Agent",
+                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36");
+        }
+        if (!msg.Headers.Contains("Accept"))
+        {
+            msg.Headers.TryAddWithoutValidation("Accept", "*/*");
+        }
+        if (!msg.Headers.Contains("Accept-Language"))
+        {
+            msg.Headers.TryAddWithoutValidation("Accept-Language", "en-US,en;q=0.9");
+        }
+
         using var headerCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         headerCts.CancelAfter(TimeSpan.FromSeconds(30));
 

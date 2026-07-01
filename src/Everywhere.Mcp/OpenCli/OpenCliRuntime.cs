@@ -719,6 +719,45 @@ public sealed class OpenCliRuntime : IAsyncDisposable
             // V8 isolate doesn't ship URL / URLSearchParams as globals
             // (they're WHATWG specs, not part of ES2024). Many adapters
             // build query strings via `new URL(...)` / `new URLSearchParams(...)`.
+            // V8 isolate default globals miss AbortController/AbortSignal
+            // (WHATWG DOM). Ship a minimal shim — timers only,
+            // .aborted flag, .reason. Enough for adapters that pass
+            // `signal: AbortSignal.timeout(ms)` into fetch. Real
+            // abort semantics (canceling in-flight requests) are
+            // covered by HostShim.fetchAsync's own 30s timeout.
+            globalThis.AbortController = globalThis.AbortController || class AbortController {
+                constructor() {
+                    this.signal = new globalThis.AbortSignal();
+                }
+                abort(reason) {
+                    this.signal._abort(reason);
+                }
+            };
+            globalThis.AbortSignal = globalThis.AbortSignal || class AbortSignal {
+                constructor() {
+                    this.aborted = false;
+                    this.reason = undefined;
+                    this._listeners = [];
+                }
+                _abort(reason) {
+                    if (this.aborted) return;
+                    this.aborted = true;
+                    this.reason = reason;
+                    for (const cb of this._listeners) { try { cb(); } catch {} }
+                }
+                addEventListener(_event, cb) { this._listeners.push(cb); }
+                removeEventListener(_event, cb) { this._listeners = this._listeners.filter(l => l !== cb); }
+                static timeout(ms) {
+                    const sig = new globalThis.AbortSignal();
+                    setTimeout(() => sig._abort(new Error(`AbortSignal.timeout: ${ms}ms elapsed`)), ms);
+                    return sig;
+                }
+                static abort(reason) {
+                    const sig = new globalThis.AbortSignal();
+                    sig._abort(reason);
+                    return sig;
+                }
+            };
             globalThis.URLSearchParams = globalThis.URLSearchParams || class URLSearchParams {
                 constructor(init) {
                     this._params = [];

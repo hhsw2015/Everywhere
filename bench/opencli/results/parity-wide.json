@@ -1,0 +1,784 @@
+{
+  "total": 56,
+  "bothOK": 35,
+  "mcpFail": 12,
+  "nodeFail": 0,
+  "bothFail": 9,
+  "results": [
+    {
+      "site": "1point3acres",
+      "name": "digest",
+      "node": {
+        "ok": false,
+        "err": "1point3acres request failed: HTTP 403 Forbidden from https://www.1point3acres.com/bbs/forum.php?mod=guide&view=digest"
+      },
+      "mcp": {
+        "ok": false,
+        "err": "1point3acres request failed: HTTP 403 Forbidden from https://www.1point3acres.com/bbs/forum.php?mod=guide&view=digest",
+        "code": "COMMAND_EXEC"
+      }
+    },
+    {
+      "site": "1point3acres",
+      "name": "forums",
+      "node": {
+        "ok": false,
+        "err": "1point3acres request failed: HTTP 403 Forbidden from https://www.1point3acres.com/bbs/forum.php"
+      },
+      "mcp": {
+        "ok": false,
+        "err": "1point3acres request failed: HTTP 403 Forbidden from https://www.1point3acres.com/bbs/forum.php",
+        "code": "COMMAND_EXEC"
+      }
+    },
+    {
+      "site": "36kr",
+      "name": "news",
+      "node": {
+        "ok": true,
+        "len": 20,
+        "type": "array"
+      },
+      "mcp": {
+        "ok": true,
+        "len": 20,
+        "type": "array"
+      }
+    },
+    {
+      "site": "apple-podcasts",
+      "name": "top",
+      "node": {
+        "ok": true,
+        "len": 20,
+        "type": "array"
+      },
+      "mcp": {
+        "ok": false,
+        "err": "Unable to reach Apple Podcasts charts for US",
+        "code": "FETCH_ERROR"
+      }
+    },
+    {
+      "site": "bbc",
+      "name": "news",
+      "node": {
+        "ok": true,
+        "len": 20,
+        "type": "array"
+      },
+      "mcp": {
+        "ok": true,
+        "len": 20,
+        "type": "array"
+      }
+    },
+    {
+      "site": "binance",
+      "name": "gainers",
+      "node": {
+        "ok": true,
+        "len": 10,
+        "type": "array"
+      },
+      "mcp": {
+        "ok": true,
+        "len": 10,
+        "type": "array"
+      }
+    },
+    {
+      "site": "binance",
+      "name": "losers",
+      "node": {
+        "ok": true,
+        "len": 10,
+        "type": "array"
+      },
+      "mcp": {
+        "ok": true,
+        "len": 10,
+        "type": "array"
+      }
+    },
+    {
+      "site": "bloomberg",
+      "name": "crypto",
+      "node": {
+        "ok": true,
+        "len": 1,
+        "type": "array"
+      },
+      "mcp": {
+        "ok": true,
+        "len": 1,
+        "type": "array"
+      }
+    },
+    {
+      "site": "bloomberg",
+      "name": "economics",
+      "node": {
+        "ok": true,
+        "len": 1,
+        "type": "array"
+      },
+      "mcp": {
+        "ok": true,
+        "len": 1,
+        "type": "array"
+      }
+    },
+    {
+      "site": "bluesky",
+      "name": "feeds",
+      "node": {
+        "ok": true,
+        "len": 17,
+        "type": "array"
+      },
+      "mcp": {
+        "ok": true,
+        "len": 17,
+        "type": "array"
+      }
+    },
+    {
+      "site": "bluesky",
+      "name": "trending",
+      "node": {
+        "ok": true,
+        "len": 10,
+        "type": "array"
+      },
+      "mcp": {
+        "ok": true,
+        "len": 10,
+        "type": "array"
+      }
+    },
+    {
+      "site": "chatgpt-app",
+      "name": "new",
+      "node": {
+        "ok": false,
+        "err": "Failed to open ChatGPT chat: child_process.execSync is not available in the embedded runtime"
+      },
+      "mcp": {
+        "ok": false,
+        "err": "Failed to open ChatGPT chat: '/bin/sh' exited 1: 30:38: execution error: Can’t get application \"ChatGPT\". (-1728)",
+        "code": "COMMAND_EXEC"
+      }
+    },
+    {
+      "site": "chatgpt-app",
+      "name": "read",
+      "node": {
+        "ok": false,
+        "err": "Failed to read from ChatGPT: child_process.execSync is not available in the embedded runtime"
+      },
+      "mcp": {
+        "ok": false,
+        "err": "Failed to read from ChatGPT: '/bin/sh' exited 1: 30:38: execution error: Can’t get application \"ChatGPT\". (-1728)",
+        "code": "COMMAND_EXEC"
+      }
+    },
+    {
+      "site": "coingecko",
+      "name": "categories",
+      "node": {
+        "ok": true,
+        "len": 20,
+        "type": "array"
+      },
+      "mcp": {
+        "ok": true,
+        "len": 20,
+        "type": "array"
+      }
+    },
+    {
+      "site": "coingecko",
+      "name": "derivatives",
+      "node": {
+        "ok": true,
+        "len": 20,
+        "type": "array"
+      },
+      "mcp": {
+        "ok": true,
+        "len": 20,
+        "type": "array"
+      }
+    },
+    {
+      "site": "dblp",
+      "name": "author",
+      "node": {
+        "ok": false,
+        "err": "dblp author cannot be empty"
+      },
+      "mcp": {
+        "ok": false,
+        "err": "dblp author cannot be empty",
+        "code": "ARGUMENT"
+      }
+    },
+    {
+      "site": "defillama",
+      "name": "protocols",
+      "node": {
+        "ok": true,
+        "len": 30,
+        "type": "array"
+      },
+      "mcp": {
+        "ok": true,
+        "len": 30,
+        "type": "array"
+      }
+    },
+    {
+      "site": "devto",
+      "name": "latest",
+      "node": {
+        "ok": true,
+        "len": 20,
+        "type": "array"
+      },
+      "mcp": {
+        "ok": false,
+        "err": "devto latest returned HTTP 403",
+        "code": "COMMAND_EXEC"
+      }
+    },
+    {
+      "site": "devto",
+      "name": "top",
+      "node": {
+        "ok": true,
+        "len": 20,
+        "type": "array"
+      },
+      "mcp": {
+        "ok": false,
+        "err": "HTTP 403 Forbidden Bots from https://dev.to/api/articles?top=1&per_page=20",
+        "code": "FETCH_ERROR"
+      }
+    },
+    {
+      "site": "eastmoney",
+      "name": "announcement",
+      "node": {
+        "ok": true,
+        "len": 20,
+        "type": "array"
+      },
+      "mcp": {
+        "ok": false,
+        "err": "BadArgTypes",
+        "code": "RUNTIME_ERROR"
+      }
+    },
+    {
+      "site": "eastmoney",
+      "name": "convertible",
+      "node": {
+        "ok": true,
+        "len": 20,
+        "type": "array"
+      },
+      "mcp": {
+        "ok": false,
+        "err": "BadArgTypes",
+        "code": "RUNTIME_ERROR"
+      }
+    },
+    {
+      "site": "github-trending",
+      "name": "repos",
+      "node": {
+        "ok": true,
+        "len": 19,
+        "type": "array"
+      },
+      "mcp": {
+        "ok": false,
+        "err": "github-trending request failed: BadArgTypes",
+        "code": "COMMAND_EXEC"
+      }
+    },
+    {
+      "site": "google",
+      "name": "news",
+      "node": {
+        "ok": true,
+        "len": 10,
+        "type": "array"
+      },
+      "mcp": {
+        "ok": true,
+        "len": 10,
+        "type": "array"
+      }
+    },
+    {
+      "site": "google",
+      "name": "trends",
+      "node": {
+        "ok": true,
+        "len": 10,
+        "type": "array"
+      },
+      "mcp": {
+        "ok": true,
+        "len": 10,
+        "type": "array"
+      }
+    },
+    {
+      "site": "guazi",
+      "name": "browse",
+      "node": {
+        "ok": true,
+        "len": 20,
+        "type": "array"
+      },
+      "mcp": {
+        "ok": true,
+        "len": 20,
+        "type": "array"
+      }
+    },
+    {
+      "site": "hackernews",
+      "name": "ask",
+      "node": {
+        "ok": true,
+        "len": 20,
+        "type": "array"
+      },
+      "mcp": {
+        "ok": true,
+        "len": 20,
+        "type": "array"
+      }
+    },
+    {
+      "site": "hackernews",
+      "name": "best",
+      "node": {
+        "ok": true,
+        "len": 20,
+        "type": "array"
+      },
+      "mcp": {
+        "ok": true,
+        "len": 20,
+        "type": "array"
+      }
+    },
+    {
+      "site": "hf",
+      "name": "datasets",
+      "node": {
+        "ok": true,
+        "len": 20,
+        "type": "array"
+      },
+      "mcp": {
+        "ok": false,
+        "err": "hf datasets request failed: BadArgTypes",
+        "code": "COMMAND_EXEC"
+      }
+    },
+    {
+      "site": "hf",
+      "name": "models",
+      "node": {
+        "ok": true,
+        "len": 20,
+        "type": "array"
+      },
+      "mcp": {
+        "ok": false,
+        "err": "hf models request failed: BadArgTypes",
+        "code": "COMMAND_EXEC"
+      }
+    },
+    {
+      "site": "homebrew",
+      "name": "popular",
+      "node": {
+        "ok": true,
+        "len": 30,
+        "type": "array"
+      },
+      "mcp": {
+        "ok": true,
+        "len": 30,
+        "type": "array"
+      }
+    },
+    {
+      "site": "juejin",
+      "name": "hot",
+      "node": {
+        "ok": true,
+        "len": 20,
+        "type": "array"
+      },
+      "mcp": {
+        "ok": true,
+        "len": 20,
+        "type": "array"
+      }
+    },
+    {
+      "site": "juejin",
+      "name": "recommend",
+      "node": {
+        "ok": true,
+        "len": 20,
+        "type": "array"
+      },
+      "mcp": {
+        "ok": true,
+        "len": 20,
+        "type": "array"
+      }
+    },
+    {
+      "site": "lesswrong",
+      "name": "curated",
+      "node": {
+        "ok": true,
+        "len": 10,
+        "type": "array"
+      },
+      "mcp": {
+        "ok": false,
+        "err": "AbortSignal is not defined",
+        "code": "RUNTIME_ERROR"
+      }
+    },
+    {
+      "site": "lesswrong",
+      "name": "frontpage",
+      "node": {
+        "ok": true,
+        "len": 10,
+        "type": "array"
+      },
+      "mcp": {
+        "ok": false,
+        "err": "AbortSignal is not defined",
+        "code": "RUNTIME_ERROR"
+      }
+    },
+    {
+      "site": "lobsters",
+      "name": "active",
+      "node": {
+        "ok": true,
+        "len": 20,
+        "type": "array"
+      },
+      "mcp": {
+        "ok": true,
+        "len": 20,
+        "type": "array"
+      }
+    },
+    {
+      "site": "lobsters",
+      "name": "hot",
+      "node": {
+        "ok": true,
+        "len": 20,
+        "type": "array"
+      },
+      "mcp": {
+        "ok": true,
+        "len": 20,
+        "type": "array"
+      }
+    },
+    {
+      "site": "nowcoder",
+      "name": "companies",
+      "node": {
+        "ok": true,
+        "len": 3,
+        "type": "array"
+      },
+      "mcp": {
+        "ok": true,
+        "len": 3,
+        "type": "array"
+      }
+    },
+    {
+      "site": "nowcoder",
+      "name": "creators",
+      "node": {
+        "ok": true,
+        "len": 10,
+        "type": "array"
+      },
+      "mcp": {
+        "ok": true,
+        "len": 10,
+        "type": "array"
+      }
+    },
+    {
+      "site": "openfda",
+      "name": "food-recall",
+      "node": {
+        "ok": true,
+        "len": 10,
+        "type": "array"
+      },
+      "mcp": {
+        "ok": true,
+        "len": 10,
+        "type": "array"
+      }
+    },
+    {
+      "site": "producthunt",
+      "name": "posts",
+      "node": {
+        "ok": true,
+        "len": 20,
+        "type": "array"
+      },
+      "mcp": {
+        "ok": true,
+        "len": 20,
+        "type": "array"
+      }
+    },
+    {
+      "site": "producthunt",
+      "name": "today",
+      "node": {
+        "ok": true,
+        "len": 10,
+        "type": "array"
+      },
+      "mcp": {
+        "ok": true,
+        "len": 10,
+        "type": "array"
+      }
+    },
+    {
+      "site": "sinafinance",
+      "name": "news",
+      "node": {
+        "ok": true,
+        "len": 20,
+        "type": "array"
+      },
+      "mcp": {
+        "ok": true,
+        "len": 20,
+        "type": "array"
+      }
+    },
+    {
+      "site": "spotify",
+      "name": "auth",
+      "node": {
+        "ok": false,
+        "err": "missing"
+      },
+      "mcp": {
+        "ok": false,
+        "err": "Missing Spotify credentials.\n\n1. Go to https://developer.spotify.com/dashboard and create an app\n2. Add http://127.0.0.1:8888/callback as a Redirect URI\n3. Copy your Client ID and Client Secret\n4. Ope",
+        "code": "CONFIG"
+      }
+    },
+    {
+      "site": "spotify",
+      "name": "next",
+      "node": {
+        "ok": false,
+        "err": "missing"
+      },
+      "mcp": {
+        "ok": false,
+        "err": "Not authenticated. Run: opencli spotify auth",
+        "code": "AUTH_REQUIRED"
+      }
+    },
+    {
+      "site": "stackoverflow",
+      "name": "bounties",
+      "node": {
+        "ok": true,
+        "len": 1,
+        "type": "array"
+      },
+      "mcp": {
+        "ok": false,
+        "err": "HTTP 403 Forbidden from https://api.stackexchange.com/2.3/questions/featured?order=desc&sort=activity&site=stackoverflow&pagesize=10",
+        "code": "FETCH_ERROR"
+      }
+    },
+    {
+      "site": "stackoverflow",
+      "name": "hot",
+      "node": {
+        "ok": true,
+        "len": 10,
+        "type": "array"
+      },
+      "mcp": {
+        "ok": false,
+        "err": "HTTP 403 Forbidden from https://api.stackexchange.com/2.3/questions?order=desc&sort=hot&site=stackoverflow&pagesize=10",
+        "code": "FETCH_ERROR"
+      }
+    },
+    {
+      "site": "steam",
+      "name": "top-sellers",
+      "node": {
+        "ok": true,
+        "len": 10,
+        "type": "array"
+      },
+      "mcp": {
+        "ok": true,
+        "len": 10,
+        "type": "array"
+      }
+    },
+    {
+      "site": "toutiao",
+      "name": "hot",
+      "node": {
+        "ok": true,
+        "len": 30,
+        "type": "array"
+      },
+      "mcp": {
+        "ok": true,
+        "len": 30,
+        "type": "array"
+      }
+    },
+    {
+      "site": "v2ex",
+      "name": "hot",
+      "node": {
+        "ok": true,
+        "len": 8,
+        "type": "array"
+      },
+      "mcp": {
+        "ok": true,
+        "len": 8,
+        "type": "array"
+      }
+    },
+    {
+      "site": "v2ex",
+      "name": "latest",
+      "node": {
+        "ok": true,
+        "len": 20,
+        "type": "array"
+      },
+      "mcp": {
+        "ok": true,
+        "len": 20,
+        "type": "array"
+      }
+    },
+    {
+      "site": "weread",
+      "name": "ranking",
+      "node": {
+        "ok": true,
+        "len": 20,
+        "type": "array"
+      },
+      "mcp": {
+        "ok": true,
+        "len": 0,
+        "type": "array"
+      }
+    },
+    {
+      "site": "weread-official",
+      "name": "discover",
+      "node": {
+        "ok": false,
+        "err": "WEREAD_API_KEY is not set. Export it with `export WEREAD_API_KEY=<wrk-...>`."
+      },
+      "mcp": {
+        "ok": false,
+        "err": "WEREAD_API_KEY is not set. Export it with `export WEREAD_API_KEY=<wrk-...>`.",
+        "code": "AUTH_REQUIRED"
+      }
+    },
+    {
+      "site": "weread-official",
+      "name": "list-apis",
+      "node": {
+        "ok": false,
+        "err": "WEREAD_API_KEY is not set. Export it with `export WEREAD_API_KEY=<wrk-...>`."
+      },
+      "mcp": {
+        "ok": false,
+        "err": "WEREAD_API_KEY is not set. Export it with `export WEREAD_API_KEY=<wrk-...>`.",
+        "code": "AUTH_REQUIRED"
+      }
+    },
+    {
+      "site": "wikipedia",
+      "name": "random",
+      "node": {
+        "ok": true,
+        "len": 1,
+        "type": "array"
+      },
+      "mcp": {
+        "ok": true,
+        "len": 1,
+        "type": "array"
+      }
+    },
+    {
+      "site": "wikipedia",
+      "name": "trending",
+      "node": {
+        "ok": true,
+        "len": 10,
+        "type": "array"
+      },
+      "mcp": {
+        "ok": true,
+        "len": 10,
+        "type": "array"
+      }
+    },
+    {
+      "site": "yollomi",
+      "name": "models",
+      "node": {
+        "ok": true,
+        "len": 37,
+        "type": "array"
+      },
+      "mcp": {
+        "ok": true,
+        "len": 37,
+        "type": "array"
+      }
+    }
+  ]
+}
