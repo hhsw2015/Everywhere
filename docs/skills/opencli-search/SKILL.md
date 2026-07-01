@@ -2,14 +2,14 @@
 name: opencli-search
 description: |
   Route real-world data queries through Everywhere's embedded OpenCLI
-  adapters (1257 commands across 172 sites). Use when the user wants
-  data from a specific site — Reddit thread, HN top stories, PyPI
-  package info, 36kr news, bilibili trending, Zhihu answer, etc. —
-  instead of guessing at raw HTTP or scraping. Discover via
-  `opencli_list`, describe via `opencli_describe`, execute via
-  `opencli_run`. When in doubt about which site has a command, call
-  `opencli_list({query: "..."})`.
-allowed-tools: mcp__everywhere-http__call_tool, mcp__everywhere-http__web_search, mcp__everywhere-http__web_fetch_url
+  adapters (hundreds of sites, updated per upstream refresh). Use when
+  the user wants data from a specific site — Reddit thread, HN top
+  stories, PyPI package info, 36kr news, bilibili trending, Zhihu
+  answer, etc. — instead of guessing at raw HTTP or scraping.
+  Discover via `opencli_list`, describe via `opencli_describe`,
+  execute via `opencli_run`. When in doubt about which site has a
+  command, call `opencli_list({query: "..."})`.
+allowed-tools: mcp__everywhere-http__opencli_list, mcp__everywhere-http__opencli_describe, mcp__everywhere-http__opencli_run, mcp__everywhere-http__web_search, mcp__everywhere-http__web_fetch_url
 ---
 
 # opencli-search
@@ -35,7 +35,10 @@ opencli_run({site, name, arguments_json})  ← execute
 ```
 
 `opencli_run`'s third arg is always a JSON **string** containing the
-adapter args object. Empty args = `"{}"`.
+adapter args object. Empty args = `"{}"`. Arg keys use the exact
+spelling from the adapter's manifest — often **kebab-case** (e.g.
+`"post-id"`, `"max-length"`), never converted to camelCase. Get the
+authoritative list from `opencli_describe`.
 
 ## Adapter strategies
 
@@ -58,9 +61,9 @@ firing one of these on a busy tab.
 
 ## Routing rules
 
-**Rule 1 — user names a site**: use it directly. `opencli_list({site: ...})`
-to see commands. No fallback needed unless the site's adapters all
-fail.
+**Rule 1 — user names a site**: call `opencli_list({site: ...})` to
+see the site's commands, pick the closest fit, then run. Do not
+skip the list step — command names and args shift each upstream sync.
 
 **Rule 2 — user names a data type but no site**: fuzzy-search first.
 - "read this HN post" → `opencli_list({query: "hackernews"})`
@@ -69,9 +72,15 @@ fail.
 **Rule 3 — Chinese / regional content**: prefer 36kr, zhihu, weibo,
 bilibili, juejin, toutiao, 12306 over English-first sites.
 
-**Rule 4 — everything else fails**: fall back to `web_search` or
-`web_fetch_url`. Don't try to be clever with generic HTTP if an
-adapter exists.
+**Rule 4 — fall back to web_fetch_url / web_search**: only after ONE
+of:
+- `opencli_list({query})` returned zero matches; or
+- The picked adapter failed with `BROWSER_NOT_READY` and the user
+  isn't going to install OpenDia; or
+- Two consecutive `opencli_run` calls returned `ok:false` with
+  different codes (schema drift, transient upstream issue).
+Do not fall back on the first `ok:false` — a re-run with corrected
+args often succeeds.
 
 ## Trigger examples
 
@@ -108,8 +117,11 @@ Codes you'll encounter:
   wedged, host object mismatch). Retry once, then report.
 - `RUNTIME_SCRIPT_ERROR` — the adapter threw. See `error` for the
   adapter's own message.
-- `RUNTIME_PIPELINE_ONLY` — pipeline-only adapter without a runner.
-  Should not happen post-v0.9.261 (we vendor the pipeline runner).
+- `RUNTIME_PIPELINE_ONLY` — extremely rare after v0.9.262 (upstream
+  pipeline runner is vendored + wired). If you see it, either the
+  installed build predates v0.9.262 or the adapter uses a pipeline
+  step we couldn't vendor (e.g. `download` — needs yt-dlp/streams).
+  Don't retry; either upgrade or route via a different adapter.
 
 ## Post-run summary (mandatory)
 
