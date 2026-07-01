@@ -411,16 +411,29 @@ public sealed class OpenDiaPageBridge : IPage, IAsyncDisposable
         ArgumentNullException.ThrowIfNull(arg);
         if (arg is JsonValue v)
         {
-            if (v.TryGetValue<long>(out var l))
+            // Upstream convention (3rd/opencli/clis/**/*.js): `page.wait(N)`
+            // where N is an integer 1..12 means **seconds** — matches
+            // opendia-mcp semantics for a settle-after-goto wait. Values
+            // like 250 (rare) are also treated as seconds so a stray big
+            // integer just makes a longer wait; we cap at MaxWaitMs.
+            //
+            // ClearScript / STJ can store the JS number as int OR long OR
+            // double depending on marshaling path — try all three.
+            if (v.TryGetValue<int>(out var iSec))
             {
-                if (l < 0) throw new ArgumentOutOfRangeException(nameof(arg), "page.wait: ms must be non-negative");
-                await DelayClamped(l).ConfigureAwait(false); return;
+                if (iSec < 0) throw new ArgumentOutOfRangeException(nameof(arg), "page.wait: seconds must be non-negative");
+                await DelayClamped(iSec * 1000L).ConfigureAwait(false); return;
             }
-            if (v.TryGetValue<double>(out var msd))
+            if (v.TryGetValue<long>(out var lSec))
             {
-                if (!double.IsFinite(msd)) throw new ArgumentException("page.wait: ms must be finite");
-                if (msd < 0) throw new ArgumentOutOfRangeException(nameof(arg), "page.wait: ms must be non-negative");
-                await DelayClamped((long)Math.Round(Math.Min(msd, MaxWaitMs))).ConfigureAwait(false);
+                if (lSec < 0) throw new ArgumentOutOfRangeException(nameof(arg), "page.wait: seconds must be non-negative");
+                await DelayClamped(lSec * 1000L).ConfigureAwait(false); return;
+            }
+            if (v.TryGetValue<double>(out var dSec))
+            {
+                if (!double.IsFinite(dSec)) throw new ArgumentException("page.wait: seconds must be finite");
+                if (dSec < 0) throw new ArgumentOutOfRangeException(nameof(arg), "page.wait: seconds must be non-negative");
+                await DelayClamped((long)Math.Round(Math.Min(dSec * 1000.0, MaxWaitMs))).ConfigureAwait(false);
                 return;
             }
             if (v.TryGetValue<string>(out var sel))
@@ -429,7 +442,33 @@ public sealed class OpenDiaPageBridge : IPage, IAsyncDisposable
                 return;
             }
         }
-        throw new ArgumentException("page.wait: expected number ms or selector string");
+        // Upstream also accepts { text, timeout } and { time } shapes
+        // (see 3rd/opencli/runtime/pipeline/steps/browser.js:stepWait).
+        if (arg is JsonObject obj)
+        {
+            if (obj.TryGetPropertyValue("time", out var tNode) && tNode is JsonValue tv)
+            {
+                if (tv.TryGetValue<double>(out var ts))
+                {
+                    if (!double.IsFinite(ts) || ts < 0) throw new ArgumentException("page.wait({time}): finite non-negative seconds required");
+                    await DelayClamped((long)Math.Round(Math.Min(ts * 1000.0, MaxWaitMs))).ConfigureAwait(false);
+                    return;
+                }
+            }
+            if (obj.TryGetPropertyValue("text", out var txtNode) && txtNode is JsonValue tv2 && tv2.TryGetValue<string>(out var text))
+            {
+                var timeoutMs = 30000L;
+                if (obj.TryGetPropertyValue("timeout", out var tnode) && tnode is JsonValue toV && toV.TryGetValue<double>(out var toD))
+                    timeoutMs = (long)Math.Round(toD);
+                await Call("browser_wait_for_text", new JsonObject
+                {
+                    ["text"] = text,
+                    ["timeout"] = timeoutMs,
+                }).ConfigureAwait(false);
+                return;
+            }
+        }
+        throw new ArgumentException($"page.wait: expected number seconds, selector string, or {{text,timeout}}/{{time}} object; got {arg.GetValueKind()}");
     }
 
     private static Task DelayClamped(long ms)

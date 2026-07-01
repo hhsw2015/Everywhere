@@ -454,6 +454,14 @@ public sealed class OpenCliRuntime : IAsyncDisposable
                 // .ToJsonString() through V8's host-object surface reliably.
                 Func<JsonNode?, string?> jsonify = static (n) => n?.ToJsonString();
                 engine.Script.__opencliJsonify = jsonify;
+                // Delegate: JSON string → JsonNode. Used by the JS-side
+                // wrap layer to marshal a plain JS object as a strongly-
+                // typed JsonNode arg into host methods that declare
+                // `JsonObject?` / `JsonNode` parameters. Direct pass of
+                // a V8 ScriptObject would raise 'BadArgTypes'.
+                Func<string?, JsonNode?> parseJson = static (s) =>
+                    string.IsNullOrEmpty(s) ? null : JsonNode.Parse(s);
+                engine.Script.__opencliParseJson = parseJson;
                 engine.Script.__opencliArgs = args.DeepClone().ToJsonString();
                 engine.Script.__opencliFn = def.Func;
                 engine.Script.__opencliFnBrowser = def.Browser;
@@ -540,11 +548,34 @@ public sealed class OpenCliRuntime : IAsyncDisposable
                             'snapshot', 'tabs', 'setFileInput', 'nativeClick',
                             'nativeKeyPress', 'nativeType', 'screenshot',
                         ]);
+                        // JS objects can't cross ClearScript → C# as
+                        // JsonObject directly; the marshaler passes them
+                        // as ScriptObject (a host-visible JS reference)
+                        // and the C# receiver sees InvalidCastException or
+                        // BadArgTypes when it tries to index. Serialize
+                        // every JS-object arg to a JSON string on our
+                        // side, then let C# parse it back into JsonNode.
+                        // Native primitives (string / number / bool / null)
+                        // cross cleanly — pass those through.
+                        const normalizeArg = (a) => {
+                            if (a === null || a === undefined) return a;
+                            const t = typeof a;
+                            if (t === 'string' || t === 'number' || t === 'boolean') return a;
+                            // ScriptObject / plain object / array → JSON-parse
+                            // wrap. The host will `JsonNode.Parse` this
+                            // opaque token, so the C# JsonObject param
+                            // arrives typed.
+                            try {
+                                const s = JSON.stringify(a);
+                                return globalThis.__opencliParseJson(s);
+                            } catch { return a; }
+                        };
                         const proxy = {};
                         for (const [js, cs] of Object.entries(map)) {
                             if (jsonReturns.has(js)) {
                                 proxy[js] = async (...args) => {
-                                    const r = await host[cs](...args);
+                                    const na = args.map(normalizeArg);
+                                    const r = await host[cs](...na);
                                     if (r === null || r === undefined) return r;
                                     // Round-trip host JsonNode → JSON → JS so
                                     // adapter code can read result.kind/etc.
@@ -554,7 +585,7 @@ public sealed class OpenCliRuntime : IAsyncDisposable
                                     catch { return r; }
                                 };
                             } else {
-                                proxy[js] = (...args) => host[cs](...args);
+                                proxy[js] = (...args) => host[cs](...args.map(normalizeArg));
                             }
                         }
                         return proxy;
