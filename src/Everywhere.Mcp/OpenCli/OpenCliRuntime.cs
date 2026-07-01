@@ -321,7 +321,8 @@ public sealed class OpenCliRuntime : IAsyncDisposable
                         strategy: loaded.Strategy, browser: loaded.Browser, access: loaded.Access,
                         domain: loaded.Domain, aliases: loaded.Aliases,
                         args: loaded.Args, columns: loaded.Columns,
-                        func: synth, pipeline: loaded.Pipeline);
+                        func: synth, pipeline: loaded.Pipeline,
+                        navigateBefore: loaded.NavigateBefore);
                     _registry[key] = withFunc;
                     // The unloaded snapshot is now stale — drop it so the
                     // JSON clones it carries can be GC'd.
@@ -962,7 +963,11 @@ public sealed class OpenCliRuntime : IAsyncDisposable
             args: (meta["args"] as JsonArray)?.DeepClone() as JsonArray,
             columns: (meta["columns"] as JsonArray)?.DeepClone() as JsonArray,
             func: func,
-            pipeline: meta["pipeline"]?.DeepClone());
+            pipeline: meta["pipeline"]?.DeepClone(),
+            // Manifest sets navigateBefore=false to mean "adapter targets
+            // whatever tab is active". Preserve null for that case; only
+            // populate NavigateBefore when a URL is present.
+            navigateBefore: TryString(meta, "navigateBefore"));
     }
 
     private static string? TryString(JsonObject meta, string key)

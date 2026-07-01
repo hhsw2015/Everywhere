@@ -216,8 +216,15 @@ public sealed class OpenCliTools(OpenCliRuntime runtime, OpenDiaBridge? bridge =
             // active tab: OpenDiaPageBridge opens a fresh background tab
             // on first goto and closes it on dispose. UI-strategy adapters
             // that need a visible page for click / scroll semantics get
-            // an active tab (opt-out via `useBackgroundTab: false`).
-            var useBg = strategy is "cookie" or "intercept";
+            // an active tab.
+            //
+            // Adapters with `navigateBefore: false` (whoami-class) are
+            // designed to target the user's current tab (they check
+            // `location.href` to detect login state, don't fetch anything
+            // that needs a specific origin). Don't route them through a
+            // bg tab — that would defeat the design.
+            var useBg = (strategy is "cookie" or "intercept")
+                && !string.IsNullOrEmpty(def.NavigateBefore);
             page = new OpenDiaPageBridge(bridge, useBackgroundTab: useBg);
         }
         else

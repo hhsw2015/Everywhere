@@ -23,7 +23,8 @@ public sealed class AdapterDef : IEquatable<AdapterDef>
     public AdapterDef(
         string site, string name, string description, string strategy, bool browser,
         string? access, string? domain, IReadOnlyList<string>? aliases,
-        JsonArray? args, JsonArray? columns, ScriptObject? func, JsonNode? pipeline)
+        JsonArray? args, JsonArray? columns, ScriptObject? func, JsonNode? pipeline,
+        string? navigateBefore = null)
     {
         if (string.IsNullOrEmpty(site)) throw new ArgumentException("site required", nameof(site));
         if (string.IsNullOrEmpty(name)) throw new ArgumentException("name required", nameof(name));
@@ -37,6 +38,7 @@ public sealed class AdapterDef : IEquatable<AdapterDef>
         Browser = browser;
         Access = access; Domain = domain; Aliases = aliases;
         Args = args; Columns = columns; Func = func; Pipeline = pipeline;
+        NavigateBefore = navigateBefore;
         FullName = site + "/" + name;
     }
 
@@ -48,6 +50,11 @@ public sealed class AdapterDef : IEquatable<AdapterDef>
     public string? Access { get; }
     public string? Domain { get; }
     public IReadOnlyList<string>? Aliases { get; }
+    /// <summary>navigateBefore URL from manifest. Null when the manifest
+    /// sets false / unset — adapter targets whatever tab is active.
+    /// Non-null means the runtime pre-navigates before invoking the
+    /// adapter body — safe to route through a background tab.</summary>
+    public string? NavigateBefore { get; }
     public JsonArray? Args { get; }
     public JsonArray? Columns { get; }
     public ScriptObject? Func { get; }

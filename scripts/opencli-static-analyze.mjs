@@ -186,13 +186,18 @@ function analyze(file) {
     }
   }
 
-  // R5: strategy=public but adapter uses browser-required methods
+  // R5: browser=false but code uses browser-required page.* methods.
+  // OpenCliTools attaches OpenDiaPageBridge when strategy != public OR
+  // browser=true; otherwise adapter gets Phase1StubPage which throws
+  // on every method. `strategy=public + browser=true` is legit — the
+  // bridge is used to fetch through the user's browser (bypass CORS,
+  // reuse Cloudflare cookies, etc.) even though no auth is needed.
   if (cmd) {
     const strat = (cmd.strategy || '').toLowerCase();
-    if (strat === 'public') {
+    if (strat === 'public' && cmd.browser !== true) {
       const usesBrowser = /\bpage\.(evaluate|cdp|snapshot|click|fill|goto|screenshot|find|getCookies)\s*\(/.test(src);
       if (usesBrowser) {
-        rec('R5', `strategy=public but code calls browser-only page.*() — will hit Phase1StubPage error`, null);
+        rec('R5', `strategy=public + browser=${cmd.browser} but code calls browser-only page.*() — will hit Phase1StubPage error`, null);
       }
     }
   }
@@ -215,7 +220,21 @@ function analyze(file) {
     const varName = m[1];
     const line = lineOf(m.index);
     const scope = src.slice(m.index, m.index + 2000);
-    const guarded = new RegExp(`(?:\\b${varName}\\s*(?:===|==|!==|!=)\\s*(?:null|undefined)|\\bif\\s*\\(\\s*!?${varName}\\b|\\btypeof\\s+${varName}\\s*(?:===|!==)|\\b${varName}\\.kind\\b|\\b${varName}\\s*&&)`).test(scope);
+    // Guarded if adapter does any of: explicit === null / !X / typeof
+    // X / X.kind envelope / X && Y / X?. optional chain / X?.[ /
+    // X ?? Y nullish coalesce / return X (final result caller checks).
+    const guarded = new RegExp(
+      `(?:` +
+        `\\b${varName}\\s*(?:===|==|!==|!=)\\s*(?:null|undefined)` +
+        `|\\bif\\s*\\(\\s*!?${varName}\\b` +
+        `|\\btypeof\\s+${varName}\\s*(?:===|!==)` +
+        `|\\b${varName}\\.kind\\b` +
+        `|\\b${varName}\\s*&&` +
+        `|\\b${varName}\\s*\\?\\??\\s*[\\.\\[]` +
+        `|\\b${varName}\\s*\\?\\?` +
+        `|\\breturn\\s+${varName}\\b` +
+      `)`
+    ).test(scope);
     if (!guarded) {
       rec('R7', `result of page.evaluate stored in '${varName}' but next 2000 chars have no null-guard / kind check`, line);
     }
