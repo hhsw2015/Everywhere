@@ -681,6 +681,54 @@ public sealed class HostShim
         }
     }
 
+    // -------- timers (setTimeout/setInterval polyfill) --------
+
+    private long _timerCounter;
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<long, CancellationTokenSource> _timers = new();
+
+    public long scheduleTimer(object fnRef, double ms, object? argsRef, bool repeating)
+    {
+        var id = System.Threading.Interlocked.Increment(ref _timerCounter);
+        var cts = new CancellationTokenSource();
+        _timers[id] = cts;
+        var fn = fnRef as ScriptObject;
+        if (fn is null) return id;
+
+        var delay = TimeSpan.FromMilliseconds(Math.Max(0, ms));
+        var extraArgs = Array.Empty<object?>();
+        if (argsRef is ScriptObject a && a.GetProperty("length") is int len && len > 0)
+        {
+            extraArgs = new object?[len];
+            for (int i = 0; i < len; i++) extraArgs[i] = a.GetProperty(i.ToString());
+        }
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                do
+                {
+                    await Task.Delay(delay, cts.Token).ConfigureAwait(false);
+                    if (cts.IsCancellationRequested) return;
+                    try { fn.Invoke(false, extraArgs); }
+                    catch (Exception ex) { _onWarn($"timer {id}: {ex.Message}"); }
+                } while (repeating && !cts.IsCancellationRequested);
+            }
+            catch (OperationCanceledException) { }
+            finally { _timers.TryRemove(id, out _); }
+        });
+        return id;
+    }
+
+    public void cancelTimer(long id)
+    {
+        if (_timers.TryRemove(id, out var cts))
+        {
+            try { cts.Cancel(); } catch { }
+            cts.Dispose();
+        }
+    }
+
     public string osTmpDir() => Path.GetTempPath();
     public string osHomeDir() => Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
     public string osHostName() => Environment.MachineName;

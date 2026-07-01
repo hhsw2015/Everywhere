@@ -719,6 +719,26 @@ public sealed class OpenCliRuntime : IAsyncDisposable
             // V8 isolate doesn't ship URL / URLSearchParams as globals
             // (they're WHATWG specs, not part of ES2024). Many adapters
             // build query strings via `new URL(...)` / `new URLSearchParams(...)`.
+            // V8 isolate ships no setTimeout/setInterval by default —
+            // those are host runtime APIs. Adapters that reach for
+            // them (either directly, or via AbortSignal.timeout) get
+            // 'setTimeout is not defined'. Route to the .NET host
+            // helper so Node-shaped code works.
+            globalThis.setTimeout = globalThis.setTimeout || function (fn, ms, ...a) {
+                return __opencliHost.scheduleTimer(fn, Number(ms) || 0, a || null, false);
+            };
+            globalThis.setInterval = globalThis.setInterval || function (fn, ms, ...a) {
+                return __opencliHost.scheduleTimer(fn, Number(ms) || 0, a || null, true);
+            };
+            globalThis.clearTimeout = globalThis.clearTimeout || function (id) {
+                __opencliHost.cancelTimer(id);
+            };
+            globalThis.clearInterval = globalThis.clearInterval || function (id) {
+                __opencliHost.cancelTimer(id);
+            };
+            globalThis.queueMicrotask = globalThis.queueMicrotask || function (fn) {
+                Promise.resolve().then(fn);
+            };
             // V8 isolate default globals miss AbortController/AbortSignal
             // (WHATWG DOM). Ship a minimal shim — timers only,
             // .aborted flag, .reason. Enough for adapters that pass

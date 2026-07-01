@@ -1,16 +1,17 @@
 {
   "total": 56,
-  "bothOK": 35,
-  "mcpFail": 12,
+  "bothOK": 41,
+  "mcpFail": 7,
   "nodeFail": 0,
-  "bothFail": 9,
+  "bothFail": 8,
   "results": [
     {
       "site": "1point3acres",
       "name": "digest",
       "node": {
-        "ok": false,
-        "err": "1point3acres request failed: HTTP 403 Forbidden from https://www.1point3acres.com/bbs/forum.php?mod=guide&view=digest"
+        "ok": true,
+        "len": 20,
+        "type": "array"
       },
       "mcp": {
         "ok": false,
@@ -27,7 +28,7 @@
       },
       "mcp": {
         "ok": false,
-        "err": "1point3acres request failed: HTTP 403 Forbidden from https://www.1point3acres.com/bbs/forum.php",
+        "err": "1point3acres request failed: net_io_eof",
         "code": "COMMAND_EXEC"
       }
     },
@@ -247,9 +248,9 @@
         "type": "array"
       },
       "mcp": {
-        "ok": false,
-        "err": "devto latest returned HTTP 403",
-        "code": "COMMAND_EXEC"
+        "ok": true,
+        "len": 20,
+        "type": "array"
       }
     },
     {
@@ -261,9 +262,9 @@
         "type": "array"
       },
       "mcp": {
-        "ok": false,
-        "err": "HTTP 403 Forbidden Bots from https://dev.to/api/articles?top=1&per_page=20",
-        "code": "FETCH_ERROR"
+        "ok": true,
+        "len": 20,
+        "type": "array"
       }
     },
     {
@@ -276,8 +277,8 @@
       },
       "mcp": {
         "ok": false,
-        "err": "BadArgTypes",
-        "code": "RUNTIME_ERROR"
+        "err": "announcement failed: HTTP 400",
+        "code": "HTTP_ERROR"
       }
     },
     {
@@ -290,8 +291,8 @@
       },
       "mcp": {
         "ok": false,
-        "err": "BadArgTypes",
-        "code": "RUNTIME_ERROR"
+        "err": "eastmoney returned no convertible data",
+        "code": "NO_DATA"
       }
     },
     {
@@ -303,9 +304,9 @@
         "type": "array"
       },
       "mcp": {
-        "ok": false,
-        "err": "github-trending request failed: BadArgTypes",
-        "code": "COMMAND_EXEC"
+        "ok": true,
+        "len": 19,
+        "type": "array"
       }
     },
     {
@@ -387,9 +388,9 @@
         "type": "array"
       },
       "mcp": {
-        "ok": false,
-        "err": "hf datasets request failed: BadArgTypes",
-        "code": "COMMAND_EXEC"
+        "ok": true,
+        "len": 20,
+        "type": "array"
       }
     },
     {
@@ -401,9 +402,9 @@
         "type": "array"
       },
       "mcp": {
-        "ok": false,
-        "err": "hf models request failed: BadArgTypes",
-        "code": "COMMAND_EXEC"
+        "ok": true,
+        "len": 20,
+        "type": "array"
       }
     },
     {
@@ -439,7 +440,7 @@
       "name": "recommend",
       "node": {
         "ok": true,
-        "len": 20,
+        "len": 19,
         "type": "array"
       },
       "mcp": {
@@ -458,7 +459,7 @@
       },
       "mcp": {
         "ok": false,
-        "err": "AbortSignal is not defined",
+        "err": "setTimeout is not defined",
         "code": "RUNTIME_ERROR"
       }
     },
@@ -472,7 +473,7 @@
       },
       "mcp": {
         "ok": false,
-        "err": "AbortSignal is not defined",
+        "err": "setTimeout is not defined",
         "code": "RUNTIME_ERROR"
       }
     },
@@ -624,8 +625,8 @@
       },
       "mcp": {
         "ok": false,
-        "err": "HTTP 403 Forbidden from https://api.stackexchange.com/2.3/questions/featured?order=desc&sort=activity&site=stackoverflow&pagesize=10",
-        "code": "FETCH_ERROR"
+        "err": "net_io_eof",
+        "code": "RUNTIME_ERROR"
       }
     },
     {
@@ -637,9 +638,9 @@
         "type": "array"
       },
       "mcp": {
-        "ok": false,
-        "err": "HTTP 403 Forbidden from https://api.stackexchange.com/2.3/questions?order=desc&sort=hot&site=stackoverflow&pagesize=10",
-        "code": "FETCH_ERROR"
+        "ok": true,
+        "len": 10,
+        "type": "array"
       }
     },
     {
