@@ -496,12 +496,13 @@ Generate `docs/specs/HANDOFF.md`. Stop.
     `Resources/opencli/clis/`).
 11. `OpenCliRuntime.cs` + `HostShim.cs` + `ModuleLoader.cs` +
     `IPage.cs` + `OpenDiaPageBridge.cs` + `OpenCliTools.cs` total ≤
-    2600 LOC (post-trim, excluding comments). The cap forces the team
-    to keep the surface thin; bumping it requires SPEC change. 1000 →
-    1200 → 1300 → 1800 → 2000 → 2200 → 2400 → 2600 across successive
-    hardening passes — round-5 covers URL/URLSearchParams shims and
-    the camelCase IPage proxy that lets upstream adapters call host
-    methods through the V8 boundary.
+    2800 LOC (post-trim, excluding comments). The cap forces the team
+    to keep the surface thin; bumping it requires SPEC change. Growth
+    path: 1000 → 1200 → 1300 → 1800 → 2000 → 2200 → 2400 → 2600 →
+    2800. The 2800 bump covers the full IPage → OpenDia tool-name
+    alignment (28 methods verified against the live extension) plus
+    the CDP-eval bypass for pages with CSP `unsafe-eval` denials
+    (Reddit, GitHub, ...).
 12. Every test in `tests/Everywhere.Mcp.Tests/OpenCli/` has a frontmatter-style
     leading comment indicating the adapter name(s) under test.
 13. Each `bench/opencli/fixtures/<id>/expected.json` declares
