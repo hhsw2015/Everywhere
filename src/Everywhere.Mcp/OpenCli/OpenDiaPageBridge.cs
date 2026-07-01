@@ -563,8 +563,17 @@ public sealed class OpenDiaPageBridge : IPage, IAsyncDisposable
         return Call("browser_find", CloneObjOrEmpty(opts));
     }
 
-    public Task<JsonNode?> GetCookies(JsonObject? opts = null) =>
-        Call("browser_cookies_get", CloneObjOrEmpty(opts));
+    public async Task<JsonNode?> GetCookies(JsonObject? opts = null)
+    {
+        var resp = await Call("browser_cookies_get", CloneObjOrEmpty(opts)).ConfigureAwait(false);
+        // Extension returns `{ok:true, url, cookies:[...]}`; adapters
+        // universally call `cookies.some(...)` on the return value, so
+        // unwrap the array. If shape drifts, return the raw response
+        // rather than nothing.
+        if (resp is JsonObject obj && obj.TryGetPropertyValue("cookies", out var arr) && arr is JsonArray)
+            return arr.DeepClone();
+        return resp;
+    }
 
     /// <summary>OpenDia has no dedicated get-url tool, but
     /// <c>browser_wait_for_url</c> with no matcher completes immediately
