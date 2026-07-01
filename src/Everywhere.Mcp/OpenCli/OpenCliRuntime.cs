@@ -459,9 +459,20 @@ public sealed class OpenCliRuntime : IAsyncDisposable
                 // typed JsonNode arg into host methods that declare
                 // `JsonObject?` / `JsonNode` parameters. Direct pass of
                 // a V8 ScriptObject would raise 'BadArgTypes'.
-                Func<string?, JsonNode?> parseJson = static (s) =>
-                    string.IsNullOrEmpty(s) ? null : JsonNode.Parse(s);
+                // Most IPage methods take `JsonObject? opts`. Parse into
+                // JsonObject so ClearScript can pass without BadArgTypes
+                // (widening JsonObject → JsonNode is implicit; going the
+                // other way is not). Adapters rarely pass arrays or
+                // scalars as opts — for those, use parseJsonArray.
+                Func<string?, JsonObject?> parseJson = static (s) =>
+                    string.IsNullOrEmpty(s) ? null : JsonNode.Parse(s) as JsonObject;
                 engine.Script.__opencliParseJson = parseJson;
+                // Companion for arrays (e.g. page.keys(['a','b']),
+                // page.setFileInput(ref, files[])). Returns JsonArray so
+                // it widens to JsonNode target params.
+                Func<string?, JsonArray?> parseJsonArray = static (s) =>
+                    string.IsNullOrEmpty(s) ? null : JsonNode.Parse(s) as JsonArray;
+                engine.Script.__opencliParseJsonArray = parseJsonArray;
                 engine.Script.__opencliArgs = args.DeepClone().ToJsonString();
                 engine.Script.__opencliFn = def.Func;
                 engine.Script.__opencliFnBrowser = def.Browser;
@@ -561,12 +572,13 @@ public sealed class OpenCliRuntime : IAsyncDisposable
                             if (a === null || a === undefined) return a;
                             const t = typeof a;
                             if (t === 'string' || t === 'number' || t === 'boolean') return a;
-                            // ScriptObject / plain object / array → JSON-parse
-                            // wrap. The host will `JsonNode.Parse` this
-                            // opaque token, so the C# JsonObject param
-                            // arrives typed.
                             try {
                                 const s = JSON.stringify(a);
+                                // Route arrays to parseJsonArray so C# gets a
+                                // JsonArray (widens to JsonNode); objects to
+                                // parseJson for JsonObject.
+                                if (Array.isArray(a))
+                                    return globalThis.__opencliParseJsonArray(s);
                                 return globalThis.__opencliParseJson(s);
                             } catch { return a; }
                         };
