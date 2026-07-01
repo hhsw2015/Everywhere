@@ -169,13 +169,22 @@ public sealed class OpenDiaPageBridge : IPage
     public async Task<JsonNode?> Evaluate(string js)
     {
         ArgumentException.ThrowIfNullOrEmpty(js);
-        // CDP requires an expression — wrap statements the way Node's
-        // Playwright / Puppeteer do.
-        var expr = LooksLikeExpression(js) ? js : $"(async () => {{ {js} }})()";
+        // OpenDia extension auto-wraps `expr` into
+        //   (async () => { <expr if includes "return "; else return (<expr>) > })()
+        // so we must send an expression the outer wrapper's `return` can
+        // yield. If the caller already sent an IIFE, the outer wrapper sees
+        // no top-level `return ` in it and would build
+        //   (async () => { (async function(){ ... return X; })() })()
+        // — outer function has no return, promise resolves to undefined.
+        //
+        // Force the extension into the "no return" branch by prefixing
+        // `return await ` — for both IIFEs (they resolve to a promise we
+        // await) and bare expressions.
+        var expr = LooksLikeExpression(js) ? $"return await ({js})" : js;
         var resp = await Call("browser_cdp_evaluate", new JsonObject
         {
             ["expression"] = expr,
-            ["awaitPromise"] = true,
+            ["await_promise"] = true,
         }).ConfigureAwait(false);
         return UnwrapEvalResult(resp);
     }
@@ -183,16 +192,16 @@ public sealed class OpenDiaPageBridge : IPage
     public async Task<JsonNode?> EvaluateWithArgs(string js, JsonNode? argsNode)
     {
         ArgumentException.ThrowIfNullOrEmpty(js);
-        // CDP evaluate has no bind-args API; embed args into the source
-        // as a JSON literal.
+        // Same reasoning as Evaluate: hand the extension a body it can wrap
+        // once. Args are embedded as a JSON literal (CDP has no bind-args).
         var argJson = argsNode?.ToJsonString() ?? "null";
         var expr = LooksLikeExpression(js)
-            ? $"(function(args) {{ return ({js}); }})({argJson})"
-            : $"(async (args) => {{ {js} }})({argJson})";
+            ? $"return await (function(args) {{ return ({js}); }})({argJson})"
+            : $"return await (async (args) => {{ {js} }})({argJson})";
         var resp = await Call("browser_cdp_evaluate", new JsonObject
         {
             ["expression"] = expr,
-            ["awaitPromise"] = true,
+            ["await_promise"] = true,
         }).ConfigureAwait(false);
         return UnwrapEvalResult(resp);
     }
