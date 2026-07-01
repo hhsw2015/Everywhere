@@ -181,6 +181,22 @@ public sealed class OpenDiaPageBridge : IPage, IAsyncDisposable
             }
             if (_bgTabId is null)
                 throw new InvalidOperationException("page.goto: browser_tab_create did not return tab_id");
+
+            // tab_create returns before the page is done loading
+            // (extension's own delay is 500ms). Poll document.readyState
+            // via cdp_evaluate so relative fetches like /comments/*.json
+            // have a base URL. Bounded to ~10s.
+            for (var i = 0; i < 40; i++)
+            {
+                var ready = await Call("browser_cdp_evaluate", new JsonObject
+                {
+                    ["expression"] = "return document.readyState",
+                    ["await_promise"] = true,
+                }).ConfigureAwait(false);
+                var state = (ready as JsonObject)?["result"]?.GetValue<string>();
+                if (state == "complete" || state == "interactive") return;
+                await Task.Delay(250).ConfigureAwait(false);
+            }
             return;
         }
 
