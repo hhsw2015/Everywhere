@@ -257,21 +257,26 @@ public sealed class OpenDiaPageBridge : IPage, IAsyncDisposable
     public async Task<JsonNode?> Evaluate(string js)
     {
         ArgumentException.ThrowIfNullOrEmpty(js);
-        // OpenDia extension auto-wraps `expr` into
-        //   (async () => { <expr if includes "return "; else return (<expr>) > })()
-        // so we must send an expression the outer wrapper's `return` can
-        // yield. If the caller already sent an IIFE, the outer wrapper sees
-        // no top-level `return ` in it and would build
-        //   (async () => { (async function(){ ... return X; })() })()
-        // — outer function has no return, promise resolves to undefined.
-        //
-        // Force the extension into the "no return" branch by prefixing
-        // `return await ` — for both IIFEs (they resolve to a promise we
-        // await) and bare expressions.
-        var expr = LooksLikeExpression(js) ? $"return await ({js})" : js;
+        // Adapter code sends 5 different shapes to page.evaluate:
+        //   1. IIFE `(...)()`
+        //   2. Arrow `() => X` or `x => X` (with optional `async`)
+        //   3. `function () {...}` / `async function() {...}`
+        //   4. Bare expression `x`
+        //   5. Statement body `const x = ...; return X;`
+        // Extension's cdp_evaluate wraps with:
+        //   expr.includes('return ') ? expr : `return (${expr})`
+        // then puts that inside `(async () => { ... })()`.
+        // For shape #2/3 the wrap yields a *function reference*, not its
+        // invocation → CDP returns the function object as `null` on
+        // returnByValue. Fix by making the outbound expression a call:
+        //   `return await (<callee>)()`
+        // for #2 and #3, and `return await (<iife-body>)` for #1, and
+        // `return (<expr>)` for #4 (bare expression), and #5 stays as-is
+        // (adapter already writes `return` inside).
+        var norm = NormalizeEvaluateSource(js);
         var resp = await Call("browser_cdp_evaluate", new JsonObject
         {
-            ["expression"] = expr,
+            ["expression"] = norm,
             ["await_promise"] = true,
         }).ConfigureAwait(false);
         return UnwrapEvalResult(resp);
@@ -280,36 +285,109 @@ public sealed class OpenDiaPageBridge : IPage, IAsyncDisposable
     public async Task<JsonNode?> EvaluateWithArgs(string js, JsonNode? argsNode)
     {
         ArgumentException.ThrowIfNullOrEmpty(js);
-        // Same reasoning as Evaluate: hand the extension a body it can wrap
-        // once. Args are embedded as a JSON literal (CDP has no bind-args).
+        // Args are embedded as a JSON literal (CDP has no bind-args).
+        // Force the source into a callable form and immediately invoke
+        // it with the JSON literal as its arg.
         var argJson = argsNode?.ToJsonString() ?? "null";
-        var expr = LooksLikeExpression(js)
-            ? $"return await (function(args) {{ return ({js}); }})({argJson})"
-            : $"return await (async (args) => {{ {js} }})({argJson})";
+        var norm = NormalizeEvaluateSourceWithArgs(js, argJson);
         var resp = await Call("browser_cdp_evaluate", new JsonObject
         {
-            ["expression"] = expr,
+            ["expression"] = norm,
             ["await_promise"] = true,
         }).ConfigureAwait(false);
         return UnwrapEvalResult(resp);
     }
 
-    /// <summary>Detect the shape of a JS payload for CDP evaluate.
-    /// Only two forms match: a bare parenthesised expression (`(...)`),
-    /// or an IIFE (`(...)()`) — both are safe to eval as-is. Everything
-    /// else — including bare statements, multi-statement scripts, and
-    /// scripts with `return` at top level — gets wrapped in an async
-    /// arrow. Adapters that want to return a value from statement code
-    /// should use an IIFE explicitly. This matches Playwright/Puppeteer.</summary>
-    private static bool LooksLikeExpression(string js)
+    /// <summary>Port of upstream <c>normalizeEvaluateSource</c>
+    /// (3rd/opencli/runtime/pipeline/template.js). Turns any of the 5
+    /// adapter-authored shapes into an outbound expression that yields
+    /// the value the caller expects. Always emits a top-level
+    /// `return await (callable)()` so extension's auto-wrap
+    /// (which prepends `return (...)` when the string lacks `return `)
+    /// receives a value-producing statement, not a bare function ref.
+    /// </summary>
+    internal static string NormalizeEvaluateSource(string source)
     {
-        // Trim BOTH ends — adapters embed IIFEs with leading indentation
-        // (template-literal newline + spaces before `(async function()...`).
-        // Without TrimStart the check fails on those and the expression
-        // is sent as-is to the extension, which wraps it as a body and
-        // ends up with an outer wrapper that has no top-level return.
-        var t = js.Trim().TrimEnd(';', ' ', '\n', '\r', '\t');
-        return t.StartsWith('(') && t.EndsWith(')');
+        var s = source.Trim();
+        if (string.IsNullOrEmpty(s)) return "return undefined";
+
+        // Shape 1: IIFE `(...)()`. Await the result.
+        if (s.StartsWith('(') && s.EndsWith(")()"))
+            return $"return await ({s})";
+
+        // Shape 2: arrow function `() => X` or `x => X` (allow `async`).
+        // Turn into invocation.
+        if (IsArrowExpression(s))
+            return $"return await ({s})()";
+
+        // Shape 3: `function () {...}` or `async function () {...}`.
+        if (s.StartsWith("function ") || s.StartsWith("function(")
+            || s.StartsWith("async function ") || s.StartsWith("async function("))
+            return $"return await ({s})()";
+
+        // Shape 4: bare expression enclosed in `(...)` (no trailing `()`).
+        if (s.StartsWith('(') && s.EndsWith(')') && !s.EndsWith(")()"))
+            return $"return {s}";
+
+        // Shape 5: statement body — caller wrote `return X` themselves,
+        // possibly with `const`/`let`. Pass through; extension's wrap
+        // uses it as an async function body.
+        return s;
+    }
+
+    internal static string NormalizeEvaluateSourceWithArgs(string source, string argJsonLiteral)
+    {
+        var s = source.Trim();
+        if (string.IsNullOrEmpty(s)) return "return undefined";
+        // IIFE already invoked — we can't re-invoke with args. Wrap.
+        if (s.StartsWith('(') && s.EndsWith(")()"))
+            return $"return await (function(args) {{ return ({s}); }})({argJsonLiteral})";
+        if (IsArrowExpression(s)
+            || s.StartsWith("function ") || s.StartsWith("function(")
+            || s.StartsWith("async function ") || s.StartsWith("async function("))
+            return $"return await ({s})({argJsonLiteral})";
+        // Bare parenthesised expression → wrap as arrow taking args.
+        if (s.StartsWith('(') && s.EndsWith(')') && !s.EndsWith(")()"))
+            return $"return await ((args) => {s})({argJsonLiteral})";
+        // Statement body: wrap in `(args) => { ... }`.
+        return $"return await ((args) => {{ {s} }})({argJsonLiteral})";
+    }
+
+    private static bool IsArrowExpression(string s)
+    {
+        // `() => ...`, `(a, b) => ...`, `x => ...`, `async () => ...`
+        // Cheap regex: after optional `async`, either `(...)` param list
+        // or bare identifier, then `=>`.
+        var body = s.StartsWith("async") ? s[5..].TrimStart() : s;
+        if (body.Length == 0) return false;
+        int arrowIdx;
+        if (body[0] == '(')
+        {
+            // Find matching `)` at depth 0.
+            var depth = 0;
+            var end = -1;
+            for (var i = 0; i < body.Length; i++)
+            {
+                if (body[i] == '(') depth++;
+                else if (body[i] == ')')
+                {
+                    depth--;
+                    if (depth == 0) { end = i; break; }
+                }
+            }
+            if (end < 0) return false;
+            arrowIdx = end + 1;
+        }
+        else if (char.IsLetter(body[0]) || body[0] == '_' || body[0] == '$')
+        {
+            var i = 0;
+            while (i < body.Length && (char.IsLetterOrDigit(body[i]) || body[i] == '_' || body[i] == '$')) i++;
+            arrowIdx = i;
+        }
+        else return false;
+        // Skip whitespace after params.
+        while (arrowIdx < body.Length && char.IsWhiteSpace(body[arrowIdx])) arrowIdx++;
+        return arrowIdx + 1 < body.Length && body[arrowIdx] == '=' && body[arrowIdx + 1] == '>';
     }
 
     /// <summary>Unwrap OpenDia's cdp_evaluate envelope
