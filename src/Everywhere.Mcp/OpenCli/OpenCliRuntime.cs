@@ -447,6 +447,12 @@ public sealed class OpenCliRuntime : IAsyncDisposable
             try
             {
                 engine.Script.__opencliPage = page;
+                // Delegate: JsonNode → JSON string. Used by the JS-side
+                // wrap layer to convert host JsonNode returns into plain
+                // JS values via JSON.parse. ClearScript can't dispatch
+                // .ToJsonString() through V8's host-object surface reliably.
+                Func<JsonNode?, string?> jsonify = static (n) => n?.ToJsonString();
+                engine.Script.__opencliJsonify = jsonify;
                 engine.Script.__opencliArgs = args.DeepClone().ToJsonString();
                 engine.Script.__opencliFn = def.Func;
                 engine.Script.__opencliFnBrowser = def.Browser;
@@ -539,12 +545,12 @@ public sealed class OpenCliRuntime : IAsyncDisposable
                                 proxy[js] = async (...args) => {
                                     const r = await host[cs](...args);
                                     if (r === null || r === undefined) return r;
-                                    // r is a C# JsonNode host reference — its
-                                    // ToString() is the compact JSON. Round-trip
-                                    // to a plain JS value.
-                                    // JsonNode.ToJsonString() always returns valid JSON
-                                    // (unlike ToString() which wraps primitives in quotes).
-                                    try { return JSON.parse(r.ToJsonString()); }
+                                    // r is a C# JsonNode host reference — no
+                                    // JS-visible fields. Round-trip via a host
+                                    // delegate that stringifies it, then parse.
+                                    const s = globalThis.__opencliJsonify(r);
+                                    if (s === null || s === undefined) return null;
+                                    try { return JSON.parse(s); }
                                     catch { return r; }
                                 };
                             } else {
