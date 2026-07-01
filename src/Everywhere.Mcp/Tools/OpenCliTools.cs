@@ -212,7 +212,13 @@ public sealed class OpenCliTools(OpenCliRuntime runtime, OpenDiaBridge? bridge =
         {
             if (bridge is null || !bridge.IsConnected)
                 return Envelope(false, site, name, "opendia-not-connected", "BROWSER_NOT_READY");
-            page = new OpenDiaPageBridge(bridge);
+            // Cookie/intercept/ui adapters do their I/O off the user's
+            // active tab: OpenDiaPageBridge opens a fresh background tab
+            // on first goto and closes it on dispose. UI-strategy adapters
+            // that need a visible page for click / scroll semantics get
+            // an active tab (opt-out via `useBackgroundTab: false`).
+            var useBg = strategy is "cookie" or "intercept";
+            page = new OpenDiaPageBridge(bridge, useBackgroundTab: useBg);
         }
         else
         {
@@ -227,6 +233,12 @@ public sealed class OpenCliTools(OpenCliRuntime runtime, OpenDiaBridge? bridge =
         catch (Exception ex)
         {
             return Envelope(false, site, name, ex.Message, "RUNTIME_HOST_ERROR");
+        }
+        finally
+        {
+            // Close background tab (best-effort) so tabs don't leak.
+            if (page is IAsyncDisposable disposable)
+                await disposable.DisposeAsync().ConfigureAwait(false);
         }
     }
 }

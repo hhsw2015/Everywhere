@@ -1,8 +1,8 @@
 {
   "total": 56,
-  "bothOK": 44,
-  "mcpFail": 2,
-  "nodeFail": 1,
+  "bothOK": 43,
+  "mcpFail": 4,
+  "nodeFail": 0,
   "bothFail": 9,
   "results": [
     {
@@ -10,7 +10,7 @@
       "name": "digest",
       "node": {
         "ok": false,
-        "err": "1point3acres request failed: HTTP 403 Forbidden from https://www.1point3acres.com/bbs/forum.php?mod=guide&view=digest"
+        "err": "1point3acres request failed: fetch failed"
       },
       "mcp": {
         "ok": false,
@@ -23,7 +23,7 @@
       "name": "forums",
       "node": {
         "ok": false,
-        "err": "1point3acres request failed: HTTP 403 Forbidden from https://www.1point3acres.com/bbs/forum.php"
+        "err": "1point3acres request failed: fetch failed"
       },
       "mcp": {
         "ok": false,
@@ -192,9 +192,9 @@
         "type": "array"
       },
       "mcp": {
-        "ok": true,
-        "len": 20,
-        "type": "array"
+        "ok": false,
+        "err": "coingecko categories request failed: net_io_eof",
+        "code": "COMMAND_EXEC"
       }
     },
     {
@@ -331,9 +331,9 @@
         "type": "array"
       },
       "mcp": {
-        "ok": true,
-        "len": 10,
-        "type": "array"
+        "ok": false,
+        "err": "HTTP 429",
+        "code": "FETCH_ERROR"
       }
     },
     {
@@ -674,12 +674,13 @@
       "site": "v2ex",
       "name": "hot",
       "node": {
-        "ok": false,
-        "err": "fetch failed"
+        "ok": true,
+        "len": 9,
+        "type": "array"
       },
       "mcp": {
         "ok": true,
-        "len": 8,
+        "len": 9,
         "type": "array"
       }
     },

@@ -32,13 +32,22 @@ namespace Everywhere.Mcp.OpenCli;
 /// throws when the WS pipe is dead; <see cref="OpenCliRuntime"/> wraps
 /// it into the <c>{ok:false, error:"opendia-not-connected"}</c> envelope.
 /// </summary>
-public sealed class OpenDiaPageBridge : IPage
+public sealed class OpenDiaPageBridge : IPage, IAsyncDisposable
 {
     private readonly OpenDiaBridge bridge;
-    public OpenDiaPageBridge(OpenDiaBridge bridge)
+    // When true, the first Goto opens a fresh tab with active:false and
+    // stashes its id in _bgTabId; every subsequent Call passes tab_id so
+    // the user's foreground tab is never disturbed. Adapter dispose closes
+    // the background tab.
+    private readonly bool _useBackgroundTab;
+    private long? _bgTabId;
+    private bool _disposed;
+
+    public OpenDiaPageBridge(OpenDiaBridge bridge, bool useBackgroundTab = false)
     {
         ArgumentNullException.ThrowIfNull(bridge);
         this.bridge = bridge;
+        this._useBackgroundTab = useBackgroundTab;
     }
 
     private static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(30);
@@ -60,8 +69,19 @@ public sealed class OpenDiaPageBridge : IPage
     // Failing to strip → "Unknown method: browser_X" from the extension
     // (v0.9.278 through v0.9.282 hit this on cookie-strategy adapters
     // like reddit/read that use browser_cdp_evaluate).
-    private Task<JsonNode?> Call(string method, JsonObject? args, CancellationToken ct = default) =>
-        bridge.InvokeByPrefixedName(method, args, TimeoutFor(method), ct);
+    private Task<JsonNode?> Call(string method, JsonObject? args, CancellationToken ct = default)
+    {
+        // Pin every request to our background tab so page.evaluate,
+        // cdp_input_*, cookies_get, etc. all target the same execution
+        // context — even after the user switches away.
+        if (_bgTabId is long tabId)
+        {
+            args ??= new JsonObject();
+            if (!args.ContainsKey("tab_id"))
+                args["tab_id"] = tabId;
+        }
+        return bridge.InvokeByPrefixedName(method, args, TimeoutFor(method), ct);
+    }
 
     private static TimeSpan TimeoutFor(string method) => method switch
     {
@@ -143,6 +163,27 @@ public sealed class OpenDiaPageBridge : IPage
         if (!Uri.TryCreate(url, UriKind.Absolute, out var u) || u.Scheme is not ("http" or "https"))
             throw new ArgumentException($"page.goto: only http(s) urls allowed, got '{url}'");
 
+        // Background-tab mode: first Goto opens a fresh tab with
+        // active:false. Subsequent calls that hit this branch (rare —
+        // an adapter chaining goto within one run) navigate that same
+        // tab via browser_open with tab_id (Call injects it).
+        if (_useBackgroundTab && _bgTabId is null)
+        {
+            var resp = await bridge.InvokeByPrefixedName(
+                "browser_tab_create",
+                new JsonObject { ["url"] = url, ["active"] = false },
+                TimeoutFor("browser_tab_create")).ConfigureAwait(false);
+            if (resp is JsonObject obj)
+            {
+                var idNode = obj["tab_id"] ?? obj["tabId"];
+                if (idNode is JsonValue idv && (idv.TryGetValue<long>(out var idL) || idv.TryGetValue<int>(out var idI) && (idL = idI) == idL))
+                    _bgTabId = idL;
+            }
+            if (_bgTabId is null)
+                throw new InvalidOperationException("page.goto: browser_tab_create did not return tab_id");
+            return;
+        }
+
         var current = await GetCurrentUrl().ConfigureAwait(false);
         if (!string.IsNullOrEmpty(current)
             && Uri.TryCreate(current, UriKind.Absolute, out var cu)
@@ -159,6 +200,27 @@ public sealed class OpenDiaPageBridge : IPage
             return;
         }
         await Call("browser_open", new JsonObject { ["url"] = url }).ConfigureAwait(false);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_disposed) return;
+        _disposed = true;
+        if (_bgTabId is long tabId)
+        {
+            _bgTabId = null;
+            try
+            {
+                await bridge.InvokeByPrefixedName(
+                    "browser_tab_close",
+                    new JsonObject { ["tab_id"] = tabId },
+                    TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+            }
+            catch
+            {
+                // Best-effort cleanup; extension may already be down.
+            }
+        }
     }
 
     /// <summary>
