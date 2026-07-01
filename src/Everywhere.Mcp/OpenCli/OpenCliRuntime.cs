@@ -776,7 +776,10 @@ public sealed class OpenCliRuntime : IAsyncDisposable
             // via V8's JSON.parse, not a .NET JsonNode (host object that
             // Array.isArray / Object.entries / .map can't see through).
             globalThis.fetch = async (url, init) => {
-                const hostResp = await __opencliHost.fetchAsync(url, init || null);
+                // Coerce URL objects / anything-toString-able to string —
+                // C# HostShim.fetchAsync takes `string url` and would
+                // otherwise fail with 'BadArgTypes' on `new URL(...)`.
+                const hostResp = await __opencliHost.fetchAsync(String(url), init || null);
                 const hostText = await hostResp.text();
                 return {
                     ok: hostResp.ok,

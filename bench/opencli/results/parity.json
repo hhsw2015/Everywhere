@@ -9,7 +9,7 @@
     },
     "mcp": {
       "ok": true,
-      "len": 20,
+      "len": 2,
       "type": "array"
     }
   },
@@ -22,9 +22,9 @@
       "type": "array"
     },
     "mcp": {
-      "ok": false,
-      "err": "oeis query cannot be empty",
-      "code": "ARGUMENT"
+      "ok": true,
+      "len": 2,
+      "type": "array"
     }
   },
   {
@@ -36,9 +36,9 @@
       "type": "array"
     },
     "mcp": {
-      "ok": false,
-      "err": "oeis sequence id is required (e.g. \"A000045\" for Fibonacci)",
-      "code": "ARGUMENT"
+      "ok": true,
+      "len": 1,
+      "type": "array"
     }
   },
   {
@@ -50,9 +50,9 @@
       "type": "array"
     },
     "mcp": {
-      "ok": false,
-      "err": "crates query cannot be empty",
-      "code": "ARGUMENT"
+      "ok": true,
+      "len": 2,
+      "type": "array"
     }
   },
   {
@@ -64,9 +64,9 @@
       "type": "array"
     },
     "mcp": {
-      "ok": false,
-      "err": "pypi package name is required (e.g. \"requests\", \"pandas\")",
-      "code": "ARGUMENT"
+      "ok": true,
+      "len": 1,
+      "type": "array"
     }
   },
   {
@@ -78,9 +78,9 @@
       "type": "array"
     },
     "mcp": {
-      "ok": false,
-      "err": "Invalid HN item id: undefined",
-      "code": "ARGUMENT"
+      "ok": true,
+      "len": 4,
+      "type": "array"
     }
   },
   {
