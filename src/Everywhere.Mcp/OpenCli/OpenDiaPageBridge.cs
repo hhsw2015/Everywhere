@@ -60,13 +60,8 @@ public sealed class OpenDiaPageBridge : IPage
     // Failing to strip → "Unknown method: browser_X" from the extension
     // (v0.9.278 through v0.9.282 hit this on cookie-strategy adapters
     // like reddit/read that use browser_cdp_evaluate).
-    private Task<JsonNode?> Call(string method, JsonObject? args, CancellationToken ct = default)
-    {
-        var extName = method.StartsWith(OpenDiaToolListBuilder.Prefix, StringComparison.Ordinal)
-            ? method.Substring(OpenDiaToolListBuilder.Prefix.Length)
-            : method;
-        return bridge.CallToolAsync(extName, args, TimeoutFor(method), ct);
-    }
+    private Task<JsonNode?> Call(string method, JsonObject? args, CancellationToken ct = default) =>
+        bridge.InvokeByPrefixedName(method, args, TimeoutFor(method), ct);
 
     private static TimeSpan TimeoutFor(string method) => method switch
     {
