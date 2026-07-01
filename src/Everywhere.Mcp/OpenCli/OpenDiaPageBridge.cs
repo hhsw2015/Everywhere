@@ -45,10 +45,19 @@ public sealed class OpenDiaPageBridge : IPage
     private static readonly TimeSpan WaitTimeout = TimeSpan.FromMinutes(11);
     private const int MaxWaitMs = 10 * 60 * 1000;
 
-    // OpenDia extension WS accepts every tool it registers (~161).
-    // Direct dispatch by tool name is correct; the earlier "Unknown method"
-    // I saw was a symptom of driving via MCP-layer meta tools, not this
-    // path. Keep it simple.
+    // OpenDia extension WS accepts every tool it registers by name (~161).
+    // Direct dispatch is correct; the earlier "Unknown method: X" errors
+    // I chased with a wrap were misdiagnosed:
+    //   * v0.9.278-earlier "Unknown method: browser_evaluate_js" — I was
+    //     invoking the wrong tool name; the real one is browser_cdp_evaluate
+    //     (fixed in v0.9.278).
+    //   * v0.9.280 "Unknown method: call_tool" — the wrap I added sent the
+    //     literal string "call_tool" as the extension tool name. call_tool
+    //     is a MCP-layer meta tool (see MetaTools.cs), not an extension tool.
+    // Evidence for the current path: v0.9.280 with the wrap failed on
+    // reddit/read (cookie strategy → browser_cdp_evaluate); reverting to
+    // direct dispatch — same as v0.9.278 for public strategies which have
+    // been passing parity-wide since — is the correct posture.
     private Task<JsonNode?> Call(string method, JsonObject? args, CancellationToken ct = default) =>
         bridge.CallToolAsync(method, args, TimeoutFor(method), ct);
 

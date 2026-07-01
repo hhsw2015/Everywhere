@@ -165,7 +165,7 @@ public sealed class MetaTools
         AppendNativeRow(sb, "perception_active",
             n => n is "list_apps" or "expand_element" or "get_browser_tabs" or "get_idle_time" or "pick_element");
         AppendNativeRow(sb, "perception_content",
-            n => n is "doc_read_xlsx" or "doc_read_pptx" or "doc_read_epub" or "doc_read_html" or "doc_read_txt" or "read_whiteboard_image");
+            n => n is "doc_read_pdf" or "doc_read_docx" or "doc_read_xlsx" or "doc_read_pptx" or "doc_read_epub" or "doc_read_html" or "doc_read_txt" or "read_whiteboard_image");
         AppendNativeRow(sb, "action_macos",
             n => n is "drag" or "perform_secondary_action" or "clipboard_write" or "clipboard_copy" or "clipboard_read" or "clipboard_paste");
         // opencli_describe is gate-hidden individually (not in NativeLongTail);
