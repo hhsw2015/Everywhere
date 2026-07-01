@@ -45,25 +45,16 @@ public sealed class OpenDiaPageBridge : IPage
     private static readonly TimeSpan WaitTimeout = TimeSpan.FromMinutes(11);
     private const int MaxWaitMs = 10 * 60 * 1000;
 
-    // OpenDia extension exposes ~40 tools directly on its WS pipe;
+    // OpenDia extension only exposes ~40 tools for direct WS dispatch;
     // the other ~121 (all cdp_*, evaluate, cookies, network, storage,
-    // react_*, etc.) MUST be wrapped in `call_tool(name, arguments_json)`
-    // — direct dispatch returns "Unknown method: ...". Anything not in
-    // this set gets wrapped automatically. Keep in sync with tools/list
-    // observed at runtime; a stray direct name just fails loudly.
-    private static readonly HashSet<string> CoreTools = new(StringComparer.Ordinal)
-    {
-        "browser_snapshot", "browser_click", "browser_fill", "browser_get_text",
-        "browser_press", "browser_scroll", "browser_get_url",
-        "browser_page_navigate", "browser_page_wait_for", "browser_screenshot",
-        "get_browser_url", "get_browser_tabs",
-    };
-
+    // react_*, etc.) return "Unknown method: X" unless wrapped in
+    // `call_tool(name, arguments_json)`. Rather than maintain a fragile
+    // core-name whitelist that drifts every OpenDia release, wrap
+    // everything — the wrapper accepts core names too (verified against
+    // browser_get_url, browser_snapshot). One JSON re-serialise per
+    // call is cheap next to the WS round-trip.
     private Task<JsonNode?> Call(string method, JsonObject? args, CancellationToken ct = default)
     {
-        if (CoreTools.Contains(method))
-            return bridge.CallToolAsync(method, args, TimeoutFor(method), ct);
-        // Long-tail wrap: `call_tool(name=X, arguments_json="...")`.
         var wrapped = new JsonObject
         {
             ["name"] = method,
