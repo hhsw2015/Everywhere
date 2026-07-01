@@ -215,7 +215,12 @@ public sealed class OpenDiaPageBridge : IPage
     /// should use an IIFE explicitly. This matches Playwright/Puppeteer.</summary>
     private static bool LooksLikeExpression(string js)
     {
-        var t = js.TrimEnd(';', ' ', '\n', '\r', '\t');
+        // Trim BOTH ends — adapters embed IIFEs with leading indentation
+        // (template-literal newline + spaces before `(async function()...`).
+        // Without TrimStart the check fails on those and the expression
+        // is sent as-is to the extension, which wraps it as a body and
+        // ends up with an outer wrapper that has no top-level return.
+        var t = js.Trim().TrimEnd(';', ' ', '\n', '\r', '\t');
         return t.StartsWith('(') && t.EndsWith(')');
     }
 

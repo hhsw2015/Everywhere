@@ -488,11 +488,11 @@ public sealed class OpenCliRuntime : IAsyncDisposable
                     // come through as PascalCase (page.Goto), but upstream
                     // adapters call camelCase (page.goto). Re-export each
                     // entry as a forwarding function so both names work.
-                    // Stash on globalThis with `||=` so we install the
-                    // wrapper exactly once — top-level `const` declarations
-                    // persist across engine.Execute() calls and would throw
-                    // 'Identifier already declared' on the second invoke.
-                    globalThis.__wrapPage = globalThis.__wrapPage || ((host) => {
+                    // Reinstall on every invoke so factory changes ship with
+                    // the build (previously used `||=` which pinned the very
+                    // first version for the engine's lifetime — a per-boot
+                    // upgrade needed a full app restart, not an app relaunch).
+                    globalThis.__wrapPage = ((host) => {
                         if (host === null || host === undefined) return host;
                         // Reflect the C# surface: every PascalCase method becomes
                         // a camelCase alias that forwards to it. We can't easily
@@ -545,23 +545,12 @@ public sealed class OpenCliRuntime : IAsyncDisposable
                                 proxy[js] = async (...args) => {
                                     const r = await host[cs](...args);
                                     if (r === null || r === undefined) return r;
-                                    // Round-trip host JsonNode → JSON → JS.
-                                    // Throw with diagnostics so failures surface
-                                    // in the adapter envelope instead of silently
-                                    // becoming null.
-                                    const jsonify = globalThis.__opencliJsonify;
-                                    if (typeof jsonify !== 'function') {
-                                        throw new Error('page.' + js + ': __opencliJsonify not registered (typeof=' + typeof jsonify + ')');
-                                    }
-                                    const s = jsonify(r);
+                                    // Round-trip host JsonNode → JSON → JS so
+                                    // adapter code can read result.kind/etc.
+                                    const s = globalThis.__opencliJsonify(r);
                                     if (s === null || s === undefined) return null;
-                                    if (typeof s !== 'string') {
-                                        throw new Error('page.' + js + ': jsonify returned non-string (typeof=' + typeof s + ')');
-                                    }
                                     try { return JSON.parse(s); }
-                                    catch (e) {
-                                        throw new Error('page.' + js + ': JSON.parse failed: ' + e.message + ' payload=' + s.slice(0, 200));
-                                    }
+                                    catch { return r; }
                                 };
                             } else {
                                 proxy[js] = (...args) => host[cs](...args);
