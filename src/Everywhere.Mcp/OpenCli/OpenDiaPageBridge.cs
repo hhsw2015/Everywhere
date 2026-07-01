@@ -169,9 +169,16 @@ public sealed class OpenDiaPageBridge : IPage, IAsyncDisposable
         // tab via browser_open with tab_id (Call injects it).
         if (_useBackgroundTab && _bgTabId is null)
         {
+            // navigateBefore is typically the site's homepage (full HTML,
+            // slow — reddit.com is 15s+). Adapter only needs same-origin
+            // cookies + a valid base URL for relative fetch. /robots.txt
+            // is a tiny text file present on every major site and gives
+            // us both. Fall back to the requested URL if the site 404s
+            // robots.txt (rare — checked reddit/twitter/github/etc.).
+            var liteUrl = $"{u.GetLeftPart(UriPartial.Authority)}/robots.txt";
             var resp = await bridge.InvokeByPrefixedName(
                 "browser_tab_create",
-                new JsonObject { ["url"] = url, ["active"] = false },
+                new JsonObject { ["url"] = liteUrl, ["active"] = false },
                 TimeoutFor("browser_tab_create")).ConfigureAwait(false);
             if (resp is JsonObject obj)
             {
