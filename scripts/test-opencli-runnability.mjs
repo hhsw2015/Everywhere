@@ -138,9 +138,12 @@ async function runOne(category, [site, name, args]) {
       // upstream func signature is (args) for PUBLIC and (args, page)
       // for browser. PUBLIC adapter doesn't receive a page argument.
       const fnArity = def.func.length;
-      // Upstream signature: (page, args) or (args).
+      const call =
+        fnArity >= 2 ? def.func(page, args)
+      : fnArity === 1 ? (def.browser ? def.func(page) : def.func(args))
+      : def.func();
       result = await Promise.race([
-        fnArity >= 2 ? def.func(page, args) : def.func(args),
+        call,
         new Promise((_, r) => setTimeout(() => r(new Error('TIMEOUT_15s')), 15000)),
       ]);
     } else if (def.pipeline) {

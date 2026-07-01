@@ -449,6 +449,7 @@ public sealed class OpenCliRuntime : IAsyncDisposable
                 engine.Script.__opencliPage = page;
                 engine.Script.__opencliArgs = args.DeepClone().ToJsonString();
                 engine.Script.__opencliFn = def.Func;
+            engine.Script.__opencliFnBrowser = def.Browser;
                 // Serialise the result inside the IIFE so JSON.stringify
                 // errors (circular structures, Date / BigInt) surface as
                 // adapter exceptions rather than silently flipping a
@@ -518,14 +519,20 @@ public sealed class OpenCliRuntime : IAsyncDisposable
                         try {
                             const cargs = JSON.parse(globalThis.__opencliArgs);
                             const cpage = globalThis.__wrapPage(globalThis.__opencliPage);
-                            // Upstream func signature is (page, args) — single-
-                            // arg variants (page) or (args) work too because
-                            // unused parameters are simply ignored. PUBLIC
-                            // adapters get a stub page but still expect it as
-                            // arg 0. Calling with (args, page) silently swapped
-                            // the slots and adapters that read args.X got
-                            // ".X is not a function" or "Unknown type".
-                            const r = await globalThis.__opencliFn(cpage, cargs);
+                            // Upstream func signatures observed in v1.8.5:
+                            //   async (page, args)  — browser=true adapters
+                            //   async (page)        — browser=true, no args
+                            //   async (args)        — browser=false PUBLIC
+                            //   async ()            — env-driven
+                            // The .length arity tells us how many, and
+                            // def.browser tells us WHICH single-arg role.
+                            const fn = globalThis.__opencliFn;
+                            const arity = fn.length;
+                            const isBrowser = globalThis.__opencliFnBrowser === true;
+                            const r = arity >= 2 ? await fn(cpage, cargs)
+                                    : arity === 1
+                                        ? (isBrowser ? await fn(cpage) : await fn(cargs))
+                                        : await fn();
                             globalThis.__opencliCallResultJson = JSON.stringify(r === undefined ? null : r);
                         } catch (e) {
                             const code = (e && e.code != null) ? String(e.code) : 'RUNTIME_ERROR';

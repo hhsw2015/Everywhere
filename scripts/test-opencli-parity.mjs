@@ -63,8 +63,15 @@ async function runNode(site, name, args) {
   try {
     let result;
     if (typeof def.func === 'function') {
-      // Upstream signature: (page, args) or (args).
-      result = def.func.length >= 2 ? await def.func(null, args) : await def.func(args);
+      const arity = def.func.length;
+      // Upstream (page, args) for browser adapters; (args) for PUBLIC.
+      // The .length arity tells us how many, def.browser tells us
+      // which single-arg role.
+      result = arity >= 2
+        ? await def.func(null, args)
+        : arity === 1
+          ? (def.browser ? await def.func(null) : await def.func(args))
+          : await def.func();
     } else if (def.pipeline) {
       result = await executePipeline(def.browser ? null : null, def.pipeline, { args });
     }

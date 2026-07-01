@@ -9,7 +9,7 @@
     },
     "mcp": {
       "ok": true,
-      "len": 2,
+      "len": 20,
       "type": "array"
     }
   },
@@ -22,9 +22,9 @@
       "type": "array"
     },
     "mcp": {
-      "ok": true,
-      "len": 2,
-      "type": "array"
+      "ok": false,
+      "err": "oeis query cannot be empty",
+      "code": "ARGUMENT"
     }
   },
   {
@@ -36,9 +36,9 @@
       "type": "array"
     },
     "mcp": {
-      "ok": true,
-      "len": 1,
-      "type": "array"
+      "ok": false,
+      "err": "oeis sequence id is required (e.g. \"A000045\" for Fibonacci)",
+      "code": "ARGUMENT"
     }
   },
   {
@@ -50,9 +50,9 @@
       "type": "array"
     },
     "mcp": {
-      "ok": true,
-      "len": 2,
-      "type": "array"
+      "ok": false,
+      "err": "crates query cannot be empty",
+      "code": "ARGUMENT"
     }
   },
   {
@@ -64,9 +64,9 @@
       "type": "array"
     },
     "mcp": {
-      "ok": true,
-      "len": 1,
-      "type": "array"
+      "ok": false,
+      "err": "pypi package name is required (e.g. \"requests\", \"pandas\")",
+      "code": "ARGUMENT"
     }
   },
   {
@@ -78,9 +78,9 @@
       "type": "array"
     },
     "mcp": {
-      "ok": true,
-      "len": 4,
-      "type": "array"
+      "ok": false,
+      "err": "Invalid HN item id: undefined",
+      "code": "ARGUMENT"
     }
   },
   {
@@ -190,9 +190,9 @@
       "type": "array"
     },
     "mcp": {
-      "ok": false,
-      "err": "URLSearchParams is not defined",
-      "code": "RUNTIME_ERROR"
+      "ok": true,
+      "len": 2,
+      "type": "array"
     }
   },
   {
@@ -200,11 +200,11 @@
     "name": "trending",
     "node": {
       "ok": false,
-      "err": "Cannot read properties of null (reading 'limit')"
+      "err": "Cannot read properties of null (reading 'startNetworkCapture')"
     },
     "mcp": {
       "ok": false,
-      "err": "page.goto is not a function",
+      "err": "Unknown method: browser_page_navigate",
       "code": "RUNTIME_ERROR"
     }
   },
@@ -213,7 +213,7 @@
     "name": "user",
     "node": {
       "ok": false,
-      "err": "Cannot read properties of null (reading 'username')"
+      "err": "Username is required"
     },
     "mcp": {
       "ok": false,
@@ -226,7 +226,7 @@
     "name": "code",
     "node": {
       "ok": false,
-      "err": "Cannot read properties of null (reading 'input')"
+      "err": "Missing component input. Pass a full Uiverse URL or an author/slug identifier."
     },
     "mcp": {
       "ok": false,
@@ -239,11 +239,11 @@
     "name": "news",
     "node": {
       "ok": false,
-      "err": "Cannot read properties of null (reading 'limit')"
+      "err": "Cannot read properties of null (reading 'goto')"
     },
     "mcp": {
       "ok": false,
-      "err": "page.goto is not a function",
+      "err": "BadArgTypes",
       "code": "RUNTIME_ERROR"
     }
   },
@@ -270,7 +270,7 @@
     },
     "mcp": {
       "ok": false,
-      "err": "URL is not defined",
+      "err": "BadArgTypes",
       "code": "RUNTIME_ERROR"
     }
   }
