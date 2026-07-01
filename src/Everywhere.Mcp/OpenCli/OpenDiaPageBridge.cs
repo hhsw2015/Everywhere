@@ -45,23 +45,12 @@ public sealed class OpenDiaPageBridge : IPage
     private static readonly TimeSpan WaitTimeout = TimeSpan.FromMinutes(11);
     private const int MaxWaitMs = 10 * 60 * 1000;
 
-    // OpenDia extension only exposes ~40 tools for direct WS dispatch;
-    // the other ~121 (all cdp_*, evaluate, cookies, network, storage,
-    // react_*, etc.) return "Unknown method: X" unless wrapped in
-    // `call_tool(name, arguments_json)`. Rather than maintain a fragile
-    // core-name whitelist that drifts every OpenDia release, wrap
-    // everything — the wrapper accepts core names too (verified against
-    // browser_get_url, browser_snapshot). One JSON re-serialise per
-    // call is cheap next to the WS round-trip.
-    private Task<JsonNode?> Call(string method, JsonObject? args, CancellationToken ct = default)
-    {
-        var wrapped = new JsonObject
-        {
-            ["name"] = method,
-            ["arguments_json"] = (args ?? new JsonObject()).ToJsonString(),
-        };
-        return bridge.CallToolAsync("call_tool", wrapped, TimeoutFor(method), ct);
-    }
+    // OpenDia extension WS accepts every tool it registers (~161).
+    // Direct dispatch by tool name is correct; the earlier "Unknown method"
+    // I saw was a symptom of driving via MCP-layer meta tools, not this
+    // path. Keep it simple.
+    private Task<JsonNode?> Call(string method, JsonObject? args, CancellationToken ct = default) =>
+        bridge.CallToolAsync(method, args, TimeoutFor(method), ct);
 
     private static TimeSpan TimeoutFor(string method) => method switch
     {
