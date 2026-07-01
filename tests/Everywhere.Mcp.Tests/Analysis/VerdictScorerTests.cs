@@ -12,7 +12,7 @@ public sealed class VerdictScorerTests
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
         while (dir is not null)
         {
-            var probe = Path.Combine(dir.FullName, "tests", "Everywhere.Mcp.Tests", "fixtures", "observation", "hackernews-manual.json");
+            var probe = Path.Combine(dir.FullName, "tests", "Everywhere.Mcp.Tests", "Fixtures", "observation", "hackernews-manual.json");
             if (File.Exists(probe))
             {
                 var opts = new JsonSerializerOptions();
