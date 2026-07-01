@@ -523,9 +523,33 @@ public sealed class OpenCliRuntime : IAsyncDisposable
                             waitForCapture: 'WaitForCapture',
                             waitForTimeout: 'WaitForTimeout',
                         };
+                        // JSON-shape methods (return C# JsonNode?): the host
+                        // reference has no JS-visible fields. JSON round-trip
+                        // to a plain JS object so adapter code can `result.kind`.
+                        const jsonReturns = new Set([
+                            'evaluate', 'evaluateWithArgs', 'cdp', 'find',
+                            'getCookies', 'getInterceptedRequests', 'readNetworkCapture',
+                            'installInterceptor', 'startNetworkCapture', 'waitForCapture',
+                            'snapshot', 'tabs', 'setFileInput', 'nativeClick',
+                            'nativeKeyPress', 'nativeType', 'screenshot',
+                        ]);
                         const proxy = {};
                         for (const [js, cs] of Object.entries(map)) {
-                            proxy[js] = (...args) => host[cs](...args);
+                            if (jsonReturns.has(js)) {
+                                proxy[js] = async (...args) => {
+                                    const r = await host[cs](...args);
+                                    if (r === null || r === undefined) return r;
+                                    // r is a C# JsonNode host reference — its
+                                    // ToString() is the compact JSON. Round-trip
+                                    // to a plain JS value.
+                                    // JsonNode.ToJsonString() always returns valid JSON
+                                    // (unlike ToString() which wraps primitives in quotes).
+                                    try { return JSON.parse(r.ToJsonString()); }
+                                    catch { return r; }
+                                };
+                            } else {
+                                proxy[js] = (...args) => host[cs](...args);
+                            }
                         }
                         return proxy;
                     });
