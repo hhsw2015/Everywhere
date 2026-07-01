@@ -35,12 +35,14 @@ internal static class CoreToolGate
         if (!FilterEnabled) return false;
         if (toolName!.StartsWith(OpenDiaToolListBuilder.Prefix, StringComparison.Ordinal))
             return !CoreBrowserTools.Contains(toolName);
-        // SPEC docs/specs/everywhere-opencli-adapters.md §6.7 — opencli_*
-        // tools are filtered out by the gate until the user opts in by
-        // setting EVERYWHERE_MCP_OPENCLI=1 (or flipping the default after
-        // Phase 2 ships). Reaches via call_tool stays available.
+        // opencli_list + opencli_run stay core; opencli_describe is a
+        // between-step tool the agent reaches for on demand — hide it
+        // from tools/list to save ~500 tokens; call_tool still reaches it.
         if (toolName!.StartsWith("opencli_", StringComparison.Ordinal))
-            return !OpenCliEnabled;
+        {
+            if (!OpenCliEnabled) return true;
+            return toolName == "opencli_describe";
+        }
         return NativeLongTail.Contains(toolName);
     }
 
@@ -103,8 +105,12 @@ internal static class CoreToolGate
         "clipboard_write",
         "clipboard_copy",
 
-        // Doc readers — pdf+docx are the high-frequency formats.
-        // The rest stay reachable through call_tool.
+        // Doc readers — pdf+docx/xlsx/pptx/epub/html/txt all live here now.
+        // The high-frequency shape (agent extracts text from a user-named
+        // file path) is well-served by call_tool + list_more_tools, and the
+        // pdf/docx descriptions cost ~800 tokens together in tools/list.
+        "doc_read_pdf",
+        "doc_read_docx",
         "doc_read_xlsx",
         "doc_read_pptx",
         "doc_read_epub",

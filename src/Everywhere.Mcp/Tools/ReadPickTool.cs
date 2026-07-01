@@ -13,18 +13,12 @@ public static class ReadPickTool
 {
     [McpServerTool(Name = "read_pick", ReadOnly = true)]
     [Description(
-        "Read the UI element the user explicitly pinned for this agent via Everywhere's " +
-        "configurable Pin-Element hotkey. Returns {\"pinned\": true, \"picked_index\": int, " +
-        "\"app\": str, \"element\": {...}} — the picked element is at picked_index inside the " +
-        "indexed tree, addressable by click/set_value/scroll. Returns {\"pinned\": false} when " +
-        "no pin is fresh (the pin is one-shot: reading consumes it; pins expire after 5 min). " +
-        "ALWAYS call this FIRST when the user uses deictic references (\"this\", \"that\", " +
-        "\"the button I just selected\", \"刚才那个\") — fall back to get_app_context or " +
-        "get_focused_context when pinned is false. " +
-        "PARAM mode: \"auto\" (default — picks links view when the pin is a list of " +
-        "hyperlinks, otherwise full tree), \"links\" (force url+label pairs only — best " +
-        "when pin is a popup of urls), \"text\" (force plain text aggregation), \"full\" " +
-        "(force the verbose tree). \"links\" / \"text\" cut output ~10× vs \"full\".")]
+        "Read the UI element the user pinned via Everywhere's Pin-Element hotkey. " +
+        "Returns {pinned, picked_index, app, element}. Consumed on read; expires 5min. " +
+        "ALWAYS call FIRST for deictic references (\"this\", \"that\", \"刚才那个\") — " +
+        "fall back to get_app_context / get_focused_context when pinned=false. " +
+        "mode: auto (default, picks links if link-heavy) | links | text | full. " +
+        "links/text cut output ~10× vs full.")]
     public static CallToolResult ReadPick(
         PickStash stash,
         SessionStore sessions,

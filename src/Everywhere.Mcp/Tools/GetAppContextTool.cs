@@ -14,16 +14,10 @@ public static class GetAppContextTool
 {
     [McpServerTool(Name = "get_app_context", ReadOnly = true)]
     [Description(
-        "Resolve a fuzzy app name (\"the browser\", \"slack\", \"vscode\", \"arc\") to its current " +
-        "window state in ONE call. Internally: list_apps → fuzzy match → snapshot largest visible " +
-        "window. PREFER this over calling list_apps + get_app_state separately. Returns the same " +
-        "shape as get_app_state plus a 'matched' field describing which app and how confident. " +
-        "raise_if_needed: When true, briefly raise the target app to the foreground before reading, " +
-        "then restore the previous foreground. Pass true ONLY when (a) a prior read returned an empty " +
-        "or incomplete tree (Electron / Wayland apps lazy-load a11y in foreground only), (b) the user " +
-        "explicitly asked to switch to and check the app, or (c) you also need a screenshot of an app " +
-        "currently behind another window. DO NOT pass true for routine reads — most apps expose full " +
-        "a11y in background and raising disrupts the user.")]
+        "Fuzzy app name → window state (indexed a11y tree). Combines list_apps + get_app_state; " +
+        "prefer this over calling them separately. raise_if_needed=true only when a prior read " +
+        "returned an incomplete tree (Electron/Wayland lazy-load a11y in foreground) or you need " +
+        "a screenshot of an occluded window — raising interrupts the user.")]
     public static async Task<CallToolResult> GetAppContext(
         [Description("Fuzzy app name. Matched against process name AND window title (case-insensitive substring).")] string app_hint,
         IVisualElementContext context,

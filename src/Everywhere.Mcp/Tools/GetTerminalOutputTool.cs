@@ -17,11 +17,9 @@ public static class GetTerminalOutputTool
 
     [McpServerTool(Name = "get_terminal_output", ReadOnly = true)]
     [Description(
-        "Return the visible/rendered text of the focused terminal as JSON " +
-        "{\"is_terminal\": bool, \"lines_returned\": int, \"text\": string}. " +
-        "\"is_terminal\" is false when the focused app is not a recognised terminal — " +
-        "the agent should then fall back to get_focused_context. " +
-        "Use this when the user references \"this output\", \"this error\", \"the last command\", \"刚才那条\".")]
+        "Focused terminal's visible text as {is_terminal, lines_returned, text}. " +
+        "is_terminal=false → fall back to get_focused_context. " +
+        "Use for \"this output/error\", \"the last command\", \"刚才那条\".")]
     public static CallToolResult GetTerminalOutput(
         IVisualElementContext context,
         [Description("Max number of trailing lines to return. Defaults to 200, clamped to [1, 10000].")] int? lines_back = null)

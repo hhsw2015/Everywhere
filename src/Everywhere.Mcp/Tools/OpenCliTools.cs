@@ -35,12 +35,9 @@ public sealed class OpenCliTools(OpenCliRuntime runtime, OpenDiaBridge? bridge =
 
     [McpServerTool(Name = "opencli_list")]
     [Description(
-        "List OpenCLI site adapters Everywhere can run. With no args " +
-        "returns the SITE INDEX only — site name + command count + " +
-        "small description (cheap, ~3 KB). Pass `site` to drill into " +
-        "one site and get every command on it; pass `query` to fuzzy-" +
-        "match across the full registry. Pair with opencli_describe for " +
-        "a command's full schema; pair with opencli_run to execute one.")]
+        "List OpenCLI site adapters. No args → site index (~3KB). " +
+        "site=X → drill into one site's commands. query=X → fuzzy match (cap 60). " +
+        "Pair with opencli_run to execute.")]
     public async Task<string> OpenCliList(
         [Description("Optional site filter (e.g. \"bilibili\"). When set, returns every command for just that site instead of the site index.")] string? site = null,
         [Description("Optional case-insensitive substring match against site/name/description. Caps at 60 hits.")] string? query = null,
@@ -149,10 +146,8 @@ public sealed class OpenCliTools(OpenCliRuntime runtime, OpenDiaBridge? bridge =
 
     [McpServerTool(Name = "opencli_run")]
     [Description(
-        "Run an OpenCLI command. PUBLIC adapters work even without a " +
-        "browser extension; cookie/intercept/ui adapters require " +
-        "OpenDia to be connected — without it, run returns " +
-        "{ok:false, code:\"BROWSER_NOT_READY\"}.")]
+        "Run an OpenCLI command. PUBLIC adapters work anywhere; cookie/intercept/ui need OpenDia " +
+        "connected — else {ok:false, code:BROWSER_NOT_READY}.")]
     public async Task<string> OpenCliRun(
         [Description("Site identifier (from opencli_list).")] string site,
         [Description("Command name (from opencli_list).")] string name,

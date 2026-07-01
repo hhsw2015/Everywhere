@@ -14,16 +14,11 @@ public static class AddAnnotationTool
 
     [McpServerTool(Name = "add_annotation")]
     [Description(
-        "Queue a user-authored note against a perception anchor. Notes accumulate " +
-        "across pin / whiteboard / selected / linkrect captures and ship together " +
-        "in the next [everywhere-ctx] payload. " +
-        "source: one of \"pin\"|\"whiteboard\"|\"selected\"|\"linkrect\". " +
-        "body: the user's note text. " +
-        "anchor_label: short human-readable description of what the note attaches to " +
-        "(e.g. 'AXButton \"Submit\" in Notes', 'region 210x110 circle in Pages'). " +
-        "anchor_ref (optional): opaque id the source-specific stash can re-resolve " +
-        "(e.g. element_index for pin). " +
-        "Returns {\"queued\":<int>} = total annotations now waiting to be sent.")]
+        "Queue a user note against a perception anchor. Ships in next [everywhere-ctx]. " +
+        "source: pin|whiteboard|selected|linkrect. body: note text. " +
+        "anchor_label: short human-readable target description. " +
+        "anchor_ref (optional): opaque id (e.g. element_index for pin). " +
+        "Returns {queued:<int>}.")]
     public static CallToolResult AddAnnotation(
         AnnotationStash annotations,
         string source,

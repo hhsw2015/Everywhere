@@ -13,16 +13,10 @@ public static class ScreenshotTool
 {
     [McpServerTool(Name = "screenshot", ReadOnly = true)]
     [Description(
-        "Capture a base64-encoded screenshot. Targets in priority order: element_index → app_hint " +
-        "→ focused window. " +
-        "Defaults: format=jpeg, quality=70, max_height=1080, max_width=1920 — keeps a 5K-display " +
-        "window at ~70-100 KB (~25-35 K agent tokens) vs. PNG-100 ~3 MB (~1 M tokens). " +
-        "Pass format=\"png\" + quality=100 + max_height=0 + max_width=0 when you need bit-perfect output (OCR / diff). " +
-        "raise_if_needed: When true, briefly raise the target to the foreground before capture and " +
-        "restore the previous foreground. Use only when the target may be obscured / off-screen / not " +
-        "actively rendered (background tabs in some apps, occluded windows). " +
-        "Returns {\"screenshot_png_b64\":\"...\",\"format\":\"jpeg|png\"}. " +
-        "Field name kept as `screenshot_png_b64` for client back-compat — actual format is in `format`.")]
+        "Base64 screenshot. Target: element_index → app_hint → focused window. " +
+        "Defaults jpeg/70/1920x1080 (~25-35K tokens). Use format=png quality=100 max_*=0 for OCR/diff. " +
+        "raise_if_needed=true only for occluded/off-screen targets. " +
+        "Returns {screenshot_png_b64, format}.")]
     public static async Task<CallToolResult> Screenshot(
         IVisualElementContext context,
         SessionStore sessions,

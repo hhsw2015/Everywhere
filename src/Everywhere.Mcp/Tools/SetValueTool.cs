@@ -9,7 +9,7 @@ namespace Everywhere.Mcp.Tools;
 public static class SetValueTool
 {
     [McpServerTool(Name = "set_value")]
-    [Description("Replace the textual value of an indexed editable element (text field, combo box, slider, etc.) via AX SetValue. NOTE: some web inputs (Stripe / Cloudflare / certain Electron apps) reject scripted SetValue on security-sensitive fields — for those, click the element first to focus it, then press_key(\"super+a\") to select existing content, press_key(\"BackSpace\") to clear, then type_text(value).")]
+    [Description("Replace text of an indexed editable element via AX SetValue. Some fields (Stripe/Cloudflare/some Electron) reject scripted SetValue — fall back to click + press_key(super+a) + press_key(BackSpace) + type_text.")]
     public static CallToolResult SetValue(
         string app,
         string element_index,

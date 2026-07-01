@@ -12,13 +12,9 @@ public static class GetBrowserTabsTool
 {
     [McpServerTool(Name = "get_browser_tabs", ReadOnly = true)]
     [Description(
-        "Return all tabs of a browser app (Safari / Chrome / Arc / Brave / Edge / " +
-        "Chromium / Vivaldi / Opera) as JSON. Pass app_hint to target a specific browser; " +
-        "omit to use the foreground app. " +
-        "Status field: \"ok\" / \"not_supported\" (app isn't a browser) / " +
-        "\"permission_denied\" (Apple Events not granted yet — first call typically triggers " +
-        "the macOS permission prompt; if user dismissed it once, re-grant via " +
-        "System Settings → Privacy & Security → Automation).")]
+        "All tabs of a browser (Safari/Chrome/Arc/Brave/Edge/Chromium/Vivaldi/Opera). " +
+        "app_hint or foreground. status: ok | not_supported | permission_denied " +
+        "(macOS System Settings → Privacy → Automation).")]
     public static CallToolResult GetBrowserTabs(
         IVisualElementContext context,
         IBrowserTabsReader reader,

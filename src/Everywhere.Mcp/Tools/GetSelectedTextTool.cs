@@ -12,12 +12,9 @@ public static class GetSelectedTextTool
 {
     [McpServerTool(Name = "get_selected_text", ReadOnly = true)]
     [Description(
-        "Return the text the user has highlighted, OS-wide, as JSON " +
-        "{\"selected\": bool, \"text\": string, \"app\": string|null, \"source\": \"cache\"|\"focused\"|null}. " +
-        "Pulls from a 2-minute selection cache fed by the platform's text-selection observer, so it " +
-        "works even when focus has since moved to a different app (e.g. you select in the browser, " +
-        "switch back to chat, ask the agent). Falls back to the currently focused element's selection " +
-        "if no cached selection is fresh. selected=false / text=\"\" when nothing is highlighted anywhere.")]
+        "OS-wide highlighted text as {selected, text, app, source}. " +
+        "2-min cache survives focus change (select in browser, ask in chat still works); " +
+        "falls back to focused element's selection.")]
     public static CallToolResult GetSelectedText(IVisualElementContext context, SelectionCache cache)
     {
         try

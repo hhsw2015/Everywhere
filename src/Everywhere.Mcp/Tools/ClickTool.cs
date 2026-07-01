@@ -9,7 +9,7 @@ namespace Everywhere.Mcp.Tools;
 public static class ClickTool
 {
     [McpServerTool(Name = "click")]
-    [Description("Click a UI element. Pass element_index from a prior get_app_state when the target is in the indexed tree (no pointer movement, target window need not be foreground). Pass x/y screen pixel coordinates for free-form clicks. click_count defaults to 1; mouse_button defaults to left.")]
+    [Description("Click a UI element. Pass element_index (from get_app_state — no pointer move, no foreground) OR x/y pixel coords. click_count default 1; mouse_button default left.")]
     public static CallToolResult Click(
         string app,
         IServiceProvider services,

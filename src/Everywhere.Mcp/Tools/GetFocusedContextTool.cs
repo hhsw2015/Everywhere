@@ -13,14 +13,10 @@ public static class GetFocusedContextTool
 {
     [McpServerTool(Name = "get_focused_context", ReadOnly = true)]
     [Description(
-        "Snapshot of the user's CURRENT foreground app — focused window + selected text + " +
-        "indexed accessibility tree + screenshot. Use ONLY when the user references their " +
-        "current view with deictic words: \"this\", \"that\", \"here\", \"the error\", " +
-        "\"this code\", \"这个\". " +
-        "DO NOT use when the user names a specific app (\"the browser\", \"Chrome\", \"VSCode\", " +
-        "\"Slack\") — call get_app_context instead. " +
-        "DO NOT use when the user has pre-pinned an element via the Pin Element hotkey — " +
-        "call read_pick instead.")]
+        "Snapshot user's CURRENT foreground app — window + selected text + a11y tree + screenshot. " +
+        "Use for deictic \"this/that/here/这个\". " +
+        "DO NOT use when a specific app is named (call get_app_context) or when user has pinned via " +
+        "Pin-Element hotkey (call read_pick).")]
     public static async Task<CallToolResult> GetFocusedContext(
         IVisualElementContext context,
         SessionStore sessions,

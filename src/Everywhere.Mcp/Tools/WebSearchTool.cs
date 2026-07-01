@@ -26,12 +26,10 @@ public sealed class WebSearchTool(IWebSearchService searchService, IHttpClientFa
 {
     [McpServerTool(Name = "web_search")]
     [Description(
-        "🔎 Search the web via the user's configured Everywhere search provider " +
-        "(Tavily/Brave/Google/Jina/Searxng/AnySearch/UniFuncs/BoCha/TinyFish/Official). " +
-        "Multi-key rotating pool with 60s rate-limit cooldowns. " +
-        "Prefer this for ANY web search — saves ~10× tokens vs WebFetch on " +
-        "a URL the user is viewing, and routes through the user's existing " +
-        "API quotas. Returns title + url + snippet per hit (JSON).")]
+        "🔎 Web search via user's configured Everywhere provider " +
+        "(Tavily/Brave/Google/Jina/Searxng/etc.). Multi-key rotating pool. " +
+        "Prefer over WebFetch on viewed URLs (~10× token savings). " +
+        "Returns title/url/snippet per hit.")]
     public async Task<string> WebSearch(
         [Description("Search query.")] string query,
         [Description("Max results (default 5, clamped per-provider).")] int count = 5,
@@ -66,11 +64,8 @@ public sealed class WebSearchTool(IWebSearchService searchService, IHttpClientFa
 
     [McpServerTool(Name = "web_fetch_url")]
     [Description(
-        "📄 Fetch a URL as Markdown via Jina r.jina.ai (no API key, public " +
-        "reader endpoint). Use to read a page the user isn't currently " +
-        "viewing — when they ARE viewing it, prefer browser_snapshot + " +
-        "browser_get_text instead (zero external traffic). Returns the " +
-        "rendered Markdown as plain text.")]
+        "📄 Fetch URL as Markdown via Jina r.jina.ai (no API key). " +
+        "For pages user isn't viewing — when viewed, prefer browser_snapshot+get_text.")]
     public async Task<string> WebFetchUrl(
         [Description("Absolute http(s) URL to fetch.")] string url,
         CancellationToken ct = default)

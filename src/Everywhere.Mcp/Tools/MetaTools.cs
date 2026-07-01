@@ -33,15 +33,9 @@ public sealed class MetaTools
 
     [McpServerTool(Name = "list_more_tools")]
     [Description(
-        "🔎 List long-tail tools by category. Use when the default tools/list " +
-        "doesn't cover what you need. Browser long-tail: cookies, CDP eval, " +
-        "network capture, React debug, find_by_role/label/testid, device emulation, " +
-        "auth/state. Native long-tail: doc_read_xlsx/pptx/epub/html/txt, drag, " +
-        "perform_secondary_action, list_apps, expand_element, get_idle_time. " +
-        "Returns a markdown catalog (name + one-line description) per category. " +
-        "Pair with `call_tool(name, args)` to invoke. " +
-        "Categories: action_browser | action_macos | perception_active | " +
-        "perception_content | debug | config | (omit for overview).")]
+        "🔎 List long-tail tools by category. Categories: action_browser | action_macos | " +
+        "perception_active | perception_content | debug | config | opencli (omit for overview). " +
+        "Pair with call_tool(name, args) to invoke.")]
     public string ListMoreTools(
         [Description("Optional category filter. Omit for category overview with counts.")]
         string? category = null)
@@ -58,10 +52,8 @@ public sealed class MetaTools
 
     [McpServerTool(Name = "call_tool")]
     [Description(
-        "🛠️ Invoke any registered tool by name (including long-tail tools not " +
-        "shown in tools/list). Use after `list_more_tools` to drive a niche " +
-        "capability without polluting the default tools list. Errors come " +
-        "back as the target's own error envelope — adjust args and retry.")]
+        "🛠️ Invoke any registered tool by name (including long-tail tools not in tools/list). " +
+        "Use after list_more_tools. Errors return the target's own error envelope.")]
     public async Task<string> CallTool(
         [Description("Target tool name, e.g. 'browser_cookies_get' or 'doc_read_xlsx'.")]
         string name,
@@ -176,6 +168,10 @@ public sealed class MetaTools
             n => n is "doc_read_xlsx" or "doc_read_pptx" or "doc_read_epub" or "doc_read_html" or "doc_read_txt" or "read_whiteboard_image");
         AppendNativeRow(sb, "action_macos",
             n => n is "drag" or "perform_secondary_action" or "clipboard_write" or "clipboard_copy" or "clipboard_read" or "clipboard_paste");
+        // opencli_describe is gate-hidden individually (not in NativeLongTail);
+        // surface it in the overview so agents know to reach it via call_tool.
+        if (CoreToolGate.OpenCliEnabled)
+            sb.AppendLine("| opencli | 1 | opencli_describe |");
 
         return sb.ToString();
     }
@@ -229,7 +225,7 @@ public sealed class MetaTools
         if (n == 0)
             return $"No long-tail tools in category '{category}'. " +
                    $"Valid: action_browser | action_macos | perception_active | " +
-                   $"perception_content | debug | config.";
+                   $"perception_content | debug | config | opencli.";
 
         sb.AppendLine();
         sb.AppendLine("Invoke any of these with: `call_tool(name=\"...\", arguments={...})`.");
@@ -252,6 +248,8 @@ public sealed class MetaTools
             },
             "perception_content" => new[]
             {
+                ("doc_read_pdf", "Extract text from a .pdf via PdfPig."),
+                ("doc_read_docx", "Extract text from a .docx via OpenXml."),
                 ("doc_read_xlsx", "Extract sheets from a .xlsx as CSV-ish text."),
                 ("doc_read_pptx", "Extract text from a .pptx slide deck."),
                 ("doc_read_epub", "Extract chapters from an .epub in reading order."),
@@ -267,6 +265,10 @@ public sealed class MetaTools
                 ("clipboard_copy", "Alias of clipboard_write."),
                 ("clipboard_read", "Read pasteboard (alias of get_clipboard)."),
                 ("clipboard_paste", "Read pasteboard (SPEC alias)."),
+            },
+            "opencli" => new[]
+            {
+                ("opencli_describe", "Full args/columns schema for one OpenCLI command (site/name)."),
             },
             _ => Array.Empty<(string, string)>(),
         };

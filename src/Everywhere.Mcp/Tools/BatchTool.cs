@@ -31,11 +31,9 @@ public sealed class BatchTool
 
     [McpServerTool(Name = "batch")]
     [Description(
-        "Run a sequence of tool calls in one round-trip. " +
-        "steps_json = JSON array of {tool, args}, e.g. " +
-        "'[{\"tool\":\"browser_snapshot\",\"args\":{}}, {\"tool\":\"browser_click\",\"args\":{\"ref\":\"@ref3\"}}]'. " +
-        "browser_* steps forward via the OpenDia WS bridge; everywhere.* are dispatched locally. " +
-        "Stops on first error and returns the partial result list. SPEC §3.3 ab agent_browser_batch.")]
+        "Sequenced tool calls in one round-trip. " +
+        "steps_json = '[{\"tool\":\"browser_click\",\"args\":{...}}, ...]'. " +
+        "Stops on first error, returns partial results.")]
     public async Task<CallToolResult> Batch(
         string steps_json,
         CancellationToken ct = default)

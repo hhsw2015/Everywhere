@@ -15,14 +15,10 @@ public static class ReadWhiteboardTool
 {
     [McpServerTool(Name = "read_whiteboard", ReadOnly = true)]
     [Description(
-        "Read the user's whiteboard annotations: rectangular gestures the user drew on top " +
-        "of the screen to single out content for this agent (the Whiteboard hotkey). " +
-        "Returns one markdown section per region with the region's gesture kind " +
-        "(circle/underline/arrow/x — carrying intent: emphasis / focus on a single line / " +
-        "pointing / strike-through) plus the Label and Hyperlink text the gesture captured. " +
-        "Returns {\"drawn\": false} when no whiteboard is fresh (one-shot consume; expires 5 min). " +
-        "ALWAYS call this when the stash hint mentions whiteboard / annotated regions / " +
-        "gestures — DO NOT use read_pick for whiteboard sessions, they are different stashes.")]
+        "Read user's whiteboard annotations (rectangular gestures via Whiteboard hotkey). " +
+        "Returns markdown per region with gesture kind (circle/underline/arrow/x) + Label + Hyperlink. " +
+        "{drawn:false} if none fresh. Consumed on read; expires 5min. " +
+        "Call ONLY when stash hint mentions whiteboard/gestures — different stash from read_pick.")]
     public static CallToolResult ReadWhiteboard(WhiteboardStash stash)
     {
         try
