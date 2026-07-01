@@ -81,12 +81,15 @@ public sealed class OpenDiaPageBridge : IPage
         if (n is JsonValue v && v.TryGetValue<string>(out var s)) return s;
         if (n is JsonObject obj)
         {
-            if (preferKey is not null)
-            {
-                return obj.TryGetPropertyValue(preferKey, out var direct) &&
-                       direct is JsonValue dv && dv.TryGetValue<string>(out var ds)
-                    ? ds : null;
-            }
+            // Try preferKey first, then always fall through to the
+            // wrapper-key sweep. Symmetric behaviour avoids the
+            // AsString(resp,"data") ?? AsString(resp,"screenshot") ??
+            // AsString(resp,"base64") chain and its stale-if-schema-drifts
+            // failure mode.
+            if (preferKey is not null &&
+                obj.TryGetPropertyValue(preferKey, out var direct) &&
+                direct is JsonValue dv && dv.TryGetValue<string>(out var ds))
+                return ds;
             foreach (var key in StringWrapperKeys)
             {
                 if (obj.TryGetPropertyValue(key, out var inner) && inner is JsonValue iv && iv.TryGetValue<string>(out var ins))
@@ -94,6 +97,20 @@ public sealed class OpenDiaPageBridge : IPage
             }
         }
         return null;
+    }
+
+    /// <summary>CDP box responses come back with integer coordinates on
+    /// most platforms; <c>GetValue&lt;double&gt;()</c> throws for that
+    /// case. Try double then int/long, and 0 as final fallback.</summary>
+    private static double AsNumber(JsonNode? n)
+    {
+        if (n is JsonValue v)
+        {
+            if (v.TryGetValue<double>(out var d)) return d;
+            if (v.TryGetValue<long>(out var l)) return l;
+            if (v.TryGetValue<int>(out var i)) return i;
+        }
+        return 0;
     }
 
     // ================ GUARANTEED SURFACE (SPEC §3.4) =================
@@ -114,8 +131,11 @@ public sealed class OpenDiaPageBridge : IPage
         var current = await GetCurrentUrl().ConfigureAwait(false);
         if (!string.IsNullOrEmpty(current)
             && Uri.TryCreate(current, UriKind.Absolute, out var cu)
-            && string.Equals(cu.Host, u.Host, StringComparison.OrdinalIgnoreCase)
-            && cu.Scheme == u.Scheme)
+            // RFC 6454: origin = scheme + host + port. Comparing
+            // Authority captures all three (host, port, userInfo).
+            && string.Equals(cu.GetLeftPart(UriPartial.Authority),
+                             u.GetLeftPart(UriPartial.Authority),
+                             StringComparison.OrdinalIgnoreCase))
         {
             // Already on the target origin — skip. Most cookie-tier
             // adapters use manifest.navigateBefore just to establish
@@ -162,15 +182,17 @@ public sealed class OpenDiaPageBridge : IPage
         return UnwrapEvalResult(resp);
     }
 
+    /// <summary>Detect the shape of a JS payload for CDP evaluate.
+    /// Only two forms match: a bare parenthesised expression (`(...)`),
+    /// or an IIFE (`(...)()`) — both are safe to eval as-is. Everything
+    /// else — including bare statements, multi-statement scripts, and
+    /// scripts with `return` at top level — gets wrapped in an async
+    /// arrow. Adapters that want to return a value from statement code
+    /// should use an IIFE explicitly. This matches Playwright/Puppeteer.</summary>
     private static bool LooksLikeExpression(string js)
     {
-        // Heuristic: no top-level 'return' and no unbalanced semicolons
-        // suggest an expression. If it starts with `(` and ends `)` or
-        // `()`, it's the classic IIFE form and safe to eval directly.
         var t = js.TrimEnd(';', ' ', '\n', '\r', '\t');
-        if (t.StartsWith('(') && (t.EndsWith(')') || t.EndsWith(")()"))) return true;
-        // If it contains `return ` at the top level, it's statements — wrap.
-        return !js.Contains("return ", StringComparison.Ordinal);
+        return t.StartsWith('(') && t.EndsWith(')');
     }
 
     /// <summary>Unwrap OpenDia's cdp_evaluate envelope
@@ -194,12 +216,16 @@ public sealed class OpenDiaPageBridge : IPage
         ArgumentNullException.ThrowIfNull(arg);
         if (arg is JsonValue v)
         {
-            if (v.TryGetValue<long>(out var l)) { await DelayClamped(l).ConfigureAwait(false); return; }
+            if (v.TryGetValue<long>(out var l))
+            {
+                if (l < 0) throw new ArgumentOutOfRangeException(nameof(arg), "page.wait: ms must be non-negative");
+                await DelayClamped(l).ConfigureAwait(false); return;
+            }
             if (v.TryGetValue<double>(out var msd))
             {
                 if (!double.IsFinite(msd)) throw new ArgumentException("page.wait: ms must be finite");
-                var clamped = Math.Min(Math.Max(msd, 0), (double)MaxWaitMs);
-                await DelayClamped((long)Math.Round(clamped)).ConfigureAwait(false);
+                if (msd < 0) throw new ArgumentOutOfRangeException(nameof(arg), "page.wait: ms must be non-negative");
+                await DelayClamped((long)Math.Round(Math.Min(msd, MaxWaitMs))).ConfigureAwait(false);
                 return;
             }
             if (v.TryGetValue<string>(out var sel))
@@ -213,6 +239,8 @@ public sealed class OpenDiaPageBridge : IPage
 
     private static Task DelayClamped(long ms)
     {
+        // Caller has already rejected negatives; clamp only the upper
+        // bound so a stray max-value doesn't stall forever.
         var clamped = Math.Min(Math.Max(ms, 0), MaxWaitMs);
         return Task.Delay(TimeSpan.FromMilliseconds(clamped));
     }
@@ -251,11 +279,12 @@ public sealed class OpenDiaPageBridge : IPage
 
     public async Task<string?> Screenshot(JsonObject? opts = null)
     {
-        // browser_annotate_screenshot returns base64 PNG + overlay; the
-        // raw base64 is what adapters usually want. Falls back to a CDP
-        // Page.captureScreenshot if that fails.
+        // browser_annotate_screenshot returns base64 PNG + overlay.
+        // AsString now sweeps common wrapper keys (data/value/base64/etc.)
+        // after checking the preferred one, so a single call handles
+        // schema variance across OpenDia versions.
         var resp = await Call("browser_annotate_screenshot", CloneObjOrEmpty(opts)).ConfigureAwait(false);
-        return AsString(resp, "data") ?? AsString(resp, "screenshot") ?? AsString(resp, "base64");
+        return AsString(resp, "data");
     }
 
     // ================ TAIL SURFACE ================
@@ -263,9 +292,12 @@ public sealed class OpenDiaPageBridge : IPage
     public Task<JsonNode?> AutoScroll(JsonObject? opts = null) =>
         Call("browser_scroll", CloneObjOrEmpty(opts));
 
-    /// <summary>Raw CDP passthrough. <c>method</c> is a Chrome DevTools
-    /// Protocol method name (e.g. <c>Page.reload</c>). For simple JS
-    /// evaluation prefer <see cref="Evaluate"/>.</summary>
+    /// <summary>Constrained CDP escape hatch. OpenDia does NOT expose
+    /// generic Chrome DevTools Protocol passthrough — only
+    /// <c>Runtime.evaluate</c> is routed (to <c>browser_cdp_evaluate</c>).
+    /// Every other <c>method</c> throws <see cref="NotSupportedException"/>.
+    /// For simple JS evaluation prefer <see cref="Evaluate"/>, which
+    /// already wraps this path.</summary>
     public Task<JsonNode?> Cdp(string method, JsonObject? args)
     {
         ArgumentException.ThrowIfNullOrEmpty(method);
@@ -310,7 +342,13 @@ public sealed class OpenDiaPageBridge : IPage
             var r = await Call("browser_wait_for_url", new JsonObject { ["timeout"] = 100 }).ConfigureAwait(false);
             return AsString(r, "url");
         }
-        catch { return null; }
+        // Swallow only "no URL available right now" errors; cancellation
+        // and disposal must propagate so callers can react to shutdown.
+        catch (Exception e) when (e is not OperationCanceledException
+                                    and not ObjectDisposedException)
+        {
+            return null;
+        }
     }
 
     /// <summary>Buffered network requests (last 200) via CDP-Network.
@@ -335,36 +373,64 @@ public sealed class OpenDiaPageBridge : IPage
     public Task Keys(JsonNode keys, JsonObject? opts = null)
     {
         ArgumentNullException.ThrowIfNull(keys);
-        // Multi-key chord (Control+Shift+K) or single key.
+        // Single string: pass through as the key name.
         if (keys is JsonValue kv && kv.TryGetValue<string>(out var k))
             return Call("browser_press", new JsonObject { ["key"] = k });
-        // Array: press each key in sequence.
+        // Array of strings only — each element must be a key name.
+        // Reject numeric / object elements early rather than sending
+        // `1+2` or `{...}+{...}` and getting a cryptic extension error.
         if (keys is JsonArray arr)
         {
-            var joined = string.Join("+", arr.OfType<JsonValue>().Select(x => x.ToString()));
-            return Call("browser_press", new JsonObject { ["key"] = joined });
+            var parts = new List<string>(arr.Count);
+            foreach (var e in arr)
+            {
+                if (e is not JsonValue ev || !ev.TryGetValue<string>(out var s))
+                    throw new ArgumentException(
+                        $"page.keys: array must contain only key-name strings, got {e?.GetType().Name ?? "null"}",
+                        nameof(keys));
+                parts.Add(s);
+            }
+            return Call("browser_press", new JsonObject { ["key"] = string.Join("+", parts) });
         }
-        return Call("browser_press", new JsonObject { ["key"] = keys.ToJsonString() });
+        throw new ArgumentException(
+            $"page.keys: expected string or string[], got {keys.GetType().Name}",
+            nameof(keys));
     }
 
-    /// <summary>Native (isTrusted=true) click via CDP Input.</summary>
+    /// <summary>Native (isTrusted=true) click via CDP Input. Real
+    /// trusted clicks require both `mousePressed` and `mouseReleased`
+    /// — sites that gate on isTrusted click-jacking will ignore a
+    /// press-only event, so we always dispatch the pair.</summary>
     public async Task NativeClick(JsonNode refOrSelector, JsonObject? opts = null)
     {
         ArgumentNullException.ThrowIfNull(refOrSelector);
-        // CDP wants viewport coordinates. Get the element box first, then
-        // dispatch mousePressed+mouseReleased at its center.
         var box = await Call("browser_get_box", BuildRefOrSelector(refOrSelector)).ConfigureAwait(false);
-        if (box is not JsonObject bo || !bo.TryGetPropertyValue("x", out var xn))
+        if (box is not JsonObject bo || !bo.TryGetPropertyValue("x", out _))
             throw new InvalidOperationException("nativeClick: could not resolve element box");
-        var x = xn?.GetValue<double>() ?? 0;
-        var y = bo["y"]?.GetValue<double>() ?? 0;
-        var w = bo["width"]?.GetValue<double>() ?? 0;
-        var h = bo["height"]?.GetValue<double>() ?? 0;
+        // CDP box coordinates come back as integers on most platforms;
+        // GetValue<double> would throw on integer nodes. AsNumber
+        // tolerates either kind.
+        var x = AsNumber(bo["x"]);
+        var y = AsNumber(bo["y"]);
+        var w = AsNumber(bo["width"]);
+        var h = AsNumber(bo["height"]);
+        var cx = x + w / 2;
+        var cy = y + h / 2;
         await Call("browser_cdp_input_mouse", new JsonObject
         {
-            ["x"] = x + w / 2,
-            ["y"] = y + h / 2,
+            ["type"] = "mousePressed",
+            ["x"] = cx,
+            ["y"] = cy,
             ["button"] = "left",
+            ["clickCount"] = 1,
+        }).ConfigureAwait(false);
+        await Call("browser_cdp_input_mouse", new JsonObject
+        {
+            ["type"] = "mouseReleased",
+            ["x"] = cx,
+            ["y"] = cy,
+            ["button"] = "left",
+            ["clickCount"] = 1,
         }).ConfigureAwait(false);
     }
 
@@ -392,14 +458,17 @@ public sealed class OpenDiaPageBridge : IPage
     public Task SelectTab(JsonNode tab)
     {
         ArgumentNullException.ThrowIfNull(tab);
-        // Tab can be a numeric id or an object {tabId, url}.
-        var tabId = tab switch
+        JsonNode? tabId = tab switch
         {
             JsonValue tv when tv.TryGetValue<long>(out var idL) => (JsonNode)idL,
-            JsonObject to when to.TryGetPropertyValue("tabId", out var t) => t?.DeepClone() ?? tab,
-            JsonObject to when to.TryGetPropertyValue("id", out var t) => t?.DeepClone() ?? tab,
-            _ => tab,
+            JsonObject to when to.TryGetPropertyValue("tabId", out var t) => t?.DeepClone(),
+            JsonObject to when to.TryGetPropertyValue("id", out var t) => t?.DeepClone(),
+            _ => null,
         };
+        if (tabId is null)
+            throw new ArgumentException(
+                $"page.selectTab: unrecognised tab shape — expected numeric id or object with tabId/id, got {tab.GetType().Name}",
+                nameof(tab));
         return Call("browser_tab_switch", new JsonObject { ["tabId"] = tabId });
     }
 
@@ -440,8 +509,19 @@ public sealed class OpenDiaPageBridge : IPage
         // OpenDia doesn't have a "wait for a captured request" tool
         // out of the box; poll browser_cdp_list_network_requests with
         // a simple predicate on url substring if provided.
-        var urlHint = opts["url"]?.GetValue<string>();
-        var deadline = DateTime.UtcNow.AddSeconds(30);
+        string? urlHint = null;
+        if (opts.TryGetPropertyValue("url", out var urlNode) && urlNode is JsonValue uv)
+            uv.TryGetValue<string>(out urlHint);
+
+        // Honour opts.timeout — Playwright convention. Default 30s.
+        double timeoutMs = 30_000;
+        if (opts.TryGetPropertyValue("timeout", out var tn) && tn is JsonValue tv)
+        {
+            if (tv.TryGetValue<double>(out var td)) timeoutMs = td;
+            else if (tv.TryGetValue<long>(out var tl)) timeoutMs = tl;
+        }
+        var deadline = DateTime.UtcNow.AddMilliseconds(Math.Max(0, timeoutMs));
+
         while (DateTime.UtcNow < deadline)
         {
             var reqs = await Call("browser_cdp_list_network_requests", new JsonObject()).ConfigureAwait(false);
@@ -449,8 +529,12 @@ public sealed class OpenDiaPageBridge : IPage
             {
                 foreach (var rq in arr)
                 {
-                    if (rq?["url"]?.GetValue<string>() is string ru &&
-                        (urlHint is null || ru.Contains(urlHint, StringComparison.Ordinal)))
+                    if (rq is not JsonObject rqObj) continue;
+                    string? ru = null;
+                    if (rqObj.TryGetPropertyValue("url", out var un) && un is JsonValue uvn)
+                        uvn.TryGetValue<string>(out ru);
+                    if (ru is null) continue;
+                    if (urlHint is null || ru.Contains(urlHint, StringComparison.Ordinal))
                         return rq.DeepClone();
                 }
             }
@@ -459,5 +543,9 @@ public sealed class OpenDiaPageBridge : IPage
         return null;
     }
 
-    public Task WaitForTimeout(int ms) => DelayClamped(ms);
+    public Task WaitForTimeout(int ms)
+    {
+        if (ms < 0) throw new ArgumentOutOfRangeException(nameof(ms), "page.waitForTimeout: ms must be non-negative");
+        return DelayClamped(ms);
+    }
 }
