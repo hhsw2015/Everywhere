@@ -198,11 +198,11 @@ public sealed class OpenDiaPageBridge : IPage, IAsyncDisposable
                 ["timeout"] = 15000,
             }).ConfigureAwait(false);
             var origin = u.GetLeftPart(UriPartial.Authority).TrimEnd('/');
-            var probe = await Call("browser_cdp_evaluate", new JsonObject
-            {
-                ["expression"] = "return location.href",
-                ["await_promise"] = true,
-            }).ConfigureAwait(false);
+            // Use nav-retry helper — the first cdp_evaluate right after
+            // wait_for_load frequently hits 'Inspected target navigated
+            // or closed' because chrome's CDP session lags the navigation
+            // completion event by ~100ms.
+            var probe = await CdpEvaluateWithNavRetry("return location.href").ConfigureAwait(false);
             var href = (probe as JsonObject)?["result"]?.GetValue<string>() ?? "";
             if (!href.StartsWith(origin, StringComparison.OrdinalIgnoreCase))
                 throw new InvalidOperationException(
@@ -274,11 +274,7 @@ public sealed class OpenDiaPageBridge : IPage, IAsyncDisposable
         // `return (<expr>)` for #4 (bare expression), and #5 stays as-is
         // (adapter already writes `return` inside).
         var norm = NormalizeEvaluateSource(js);
-        var resp = await Call("browser_cdp_evaluate", new JsonObject
-        {
-            ["expression"] = norm,
-            ["await_promise"] = true,
-        }).ConfigureAwait(false);
+        var resp = await CdpEvaluateWithNavRetry(norm).ConfigureAwait(false);
         return UnwrapEvalResult(resp);
     }
 
@@ -290,12 +286,41 @@ public sealed class OpenDiaPageBridge : IPage, IAsyncDisposable
         // it with the JSON literal as its arg.
         var argJson = argsNode?.ToJsonString() ?? "null";
         var norm = NormalizeEvaluateSourceWithArgs(js, argJson);
-        var resp = await Call("browser_cdp_evaluate", new JsonObject
-        {
-            ["expression"] = norm,
-            ["await_promise"] = true,
-        }).ConfigureAwait(false);
+        var resp = await CdpEvaluateWithNavRetry(norm).ConfigureAwait(false);
         return UnwrapEvalResult(resp);
+    }
+
+    /// <summary>
+    /// After tab_create + wait_for_load, CDP attachment races the tab's
+    /// navigation events; the first Runtime.evaluate can come back with
+    /// `Inspected target navigated or closed` even though the tab is
+    /// perfectly fine on retry. Also seen when adapter runs back-to-back
+    /// on same origin — chrome recycles tab_id but extension's
+    /// _cdpAttached cache is 1 tick behind onRemoved. Retry twice with
+    /// short delays before surfacing.
+    /// </summary>
+    private async Task<JsonNode?> CdpEvaluateWithNavRetry(string expression)
+    {
+        Exception? last = null;
+        for (var i = 0; i < 3; i++)
+        {
+            try
+            {
+                return await Call("browser_cdp_evaluate", new JsonObject
+                {
+                    ["expression"] = expression,
+                    ["await_promise"] = true,
+                }).ConfigureAwait(false);
+            }
+            catch (OpenDia.OpenDiaToolException ex) when (
+                ex.Message.Contains("Inspected target navigated or closed", StringComparison.Ordinal)
+                || ex.Message.Contains("Cannot find context with specified id", StringComparison.Ordinal))
+            {
+                last = ex;
+                await Task.Delay(150 * (i + 1)).ConfigureAwait(false);
+            }
+        }
+        throw last!;
     }
 
     /// <summary>Port of upstream <c>normalizeEvaluateSource</c>
