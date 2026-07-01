@@ -189,26 +189,24 @@ public sealed class OpenDiaPageBridge : IPage, IAsyncDisposable
             if (_bgTabId is null)
                 throw new InvalidOperationException("page.goto: browser_tab_create did not return tab_id");
 
-            // tab_create returns while the tab is still at about:blank
-            // (extension's own delay is 500ms; readyState=complete on
-            // blank pages too, so polling it alone isn't enough). Poll
-            // document.location.href until it matches the target origin
-            // AND the document has started parsing. Bounded ~15s.
-            var origin = u.GetLeftPart(UriPartial.Authority).TrimEnd('/');
-            for (var i = 0; i < 60; i++)
+            // Use extension's own wait_for_load (single WS round trip
+            // instead of a 250ms cdp_evaluate poll loop that costs ~17s
+            // on reddit). Then one verification eval to confirm we're on
+            // the target origin (not stuck at about:blank).
+            await Call("browser_wait_for_load", new JsonObject
             {
-                var ready = await Call("browser_cdp_evaluate", new JsonObject
-                {
-                    ["expression"] = "return { url: location.href, ready: document.readyState }",
-                    ["await_promise"] = true,
-                }).ConfigureAwait(false);
-                var resultObj = (ready as JsonObject)?["result"] as JsonObject;
-                var href = resultObj?["url"]?.GetValue<string>() ?? "";
-                var state = resultObj?["ready"]?.GetValue<string>() ?? "";
-                if (href.StartsWith(origin, StringComparison.OrdinalIgnoreCase)
-                    && (state == "complete" || state == "interactive")) return;
-                await Task.Delay(250).ConfigureAwait(false);
-            }
+                ["timeout"] = 15000,
+            }).ConfigureAwait(false);
+            var origin = u.GetLeftPart(UriPartial.Authority).TrimEnd('/');
+            var probe = await Call("browser_cdp_evaluate", new JsonObject
+            {
+                ["expression"] = "return location.href",
+                ["await_promise"] = true,
+            }).ConfigureAwait(false);
+            var href = (probe as JsonObject)?["result"]?.GetValue<string>() ?? "";
+            if (!href.StartsWith(origin, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException(
+                    $"page.goto: bg tab still at '{href}' after wait_for_load (expected origin '{origin}')");
             return;
         }
 
