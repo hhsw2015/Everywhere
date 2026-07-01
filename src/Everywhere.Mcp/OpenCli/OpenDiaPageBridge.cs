@@ -182,19 +182,24 @@ public sealed class OpenDiaPageBridge : IPage, IAsyncDisposable
             if (_bgTabId is null)
                 throw new InvalidOperationException("page.goto: browser_tab_create did not return tab_id");
 
-            // tab_create returns before the page is done loading
-            // (extension's own delay is 500ms). Poll document.readyState
-            // via cdp_evaluate so relative fetches like /comments/*.json
-            // have a base URL. Bounded to ~10s.
-            for (var i = 0; i < 40; i++)
+            // tab_create returns while the tab is still at about:blank
+            // (extension's own delay is 500ms; readyState=complete on
+            // blank pages too, so polling it alone isn't enough). Poll
+            // document.location.href until it matches the target origin
+            // AND the document has started parsing. Bounded ~15s.
+            var origin = u.GetLeftPart(UriPartial.Authority).TrimEnd('/');
+            for (var i = 0; i < 60; i++)
             {
                 var ready = await Call("browser_cdp_evaluate", new JsonObject
                 {
-                    ["expression"] = "return document.readyState",
+                    ["expression"] = "return { url: location.href, ready: document.readyState }",
                     ["await_promise"] = true,
                 }).ConfigureAwait(false);
-                var state = (ready as JsonObject)?["result"]?.GetValue<string>();
-                if (state == "complete" || state == "interactive") return;
+                var resultObj = (ready as JsonObject)?["result"] as JsonObject;
+                var href = resultObj?["url"]?.GetValue<string>() ?? "";
+                var state = resultObj?["ready"]?.GetValue<string>() ?? "";
+                if (href.StartsWith(origin, StringComparison.OrdinalIgnoreCase)
+                    && (state == "complete" || state == "interactive")) return;
                 await Task.Delay(250).ConfigureAwait(false);
             }
             return;
