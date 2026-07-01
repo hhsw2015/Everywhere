@@ -62,6 +62,15 @@ public sealed class AdapterDef : IEquatable<AdapterDef>
 
     public string FullName { get; }
 
+    /// <summary>
+    /// SPEC docs/specs/everywhere-self-expanding.md §10.1 — where the
+    /// adapter came from. <c>"vendored"</c> (the default) means shipped
+    /// under <c>3rd/opencli/clis/</c>; <c>"local"</c> means loaded from
+    /// <c>~/.everywhere/adapters/&lt;site&gt;/</c>. The Restricted HostShim
+    /// (§6) uses this to scope <c>fs</c>/<c>fetch</c>/<c>page.cdp</c>.
+    /// </summary>
+    public string Origin { get; init; } = "vendored";
+
     public bool Equals(AdapterDef? other) => other is not null && other.FullName == FullName;
     public override bool Equals(object? obj) => Equals(obj as AdapterDef);
     public override int GetHashCode() => FullName.GetHashCode(StringComparison.Ordinal);

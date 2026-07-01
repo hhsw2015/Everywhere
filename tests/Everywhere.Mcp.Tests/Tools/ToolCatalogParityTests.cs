@@ -39,6 +39,31 @@ public class ToolCatalogParityTests
         "list_more_tools", "call_tool",
         // web (routed through user-configured search provider + Jina reader)
         "web_search", "web_fetch_url",
+        // opencli surface
+        "opencli_list", "opencli_describe", "opencli_run",
+        // self-expanding platform (docs/specs/everywhere-self-expanding.md)
+        // Phase 1 observation
+        "capture_start", "capture_stop", "capture_current", "capture_export",
+        "browser_captcha_present", "page_extract_by_rule", "page_save_extraction_rule",
+        // Phase 3 memory
+        "memory_read", "memory_read_endpoint", "memory_write_endpoint",
+        "memory_write_field_map", "memory_write_verify_fixture",
+        "memory_append_note", "memory_freshness", "memory_snapshot",
+        // Phase 4 gates
+        "strategy_note_write", "strategy_note_get", "adapter_lint",
+        // Phase 2 analysis
+        "web_verdict_score", "web_signature_scheme", "web_techstack",
+        "web_js_search", "web_crypto_scan",
+        "web_sourcemap_list_candidates", "web_sourcemap_resolve",
+        "web_js_fetch_same_origin",
+        // Phase 5 generator
+        "adapter_scaffold", "adapter_save", "adapter_verify",
+        "adapter_list_local", "adapter_drift_check", "adapter_delete_local",
+        "adapter_regenerate", "opendia_smoke_check",
+        // Phase 6 tier
+        "search_tools", "activate_domain", "list_domains",
+        // Phase 6.5 adapter catalog search
+        "search_adapters",
     ];
 
     [Test]

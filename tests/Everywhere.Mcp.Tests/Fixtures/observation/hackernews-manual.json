@@ -1,0 +1,184 @@
+{
+  "session_id": "00000000-0000-4000-8000-000000000001",
+  "tab_id": 101,
+  "origin": "news.ycombinator.com",
+  "started_at": 1751371200000,
+  "stopped_at": 1751371220000,
+  "network": {
+    "requests": [
+      {
+        "request_id": "hn-req-0001",
+        "url": "https://news.ycombinator.com/",
+        "method": "GET",
+        "status": 200,
+        "request_headers": {
+          "accept": "text/html,application/xhtml+xml",
+          "cookie": "<REDACTED:cookie>"
+        },
+        "response_headers": {
+          "content-type": "text/html; charset=utf-8",
+          "cache-control": "private"
+        },
+        "response_body_sha256": "1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a",
+        "response_size": 32188,
+        "response_content_type": "text/html",
+        "timing_ms": 214,
+        "initiator_stack": []
+      },
+      {
+        "request_id": "hn-req-0002",
+        "url": "https://news.ycombinator.com/news.css",
+        "method": "GET",
+        "status": 200,
+        "request_headers": { "accept": "text/css" },
+        "response_headers": { "content-type": "text/css" },
+        "response_body_sha256": "2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b",
+        "response_size": 5820,
+        "response_content_type": "text/css",
+        "timing_ms": 41,
+        "initiator_stack": [
+          { "url": "https://news.ycombinator.com/", "function": "", "line": 3, "col": 0 }
+        ]
+      },
+      {
+        "request_id": "hn-req-0003",
+        "url": "https://news.ycombinator.com/user?id=pg",
+        "method": "GET",
+        "status": 200,
+        "request_headers": {
+          "accept": "text/html",
+          "cookie": "<REDACTED:cookie>"
+        },
+        "response_headers": {
+          "content-type": "text/html; charset=utf-8"
+        },
+        "response_body_sha256": "3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c",
+        "response_size": 8912,
+        "response_content_type": "text/html",
+        "timing_ms": 187,
+        "initiator_stack": [
+          { "url": "https://news.ycombinator.com/", "function": "onClickUser", "line": 42, "col": 8 }
+        ]
+      },
+      {
+        "request_id": "hn-req-0004",
+        "url": "https://hn.algolia.com/api/v1/search?query=rust&tags=story",
+        "method": "GET",
+        "status": 200,
+        "request_headers": {
+          "accept": "application/json",
+          "origin": "https://news.ycombinator.com"
+        },
+        "response_headers": {
+          "content-type": "application/json; charset=utf-8"
+        },
+        "response_body_sha256": "4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d",
+        "response_size": 14582,
+        "response_content_type": "application/json",
+        "timing_ms": 312,
+        "initiator_stack": [
+          { "url": "https://news.ycombinator.com/hn.js", "function": "search", "line": 88, "col": 14 }
+        ]
+      },
+      {
+        "request_id": "hn-req-0005",
+        "url": "https://www.google-analytics.com/g/collect?v=2&tid=UA-XXXX",
+        "method": "POST",
+        "status": 204,
+        "request_headers": { "content-type": "text/plain" },
+        "response_headers": {},
+        "response_body_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+        "response_size": 0,
+        "response_content_type": "",
+        "timing_ms": 66,
+        "initiator_stack": []
+      },
+      {
+        "request_id": "hn-req-0006",
+        "url": "https://news.ycombinator.com/vote?id=42000001&how=up&auth=<REDACTED>",
+        "method": "GET",
+        "status": 200,
+        "request_headers": {
+          "accept": "*/*",
+          "cookie": "<REDACTED:cookie>"
+        },
+        "response_headers": { "content-type": "text/plain" },
+        "response_body_sha256": "5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e",
+        "response_size": 3,
+        "response_content_type": "text/plain",
+        "timing_ms": 78,
+        "initiator_stack": [
+          { "url": "https://news.ycombinator.com/hn.js", "function": "vote", "line": 12, "col": 4 }
+        ]
+      },
+      {
+        "request_id": "hn-req-0007",
+        "url": "https://news.ycombinator.com/threads?id=pg",
+        "method": "GET",
+        "status": 401,
+        "request_headers": { "accept": "text/html" },
+        "response_headers": { "content-type": "text/html" },
+        "response_body_sha256": "6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f",
+        "response_size": 512,
+        "response_content_type": "text/html",
+        "timing_ms": 42,
+        "initiator_stack": []
+      },
+      {
+        "request_id": "hn-req-0008",
+        "url": "https://news.ycombinator.com/api/karma?id=pg",
+        "method": "GET",
+        "status": 200,
+        "request_headers": {
+          "accept": "application/json",
+          "cookie": "<REDACTED:cookie>"
+        },
+        "response_headers": {
+          "content-type": "application/json; charset=utf-8"
+        },
+        "response_body_sha256": "7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a",
+        "response_size": 812,
+        "response_content_type": "application/json",
+        "timing_ms": 144,
+        "initiator_stack": [
+          { "url": "https://news.ycombinator.com/hn.js", "function": "loadKarma", "line": 210, "col": 6 }
+        ]
+      }
+    ],
+    "bodies_by_hash": {
+      "4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d": "{\"hits\":[{\"objectID\":\"42000001\",\"title\":\"Rust for the Impatient\",\"points\":312,\"author\":\"steveklabnik\"},{\"objectID\":\"42000002\",\"title\":\"Async Rust after 4 years\",\"points\":198,\"author\":\"withoutboats\"}],\"nbHits\":2,\"page\":0}",
+      "7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a": "{\"data\":{\"user\":\"pg\",\"karma\":157321,\"created\":\"2006-10-09\",\"about\":\"Bug fixes.\"}}"
+    }
+  },
+  "console": {
+    "messages": [
+      { "ts": 1751371201123, "level": "log", "text": "HN client ready" },
+      { "ts": 1751371215004, "level": "warn", "text": "vote request took 78ms" }
+    ]
+  },
+  "dom_mutations": [
+    {
+      "ts": 1751371210050,
+      "detail": {
+        "type": "added",
+        "target_xpath": "/html/body/center/table/tbody/tr[3]/td/table",
+        "node_html": "<tr class='athing' id='42000001'><td class='title'>...</td></tr>",
+        "sibling_xpath": null
+      }
+    },
+    {
+      "ts": 1751371212800,
+      "detail": {
+        "type": "attribute",
+        "target_xpath": "/html/body/center/table/tbody/tr[3]/td/table/tr[1]",
+        "name": "class",
+        "old_value": "athing",
+        "new_value": "athing voted"
+      }
+    }
+  ],
+  "user_gestures": [
+    { "ts": 1751371205000, "kind": "click", "target_xpath": "/html/body/center/table/tbody/tr[1]/td/table/tr/td[3]/span/a[2]" },
+    { "ts": 1751371212700, "kind": "click", "target_xpath": "/html/body/center/table/tbody/tr[3]/td/table/tr[1]/td[2]/a" }
+  ]
+}

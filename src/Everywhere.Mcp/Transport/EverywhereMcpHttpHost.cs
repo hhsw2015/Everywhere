@@ -242,6 +242,25 @@ public sealed class EverywhereMcpHttpHost : IHostedService, IAsyncDisposable
         var openCliRuntime = _parentServices.GetService<OpenCli.OpenCliRuntime>();
         if (openCliRuntime is not null) builder.Services.AddSingleton(openCliRuntime);
         builder.Services.AddSingleton<Tools.OpenCliTools>();
+        // SPEC docs/specs/everywhere-self-expanding.md Phase 1 — CaptureSession
+        // store + observation tools. Store forwarded from parent so it's a
+        // single instance across MCP tool calls in one process.
+        var captureStore = _parentServices.GetService<OpenCli.Observation.CaptureSessionStore>()
+            ?? new OpenCli.Observation.CaptureSessionStore();
+        builder.Services.AddSingleton(captureStore);
+        builder.Services.AddSingleton<Tools.CaptureTools>();
+        // Phase 3 — memory store singleton forwarded from parent (fresh
+        // one if the parent didn't register it).
+        var memoryStore = _parentServices.GetService<OpenCli.Memory.MemoryStore>()
+            ?? new OpenCli.Memory.MemoryStore();
+        builder.Services.AddSingleton(memoryStore);
+        builder.Services.AddSingleton<Tools.MemoryTools>();
+        builder.Services.AddSingleton<Tools.GateTools>();
+        builder.Services.AddSingleton<Tools.AnalysisTools>();
+        builder.Services.AddSingleton<Tools.GeneratorTools>();
+        var sessionActivations = _parentServices.GetService<Meta.SessionActivations>() ?? new Meta.SessionActivations();
+        builder.Services.AddSingleton(sessionActivations);
+        builder.Services.AddSingleton<Tools.SearchTools>();
         builder.Services.AddSingleton(_idle);
         builder.Services.AddSingleton(_browserUrl);
         builder.Services.AddSingleton(_finder);

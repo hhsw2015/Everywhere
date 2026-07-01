@@ -90,6 +90,25 @@ public static class EverywhereMcpServiceExtensions
                 sp.GetService<Microsoft.Extensions.Logging.ILogger<OpenCli.OpenCliRuntime>>());
         });
         services.TryAddSingleton<Tools.OpenCliTools>();
+        // SPEC docs/specs/everywhere-self-expanding.md Phase 1 — capture session store
+        // plus the observation MCP tools. Store is singleton (in-memory,
+        // server-restart invalidates per spec).
+        services.TryAddSingleton<OpenCli.Observation.CaptureSessionStore>(sp =>
+            new OpenCli.Observation.CaptureSessionStore());
+        services.TryAddSingleton<Tools.CaptureTools>();
+        // SPEC Phase 3 — site memory store. Prod uses SystemClock; tests
+        // pass a FakeClock via a scoped MemoryStore constructor.
+        services.TryAddSingleton<OpenCli.Memory.MemoryStore>(sp => new OpenCli.Memory.MemoryStore());
+        services.TryAddSingleton<Tools.MemoryTools>();
+        // SPEC Phase 4 — adapter lint / strategy-note tools.
+        services.TryAddSingleton<Tools.GateTools>();
+        // SPEC Phase 2 — analysis tools consume CaptureSession by id.
+        services.TryAddSingleton<Tools.AnalysisTools>();
+        // SPEC Phase 5 — generator + local registry.
+        services.TryAddSingleton<Tools.GeneratorTools>();
+        // SPEC Phase 6 — session activations + BM25 search + tier gate.
+        services.TryAddSingleton<Meta.SessionActivations>();
+        services.TryAddSingleton<Tools.SearchTools>();
         // OpenDiaToolSync needs IOptions<McpServerOptions> from the inner
         // MCP container — it's instantiated from there in
         // EverywhereMcpHttpHost.BuildApp(), not here.

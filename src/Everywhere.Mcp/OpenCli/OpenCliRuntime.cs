@@ -204,6 +204,64 @@ public sealed class OpenCliRuntime : IAsyncDisposable
     /// the live registry. Idempotent and per-adapter-serialised so two
     /// concurrent opencli_run calls on the same site/name don't race the
     /// Execute. Returns the loaded def, or throws if the .js fails.</summary>
+    /// <summary>
+    /// Load a local adapter from <c>~/.everywhere/adapters/&lt;site&gt;/&lt;name&gt;.js</c>
+    /// into the V8 engine, replicating the vendored path but with the file
+    /// under LocalRegistry and Origin="local". Restricted HostShim policy
+    /// (§6) applies at execution time.
+    /// </summary>
+    private async Task<AdapterDef> EnsureLocalAdapterLoadedAsync(string site, string name, CancellationToken ct)
+    {
+        var key = site + "/" + name;
+        if (_registry.TryGetValue(key, out var existing) && existing.Func is not null && existing.Origin == "local")
+            return existing;
+
+        var path = Generator.LocalRegistry.ResolvePath(site, name);
+        if (!File.Exists(path))
+            throw new FileNotFoundException($"local adapter source not found: {path}", path);
+
+        var gate = _loadGates.GetOrAdd(key, _ => new SemaphoreSlim(1, 1));
+        await gate.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            if (_registry.TryGetValue(key, out existing) && existing.Func is not null && existing.Origin == "local")
+                return existing;
+
+            var engine = await GetEngineTask().ConfigureAwait(false);
+            var src = await File.ReadAllTextAsync(path, ct).ConfigureAwait(false);
+            var info = new DocumentInfo(new Uri(path)) { Category = ModuleCategory.Standard };
+            using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, _disposeCts.Token);
+            await _invokeGate.WaitAsync(linked.Token).ConfigureAwait(false);
+            try
+            {
+                engine.Execute(info, src);
+            }
+            finally
+            {
+                _invokeGate.Release();
+            }
+
+            if (!_registry.TryGetValue(key, out var loaded))
+                throw new InvalidOperationException($"local adapter {key} did not register via cli()");
+            // Rebuild with Origin="local" (cli() shim defaults to "vendored").
+            var localDef = new AdapterDef(
+                site: loaded.Site, name: loaded.Name, description: loaded.Description,
+                strategy: loaded.Strategy, browser: loaded.Browser,
+                access: loaded.Access, domain: loaded.Domain, aliases: loaded.Aliases,
+                args: loaded.Args, columns: loaded.Columns, func: loaded.Func,
+                pipeline: loaded.Pipeline, navigateBefore: loaded.NavigateBefore)
+            {
+                Origin = "local",
+            };
+            _registry[key] = localDef;
+            return localDef;
+        }
+        finally
+        {
+            gate.Release();
+        }
+    }
+
     private async Task<AdapterDef> EnsureAdapterLoadedAsync(string site, string name, CancellationToken ct)
     {
         var key = site + "/" + name;
@@ -403,6 +461,37 @@ public sealed class OpenCliRuntime : IAsyncDisposable
     }
 
     /// <summary>
+    /// SPEC docs/specs/everywhere-self-expanding.md §10.4 — resolve
+    /// adapter metadata across vendored + local registries. Vendored
+    /// wins on <c>(site, name)</c> collision unless
+    /// <c>EVERYWHERE_MCP_LOCAL_SHADOW=1</c> (§2.1). Local adapters set
+    /// <see cref="AdapterDef.Origin"/> = "local" so downstream Restricted
+    /// HostShim policy can scope them (§6).
+    /// </summary>
+    public async Task<AdapterDef?> ResolveAdapterAsync(string site, string name, CancellationToken ct = default)
+    {
+        await EnsureManifestLoadedAsync(ct).ConfigureAwait(false);
+        var key = site + "/" + name;
+        var vendored = _manifest.ContainsKey(key);
+        var localExists = Generator.LocalRegistry.Exists(site, name);
+        var shadow = Environment.GetEnvironmentVariable("EVERYWHERE_MCP_LOCAL_SHADOW") == "1";
+        if (vendored)
+        {
+            if (localExists && shadow)
+            {
+                _log?.LogWarning("Local shadows vendored: {Site}/{Name}", site, name);
+                return await Generator.LocalRegistry.LoadAsync(site, name, ct).ConfigureAwait(false);
+            }
+            if (localExists)
+                _log?.LogWarning("Local shadowed by vendored: {Site}/{Name} (set EVERYWHERE_MCP_LOCAL_SHADOW=1)", site, name);
+            return await Resolve(site, name, ct).ConfigureAwait(false);
+        }
+        if (localExists)
+            return await Generator.LocalRegistry.LoadAsync(site, name, ct).ConfigureAwait(false);
+        return null;
+    }
+
+    /// <summary>
     /// SPEC §4.3 — run an adapter's <c>func(args)</c>. The Phase 1
     /// <see cref="Phase1StubPage"/> short-circuits every <c>page.*</c>
     /// call with <see cref="Phase2NotReadyException"/>; Phase 2 swaps
@@ -413,9 +502,14 @@ public sealed class OpenCliRuntime : IAsyncDisposable
         var sw = Stopwatch.StartNew();
         await EnsureManifestLoadedAsync(ct).ConfigureAwait(false);
         var key = site + "/" + name;
-        if (!_manifest.TryGetValue(key, out var manifestEntry))
+        var shadow = Environment.GetEnvironmentVariable("EVERYWHERE_MCP_LOCAL_SHADOW") == "1";
+        var vendored = _manifest.ContainsKey(key);
+        var localExists = Generator.LocalRegistry.Exists(site, name);
+        var localOnly = !vendored && localExists;
+        var localShadow = vendored && localExists && shadow;
+        if (!_manifest.TryGetValue(key, out var manifestEntry) && !localOnly)
         {
-            return Failure(site, name, "RUNTIME_NOT_FOUND", $"adapter {key} not in manifest", sw);
+            return Failure(site, name, "RUNTIME_NOT_FOUND", $"adapter {key} not in manifest and not local", sw);
         }
         // Pipeline-only adapters used to short-circuit; now they go
         // through EnsureAdapterLoadedAsync which synthesises a func that
@@ -423,7 +517,9 @@ public sealed class OpenCliRuntime : IAsyncDisposable
         AdapterDef def;
         try
         {
-            def = await EnsureAdapterLoadedAsync(site, name, ct).ConfigureAwait(false);
+            def = (localOnly || localShadow)
+                ? await EnsureLocalAdapterLoadedAsync(site, name, ct).ConfigureAwait(false)
+                : await EnsureAdapterLoadedAsync(site, name, ct).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -483,7 +579,8 @@ public sealed class OpenCliRuntime : IAsyncDisposable
                 // relative `fetch('/api/...')` calls hit the right origin
                 // with the user's logged-in cookies.
                 string? navBefore = null;
-                if (manifestEntry.Raw.TryGetPropertyValue("navigateBefore", out var nb) &&
+                if (manifestEntry is not null
+                    && manifestEntry.Raw.TryGetPropertyValue("navigateBefore", out var nb) &&
                     nb is JsonValue nbv && nbv.TryGetValue<string>(out var nbs) &&
                     !string.IsNullOrEmpty(nbs))
                 {
@@ -793,7 +890,10 @@ public sealed class OpenCliRuntime : IAsyncDisposable
                 ["node:vm"] = HostShim.NodeVmSource,                ["vm"] = HostShim.NodeVmSource,
             },
             fileRoutes: fileRoutes,
-            extraRoots: new[] { runtimeDir });
+            // ~/.everywhere/adapters is added so locally-generated adapters
+            // (SPEC Phase 5) live under an allowed root — same containment
+            // guard as the vendored tree.
+            extraRoots: new[] { runtimeDir, Observation.EverywherePaths.AdaptersDir() });
         engine.DocumentSettings.Loader = loader;
         engine.DocumentSettings.AccessFlags =
             DocumentAccessFlags.EnableFileLoading |

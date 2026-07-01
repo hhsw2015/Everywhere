@@ -89,7 +89,7 @@ public sealed class Phase2NotReadyException : Exception
 public sealed class Phase1StubPage : IPage
 {
     public static readonly Phase1StubPage Instance = new();
-    private Phase1StubPage() { }
+    public Phase1StubPage() { }
     private static Task Fail(string method) => Task.FromException(new Phase2NotReadyException(method));
     private static Task<T> Fail<T>(string method) => Task.FromException<T>(new Phase2NotReadyException(method));
 

@@ -1,0 +1,60 @@
+{
+  "session_id": "00000000-0000-4000-8000-000000000002",
+  "tab_id": 102,
+  "origin": "www.google.com",
+  "started_at": 1751371300000,
+  "stopped_at": 1751371312000,
+  "network": {
+    "requests": [
+      {
+        "request_id": "rc-req-0001",
+        "url": "https://www.google.com/recaptcha/api2/anchor?ar=1&k=6Le-wvkSAAAAAPBMRTvw0Q4Muexq9bi0DJwx_mJ-&co=aHR0cHM6Ly93d3cuZ29vZ2xlLmNvbTo0NDM.&hl=en&v=<REDACTED>",
+        "method": "GET",
+        "status": 200,
+        "request_headers": { "accept": "text/html" },
+        "response_headers": { "content-type": "text/html" },
+        "response_body_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "response_size": 12420,
+        "response_content_type": "text/html",
+        "timing_ms": 288,
+        "initiator_stack": []
+      },
+      {
+        "request_id": "rc-req-0002",
+        "url": "https://www.gstatic.com/recaptcha/releases/dummy/recaptcha__en.js",
+        "method": "GET",
+        "status": 200,
+        "request_headers": { "accept": "*/*" },
+        "response_headers": { "content-type": "application/javascript" },
+        "response_body_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "response_size": 484102,
+        "response_content_type": "application/javascript",
+        "timing_ms": 512,
+        "initiator_stack": []
+      }
+    ],
+    "bodies_by_hash": {}
+  },
+  "console": { "messages": [] },
+  "dom_mutations": [
+    {
+      "ts": 1751371301500,
+      "detail": {
+        "type": "added",
+        "target_xpath": "/html/body",
+        "node_html": "<div class='g-recaptcha' data-sitekey='6Le-wvkSAAAAAPBMRTvw0Q4Muexq9bi0DJwx_mJ-'></div>",
+        "sibling_xpath": null
+      }
+    },
+    {
+      "ts": 1751371302000,
+      "detail": {
+        "type": "added",
+        "target_xpath": "/html/body",
+        "node_html": "<iframe title='reCAPTCHA' src='https://www.google.com/recaptcha/api2/anchor?ar=1&k=6Le-wvkSAAAAAPBMRTvw0Q4Muexq9bi0DJwx_mJ-'></iframe>",
+        "sibling_xpath": null
+      }
+    }
+  ],
+  "user_gestures": []
+}
