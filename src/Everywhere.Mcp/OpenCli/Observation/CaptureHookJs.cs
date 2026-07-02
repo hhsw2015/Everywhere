@@ -204,20 +204,30 @@ public static class CaptureHookJs
 """;
     }
 
-    /// <summary>The evaluate expression used to pull + clear the buffer.</summary>
-    public const string DrainExpression = @"(function(){
+    /// <summary>
+    /// Expression used to pull + clear the hook buffer via cdp_evaluate.
+    /// OpenDia's wrapper does <c>expr.includes('return ') ? expr : 'return ('+expr+')'</c>;
+    /// if the expression contains the literal token "return ", OpenDia
+    /// does NOT add an outer return, so the wrapping async IIFE swallows
+    /// the value. This expression contains NO "return " token — it uses
+    /// a comma-expression + ternary so the whole thing evaluates to the
+    /// JSON payload, and OpenDia adds the outer <c>return (expr)</c>.
+    /// </summary>
+    public const string DrainExpression = @"((() => {
+  window.__ew_drain_out__ = null;
   const b = window.__ew_capture__;
-  if (!b) return null;
-  const out = {
-    signatures: b.signatures.slice(),
-    mutations: (b.mutations || []).slice(),
-    gestures: (b.gestures || []).slice(),
-    dropped: b.dropped
-  };
-  b.signatures.length = 0;
-  if (b.mutations) b.mutations.length = 0;
-  if (b.gestures) b.gestures.length = 0;
-  b.dropped = 0;
-  return JSON.stringify(out);
-})()";
+  if (b) {
+    const out = {
+      signatures: b.signatures.slice(),
+      mutations: (b.mutations || []).slice(),
+      gestures: (b.gestures || []).slice(),
+      dropped: b.dropped
+    };
+    b.signatures.length = 0;
+    if (b.mutations) b.mutations.length = 0;
+    if (b.gestures) b.gestures.length = 0;
+    b.dropped = 0;
+    window.__ew_drain_out__ = JSON.stringify(out);
+  }
+})(), window.__ew_drain_out__)";
 }
