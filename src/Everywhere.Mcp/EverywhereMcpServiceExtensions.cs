@@ -35,6 +35,11 @@ public static class EverywhereMcpServiceExtensions
         // McpServerSettings.OpenDiaEnabled). The bridge is a singleton so
         // status surfaces and the MCP tool sync read its state.
         services.TryAddSingleton<OpenDia.OpenDiaBridge>();
+        // SPEC docs/specs/opendia-cebian-merge.md §Phase 4 — chat bus wraps
+        // OpenDiaBridge for chat_* frames + subscribe long-poll. Registered
+        // as singleton so subscriber cursors survive across MCP calls.
+        services.TryAddSingleton<OpenDia.OpenDiaChatBus>();
+        services.TryAddSingleton<Tools.ChatBusTools>();
         // Instance-based [McpServerToolType] classes need to be in DI
         // for the MCP SDK to resolve their constructors. (Static
         // [McpServerToolType] don't need this.)

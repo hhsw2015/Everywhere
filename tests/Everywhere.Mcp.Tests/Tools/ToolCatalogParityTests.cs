@@ -64,6 +64,12 @@ public class ToolCatalogParityTests
         "search_tools", "activate_domain", "list_domains",
         // Phase 6.5 adapter catalog search
         "search_adapters",
+        // OpenDia + Cebian merge Phase 4 chat bus
+        // (docs/specs/opendia-cebian-merge.md §Phase 4). Tools proxy chat
+        // state to/from the OpenDia extension's sidepanel; gated under the
+        // "chat" domain in TierGate.
+        "chat_list", "chat_read", "chat_send",
+        "chat_create", "chat_delete", "chat_subscribe",
     ];
 
     [Test]

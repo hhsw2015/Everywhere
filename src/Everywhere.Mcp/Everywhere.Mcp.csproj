@@ -40,4 +40,10 @@
          draw time). Source: open-computer-use@0.1.53 MIT. -->
     <EmbeddedResource Include="CursorOverlay\Assets\official-software-cursor-window-252.png" />
   </ItemGroup>
+
+  <ItemGroup>
+    <!-- Phase 4 chat bus tests reach an internal test hook on OpenDiaBridge
+         to simulate WebSocket push frames without a live extension. -->
+    <InternalsVisibleTo Include="Everywhere.Mcp.Tests" />
+  </ItemGroup>
 </Project>

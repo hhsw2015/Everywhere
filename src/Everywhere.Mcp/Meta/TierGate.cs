@@ -43,6 +43,15 @@ public static class TierGate
             "adapter_list_local", "adapter_drift_check", "adapter_delete_local",
             "adapter_regenerate", "opendia_smoke_check",
         }.ToFrozenSet(StringComparer.Ordinal),
+        // SPEC docs/specs/opendia-cebian-merge.md §Phase 4 — chat bus tools
+        // that proxy sidepanel chat state to daemon-side MCP agents (Claude
+        // Code, Cursor, …). Gated so untrusted callers can't lurk in the
+        // sidepanel's private conversation.
+        ["chat"] = new[]
+        {
+            "chat_list", "chat_read", "chat_send",
+            "chat_create", "chat_delete", "chat_subscribe",
+        }.ToFrozenSet(StringComparer.Ordinal),
     };
 
     /// <summary>Aliases accepted by <see cref="SessionActivations.Activate"/> and normalised to canonical names.</summary>

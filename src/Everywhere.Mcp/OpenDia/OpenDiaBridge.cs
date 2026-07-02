@@ -35,6 +35,25 @@ public sealed class OpenDiaBridge : IAsyncDisposable
     public bool IsConnected => _extSocket?.State == WebSocketState.Open;
     public event Action? StateChanged;
 
+    /// <summary>
+    /// SPEC §5.1 server-push frames (Phase 4 chat bus). Fired for any incoming
+    /// message that has a <c>type</c> field and no <c>id</c> — currently
+    /// <c>chat_appended</c> and <c>chat_deleted</c>. Subscribers should filter
+    /// by <c>type</c>; unhandled push types are dropped silently.
+    /// </summary>
+    public event Action<JsonObject>? PushFrame;
+
+    /// <summary>
+    /// Test hook. Lets Phase 4 unit tests drive the same code path that
+    /// <see cref="HandleIncoming"/> uses for server-push frames, without
+    /// standing up a real WebSocket. Prod code should never call this.
+    /// </summary>
+    internal void RaisePushFrameForTest(JsonObject frame)
+    {
+        try { PushFrame?.Invoke(frame); }
+        catch (Exception ex) { _logger.LogDebug(ex, "OpenDiaBridge: test push handler threw"); }
+    }
+
     public OpenDiaBridge(ILogger<OpenDiaBridge> logger) => _logger = logger;
 
     public async Task StartAsync(int port = 5555, CancellationToken cancellationToken = default)
@@ -332,6 +351,16 @@ public sealed class OpenDiaBridge : IAsyncDisposable
                 ["type"] = "pong",
                 ["timestamp"] = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
             }, ct);
+            return;
+        }
+
+        // SPEC §5.1 — server-push frames carry a `type` and no `id`. Fan out
+        // to Phase 4 subscribers (OpenDiaChatBus) before falling through to
+        // the id-matched response path.
+        if (type is not null && obj["id"] is null)
+        {
+            try { PushFrame?.Invoke(obj); }
+            catch (Exception ex) { _logger.LogDebug(ex, "OpenDiaBridge: PushFrame handler threw"); }
             return;
         }
 
