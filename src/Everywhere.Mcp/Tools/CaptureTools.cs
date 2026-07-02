@@ -85,12 +85,17 @@ public sealed class CaptureTools
         if (!SelfExpandGate.Enabled) return Err("SELFEXPAND_DISABLED", "");
         try
         {
-            // Drain hook before we mark the session stopped so pulled signatures
-            // land in the same session snapshot returned below.
-            if (_hooks.TryRemove(session_id, out var lease) && _bridge is not null && _bridge.IsConnected)
+            // Always pull the CDP buffers on stop. The hook-lease branch only
+            // controls whether we also drain window.__ew_capture__ and remove
+            // the init script — network + console pulls happen regardless.
+            _hooks.TryRemove(session_id, out var lease);
+            var currentSession = _store.Get(session_id);
+            var tabId = lease?.TabId ?? currentSession.TabId;
+            var scriptId = lease?.ScriptId;
+            if (_bridge is not null && _bridge.IsConnected && tabId > 0)
             {
                 var orchestrator = new CaptureOrchestrator(new OpenDiaBrowserCallSink(_bridge));
-                await orchestrator.StopAsync(session_id, lease.TabId, lease.ScriptId, _store, ct);
+                await orchestrator.StopAsync(session_id, tabId, scriptId, _store, ct);
             }
             var s = _store.Stop(session_id);
             return JsonSerializer.Serialize(s, Json);
