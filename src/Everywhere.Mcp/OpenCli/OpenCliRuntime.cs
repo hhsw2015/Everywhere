@@ -62,6 +62,7 @@ public sealed class OpenCliRuntime : IAsyncDisposable
     private sealed record ManifestEntry(string Site, string Name, JsonObject Raw, string? ModulePath);
 
     public string ClisDir => _clisDir;
+    public string ManifestPath => _manifestPath;
     public string UpstreamSha { get; private set; } = "unknown";
 
     public OpenCliRuntime(string clisDir, string manifestPath, HttpClient http, ILogger<OpenCliRuntime>? log = null)

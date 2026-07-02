@@ -292,12 +292,21 @@ public sealed class GeneratorTools
             }.ToJsonString();
         }
         // Cross-check every required tool against the bridge's advertised set.
+        // OpenDia advertises tool names WITHOUT the "browser_" prefix; the
+        // bridge builder prefixes them for the outer MCP layer. Normalize by
+        // stripping "browser_" from the required list before comparing.
         var advertised = new HashSet<string>(
             _bridge.AvailableTools
                 .Select(o => o["name"]?.GetValue<string>() ?? "")
                 .Where(n => !string.IsNullOrEmpty(n)),
             StringComparer.Ordinal);
-        var missing = required.Where(r => !advertised.Contains(r)).ToList();
+        var missing = required
+            .Where(r =>
+            {
+                var stripped = r.StartsWith("browser_", StringComparison.Ordinal) ? r["browser_".Length..] : r;
+                return !advertised.Contains(r) && !advertised.Contains(stripped);
+            })
+            .ToList();
         if (missing.Count > 0)
         {
             return new JsonObject

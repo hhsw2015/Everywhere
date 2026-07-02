@@ -20,26 +20,35 @@ public sealed class SearchTools
     private readonly Lazy<AdapterCatalogIndex> _adapterCatalog;
     private static readonly string DefaultSession = "default";
 
-    public SearchTools(SessionActivations sessions)
+    public SearchTools(SessionActivations sessions, Everywhere.Mcp.OpenCli.OpenCliRuntime? runtime = null)
     {
         _sessions = sessions;
         _index = BuildIndex();
         _adapterCatalog = new Lazy<AdapterCatalogIndex>(() =>
         {
             var idx = new AdapterCatalogIndex();
-            idx.Load(FindManifestPath());
+            idx.Load(runtime?.ManifestPath ?? FindManifestPath());
             return idx;
         });
     }
 
     private static string FindManifestPath()
     {
-        // Walk up from the running assembly's dir looking for 3rd/opencli/cli-manifest.json.
+        // Fallback probe for dev-tree layout and bundled Resources layout.
+        var probes = new[]
+        {
+            Path.Combine("3rd", "opencli", "cli-manifest.json"),
+            Path.Combine("Resources", "opencli", "cli-manifest.json"),
+            Path.Combine("opencli", "cli-manifest.json"),
+        };
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
         while (dir is not null)
         {
-            var probe = Path.Combine(dir.FullName, "3rd", "opencli", "cli-manifest.json");
-            if (File.Exists(probe)) return probe;
+            foreach (var rel in probes)
+            {
+                var probe = Path.Combine(dir.FullName, rel);
+                if (File.Exists(probe)) return probe;
+            }
             dir = dir.Parent;
         }
         return "";
@@ -48,14 +57,14 @@ public sealed class SearchTools
     private static Bm25Index BuildIndex()
     {
         var idx = new Bm25Index();
-        foreach (var (domain, tools) in TierGate.Domains)
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        void Add(string name)
         {
-            foreach (var t in tools)
-                idx.Add(new Bm25Index.Doc(t, DescribeTool(t)));
+            if (seen.Add(name)) idx.Add(new Bm25Index.Doc(name, DescribeTool(name)));
         }
-        // Also index core meta / search-tier tools.
-        foreach (var t in TierGate.SearchTierTools)
-            idx.Add(new Bm25Index.Doc(t, DescribeTool(t)));
+        foreach (var (_, tools) in TierGate.Domains)
+            foreach (var t in tools) Add(t);
+        foreach (var t in TierGate.SearchTierTools) Add(t);
         return idx;
     }
 
