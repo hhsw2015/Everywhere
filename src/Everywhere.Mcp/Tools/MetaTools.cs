@@ -111,7 +111,8 @@ public sealed class MetaTools
         new JsonObject
         {
             ["ok"] = false,
-            ["error"] = message,
+            ["code"] = "META_TOOL_ERROR",
+            ["message"] = message,
         }.ToJsonString();
 
     // ---------------- catalog -----------------------------------------------

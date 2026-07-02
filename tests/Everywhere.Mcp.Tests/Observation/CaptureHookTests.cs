@@ -29,9 +29,10 @@ public sealed class CaptureHookTests
                 : null,
         };
         var orch = new CaptureOrchestrator(sink);
-        var id = await orch.StartAsync(tabId: 101, ct: CancellationToken.None);
-        Assert.That(id, Is.EqualTo("script-42"));
-        Assert.That(sink.Calls.Select(c => c.Tool), Is.EqualTo(new[] { "add_init_script", "cdp_evaluate" }));
+        var (installed, scriptId, _) = await orch.StartAsync(tabId: 101, ct: CancellationToken.None);
+        Assert.That(installed, Is.True);
+        Assert.That(scriptId, Is.EqualTo("script-42"));
+        Assert.That(sink.Calls.Select(c => c.Tool).ToArray(), Is.EqualTo(new[] { "add_init_script", "cdp_evaluate" }));
         Assert.That(sink.Calls[0].Args["tab_id"]!.GetValue<int>(), Is.EqualTo(101));
         Assert.That(sink.Calls[0].Args["script"]!.GetValue<string>(), Does.Contain("__ew_capture__"));
     }

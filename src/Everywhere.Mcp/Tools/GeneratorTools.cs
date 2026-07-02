@@ -29,13 +29,20 @@ public sealed class GeneratorTools
     private readonly OpenDiaBridge? _bridge;
     private readonly IClock _clock;
     private readonly AdapterLinter _linter = new();
+    private readonly Everywhere.Mcp.OpenCli.OpenCliRuntime? _runtime;
 
-    public GeneratorTools(CaptureSessionStore captures, MemoryStore memory, OpenDiaBridge? bridge = null, IClock? clock = null)
+    public GeneratorTools(
+        CaptureSessionStore captures,
+        MemoryStore memory,
+        OpenDiaBridge? bridge = null,
+        IClock? clock = null,
+        Everywhere.Mcp.OpenCli.OpenCliRuntime? runtime = null)
     {
         _captures = captures;
         _memory = memory;
         _bridge = bridge;
         _clock = clock ?? SystemClock.Instance;
+        _runtime = runtime;
     }
 
     [McpServerTool(Name = "adapter_scaffold")]
@@ -177,10 +184,11 @@ public sealed class GeneratorTools
     }
 
     [McpServerTool(Name = "adapter_verify")]
-    [Description("Runs adapter_lint (G3-G9) against a stored local adapter, verify_fixture in memory.")]
-    public string AdapterVerify(string site, string name,
+    [Description("Runs G3-G9 lints then invokes the adapter and checks 4-tuple fixture patterns against real output.")]
+    public async Task<string> AdapterVerify(string site, string name,
         [Description("Optional stored fixture pathname override; defaults to the paired verify.json.")]
-        string? fixture_override = null)
+        string? fixture_override = null,
+        CancellationToken ct = default)
     {
         if (!SelfExpandGate.Enabled) return Err("SELFEXPAND_DISABLED", "");
         try
@@ -190,18 +198,128 @@ public sealed class GeneratorTools
             var fixture = LocalRegistry.LoadVerify(site, name);
             if (fixture is null) return Err("VERIFY_FIXTURE_MISSING", $"no verify.json paired with {site}/{name}");
             var note = _memory.ReadStrategyNote(site, name);
-            var res = _linter.Lint(src, note, fixture);
-            return new JsonObject
+            var lintRes = _linter.Lint(src, note, fixture);
+            var lintErrors = new JsonArray(lintRes.Errors.Select(e => (JsonNode)new JsonObject
             {
-                ["ok"] = res.Ok,
-                ["errors"] = new JsonArray(res.Errors.Select(e => (JsonNode)new JsonObject
+                ["code"] = e.Code, ["gate"] = e.Gate, ["message"] = e.Message,
+            }).ToArray());
+            if (!lintRes.Ok || _runtime is null)
+            {
+                return new JsonObject
                 {
-                    ["code"] = e.Code, ["gate"] = e.Gate, ["message"] = e.Message,
-                }).ToArray()),
-            }.ToJsonString();
+                    ["ok"] = lintRes.Ok,
+                    ["errors"] = lintErrors,
+                    ["runtime_available"] = _runtime is not null,
+                }.ToJsonString();
+            }
+
+            // SPEC §Phase 4 G9 — actually run the adapter and check 4-tuple.
+            var args = new JsonObject();
+            foreach (var (k, v) in fixture.Args) args[k] = v?.DeepClone();
+            JsonNode? invokeRes;
+            try
+            {
+                invokeRes = await _runtime.InvokeAsync(site, name, args, new Everywhere.Mcp.OpenCli.Phase1StubPage(), ct);
+            }
+            catch (Exception ex)
+            {
+                return Err("VERIFY_INVOKE_FAILED", ex.Message, new JsonObject { ["site"] = site, ["name"] = name });
+            }
+
+            var invokeObj = invokeRes as JsonObject;
+            if (invokeObj is null || invokeObj["ok"]?.GetValue<bool>() != true)
+            {
+                return new JsonObject
+                {
+                    ["ok"] = false,
+                    ["stage"] = "invoke",
+                    ["errors"] = new JsonArray { "adapter invocation returned not-ok" },
+                    ["invoke_result"] = invokeObj?.DeepClone(),
+                }.ToJsonString();
+            }
+            var rows = invokeObj["data"] as JsonArray;
+            var mismatches = CheckFixture(fixture, rows);
+            var payload = new JsonObject
+            {
+                ["ok"] = mismatches.Count == 0,
+                ["row_count"] = rows?.Count ?? 0,
+                ["errors"] = lintErrors,
+                ["mismatches"] = new JsonArray(mismatches.Select(m => (JsonNode)m).ToArray()),
+            };
+            // On success, update meta.last_success_hash + last_success_at for drift check (F8).
+            if (mismatches.Count == 0 && rows is not null)
+            {
+                var meta = LocalRegistry.LoadMeta(site, name);
+                if (meta is not null)
+                {
+                    meta.LastSuccessHash = LocalRegistry.Sha256Of(rows.ToJsonString());
+                    meta.LastSuccessAt = _clock.NowMs();
+                    LocalRegistry.SaveMetaOnly(site, name, meta);
+                }
+            }
+            return payload.ToJsonString();
         }
         catch (InvalidIdentifierException ex) { return Err("INVALID_IDENTIFIER", ex.Message); }
     }
+
+    private static List<string> CheckFixture(VerifyFixture fixture, JsonArray? rows)
+    {
+        var m = new List<string>();
+        if (rows is null) { m.Add("no rows returned"); return m; }
+        var count = rows.Count;
+        if (count < fixture.ExpectedRowCountMin) m.Add($"row_count {count} < min {fixture.ExpectedRowCountMin}");
+        if (fixture.ExpectedRowCountMax > 0 && count > fixture.ExpectedRowCountMax) m.Add($"row_count {count} > max {fixture.ExpectedRowCountMax}");
+        foreach (var (col, pattern) in fixture.Patterns)
+        {
+            var rx = new System.Text.RegularExpressions.Regex(pattern);
+            foreach (var row in rows)
+            {
+                if (row is not JsonObject ro || ro[col] is null) continue;
+                var val = ro[col]!.ToString();
+                if (!rx.IsMatch(val)) { m.Add($"column '{col}' pattern mismatch on value: {Truncate(val, 60)}"); break; }
+            }
+        }
+        foreach (var col in fixture.NotEmpty)
+        {
+            if (rows.All(r => r is JsonObject ro && (ro[col] is null || string.IsNullOrEmpty(ro[col]!.ToString()))))
+                m.Add($"column '{col}' notEmpty violated — all rows blank");
+        }
+        foreach (var (col, forbidden) in fixture.MustNotContain)
+        {
+            foreach (var row in rows)
+            {
+                if (row is not JsonObject ro || ro[col] is null) continue;
+                var val = ro[col]!.ToString();
+                foreach (var f in forbidden)
+                {
+                    if (!string.IsNullOrEmpty(f) && val.Contains(f))
+                    {
+                        m.Add($"column '{col}' contains forbidden substring '{f}'"); break;
+                    }
+                }
+            }
+        }
+        foreach (var col in fixture.MustBeTruthy)
+        {
+            if (rows.All(r => r is JsonObject ro && (ro[col] is null || IsFalsyValue(ro[col]!))))
+                m.Add($"column '{col}' mustBeTruthy violated — every row falsy/missing");
+        }
+        return m;
+    }
+
+    private static bool IsFalsyValue(JsonNode n)
+    {
+        if (n is JsonValue v)
+        {
+            if (v.TryGetValue<bool>(out var b)) return !b;
+            if (v.TryGetValue<int>(out var i)) return i == 0;
+            if (v.TryGetValue<double>(out var d)) return d == 0.0;
+            if (v.TryGetValue<string>(out var s)) return string.IsNullOrEmpty(s);
+        }
+        return false;
+    }
+
+    private static string Truncate(string s, int n) => s.Length <= n ? s : s[..n] + "...";
 
     [McpServerTool(Name = "adapter_list_local")]
     [Description("List locally-generated adapters under ~/.everywhere/adapters/.")]
@@ -250,8 +368,9 @@ public sealed class GeneratorTools
 
     [McpServerTool(Name = "adapter_regenerate")]
     [Description(
-        "Regenerate a local adapter using a fresh capture. Requires session_id or an active capture. " +
-        "Reuses the stored strategy note; bumps adapter_version.")]
+        "Re-render the scaffold + LLM prompt for an existing local adapter, reusing its strategy note. " +
+        "Requires session_id. Returns the same shape as adapter_scaffold — caller must run adapter_save " +
+        "with the LLM-filled body to actually persist a new version.")]
     public string AdapterRegenerate(string site, string name, string? session_id = null)
     {
         if (!SelfExpandGate.Enabled) return Err("SELFEXPAND_DISABLED", "");

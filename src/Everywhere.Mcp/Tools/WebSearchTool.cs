@@ -91,5 +91,5 @@ public sealed class WebSearchTool(IWebSearchService searchService, IHttpClientFa
     }
 
     private static string Error(string message) =>
-        new JsonObject { ["ok"] = false, ["error"] = message }.ToJsonString();
+        new JsonObject { ["ok"] = false, ["code"] = "WEB_SEARCH_ERROR", ["message"] = message }.ToJsonString();
 }

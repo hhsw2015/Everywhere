@@ -23,12 +23,10 @@ public sealed class AnalysisTools
     };
 
     private readonly CaptureSessionStore _store;
-    private readonly HttpClient _http;
 
-    public AnalysisTools(CaptureSessionStore store, HttpClient? http = null)
+    public AnalysisTools(CaptureSessionStore store)
     {
         _store = store;
-        _http = http ?? new HttpClient();
     }
 
     [McpServerTool(Name = "web_verdict_score")]
@@ -197,14 +195,23 @@ public sealed class AnalysisTools
         catch (SessionNotFoundException) { return Err("SESSION_NOT_FOUND", session_id); }
         if (!Uri.TryCreate(url, UriKind.Absolute, out var uri)) return Err("ARGUMENT_ERROR", "invalid url");
         if (uri.Scheme != "https") return Err("SSRF_BLOCKED", "https-only", new JsonObject { ["url"] = url, ["reason"] = "scheme_not_https" });
-        // Cross-origin check
-        if (!string.IsNullOrEmpty(session.Origin)
-            && !uri.Host.Equals(session.Origin, StringComparison.OrdinalIgnoreCase)
-            && !uri.Host.EndsWith("." + session.Origin, StringComparison.OrdinalIgnoreCase))
+        // Cross-origin check. Origin may carry a port (e.g. "example.com:8443"),
+        // which is not part of the URI's Host — strip it before comparing.
+        // Also fail closed when origin is empty (F10 auto-detect fills it now).
+        if (string.IsNullOrEmpty(session.Origin))
         {
-            return Err("CROSS_ORIGIN", $"expected {session.Origin}", new JsonObject
+            return Err("CROSS_ORIGIN", "session has no origin — capture_start could not resolve one",
+                new JsonObject { ["url"] = url, ["expected_origin"] = "" });
+        }
+        var expectedHost = session.Origin;
+        var colonIdx = expectedHost.IndexOf(':');
+        if (colonIdx > 0) expectedHost = expectedHost[..colonIdx];
+        if (!uri.Host.Equals(expectedHost, StringComparison.OrdinalIgnoreCase)
+            && !uri.Host.EndsWith("." + expectedHost, StringComparison.OrdinalIgnoreCase))
+        {
+            return Err("CROSS_ORIGIN", $"expected {expectedHost}", new JsonObject
             {
-                ["url"] = url, ["expected_origin"] = session.Origin,
+                ["url"] = url, ["expected_origin"] = expectedHost,
             });
         }
         // Private-network guard. Resolve once and pin the IP into the request

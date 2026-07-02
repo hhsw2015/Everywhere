@@ -27,25 +27,48 @@ public sealed class CaptureOrchestrator
     /// is logged (no exception surfaced) — capture still works without the
     /// hook, it just won't record signature samples.
     /// </summary>
-    public async Task<string?> StartAsync(int tabId, CancellationToken ct)
+    /// <summary>
+    /// Install the capture probe on the tab. Returns
+    /// <c>(hookInstalled, scriptId, reason?)</c>. The initial cdp_evaluate
+    /// is critical for two reasons:
+    /// 1. It forces OpenDia's `_cdpAttach` for the tab, which enables
+    ///    Network / Runtime / Log domain events; without this, the CDP
+    ///    buffer is empty when capture_stop pulls it.
+    /// 2. It injects the hook script into the already-loaded document
+    ///    (add_init_script alone only fires on subsequent navigations).
+    /// Best-effort: cdp_evaluate is always attempted so the attach lands,
+    /// even when add_init_script itself is unsupported / rejected.
+    /// </summary>
+    public async Task<(bool Installed, string? ScriptId, string? Reason)> StartAsync(int tabId, CancellationToken ct)
     {
         var script = CaptureHookJs.Render();
+        string? scriptId = null;
+        string? reason = null;
         try
         {
             var res = await _sink.CallAsync("add_init_script", new JsonObject
             {
                 ["tab_id"] = tabId, ["script"] = script,
             }, ct);
-            // Also inject once for the currently loaded document — add_init_script
-            // only applies to subsequent navigations; cdp_evaluate the same source
-            // to cover the already-loaded page.
+            scriptId = res?["id"]?.GetValue<string>();
+        }
+        catch (Exception ex)
+        {
+            reason = "add_init_script:" + ex.Message;
+        }
+        try
+        {
             await _sink.CallAsync("cdp_evaluate", new JsonObject
             {
                 ["tab_id"] = tabId, ["expression"] = script,
             }, ct);
-            return res?["id"]?.GetValue<string>();
         }
-        catch { return null; }
+        catch (Exception ex)
+        {
+            reason = (reason is null ? "" : reason + " | ") + "cdp_evaluate:" + ex.Message;
+        }
+        var installed = scriptId is not null || reason is null;
+        return (installed, scriptId, reason);
     }
 
     /// <summary>
@@ -87,6 +110,33 @@ public sealed class CaptureOrchestrator
                                 SignatureHeaders = ExtractSigHeaders(o["signature_headers"]),
                             };
                             store.AppendSignature(sessionId, sample);
+                        }
+                    }
+                    // DOM mutations from the hook.
+                    if (doc?["mutations"] is JsonArray muts)
+                    {
+                        foreach (var mNode in muts)
+                        {
+                            if (mNode is not JsonObject mo) continue;
+                            long ts = mo["ts"] is JsonValue mtv && mtv.TryGetValue<long>(out var mtl) ? mtl : 0;
+                            var detail = mo.DeepClone() as JsonObject ?? new JsonObject();
+                            detail.Remove("ts");
+                            store.AppendMutation(sessionId, new CaptureSession.DomMutation { Ts = ts, Detail = detail });
+                        }
+                    }
+                    // User gestures from the hook.
+                    if (doc?["gestures"] is JsonArray gests)
+                    {
+                        foreach (var gNode in gests)
+                        {
+                            if (gNode is not JsonObject go) continue;
+                            long ts = go["ts"] is JsonValue gtv && gtv.TryGetValue<long>(out var gtl) ? gtl : 0;
+                            store.AppendGesture(sessionId, new CaptureSession.UserGesture
+                            {
+                                Ts = ts,
+                                Kind = go["kind"]?.GetValue<string>() ?? "",
+                                TargetXpath = go["target_xpath"]?.GetValue<string>() ?? "",
+                            });
                         }
                     }
                 }
@@ -183,7 +233,9 @@ public sealed class CaptureOrchestrator
                               && !string.IsNullOrEmpty(reqId)
                               && (mime.Contains("json", StringComparison.OrdinalIgnoreCase)
                                   || mime.Contains("text", StringComparison.OrdinalIgnoreCase)
-                                  || url.EndsWith(".json", StringComparison.OrdinalIgnoreCase));
+                                  || mime.Contains("javascript", StringComparison.OrdinalIgnoreCase)
+                                  || url.EndsWith(".json", StringComparison.OrdinalIgnoreCase)
+                                  || url.EndsWith(".js", StringComparison.OrdinalIgnoreCase));
             if (shouldFetch)
             {
                 try

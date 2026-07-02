@@ -119,8 +119,13 @@ public static class LocalRegistry
         // Backup previous version if present
         if (File.Exists(path))
         {
+            // Suffix with ISO-timestamp so retries don't overwrite older
+            // backups (F26). Regeneration on same day/second still collides
+            // — accepted trade-off since we don't have a monotonic clock at
+            // this layer.
             var prev = LoadMeta(site, name);
-            var backup = Path.Combine(Path.GetDirectoryName(path)!, $"{name}.{prev?.AdapterVersion ?? meta.AdapterVersion - 1}.bak.js");
+            var stamp = DateTimeOffset.UtcNow.ToString("yyyyMMddTHHmmssZ");
+            var backup = Path.Combine(Path.GetDirectoryName(path)!, $"{name}.{prev?.AdapterVersion ?? meta.AdapterVersion - 1}.{stamp}.bak.js");
             try { File.Copy(path, backup, overwrite: true); } catch { }
         }
         MergeSafeWriter.WriteAtomic(path, source);
@@ -140,6 +145,18 @@ public static class LocalRegistry
         MergeSafeWriter.WriteAtomic(ResolveMetaPath(site, name), JsonSerializer.Serialize(metaWithHash, Json));
         MergeSafeWriter.WriteAtomic(ResolveVerifyPath(site, name), JsonSerializer.Serialize(fixture, Json));
         return path;
+    }
+
+    /// <summary>
+    /// SPEC §Phase 5 drift baseline — update only the meta sidecar
+    /// (last_success_hash / last_success_at / adapter_version) without
+    /// rewriting source or verify fixture.
+    /// </summary>
+    public static void SaveMetaOnly(string site, string name, GeneratorMeta meta)
+    {
+        var metaPath = ResolveMetaPath(site, name);
+        if (!File.Exists(ResolvePath(site, name))) return;
+        MergeSafeWriter.WriteAtomic(metaPath, JsonSerializer.Serialize(meta, Json));
     }
 
     public static void Delete(string site, string name)

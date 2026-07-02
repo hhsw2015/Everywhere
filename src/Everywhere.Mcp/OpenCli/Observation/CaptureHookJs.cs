@@ -138,6 +138,59 @@ public static class CaptureHookJs
     })();
     return _send.apply(this, arguments);
   };
+
+  // DOM mutation observer + user-gesture listeners — SPEC §Phase 1.
+  function xpathOf(el) {
+    if (!el || el.nodeType !== 1) return '';
+    const parts = [];
+    let cur = el;
+    while (cur && cur.nodeType === 1 && cur.tagName && cur !== document.documentElement) {
+      const p = cur.parentNode;
+      let idx = 1;
+      if (p) { const kids = Array.from(p.children).filter(c => c.tagName === cur.tagName); idx = kids.indexOf(cur) + 1; }
+      parts.unshift(cur.tagName.toLowerCase() + '[' + idx + ']');
+      cur = cur.parentNode;
+    }
+    return '/html/' + parts.join('/');
+  }
+  const MAX_MUT = 500;
+  const MAX_GEST = 200;
+  const _cap = window.__ew_capture__;
+  _cap.gestures = _cap.gestures || [];
+  try {
+    const mo = new MutationObserver(muts => {
+      for (const m of muts) {
+        if (_cap.mutations.length >= MAX_MUT) break;
+        if (m.type === 'childList') {
+          for (const n of m.addedNodes) {
+            if (_cap.mutations.length >= MAX_MUT) break;
+            _cap.mutations.push({ ts: Date.now(), type: 'added', target_xpath: xpathOf(m.target), node_html: (n.outerHTML || '').slice(0, 500) });
+          }
+          for (const n of m.removedNodes) {
+            if (_cap.mutations.length >= MAX_MUT) break;
+            _cap.mutations.push({ ts: Date.now(), type: 'removed', target_xpath: xpathOf(m.target), node_html: (n.outerHTML || '').slice(0, 500) });
+          }
+        } else if (m.type === 'attributes') {
+          _cap.mutations.push({ ts: Date.now(), type: 'attribute', target_xpath: xpathOf(m.target), name: m.attributeName, old_value: m.oldValue, new_value: m.target.getAttribute ? m.target.getAttribute(m.attributeName) : null });
+        }
+      }
+    });
+    if (document.body) mo.observe(document.body, { childList: true, subtree: true, attributes: true, attributeOldValue: true });
+    else document.addEventListener('DOMContentLoaded', () => mo.observe(document.body, { childList: true, subtree: true, attributes: true, attributeOldValue: true }));
+  } catch {}
+  function pushGesture(kind, target) {
+    if (_cap.gestures.length >= MAX_GEST) return;
+    _cap.gestures.push({ ts: Date.now(), kind, target_xpath: xpathOf(target) });
+  }
+  document.addEventListener('click', e => pushGesture('click', e.target), true);
+  document.addEventListener('input', e => pushGesture('input', e.target), true);
+  let _scrollT = 0;
+  document.addEventListener('scroll', () => {
+    const now = Date.now();
+    if (now - _scrollT < 500) return;
+    _scrollT = now;
+    pushGesture('scroll', document.scrollingElement || document.documentElement);
+  }, true);
 })();
 """;
     }
@@ -146,8 +199,15 @@ public static class CaptureHookJs
     public const string DrainExpression = @"(function(){
   const b = window.__ew_capture__;
   if (!b) return null;
-  const out = { signatures: b.signatures.slice(), dropped: b.dropped };
+  const out = {
+    signatures: b.signatures.slice(),
+    mutations: (b.mutations || []).slice(),
+    gestures: (b.gestures || []).slice(),
+    dropped: b.dropped
+  };
   b.signatures.length = 0;
+  if (b.mutations) b.mutations.length = 0;
+  if (b.gestures) b.gestures.length = 0;
   b.dropped = 0;
   return JSON.stringify(out);
 })()";

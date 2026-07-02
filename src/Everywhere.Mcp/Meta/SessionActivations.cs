@@ -24,6 +24,8 @@ public sealed class SessionActivations
 
     public bool Activate(string sessionId, string domain)
     {
+        // Accept SPEC aliases (e.g. observation → browser_core).
+        if (TierGate.DomainAliases.TryGetValue(domain, out var canonical)) domain = canonical;
         if (!TierGate.Domains.ContainsKey(domain) && domain != "full") return false;
         GetSet(sessionId).TryAdd(domain, 1);
         return true;

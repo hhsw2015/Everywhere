@@ -33,7 +33,8 @@ public sealed class MemoryTools
         try
         {
             var freshness = _store.Freshness(site);
-            if (freshness == "cold") return new JsonObject { ["cold"] = true }.ToJsonString();
+            if (freshness == "cold")
+                return new JsonObject { ["freshness"] = "cold", ["cold"] = true }.ToJsonString();
             return new JsonObject
             {
                 ["freshness"] = freshness,
@@ -68,8 +69,28 @@ public sealed class MemoryTools
         if (!SelfExpandGate.Enabled) return Err("SELFEXPAND_DISABLED", "");
         try
         {
-            var parsed = JsonSerializer.Deserialize<EndpointSpec>(spec, Json)
-                ?? throw new ArgumentException("spec cannot be null.");
+            EndpointSpec parsed;
+            try
+            {
+                parsed = JsonSerializer.Deserialize<EndpointSpec>(spec, Json)
+                    ?? throw new ArgumentException("spec cannot be null.");
+            }
+            catch (JsonException je)
+            {
+                return Err("ARGUMENT_ERROR", "invalid JSON: " + je.Message);
+            }
+            // SPEC §Phase 3 EndpointSpec required fields.
+            var missing = new List<string>();
+            if (string.IsNullOrEmpty(parsed.Name)) missing.Add("name");
+            if (string.IsNullOrEmpty(parsed.Method)) missing.Add("method");
+            if (string.IsNullOrEmpty(parsed.UrlTemplate)) missing.Add("url_template");
+            if (string.IsNullOrEmpty(parsed.Strategy)) missing.Add("strategy");
+            if (missing.Count > 0)
+                return Err("ARGUMENT_ERROR", "endpoint spec missing required fields",
+                    new JsonObject { ["missing_fields"] = new JsonArray(missing.Select(m => (JsonNode)m).ToArray()) });
+            if (parsed.Method is not ("GET" or "POST" or "PUT" or "DELETE" or "PATCH" or "HEAD" or "OPTIONS"))
+                return Err("ARGUMENT_ERROR", "endpoint method must be one of GET/POST/PUT/DELETE/PATCH/HEAD/OPTIONS",
+                    new JsonObject { ["method"] = parsed.Method });
             _store.WriteEndpoint(site, name, parsed, force);
             return new JsonObject { ["ok"] = true }.ToJsonString();
         }

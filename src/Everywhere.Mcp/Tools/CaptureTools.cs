@@ -48,32 +48,85 @@ public sealed class CaptureTools
         "the Phase 2.5 signature-capture hook via add_init_script. Returns " +
         "{session_id}. Fails CAPTURE_LIMIT_EXCEEDED at 10 concurrent sessions.")]
     public async Task<string> CaptureStart(
-        [Description("Chrome tab id from browser_cdp_list_tabs. Optional; the active tab is used when omitted.")]
+        [Description("Chrome tab id. Optional; active tab is auto-detected via get_url when omitted.")]
         int? tab_id = null,
-        [Description("Top-frame origin at capture start; used for SSRF-guard scoping. Optional but recommended.")]
+        [Description("Top-frame origin. Optional; auto-detected from the tab URL when omitted.")]
         string? origin = null,
         CancellationToken ct = default)
     {
-        if (!SelfExpandGate.Enabled) return Err("SELFEXPAND_DISABLED", "self-expand tools disabled by EVERYWHERE_MCP_SELFEXPAND=0.");
+        if (!SelfExpandGate.Enabled) return Err("SELFEXPAND_DISABLED", "");
+
+        // Auto-detect tab_id + origin when either is missing and bridge connected.
+        var effectiveTabId = tab_id ?? 0;
+        var effectiveOrigin = origin ?? "";
+        if (_bridge is not null && _bridge.IsConnected && (effectiveTabId == 0 || string.IsNullOrEmpty(effectiveOrigin)))
+        {
+            try
+            {
+                var urlRes = await _bridge.CallToolAsync("get_url", new JsonObject(), ct: ct);
+                if (urlRes is JsonObject uo)
+                {
+                    if (effectiveTabId == 0 && uo["tab_id"] is JsonValue tv)
+                    {
+                        if (tv.TryGetValue<int>(out var ti)) effectiveTabId = ti;
+                        else if (tv.TryGetValue<long>(out var tl)) effectiveTabId = (int)tl;
+                    }
+                    if (string.IsNullOrEmpty(effectiveOrigin) && uo["url"] is JsonValue urlV && urlV.TryGetValue<string>(out var urlStr)
+                        && Uri.TryCreate(urlStr, UriKind.Absolute, out var parsed))
+                    {
+                        effectiveOrigin = parsed.Host;
+                    }
+                }
+            }
+            catch { /* best-effort */ }
+        }
+
         CaptureSession session;
         try
         {
-            session = _store.Start(tab_id ?? 0, origin ?? "");
+            session = _store.Start(effectiveTabId, effectiveOrigin);
         }
         catch (CaptureLimitException ex)
         {
             return Err("CAPTURE_LIMIT_EXCEEDED", ex.Message, new JsonObject { ["max"] = ex.Max, ["current"] = ex.Current });
         }
-        // Best-effort hook install — SPEC Phase 2.5. Missing OpenDia bridge or
-        // hook failure does not abort the capture; sessions still record whatever
-        // capture_stop can pull via cdp_list_network_requests.
-        if (_bridge is not null && _bridge.IsConnected && tab_id.HasValue)
+
+        // Install signature hook + force CDP attach via cdp_evaluate.
+        bool hookInstalled = false;
+        string? hookReason = null;
+        if (_bridge is not null && _bridge.IsConnected && effectiveTabId > 0)
         {
-            var orchestrator = new CaptureOrchestrator(new OpenDiaBrowserCallSink(_bridge));
-            var scriptId = await orchestrator.StartAsync(tab_id.Value, ct);
-            _hooks[session.SessionId] = new HookLease(tab_id.Value, scriptId);
+            // F17: check for existing lease on same tab — skip duplicate install.
+            var already = _hooks.Values.Any(l => l.TabId == effectiveTabId);
+            if (!already)
+            {
+                var orchestrator = new CaptureOrchestrator(new OpenDiaBrowserCallSink(_bridge));
+                var (installed, scriptId, reason) = await orchestrator.StartAsync(effectiveTabId, ct);
+                hookInstalled = installed;
+                hookReason = reason;
+                _hooks[session.SessionId] = new HookLease(effectiveTabId, scriptId);
+            }
+            else
+            {
+                hookInstalled = true;
+                hookReason = "shared_with_existing_lease";
+                _hooks[session.SessionId] = new HookLease(effectiveTabId, null);
+            }
         }
-        return new JsonObject { ["session_id"] = session.SessionId }.ToJsonString();
+        else
+        {
+            hookReason = _bridge is null || !_bridge.IsConnected ? "opendia_not_connected" : "no_tab_id";
+        }
+
+        var payload = new JsonObject
+        {
+            ["session_id"] = session.SessionId,
+            ["tab_id"] = effectiveTabId,
+            ["origin"] = effectiveOrigin,
+            ["hook_installed"] = hookInstalled,
+        };
+        if (hookReason is not null) payload["hook_reason"] = hookReason;
+        return payload.ToJsonString();
     }
 
     [McpServerTool(Name = "capture_stop")]
@@ -85,10 +138,9 @@ public sealed class CaptureTools
         if (!SelfExpandGate.Enabled) return Err("SELFEXPAND_DISABLED", "");
         try
         {
-            // Always pull the CDP buffers on stop. The hook-lease branch only
-            // controls whether we also drain window.__ew_capture__ and remove
-            // the init script — network + console pulls happen regardless.
-            _hooks.TryRemove(session_id, out var lease);
+            // F28: peek lease; do NOT remove yet — Store.Stop might throw and
+            // we want the drain path to run first (which needs the lease).
+            _hooks.TryGetValue(session_id, out var lease);
             var currentSession = _store.Get(session_id);
             var tabId = lease?.TabId ?? currentSession.TabId;
             var scriptId = lease?.ScriptId;
@@ -97,6 +149,7 @@ public sealed class CaptureTools
                 var orchestrator = new CaptureOrchestrator(new OpenDiaBrowserCallSink(_bridge));
                 await orchestrator.StopAsync(session_id, tabId, scriptId, _store, ct);
             }
+            _hooks.TryRemove(session_id, out _);
             var s = _store.Stop(session_id);
             return JsonSerializer.Serialize(s, Json);
         }
@@ -136,7 +189,16 @@ public sealed class CaptureTools
             var tmp = path + ".tmp";
             File.WriteAllText(tmp, JsonSerializer.Serialize(s, Json));
             File.Move(tmp, path, overwrite: true);
-            return new JsonObject { ["path"] = path }.ToJsonString();
+            var payload = new JsonObject
+            {
+                ["path"] = path,
+                ["request_count"] = s.Network.Requests.Count,
+                ["signature_count"] = s.Signatures.Count,
+                ["console_count"] = s.Console.Messages.Count,
+            };
+            if (s.Network.Requests.Count == 0)
+                payload["warnings"] = new JsonArray { "empty_capture" };
+            return payload.ToJsonString();
         }
         catch (InvalidIdentifierException ex) { return Err("INVALID_IDENTIFIER", ex.Message, new JsonObject { ["arg"] = ex.ArgName, ["pattern"] = Identifier.PatternSource }); }
         catch (SessionNotFoundException) { return Err("SESSION_NOT_FOUND", $"session_id={session_id}"); }
@@ -158,7 +220,7 @@ public sealed class CaptureTools
     {
         if (!SelfExpandGate.Enabled) return Err("SELFEXPAND_DISABLED", "");
         if (_bridge is null || !_bridge.IsConnected)
-            return new JsonObject { ["present"] = false, ["kind"] = null, ["reason"] = "opendia_not_connected" }.ToJsonString();
+            return Err("OPENDIA_NOT_CONNECTED", "browser extension not connected — cannot detect captcha.");
 
         var args = new JsonObject();
         if (tab_id.HasValue) args["tab_id"] = tab_id.Value;
@@ -166,8 +228,8 @@ public sealed class CaptureTools
         JsonNode? cookieNode;
         try
         {
-            htmlNode = await _bridge.CallToolAsync("browser_snapshot", args, ct: ct).ConfigureAwait(false);
-            cookieNode = await _bridge.CallToolAsync("browser_cookies_get", args, ct: ct).ConfigureAwait(false);
+            htmlNode = await _bridge.CallToolAsync("snapshot", args, ct: ct).ConfigureAwait(false);
+            cookieNode = await _bridge.CallToolAsync("cookies_get", args, ct: ct).ConfigureAwait(false);
         }
         catch (Exception ex) { return Err("OPENDIA_CALL_FAILED", ex.Message); }
 
@@ -204,13 +266,13 @@ public sealed class CaptureTools
             var currentUrl = url;
             if (string.IsNullOrEmpty(currentUrl))
             {
-                var u = await _bridge.CallToolAsync("browser_get_url", new JsonObject(), ct: ct).ConfigureAwait(false);
+                var u = await _bridge.CallToolAsync("get_url", new JsonObject(), ct: ct).ConfigureAwait(false);
                 currentUrl = u?["url"]?.GetValue<string>() ?? u?.GetValue<string>() ?? "";
             }
             var rule = new ExtractionRules().Match(currentUrl ?? "");
             if (rule is null)
             {
-                var text = await _bridge.CallToolAsync("browser_get_text", new JsonObject(), ct: ct).ConfigureAwait(false);
+                var text = await _bridge.CallToolAsync("get_text", new JsonObject(), ct: ct).ConfigureAwait(false);
                 return new JsonObject { ["matched"] = false, ["text"] = text?.ToJsonString() ?? "" }.ToJsonString();
             }
             var callArgs = new JsonObject
@@ -218,7 +280,7 @@ public sealed class CaptureTools
                 ["selector"] = rule.Selector,
                 ["kind"] = rule.Kind,
             };
-            var extracted = await _bridge.CallToolAsync("browser_get_text", callArgs, ct: ct).ConfigureAwait(false);
+            var extracted = await _bridge.CallToolAsync("get_text", callArgs, ct: ct).ConfigureAwait(false);
             return new JsonObject
             {
                 ["matched"] = true,

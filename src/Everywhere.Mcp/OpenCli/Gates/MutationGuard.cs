@@ -32,9 +32,20 @@ public static class MutationGuard
         }
         if (codeMentionsMutation && !declaredMutation)
         {
-            // Advisory — warn only per spec ("regex fallback for page.evaluate string bodies is OK; warn if mutation:false").
-            r.Warnings.Add(new GateFinding("G7", "MUTATION_UNAPPROVED",
-                "adapter source contains a mutating method but strategy-note mutation:false — declare mutation:true or remove"));
+            // Promote to hard error when a strategy note is present and
+            // explicitly says mutation:false — the source contradicts the
+            // approved contract, adapter_save must refuse.
+            if (note is not null)
+            {
+                r.Errors.Add(new GateFinding("G7", "MUTATION_UNAPPROVED",
+                    "adapter source contains a mutating fetch/XHR method but strategy-note mutation:false"));
+            }
+            else
+            {
+                // Note absent — advisory only; adapter_lint standalone path.
+                r.Warnings.Add(new GateFinding("G7", "MUTATION_UNAPPROVED",
+                    "adapter source contains a mutating method — declare strategy-note mutation:true or remove"));
+            }
         }
         return r;
     }

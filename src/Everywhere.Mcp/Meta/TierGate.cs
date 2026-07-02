@@ -5,14 +5,17 @@ namespace Everywhere.Mcp.Meta;
 /// <summary>
 /// SPEC §Phase 6 tier gate. Tools grouped by domain; the session's active
 /// domains decide what appears in <c>tools/list</c>. Default tier when
-/// <c>EVERYWHERE_MCP_SELFEXPAND=1</c> is <c>search</c>.
+/// self-expand is enabled is <c>search</c>.
 /// </summary>
 public static class TierGate
 {
-    /// <summary>Domain groups (matches <see cref="SessionActivations"/> names).</summary>
+    /// <summary>Domain groups (matches <see cref="SessionActivations"/> names, and SPEC §Phase 6).</summary>
     public static readonly IReadOnlyDictionary<string, FrozenSet<string>> Domains = new Dictionary<string, FrozenSet<string>>
     {
-        ["observation"] = new[]
+        // SPEC §Phase 6 names the observation domain "browser_core". We
+        // keep an "observation" alias below in DomainAliases for backwards
+        // compat with earlier releases.
+        ["browser_core"] = new[]
         {
             "capture_start", "capture_stop", "capture_current", "capture_export",
             "browser_captcha_present", "page_extract_by_rule", "page_save_extraction_rule",
@@ -42,19 +45,22 @@ public static class TierGate
         }.ToFrozenSet(StringComparer.Ordinal),
     };
 
-    /// <summary>Search-tier: the small default surface + 3 meta tools plus a subset of the platform.</summary>
+    /// <summary>Aliases accepted by <see cref="SessionActivations.Activate"/> and normalised to canonical names.</summary>
+    public static readonly IReadOnlyDictionary<string, string> DomainAliases = new Dictionary<string, string>(StringComparer.Ordinal)
+    {
+        ["observation"] = "browser_core",
+    };
+
+    /// <summary>Search-tier: 3 meta tools + a subset of the platform, always visible.</summary>
     public static readonly FrozenSet<string> SearchTierTools = new[]
     {
-        // native meta
-        "list_more_tools", "call_tool", "search_tools",
-        // core browser perception
+        "list_more_tools", "call_tool", "search_tools", "search_adapters",
         "browser_snapshot", "browser_get_text", "browser_page_navigate",
-        // opencli
         "opencli_list", "opencli_run",
-        // observation minimum
         "capture_start", "capture_stop",
-        // memory freshness for the runbook step 2
         "memory_freshness",
+        "list_domains", "activate_domain",
+        "opendia_smoke_check",
     }.ToFrozenSet(StringComparer.Ordinal);
 
     /// <summary>All tools that <c>SELFEXPAND</c> gates. Cheaper than reflecting.</summary>

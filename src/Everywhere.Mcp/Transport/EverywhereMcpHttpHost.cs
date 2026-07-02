@@ -304,12 +304,32 @@ public sealed class EverywhereMcpHttpHost : IHostedService, IAsyncDisposable
                     .AddListToolsFilter(next => async (ctx, ct) =>
                     {
                         // Filter the static [McpServerTool] surface (native tools)
-                        // through the gate. Hidden native tools stay reachable
-                        // via call_tool — see Tools/MetaTools.cs.
+                        // through both the core gate and the SPEC Phase 6 tier gate.
+                        // Self-expand tools not in the search-tier + not covered by
+                        // an activated domain are hidden.
                         var result = await next(ctx, ct).ConfigureAwait(false);
-                        if (CoreToolGate.FilterEnabled && result?.Tools is { Count: > 0 } tools)
+                        if (result?.Tools is { Count: > 0 } tools)
                         {
-                            var kept = tools.Where(t => !CoreToolGate.ShouldFilter(t.Name)).ToList();
+                            var activations = _parentServices.GetService<Meta.SessionActivations>();
+                            bool AllowByTier(string name)
+                            {
+                                if (Meta.TierGate.SearchTierTools.Contains(name)) return true;
+                                if (!Meta.TierGate.AllSelfExpandTools.Contains(name)) return true;
+                                if (activations is null) return true;
+                                // Which domain owns this tool?
+                                foreach (var (domain, set) in Meta.TierGate.Domains)
+                                {
+                                    if (set.Contains(name))
+                                    {
+                                        return activations.IsActive("default", domain);
+                                    }
+                                }
+                                return true;
+                            }
+                            var kept = tools
+                                .Where(t => !(CoreToolGate.FilterEnabled && CoreToolGate.ShouldFilter(t.Name)))
+                                .Where(t => AllowByTier(t.Name))
+                                .ToList();
                             tools.Clear();
                             foreach (var t in kept) tools.Add(t);
                         }

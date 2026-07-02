@@ -20,16 +20,23 @@ public sealed class SearchTools
     private readonly Lazy<AdapterCatalogIndex> _adapterCatalog;
     private static readonly string DefaultSession = "default";
 
+    private readonly Everywhere.Mcp.OpenCli.OpenCliRuntime? _runtime;
+
     public SearchTools(SessionActivations sessions, Everywhere.Mcp.OpenCli.OpenCliRuntime? runtime = null)
     {
         _sessions = sessions;
+        _runtime = runtime;
         _index = BuildIndex();
-        _adapterCatalog = new Lazy<AdapterCatalogIndex>(() =>
-        {
-            var idx = new AdapterCatalogIndex();
-            idx.Load(runtime?.ManifestPath ?? FindManifestPath());
-            return idx;
-        });
+        // F6: catalog rebuilt on every search_adapters call so newly-saved
+        // local adapters appear immediately without server restart.
+        _adapterCatalog = new Lazy<AdapterCatalogIndex>(BuildCatalog);
+    }
+
+    private AdapterCatalogIndex BuildCatalog()
+    {
+        var idx = new AdapterCatalogIndex();
+        idx.Load(_runtime?.ManifestPath ?? FindManifestPath());
+        return idx;
     }
 
     private static string FindManifestPath()
@@ -111,7 +118,10 @@ public sealed class SearchTools
     public string SearchAdapters(string query, int? top_k = null)
     {
         if (!SelfExpandGate.Enabled) return Err("SELFEXPAND_DISABLED", "");
-        var idx = _adapterCatalog.Value;
+        // Rebuild each call — vendored manifest is ~1MB, local dir is small,
+        // total is a few dozen ms. Ensures freshly-saved local adapters
+        // appear immediately (SPEC §Phase 6.5 freshness expectation).
+        var idx = BuildCatalog();
         var hits = idx.Search(query ?? "", top_k ?? 5);
         var arr = new JsonArray();
         foreach (var h in hits)
@@ -145,6 +155,13 @@ public sealed class SearchTools
                 ["active"] = active.Contains(domain) || active.Contains("full"),
             });
         }
+        // Meta-domain — enables every self-expand tool at once.
+        arr.Add(new JsonObject
+        {
+            ["name"] = "full",
+            ["tool_count"] = TierGate.AllSelfExpandTools.Count,
+            ["active"] = active.Contains("full"),
+        });
         return arr.ToJsonString();
     }
 
