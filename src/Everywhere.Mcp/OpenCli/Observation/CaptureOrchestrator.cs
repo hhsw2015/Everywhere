@@ -49,11 +49,15 @@ public sealed class CaptureOrchestrator
     }
 
     /// <summary>
-    /// Drain <c>window.__ew_capture__</c>, merge into the session, remove the init
-    /// script. Best-effort; missing / cleared buffer contributes zero signatures.
+    /// Drain <c>window.__ew_capture__</c>, pull the CDP network + console
+    /// buffers from OpenDia, merge into the session, remove the init
+    /// script. Best-effort; per-source failures don't cascade.
     /// </summary>
     public async Task StopAsync(string sessionId, int tabId, string? scriptId, CaptureSessionStore store, CancellationToken ct)
     {
+        var session = store.Get(sessionId);
+        await PullNetworkAsync(session, tabId, store, ct);
+        await PullConsoleAsync(session, tabId, store, ct);
         try
         {
             var drain = await _sink.CallAsync("cdp_evaluate", new JsonObject
@@ -104,6 +108,155 @@ public sealed class CaptureOrchestrator
                 catch { }
             }
         }
+    }
+
+    /// <summary>
+    /// Pull the OpenDia CDP network buffer for the tab, filtered to entries
+    /// after session.StartedAt, and append them (redacted) to the session.
+    /// For every entry with a non-empty body-size, also fetch the response
+    /// body (up to a soft cap of 200 hits) so the verdict scorer has data.
+    /// </summary>
+    private async Task PullNetworkAsync(CaptureSession session, int tabId, CaptureSessionStore store, CancellationToken ct)
+    {
+        JsonNode? res;
+        try
+        {
+            res = await _sink.CallAsync("cdp_list_network_requests", new JsonObject
+            {
+                ["tab_id"] = tabId,
+                ["since_ms"] = session.StartedAt,
+                ["limit"] = 2000,
+            }, ct);
+        }
+        catch { return; }
+        if (res is not JsonObject o || o["requests"] is not JsonArray arr) return;
+
+        var bodyFetched = 0;
+        const int maxBodyFetches = 200;
+        foreach (var item in arr)
+        {
+            if (item is not JsonObject r) continue;
+            var reqId = r["requestId"]?.GetValue<string>() ?? "";
+            var url = r["url"]?.GetValue<string>() ?? "";
+            var method = r["method"]?.GetValue<string>() ?? "GET";
+            var mime = r["mime"]?.GetValue<string>() ?? "";
+            long size = 0;
+            if (r["size"] is JsonValue sv)
+            {
+                if (sv.TryGetValue<long>(out var sl)) size = sl;
+                else if (sv.TryGetValue<int>(out var siRaw)) size = siRaw;
+                else if (sv.TryGetValue<double>(out var sd)) size = (long)sd;
+            }
+            long status = 0;
+            if (r["status"] is JsonValue stv)
+            {
+                if (stv.TryGetValue<int>(out var stiRaw)) status = stiRaw;
+                else if (stv.TryGetValue<long>(out var stlRaw)) status = stlRaw;
+                else if (stv.TryGetValue<double>(out var std)) status = (long)std;
+            }
+            long ts = 0;
+            if (r["ts"] is JsonValue tv)
+            {
+                if (tv.TryGetValue<long>(out var tlRaw)) ts = tlRaw;
+                else if (tv.TryGetValue<int>(out var tiRaw)) ts = tiRaw;
+                else if (tv.TryGetValue<double>(out var td)) ts = (long)td;
+            }
+
+            var netReq = new CaptureSession.NetworkRequest
+            {
+                RequestId = reqId,
+                Url = Redactor.Url(url),
+                Method = method,
+                Status = (int)status,
+                ResponseSize = size,
+                ResponseContentType = mime,
+                TimingMs = ts - session.StartedAt,
+                // OpenDia doesn't advertise request/response headers or
+                // initiator through cdp_list_network_requests today — we
+                // record what we have; Phase 2 verdict scorer §Phase 2
+                // rules 1-6+8 still classify correctly without them.
+            };
+
+            string? bodyContent = null;
+            var shouldFetch = size > 0
+                              && bodyFetched < maxBodyFetches
+                              && !string.IsNullOrEmpty(reqId)
+                              && (mime.Contains("json", StringComparison.OrdinalIgnoreCase)
+                                  || mime.Contains("text", StringComparison.OrdinalIgnoreCase)
+                                  || url.EndsWith(".json", StringComparison.OrdinalIgnoreCase));
+            if (shouldFetch)
+            {
+                try
+                {
+                    var bodyRes = await _sink.CallAsync("cdp_get_response_body", new JsonObject
+                    {
+                        ["tab_id"] = tabId,
+                        ["request_id"] = reqId,
+                    }, ct);
+                    if (bodyRes is JsonObject bo && bo["body"] is JsonValue bv && bv.TryGetValue<string>(out var bs))
+                    {
+                        // Bodies capped to 512KB per entry (SPEC §Phase 1).
+                        var trimmed = bs.Length > 512 * 1024 ? bs[..(512 * 1024)] : bs;
+                        var redacted = Redactor.Body(trimmed);
+                        var sha = ComputeSha256(redacted);
+                        bodyContent = redacted;
+                        // Backfill the sha; NetworkRequest is init-only so
+                        // rebuild.
+                        netReq = new CaptureSession.NetworkRequest
+                        {
+                            RequestId = netReq.RequestId, Url = netReq.Url, Method = netReq.Method,
+                            Status = netReq.Status, ResponseSize = netReq.ResponseSize,
+                            ResponseContentType = netReq.ResponseContentType, TimingMs = netReq.TimingMs,
+                            ResponseBodySha256 = sha,
+                        };
+                        bodyFetched++;
+                    }
+                }
+                catch { /* body pull failed — keep the request entry */ }
+            }
+            store.AppendRequest(session.SessionId, netReq, bodyContent);
+        }
+    }
+
+    private async Task PullConsoleAsync(CaptureSession session, int tabId, CaptureSessionStore store, CancellationToken ct)
+    {
+        JsonNode? res;
+        try
+        {
+            res = await _sink.CallAsync("cdp_list_console_messages", new JsonObject
+            {
+                ["tab_id"] = tabId,
+                ["limit"] = 500,
+            }, ct);
+        }
+        catch { return; }
+        if (res is not JsonObject o || o["messages"] is not JsonArray arr) return;
+        foreach (var item in arr)
+        {
+            if (item is not JsonObject m) continue;
+            long ts = 0;
+            if (m["ts"] is JsonValue tv)
+            {
+                if (tv.TryGetValue<long>(out var tlRaw)) ts = tlRaw;
+                else if (tv.TryGetValue<int>(out var tiRaw)) ts = tiRaw;
+                else if (tv.TryGetValue<double>(out var td)) ts = (long)td;
+            }
+            if (ts < session.StartedAt) continue; // pre-capture noise
+            store.AppendConsole(session.SessionId, new CaptureSession.ConsoleMessage
+            {
+                Ts = ts,
+                Level = m["level"]?.GetValue<string>() ?? "log",
+                Text = Redactor.Body(m["text"]?.GetValue<string>() ?? ""),
+            });
+        }
+    }
+
+    private static string ComputeSha256(string s)
+    {
+        using var sha = System.Security.Cryptography.SHA256.Create();
+        var bytes = System.Text.Encoding.UTF8.GetBytes(s);
+        var hash = sha.ComputeHash(bytes);
+        return Convert.ToHexString(hash).ToLowerInvariant();
     }
 
     private static string? RedactSample(string? sample)
