@@ -29,8 +29,17 @@ public sealed class CaptureTools
     private readonly CaptureSessionStore _store;
     private readonly OpenDiaBridge? _bridge;
     private readonly System.Collections.Concurrent.ConcurrentDictionary<string, HookLease> _hooks = new(StringComparer.Ordinal);
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, PollerState> _pollers = new(StringComparer.Ordinal);
 
     private sealed record HookLease(int TabId, string? ScriptId);
+    private sealed class PollerState
+    {
+        public required CancellationTokenSource Cts { get; init; }
+        public required Task Loop { get; init; }
+        public HashSet<string> Seen { get; } = new(StringComparer.Ordinal);
+        public long LastPollAt { get; set; }
+        public int TotalBodiesUnavailable { get; set; }
+    }
 
     public CaptureTools(CaptureSessionStore store, OpenDiaBridge? bridge = null)
     {
@@ -118,6 +127,41 @@ public sealed class CaptureTools
             hookReason = _bridge is null || !_bridge.IsConnected ? "opendia_not_connected" : "no_tab_id";
         }
 
+        // Background poller — every 2s, pull new requests and fetch their
+        // bodies BEFORE Chrome drops them on navigation. Deduped by request id.
+        if (_bridge is not null && _bridge.IsConnected && effectiveTabId > 0)
+        {
+            var cts = new CancellationTokenSource();
+            var seenIds = new HashSet<string>(StringComparer.Ordinal);
+            var state = new PollerState { Cts = cts, Loop = Task.CompletedTask };
+            var loop = Task.Run(async () =>
+            {
+                var orchestrator = new CaptureOrchestrator(new OpenDiaBrowserCallSink(_bridge));
+                var lastPoll = session.StartedAt;
+                while (!cts.IsCancellationRequested)
+                {
+                    try
+                    {
+                        await Task.Delay(TimeSpan.FromSeconds(2), cts.Token);
+                        var (_, _, unavail) = await orchestrator.PollNetworkDeltaAsync(
+                            session, effectiveTabId, lastPoll, _store, state.Seen, cts.Token);
+                        state.TotalBodiesUnavailable += unavail;
+                        state.LastPollAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+                        // Next poll only picks up requests newer than the last poll —
+                        // subtract 500ms slack so we don't miss requests that arrived
+                        // between OpenDia's cdp_list return time and our clock.
+                        lastPoll = state.LastPollAt - 500;
+                    }
+                    catch (OperationCanceledException) { break; }
+                    catch { /* transient poll error — keep looping */ }
+                }
+            }, cts.Token);
+            _pollers[session.SessionId] = new PollerState
+            {
+                Cts = cts, Loop = loop, LastPollAt = 0,
+            };
+        }
+
         var payload = new JsonObject
         {
             ["session_id"] = session.SessionId,
@@ -138,8 +182,16 @@ public sealed class CaptureTools
         if (!SelfExpandGate.Enabled) return Err("SELFEXPAND_DISABLED", "");
         try
         {
-            // F28: peek lease; do NOT remove yet — Store.Stop might throw and
-            // we want the drain path to run first (which needs the lease).
+            // Stop the background poller first so it doesn't race with the final drain.
+            int accumulatedUnavailable = 0;
+            if (_pollers.TryRemove(session_id, out var poller))
+            {
+                accumulatedUnavailable = poller.TotalBodiesUnavailable;
+                poller.Cts.Cancel();
+                try { await poller.Loop; } catch { /* loop swallows its own errors */ }
+                poller.Cts.Dispose();
+            }
+
             _hooks.TryGetValue(session_id, out var lease);
             var currentSession = _store.Get(session_id);
             var tabId = lease?.TabId ?? currentSession.TabId;
@@ -151,6 +203,16 @@ public sealed class CaptureTools
             }
             _hooks.TryRemove(session_id, out _);
             var s = _store.Stop(session_id);
+            // Emit an inline warning if the CDP dropped bodies mid-capture.
+            if (accumulatedUnavailable > 0)
+            {
+                var envelope = JsonNode.Parse(JsonSerializer.Serialize(s, Json))!.AsObject();
+                envelope["warnings"] = new JsonArray
+                {
+                    $"{accumulatedUnavailable} response bodies were dropped by Chrome before capture could fetch them — this is a CDP limit around cross-page navigation"
+                };
+                return envelope.ToJsonString();
+            }
             return JsonSerializer.Serialize(s, Json);
         }
         catch (SessionNotFoundException) { return Err("SESSION_NOT_FOUND", $"session_id={session_id}", new JsonObject { ["session_id"] = session_id }); }

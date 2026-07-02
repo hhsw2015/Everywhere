@@ -22,6 +22,12 @@ public sealed class CaptureOrchestrator
     public CaptureOrchestrator(IBrowserCallSink sink) { _sink = sink; }
 
     /// <summary>
+    /// Test hook — swap the request/body fetch loop's max cap. Production
+    /// path always uses 200; unit tests override to 0 or 1 to speed up.
+    /// </summary>
+    internal int MaxBodyFetches { get; set; } = 200;
+
+    /// <summary>
     /// Install the capture probe on the tab. Returns the OpenDia script id
     /// so <see cref="StopAsync"/> can remove it. Best-effort: any failure
     /// is logged (no exception surfaced) — capture still works without the
@@ -162,11 +168,14 @@ public sealed class CaptureOrchestrator
 
     /// <summary>
     /// Pull the OpenDia CDP network buffer for the tab, filtered to entries
-    /// after session.StartedAt, and append them (redacted) to the session.
-    /// For every entry with a non-empty body-size, also fetch the response
-    /// body (up to a soft cap of 200 hits) so the verdict scorer has data.
+    /// newer than <paramref name="sinceMs"/>. Deduplicates against
+    /// <paramref name="seenRequestIds"/> so background polling can call
+    /// this every 2s during a live capture without re-appending.
+    /// Returns a tuple of counts for observability.
     /// </summary>
-    private async Task PullNetworkAsync(CaptureSession session, int tabId, CaptureSessionStore store, CancellationToken ct)
+    public async Task<(int NewRequests, int BodiesFetched, int BodiesUnavailable)> PollNetworkDeltaAsync(
+        CaptureSession session, int tabId, long sinceMs, CaptureSessionStore store,
+        HashSet<string> seenRequestIds, CancellationToken ct)
     {
         JsonNode? res;
         try
@@ -174,19 +183,22 @@ public sealed class CaptureOrchestrator
             res = await _sink.CallAsync("cdp_list_network_requests", new JsonObject
             {
                 ["tab_id"] = tabId,
-                ["since_ms"] = session.StartedAt,
+                ["since_ms"] = sinceMs,
                 ["limit"] = 2000,
             }, ct);
         }
-        catch { return; }
-        if (res is not JsonObject o || o["requests"] is not JsonArray arr) return;
+        catch { return (0, 0, 0); }
+        if (res is not JsonObject o || o["requests"] is not JsonArray arr) return (0, 0, 0);
 
-        var bodyFetched = 0;
-        const int maxBodyFetches = 200;
+        int newRequests = 0, bodiesFetched = 0, bodiesUnavailable = 0;
+        var maxBodyFetches = MaxBodyFetches;
         foreach (var item in arr)
         {
             if (item is not JsonObject r) continue;
             var reqId = r["requestId"]?.GetValue<string>() ?? "";
+            // Dedupe: skip requests already appended in a previous poll.
+            if (!string.IsNullOrEmpty(reqId) && !seenRequestIds.Add(reqId)) continue;
+            newRequests++;
             var url = r["url"]?.GetValue<string>() ?? "";
             var method = r["method"]?.GetValue<string>() ?? "GET";
             var mime = r["mime"]?.GetValue<string>() ?? "";
@@ -229,7 +241,7 @@ public sealed class CaptureOrchestrator
 
             string? bodyContent = null;
             var shouldFetch = size > 0
-                              && bodyFetched < maxBodyFetches
+                              && bodiesFetched < maxBodyFetches
                               && !string.IsNullOrEmpty(reqId)
                               && (mime.Contains("json", StringComparison.OrdinalIgnoreCase)
                                   || mime.Contains("text", StringComparison.OrdinalIgnoreCase)
@@ -247,13 +259,10 @@ public sealed class CaptureOrchestrator
                     }, ct);
                     if (bodyRes is JsonObject bo && bo["body"] is JsonValue bv && bv.TryGetValue<string>(out var bs))
                     {
-                        // Bodies capped to 512KB per entry (SPEC §Phase 1).
                         var trimmed = bs.Length > 512 * 1024 ? bs[..(512 * 1024)] : bs;
                         var redacted = Redactor.Body(trimmed);
                         var sha = ComputeSha256(redacted);
                         bodyContent = redacted;
-                        // Backfill the sha; NetworkRequest is init-only so
-                        // rebuild.
                         netReq = new CaptureSession.NetworkRequest
                         {
                             RequestId = netReq.RequestId, Url = netReq.Url, Method = netReq.Method,
@@ -261,13 +270,25 @@ public sealed class CaptureOrchestrator
                             ResponseContentType = netReq.ResponseContentType, TimingMs = netReq.TimingMs,
                             ResponseBodySha256 = sha,
                         };
-                        bodyFetched++;
+                        bodiesFetched++;
+                    }
+                    else
+                    {
+                        bodiesUnavailable++;
                     }
                 }
-                catch { /* body pull failed — keep the request entry */ }
+                catch { bodiesUnavailable++; /* Chrome dropped the body after navigation, or CDP quirk */ }
             }
             store.AppendRequest(session.SessionId, netReq, bodyContent);
         }
+        return (newRequests, bodiesFetched, bodiesUnavailable);
+    }
+
+    /// <summary>Batch-mode wrapper — one poll from session start to now, deduping internally.</summary>
+    private async Task PullNetworkAsync(CaptureSession session, int tabId, CaptureSessionStore store, CancellationToken ct)
+    {
+        var seen = new HashSet<string>(session.Network.Requests.Select(r => r.RequestId));
+        await PollNetworkDeltaAsync(session, tabId, session.StartedAt, store, seen, ct);
     }
 
     private async Task PullConsoleAsync(CaptureSession session, int tabId, CaptureSessionStore store, CancellationToken ct)
