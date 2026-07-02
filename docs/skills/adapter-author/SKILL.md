@@ -9,7 +9,7 @@ allowed-tools: mcp__everywhere-http__capture_*, mcp__everywhere-http__web_*, mcp
 Author read-only OpenCLI adapters from real user browsing. Loop: capture → analyze → strategy note → scaffold → LLM fill → save.
 
 ## Prerequisites
-1. `EVERYWHERE_MCP_SELFEXPAND=1` (or user activated `generator`/`full` domain)
+1. Self-expand tools are ON by default since v0.9.302. Set `EVERYWHERE_MCP_SELFEXPAND=0` only for emergency rollback.
 2. `memory_freshness(<site>)` — if `fresh`, ask user before re-recon
 
 ## Runbook

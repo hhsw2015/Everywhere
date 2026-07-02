@@ -54,7 +54,7 @@ public sealed class CaptureTools
         string? origin = null,
         CancellationToken ct = default)
     {
-        if (!SelfExpandGate.Enabled) return Err("SELFEXPAND_DISABLED", "Set EVERYWHERE_MCP_SELFEXPAND=1 or call activate_domain('observation').");
+        if (!SelfExpandGate.Enabled) return Err("SELFEXPAND_DISABLED", "self-expand tools disabled by EVERYWHERE_MCP_SELFEXPAND=0.");
         CaptureSession session;
         try
         {

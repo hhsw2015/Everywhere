@@ -1,10 +1,11 @@
 namespace Everywhere.Mcp.OpenCli.Observation;
 
 /// <summary>
-/// SPEC §2.5 — new self-expand tools are hidden unless
-/// <c>EVERYWHERE_MCP_SELFEXPAND=1</c> OR the session has already called
-/// <c>activate_domain</c> for a domain that includes them. Phase 6 adds
-/// per-session activation; until then, the env var is the only switch.
+/// SPEC §2.5 — kill switch for self-expand tools. Default ON since
+/// v0.9.302; Phase 6 tier gate + <c>activate_domain</c> handle token
+/// budget precisely. Set <c>EVERYWHERE_MCP_SELFEXPAND=0</c> to force
+/// every self-expand tool to return SELFEXPAND_DISABLED (emergency
+/// rollback without redeploying).
 /// </summary>
 public static class SelfExpandGate
 {
@@ -15,8 +16,8 @@ public static class SelfExpandGate
         get
         {
             if (_testOverride.HasValue) return _testOverride.Value;
-            return Environment.GetEnvironmentVariable("EVERYWHERE_MCP_SELFEXPAND") == "1"
-                   || Environment.GetEnvironmentVariable("EVERYWHERE_MCP_FULL") == "1";
+            // Explicit opt-out only. Any other value (including unset) → enabled.
+            return Environment.GetEnvironmentVariable("EVERYWHERE_MCP_SELFEXPAND") != "0";
         }
     }
 
@@ -24,6 +25,13 @@ public static class SelfExpandGate
     public static IDisposable EnableForTest()
     {
         _testOverride = true;
+        return new Restore();
+    }
+
+    /// <summary>Test hook — force-off (mirror EnableForTest for symmetric flow).</summary>
+    public static IDisposable DisableForTest()
+    {
+        _testOverride = false;
         return new Restore();
     }
 
