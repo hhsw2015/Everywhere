@@ -24,11 +24,20 @@ public static class CaptureHookJs
         var names = string.Join(',', SignatureHeaderNames.Select(n => "'" + n + "'"));
         return $$"""
 (() => {
-  if (window.__ew_capture__) return;
+  // Idempotent — reuse the existing buffer if present, but backfill any
+  // fields that older hook versions may have omitted (mutations, gestures).
+  const existing = window.__ew_capture__;
+  if (existing) {
+    if (!existing.mutations) existing.mutations = [];
+    if (!existing.gestures) existing.gestures = [];
+    if (typeof existing.dropped !== 'number') existing.dropped = 0;
+    return;
+  }
   const SIG = new Set([{{names}}]);
   const buf = window.__ew_capture__ = {
     signatures: [],
     mutations: [],
+    gestures: [],
     dropped: 0,
     started_at: Date.now(),
   };
