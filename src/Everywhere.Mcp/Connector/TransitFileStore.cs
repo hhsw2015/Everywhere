@@ -36,10 +36,10 @@ public sealed class TransitFileStore
         _dir = overrideDir ?? Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
             ".everywhere", "connector", "transit");
-        Directory.CreateDirectory(_dir);
+        System.IO.Directory.CreateDirectory(_dir);
     }
 
-    public string Directory => _dir;
+    public string DirectoryPath => _dir;
 
     /// <summary>Create a transit file from raw bytes. Returns metadata
     /// matching upstream's TransitFileStore.create() promise.</summary>
