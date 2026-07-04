@@ -1,0 +1,401 @@
+using System.Diagnostics;
+using System.Text.Json.Nodes;
+using Everywhere.Mcp.OpenCli;
+using Microsoft.ClearScript;
+using Microsoft.ClearScript.JavaScript;
+using Microsoft.ClearScript.V8;
+using Microsoft.Extensions.Logging;
+
+namespace Everywhere.Mcp.Connector;
+
+/// <summary>
+/// SPEC docs/specs/everywhere-connector.md §3.1 — dedicated ClearScript V8
+/// isolate hosting the open-connector provider bundle. Separate engine
+/// from <see cref="OpenCli.OpenCliRuntime"/> to prevent global namespace
+/// collisions and fault isolation between the two subsystems.
+///
+/// Lifecycle:
+/// <list type="bullet">
+///   <item>Lazy boot — engine is created on the first <see cref="InvokeAsync"/>
+///         call. Cheap ops (<see cref="ListManifest"/>) read the on-disk
+///         manifest.json without touching V8.</item>
+///   <item>Bundle is loaded once at boot from
+///         <c>Resources/connector/connector.bundle.js</c>. It publishes
+///         <c>globalThis.__connectorProviders</c>.</item>
+///   <item>Refresh-on-fault: a faulted boot Task is re-attempted by the
+///         next caller (mirrors <see cref="OpenCliRuntime"/>).</item>
+/// </list>
+/// </summary>
+public sealed class ConnectorRuntime : IAsyncDisposable
+{
+    private readonly ILogger<ConnectorRuntime>? _log;
+    private readonly string _bundleDir;
+    private readonly HttpClient _http;
+    private readonly ICredentialResolver _credentials;
+    private Task<V8ScriptEngine>? _engineTask;
+    private readonly object _engineBootLock = new();
+    private readonly SemaphoreSlim _invokeGate = new(1, 1);
+    private readonly CancellationTokenSource _disposeCts = new();
+    private V8ScriptEngine? _engineInstance;
+
+    // Manifest read once, kept in memory. Refreshed on next process boot.
+    private ConnectorManifest? _manifest;
+    private readonly object _manifestLock = new();
+
+    public ConnectorRuntime(
+        string bundleDir,
+        HttpClient http,
+        ICredentialResolver credentials,
+        ILogger<ConnectorRuntime>? log = null)
+    {
+        _bundleDir = bundleDir;
+        _http = http;
+        _credentials = credentials;
+        _log = log;
+    }
+
+    public string BundleDir => _bundleDir;
+    public string UpstreamSha { get; private set; } = "unknown";
+
+    /// <summary>Read the on-disk manifest (cheap; no V8).</summary>
+    public ConnectorManifest ListManifest()
+    {
+        lock (_manifestLock)
+        {
+            if (_manifest is not null) return _manifest;
+            var manifestPath = Path.Combine(_bundleDir, "connector-manifest.json");
+            if (!File.Exists(manifestPath))
+            {
+                _log?.LogWarning("connector: manifest not found at {Path}", manifestPath);
+                _manifest = new ConnectorManifest(Array.Empty<ConnectorService>(), "missing");
+                return _manifest;
+            }
+            var shaPath = Path.Combine(_bundleDir, "UPSTREAM_SHA");
+            if (File.Exists(shaPath))
+            {
+                try { UpstreamSha = File.ReadAllText(shaPath).Trim(); }
+                catch { /* best-effort */ }
+            }
+            try
+            {
+                var node = JsonNode.Parse(File.ReadAllText(manifestPath));
+                var servicesNode = node?["services"] as JsonArray ?? new JsonArray();
+                var services = new List<ConnectorService>();
+                foreach (var svcNode in servicesNode)
+                {
+                    if (svcNode is not JsonObject svc) continue;
+                    var actions = new List<ConnectorAction>();
+                    if (svc["actions"] is JsonArray acts)
+                    {
+                        foreach (var a in acts)
+                        {
+                            if (a is not JsonObject act) continue;
+                            actions.Add(new ConnectorAction(
+                                Id: act["id"]?.GetValue<string>() ?? "",
+                                Service: act["service"]?.GetValue<string>() ?? "",
+                                Name: act["name"]?.GetValue<string>() ?? "",
+                                Description: act["description"]?.GetValue<string>() ?? "",
+                                RequiredScopes: (act["requiredScopes"] as JsonArray)?.Select(n => n?.GetValue<string>() ?? "").ToArray() ?? Array.Empty<string>(),
+                                InputSchema: act["inputSchema"]?.DeepClone(),
+                                OutputSchema: act["outputSchema"]?.DeepClone()));
+                        }
+                    }
+                    services.Add(new ConnectorService(
+                        Service: svc["service"]?.GetValue<string>() ?? "",
+                        DisplayName: svc["displayName"]?.GetValue<string>() ?? "",
+                        Categories: (svc["categories"] as JsonArray)?.Select(n => n?.GetValue<string>() ?? "").ToArray() ?? Array.Empty<string>(),
+                        AuthTypes: (svc["authTypes"] as JsonArray)?.Select(n => n?.GetValue<string>() ?? "").ToArray() ?? Array.Empty<string>(),
+                        HomepageUrl: svc["homepageUrl"]?.GetValue<string>(),
+                        Actions: actions));
+                }
+                _manifest = new ConnectorManifest(services, UpstreamSha);
+            }
+            catch (Exception ex)
+            {
+                _log?.LogWarning(ex, "connector: manifest parse failed");
+                _manifest = new ConnectorManifest(Array.Empty<ConnectorService>(), "parse-error");
+            }
+            return _manifest;
+        }
+    }
+
+    /// <summary>SPEC §8.3 — execute one provider action inside the V8
+    /// isolate. Envelope adaptation (upstream ExecutionResult → shared
+    /// envelope) happens here so callers only handle one shape.</summary>
+    public async Task<JsonObject> InvokeAsync(string service, string actionName, JsonObject input, CancellationToken ct = default)
+    {
+        var sw = Stopwatch.StartNew();
+        if (string.IsNullOrWhiteSpace(service)) return Failure(service, actionName, "invalid_input", "service is required", sw);
+        if (string.IsNullOrWhiteSpace(actionName)) return Failure(service, actionName, "invalid_input", "action name is required", sw);
+
+        var manifest = ListManifest();
+        var svc = manifest.Services.FirstOrDefault(s => s.Service == service);
+        if (svc is null) return Failure(service, actionName, "RUNTIME_NOT_FOUND", $"service '{service}' not in manifest", sw);
+        var act = svc.Actions.FirstOrDefault(a => a.Name == actionName);
+        if (act is null) return Failure(service, actionName, "RUNTIME_NOT_FOUND", $"action '{service}.{actionName}' not in manifest", sw);
+
+        V8ScriptEngine engine;
+        try
+        {
+            engine = await GetEngineTask().ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            return Failure(service, actionName, "RUNTIME_HOST_ERROR", $"V8 boot failed: {ex.Message}", sw);
+        }
+
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, _disposeCts.Token);
+        await _invokeGate.WaitAsync(linked.Token).ConfigureAwait(false);
+        try
+        {
+            try
+            {
+                engine.Script.__connectorActionId = act.Id;
+                engine.Script.__connectorService = service;
+                engine.Script.__connectorInputJson = input.ToJsonString();
+                engine.Script.__connectorResultJson = null;
+                engine.Script.__connectorError = null;
+
+                engine.Execute("""
+                    globalThis.__connectorCallPromise = (async () => {
+                        try {
+                            const providers = globalThis.__connectorProviders || {};
+                            const provider = providers[globalThis.__connectorService];
+                            if (!provider) {
+                                throw { code: 'RUNTIME_NOT_FOUND',
+                                        message: 'provider not loaded in bundle: ' + globalThis.__connectorService };
+                            }
+                            const executor = provider.executors && provider.executors[globalThis.__connectorActionId];
+                            if (typeof executor !== 'function') {
+                                throw { code: 'RUNTIME_NOT_FOUND',
+                                        message: 'executor missing for action: ' + globalThis.__connectorActionId };
+                            }
+                            const input = JSON.parse(globalThis.__connectorInputJson);
+                            const executionContext = {
+                                async getCredential(svc) {
+                                    const raw = globalThis.__connectorHost.getCredential(svc);
+                                    if (!raw) return undefined;
+                                    try { return JSON.parse(raw); }
+                                    catch { return undefined; }
+                                },
+                            };
+                            const result = await executor(input, executionContext);
+                            // Upstream ExecutionResult: { ok, output?, error? }.
+                            globalThis.__connectorResultJson = JSON.stringify(result);
+                        } catch (e) {
+                            const code = (e && e.code != null) ? String(e.code) : 'provider_error';
+                            const msg  = (e && e.message != null) ? String(e.message) : String(e);
+                            globalThis.__connectorError = { code, message: msg };
+                        }
+                    })();
+                """);
+
+                await ((Task)engine.Script.__connectorCallPromise).ConfigureAwait(false);
+
+                var err = engine.Script.__connectorError as ScriptObject;
+                if (err is not null)
+                {
+                    var code = err.GetProperty("code")?.ToString() ?? "provider_error";
+                    var msg = err.GetProperty("message")?.ToString() ?? "unknown";
+                    return Failure(service, actionName, code, msg, sw);
+                }
+
+                var resultText = engine.Script.__connectorResultJson as string;
+                if (string.IsNullOrEmpty(resultText))
+                    return Failure(service, actionName, "RUNTIME_HOST_ERROR", "executor returned no result", sw);
+
+                var upstreamResult = JsonNode.Parse(resultText) as JsonObject;
+                if (upstreamResult is null)
+                    return Failure(service, actionName, "RUNTIME_HOST_ERROR", "executor result is not an object", sw);
+
+                var ok = upstreamResult["ok"]?.GetValue<bool>() ?? false;
+                if (ok)
+                {
+                    return new JsonObject
+                    {
+                        ["schema_version"] = "1",
+                        ["ok"] = true,
+                        ["service"] = service,
+                        ["name"] = actionName,
+                        ["data"] = upstreamResult["output"]?.DeepClone(),
+                        ["elapsed_ms"] = sw.Elapsed.TotalMilliseconds,
+                    };
+                }
+                var upstreamErr = upstreamResult["error"] as JsonObject;
+                var errCode = upstreamErr?["code"]?.GetValue<string>() ?? "provider_error";
+                var errMsg = upstreamErr?["message"]?.GetValue<string>() ?? "provider action failed";
+                return Failure(service, actionName, errCode, errMsg, sw);
+            }
+            finally
+            {
+                try
+                {
+                    engine.Script.__connectorInputJson = null;
+                    engine.Script.__connectorResultJson = null;
+                    engine.Script.__connectorError = null;
+                    engine.Script.__connectorActionId = null;
+                    engine.Script.__connectorService = null;
+                }
+                catch { }
+            }
+        }
+        catch (ScriptEngineException sex)
+        {
+            return Failure(service, actionName, "RUNTIME_SCRIPT_ERROR", sex.Message, sw);
+        }
+        catch (Exception ex)
+        {
+            return Failure(service, actionName, "RUNTIME_HOST_ERROR", ex.Message, sw);
+        }
+        finally
+        {
+            _invokeGate.Release();
+        }
+    }
+
+    private JsonObject Failure(string? service, string? name, string code, string message, Stopwatch sw)
+    {
+        var ms = sw.Elapsed.TotalMilliseconds;
+        _log?.LogInformation("connector_run service={Service} name={Name} ms={Ms} ok=false code={Code}", service, name, ms, code);
+        var envelope = new JsonObject
+        {
+            ["schema_version"] = "1",
+            ["ok"] = false,
+            ["service"] = service,
+            ["name"] = name,
+            ["code"] = code,
+            ["error"] = message,
+            ["elapsed_ms"] = ms,
+        };
+        // Actionable hint for Phase 1 credential-missing case.
+        if (code == "authorization_failed" && !string.IsNullOrEmpty(service))
+        {
+            envelope["hint"] = $"Set env var EVERYWHERE_CONNECTOR_{service!.ToUpperInvariant()}_PAT (Phase 1).";
+        }
+        return envelope;
+    }
+
+    private Task<V8ScriptEngine> GetEngineTask()
+    {
+        lock (_engineBootLock)
+        {
+            if (_engineTask is null || (_engineTask.IsCompleted && _engineTask.IsFaulted))
+            {
+                _engineTask = Task.Run(BootEngineAsync);
+            }
+            return _engineTask;
+        }
+    }
+
+    private async Task<V8ScriptEngine> BootEngineAsync()
+    {
+        var sw = Stopwatch.StartNew();
+        var engine = new V8ScriptEngine(
+            V8ScriptEngineFlags.EnableTaskPromiseConversion |
+            V8ScriptEngineFlags.EnableDateTimeConversion |
+            V8ScriptEngineFlags.DisableGlobalMembers);
+        _engineInstance = engine;
+        try
+        {
+            var bundlePath = Path.Combine(_bundleDir, "connector.bundle.js");
+            if (!File.Exists(bundlePath))
+                throw new FileNotFoundException($"connector bundle not found: {bundlePath}", bundlePath);
+
+            // Reuse OpenCLI's HostShim for its fetchAsync (SSRF-guarded HTTP egress).
+            // We only wire the register hook to a no-op — the connector bundle
+            // doesn't use it (no cli({...}) pattern; providers register onto
+            // globalThis.__connectorProviders directly).
+            var fetchShim = new HostShim(_http,
+                onRegister: (_, _, _) => { },
+                onWarn: m => _log?.LogWarning("connector host: {Message}", m));
+            var connectorHost = new ConnectorHostShim(fetchShim, _credentials,
+                m => _log?.LogWarning("connector: {Message}", m));
+            engine.AddHostObject("__connectorHost", connectorHost);
+
+            // Minimal global surface expected by upstream code.
+            engine.Execute("""
+                // V8 isolate doesn't ship URL / URLSearchParams as globals.
+                // Upstream open-connector uses `new URL(...)` heavily for
+                // building request URLs.
+                globalThis.URL = globalThis.URL || (function () {
+                    // ClearScript V8 typically already has URL — this is
+                    // insurance for older builds.
+                    throw new Error('connector runtime: URL global missing from V8 build');
+                });
+                globalThis.setTimeout = globalThis.setTimeout || function (fn, ms) {
+                    // Simple sync passthrough — Phase 1 providers only use
+                    // setTimeout inside AbortSignal.timeout, which is
+                    // orthogonal to our 30s host-side fetch cap.
+                    return 0;
+                };
+                globalThis.clearTimeout = globalThis.clearTimeout || function () {};
+            """);
+
+            // Load the bundle. The IIFE assigns globalThis.__connectorProviders
+            // and installs the fetch shim.
+            var bundleSrc = await File.ReadAllTextAsync(bundlePath, _disposeCts.Token).ConfigureAwait(false);
+            var info = new DocumentInfo(new Uri(bundlePath)) { Category = ModuleCategory.Standard };
+            engine.Execute(info, bundleSrc);
+
+            // Sanity — must have at least one provider registered.
+            var providers = engine.Script.__connectorProviders;
+            if (providers is null || providers is Undefined)
+                throw new InvalidOperationException("connector bundle did not publish globalThis.__connectorProviders");
+
+            _log?.LogInformation("connector runtime booted in {Ms}ms bundle={Bundle} sha={Sha}",
+                sw.ElapsedMilliseconds, bundlePath, UpstreamSha);
+            return engine;
+        }
+        catch
+        {
+            try { engine.Dispose(); } catch { }
+            _engineInstance = null;
+            throw;
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        _disposeCts.Cancel();
+        try
+        {
+            if (_engineTask is not null)
+            {
+                try
+                {
+                    var eng = await _engineTask.ConfigureAwait(false);
+                    eng.Dispose();
+                }
+                catch { }
+            }
+            else if (_engineInstance is not null)
+            {
+                try { _engineInstance.Dispose(); } catch { }
+            }
+        }
+        finally
+        {
+            _invokeGate.Dispose();
+            _disposeCts.Dispose();
+        }
+    }
+}
+
+public sealed record ConnectorManifest(IReadOnlyList<ConnectorService> Services, string UpstreamSha);
+
+public sealed record ConnectorService(
+    string Service,
+    string DisplayName,
+    IReadOnlyList<string> Categories,
+    IReadOnlyList<string> AuthTypes,
+    string? HomepageUrl,
+    IReadOnlyList<ConnectorAction> Actions);
+
+public sealed record ConnectorAction(
+    string Id,
+    string Service,
+    string Name,
+    string Description,
+    IReadOnlyList<string> RequiredScopes,
+    JsonNode? InputSchema,
+    JsonNode? OutputSchema);

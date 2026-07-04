@@ -1,0 +1,68 @@
+<Project>
+  <!--
+    SPEC docs/specs/everywhere-connector.md §5 — build the open-connector
+    provider bundle before C# compile, then ship the outputs into the
+    daemon's publish tree as Resources/connector/.
+
+    Mirrors Build.OpenCliBundle.targets structurally. The one addition:
+    we invoke `node scripts/build-connector-bundle.mjs` in a BeforeBuild
+    hook because the vendored TS sources need bundling before they can be
+    consumed by ConnectorRuntime at runtime.
+
+    Node ≥18 must be on PATH. If Node is missing, the bundle target
+    fails loudly with an actionable message; C# compile is unaffected
+    only if the dist/ output already exists on disk from a prior build.
+  -->
+  <PropertyGroup>
+    <_ConnectorSourceDir>$(MSBuildThisFileDirectory)../3rd/open-connector</_ConnectorSourceDir>
+    <_ConnectorBundleScript>$(MSBuildThisFileDirectory)../scripts/build-connector-bundle.mjs</_ConnectorBundleScript>
+    <_ConnectorDistDir>$(_ConnectorSourceDir)/dist</_ConnectorDistDir>
+    <_ConnectorBundleOutput>$(_ConnectorDistDir)/connector.bundle.js</_ConnectorBundleOutput>
+    <_ConnectorManifestOutput>$(_ConnectorDistDir)/connector-manifest.json</_ConnectorManifestOutput>
+  </PropertyGroup>
+
+  <!--
+    Rebuild the bundle when the script or any vendored .ts under
+    src/core or src/providers has a newer mtime than the emitted
+    bundle. Using Inputs/Outputs lets MSBuild skip this on incremental
+    builds when nothing changed.
+  -->
+  <ItemGroup>
+    <_ConnectorBundleInput Include="$(_ConnectorBundleScript)" />
+    <_ConnectorBundleInput Include="$(_ConnectorSourceDir)/src/**/*.ts" />
+    <_ConnectorBundleInput Include="$(_ConnectorSourceDir)/UPSTREAM_SHA" />
+  </ItemGroup>
+
+  <Target Name="BuildConnectorBundle"
+          BeforeTargets="PrepareForBuild"
+          Inputs="@(_ConnectorBundleInput)"
+          Outputs="$(_ConnectorBundleOutput);$(_ConnectorManifestOutput)"
+          Condition="Exists('$(_ConnectorSourceDir)/src') and Exists('$(_ConnectorBundleScript)')">
+    <Message Importance="high" Text="[connector] rebuilding provider bundle from $(_ConnectorSourceDir)" />
+    <Exec Command="node &quot;$(_ConnectorBundleScript)&quot;"
+          WorkingDirectory="$(MSBuildThisFileDirectory).." />
+  </Target>
+
+  <ItemGroup Condition="Exists('$(_ConnectorDistDir)')">
+    <Content Include="$(_ConnectorDistDir)/connector.bundle.js">
+      <Link>Resources/connector/connector.bundle.js</Link>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="$(_ConnectorDistDir)/connector-manifest.json">
+      <Link>Resources/connector/connector-manifest.json</Link>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="$(_ConnectorSourceDir)/UPSTREAM_SHA">
+      <Link>Resources/connector/UPSTREAM_SHA</Link>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="$(_ConnectorSourceDir)/UPSTREAM_REF" Condition="Exists('$(_ConnectorSourceDir)/UPSTREAM_REF')">
+      <Link>Resources/connector/UPSTREAM_REF</Link>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+</Project>

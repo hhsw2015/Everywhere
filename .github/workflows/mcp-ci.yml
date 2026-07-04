@@ -9,6 +9,9 @@ on:
       - 'src/Everywhere.Core/**'
       - 'src/Everywhere.Terminal/**'
       - 'tests/Everywhere.Mcp.Tests/**'
+      - '3rd/open-connector/**'
+      - 'scripts/build-connector-bundle.mjs'
+      - 'package.json'
       - 'Directory.Build.props'
       - 'Directory.Packages.props'
       - 'global.json'
@@ -18,6 +21,9 @@ on:
       - 'src/Everywhere.Mcp/**'
       - 'src/Everywhere.Core/**'
       - 'tests/Everywhere.Mcp.Tests/**'
+      - '3rd/open-connector/**'
+      - 'scripts/build-connector-bundle.mjs'
+      - 'package.json'
       - 'Directory.Packages.props'
       - '.github/workflows/mcp-ci.yml'
   workflow_dispatch:
@@ -40,6 +46,20 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.202'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # Connector bundle must exist before `dotnet build` runs — the C#
+      # runtime probes the emitted dist/ at boot. SPEC everywhere-connector.md §5.
+      - name: Install node deps (connector bundle)
+        run: npm ci || npm install
+        working-directory: ${{ github.workspace }}
+
+      - name: Build connector bundle
+        run: node scripts/build-connector-bundle.mjs
+        working-directory: ${{ github.workspace }}
 
       - name: Restore
         run: dotnet restore src/Everywhere.Mcp/Everywhere.Mcp.csproj

@@ -95,6 +95,46 @@ public static class EverywhereMcpServiceExtensions
                 sp.GetService<Microsoft.Extensions.Logging.ILogger<OpenCli.OpenCliRuntime>>());
         });
         services.TryAddSingleton<Tools.OpenCliTools>();
+
+        // SPEC docs/specs/everywhere-connector.md — open-connector provider
+        // runtime. Separate V8 isolate from OpenCLI (§3.1). Phase 1 uses
+        // environment variables for credentials; Phase 2 swaps to SQLite.
+        services.TryAddSingleton<Connector.ICredentialResolver, Connector.EnvironmentCredentialResolver>();
+        services.TryAddSingleton<Connector.ConnectorRuntime>(sp =>
+        {
+            var baseDir = AppContext.BaseDirectory;
+            string? bundleDir = null;
+            foreach (var probe in new[]
+                     {
+                         Path.Combine(baseDir, "Resources", "connector"),
+                         Path.Combine(baseDir, "..", "Resources", "connector"),
+                         Path.Combine(baseDir, "..", "Resources", "Resources", "connector"),
+                     })
+            {
+                var canon = Path.GetFullPath(probe);
+                if (File.Exists(Path.Combine(canon, "connector.bundle.js")))
+                {
+                    bundleDir = canon;
+                    break;
+                }
+            }
+            if (bundleDir is null)
+            {
+                // Dev fallback — walk up to repo root, look for 3rd/open-connector/dist.
+                var dir = new DirectoryInfo(baseDir);
+                while (dir != null && !File.Exists(Path.Combine(dir.FullName, "3rd", "open-connector", "dist", "connector.bundle.js")))
+                    dir = dir.Parent;
+                if (dir != null) bundleDir = Path.Combine(dir.FullName, "3rd", "open-connector", "dist");
+            }
+            bundleDir ??= Path.Combine(baseDir, "Resources", "connector");
+            var creds = sp.GetRequiredService<Connector.ICredentialResolver>();
+            return new Connector.ConnectorRuntime(
+                bundleDir,
+                new HttpClient(),
+                creds,
+                sp.GetService<Microsoft.Extensions.Logging.ILogger<Connector.ConnectorRuntime>>());
+        });
+        services.TryAddSingleton<Tools.ConnectorTools>();
         // SPEC docs/specs/everywhere-self-expanding.md Phase 1 — capture session store
         // plus the observation MCP tools. Store is singleton (in-memory,
         // server-restart invalidates per spec).

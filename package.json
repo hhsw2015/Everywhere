@@ -1,0 +1,13 @@
+{
+  "name": "everywhere-tooling",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Node dev tooling for Everywhere (bundle builds, spec linters). Not shipped.",
+  "scripts": {
+    "build:connector": "node scripts/build-connector-bundle.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "0.24.0"
+  }
+}

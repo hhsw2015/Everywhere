@@ -48,4 +48,5 @@
 
   <Import Project="..\Build.Watchdog.targets" />
   <Import Project="..\Build.OpenCliBundle.targets" />
+  <Import Project="..\Build.ConnectorBundle.targets" />
 </Project>
