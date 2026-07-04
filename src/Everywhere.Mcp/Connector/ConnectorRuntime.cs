@@ -569,6 +569,38 @@ public sealed class ConnectorRuntime : IAsyncDisposable
                 }
                 globalThis.setTimeout = globalThis.setTimeout || function (fn, ms) { return 0; };
                 globalThis.clearTimeout = globalThis.clearTimeout || function () {};
+                // Some vendored providers reference `Buffer` as a global
+                // (Node convention) without importing node:buffer. Alias
+                // to the same shim esbuild inlines via node:buffer.
+                if (typeof globalThis.Buffer === 'undefined') {
+                    globalThis.Buffer = {
+                        from(input, encoding) {
+                            encoding = (encoding || 'utf8').toLowerCase();
+                            if (encoding === 'base64') {
+                                const bin = atob(String(input));
+                                const out = new Uint8Array(bin.length);
+                                for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+                                return out;
+                            }
+                            if (encoding === 'hex') {
+                                const s = String(input);
+                                const out = new Uint8Array(s.length / 2);
+                                for (let i = 0; i < out.length; i++) out[i] = parseInt(s.substr(i * 2, 2), 16);
+                                return out;
+                            }
+                            return new TextEncoder().encode(String(input));
+                        },
+                        isBuffer(x) { return x instanceof Uint8Array; },
+                        concat(list) {
+                            let total = 0;
+                            for (const b of list) total += b.length;
+                            const out = new Uint8Array(total);
+                            let off = 0;
+                            for (const b of list) { out.set(b, off); off += b.length; }
+                            return out;
+                        },
+                    };
+                }
             """);
 
             // Load the bundle. The IIFE assigns globalThis.__connectorProviders
