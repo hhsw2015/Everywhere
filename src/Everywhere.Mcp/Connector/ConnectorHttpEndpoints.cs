@@ -219,6 +219,130 @@ internal static class ConnectorHttpEndpoints
             });
         });
 
+        // --- /api/oauth/configs (Phase 3.5) ------------------------------
+        app.MapGet("/api/oauth/configs", (HttpContext ctx) =>
+        {
+            if (store is null) return NotConfigured(ctx);
+            var arr = new JsonArray();
+            foreach (var c in store.ListOAuthClients())
+            {
+                arr.Add(new JsonObject
+                {
+                    ["service"] = c.Service,
+                    ["clientId"] = c.ClientId,
+                    ["hasSecret"] = c.HasSecret,
+                    ["redirectUri"] = c.RedirectUri,
+                });
+            }
+            return WriteJson(ctx, new JsonObject
+            {
+                ["schemaVersion"] = "1",
+                ["oauthClients"] = arr,
+            });
+        });
+
+        app.MapPost("/api/oauth/configs/{service}", async (HttpContext ctx, string service) =>
+        {
+            if (store is null) { await NotConfigured(ctx); return; }
+            var body = await ReadJsonBody(ctx);
+            var clientId = body?["clientId"]?.GetValue<string>();
+            var clientSecret = body?["clientSecret"]?.GetValue<string>();
+            var redirectUri = body?["redirectUri"]?.GetValue<string>()
+                              ?? DefaultRedirectUri(ctx);
+            if (string.IsNullOrWhiteSpace(clientId))
+            {
+                ctx.Response.StatusCode = StatusCodes.Status400BadRequest;
+                await WriteJson(ctx, new JsonObject { ["error"] = "clientId required", ["code"] = "invalid_input" });
+                return;
+            }
+            store.SetOAuthClient(service, clientId, clientSecret, redirectUri, body?["extra"] as JsonObject);
+            await WriteJson(ctx, new JsonObject
+            {
+                ["schemaVersion"] = "1",
+                ["service"] = service,
+                ["redirectUri"] = redirectUri,
+            });
+        });
+
+        app.MapDelete("/api/oauth/configs/{service}", async (HttpContext ctx, string service) =>
+        {
+            if (store is null) { await NotConfigured(ctx); return; }
+            var removed = store.DeleteOAuthClient(service);
+            await WriteJson(ctx, new JsonObject
+            {
+                ["schemaVersion"] = "1",
+                ["service"] = service,
+                ["removed"] = removed,
+            });
+        });
+
+        // --- /api/oauth/authorize/:service --------------------------------
+        var oauth = parentServices.GetService<OAuthFlowService>();
+        app.MapPost("/api/oauth/authorize/{service}", async (HttpContext ctx, string service) =>
+        {
+            if (oauth is null) { await NotConfigured(ctx); return; }
+            try
+            {
+                var result = oauth.Authorize(service);
+                await WriteJson(ctx, new JsonObject
+                {
+                    ["schemaVersion"] = "1",
+                    ["service"] = result.Service,
+                    ["url"] = result.Url,
+                    ["state"] = result.State,
+                    ["redirectUri"] = result.RedirectUri,
+                });
+            }
+            catch (OAuthException ex)
+            {
+                ctx.Response.StatusCode = StatusCodes.Status400BadRequest;
+                await WriteJson(ctx, new JsonObject { ["error"] = ex.Message, ["code"] = ex.Code });
+            }
+        });
+
+        // --- /api/oauth/callback ------------------------------------------
+        // Handler for the redirect the OAuth provider sends the user back
+        // to. Renders a plain HTML page with success / failure so users
+        // see something in the browser tab.
+        app.MapGet("/api/oauth/callback", async (HttpContext ctx) =>
+        {
+            if (oauth is null) { await NotConfigured(ctx); return; }
+            var state = ctx.Request.Query["state"].ToString();
+            var code = ctx.Request.Query["code"].ToString();
+            var providerErr = ctx.Request.Query["error"].ToString();
+            if (!string.IsNullOrEmpty(providerErr))
+            {
+                await WriteHtml(ctx, StatusCodes.Status400BadRequest,
+                    $"<h1>OAuth failed</h1><p>Provider returned: <code>{HtmlEncode(providerErr)}</code></p>");
+                return;
+            }
+            if (string.IsNullOrEmpty(state) || string.IsNullOrEmpty(code))
+            {
+                await WriteHtml(ctx, StatusCodes.Status400BadRequest,
+                    "<h1>OAuth failed</h1><p>Missing state or code query parameters.</p>");
+                return;
+            }
+            try
+            {
+                var result = await oauth.HandleCallbackAsync(state, code, ctx.RequestAborted);
+                await WriteHtml(ctx, StatusCodes.Status200OK,
+                    $"<h1>Connected {HtmlEncode(result.Service)}</h1>" +
+                    "<p>You can close this tab and return to the Everywhere UI.</p>" +
+                    "<script>setTimeout(() => window.close(), 1500);</script>");
+            }
+            catch (OAuthException ex)
+            {
+                await WriteHtml(ctx, StatusCodes.Status400BadRequest,
+                    $"<h1>OAuth failed</h1><p>{HtmlEncode(ex.Message)}</p>");
+            }
+            catch (Exception ex)
+            {
+                log?.LogWarning(ex, "OAuth callback threw");
+                await WriteHtml(ctx, StatusCodes.Status500InternalServerError,
+                    $"<h1>OAuth failed</h1><p>{HtmlEncode(ex.Message)}</p>");
+            }
+        });
+
         // --- /v1/actions/:actionId — mirrors upstream shape ---------------
         app.MapPost("/v1/actions/{actionId}", async (HttpContext ctx, string actionId) =>
         {
@@ -308,4 +432,25 @@ internal static class ConnectorHttpEndpoints
         foreach (var s in items) arr.Add((JsonNode)JsonValue.Create(s ?? "")!);
         return arr;
     }
+
+    private static string DefaultRedirectUri(HttpContext ctx)
+    {
+        // Everywhere daemon binds loopback only; use the request's host.
+        var host = ctx.Request.Host.Value ?? "127.0.0.1:7878";
+        return $"http://{host}/api/oauth/callback";
+    }
+
+    private static Task WriteHtml(HttpContext ctx, int status, string body)
+    {
+        ctx.Response.StatusCode = status;
+        ctx.Response.ContentType = "text/html; charset=utf-8";
+        var page =
+            "<!doctype html><html><head><meta charset=\"utf-8\"><title>Everywhere Connector</title>" +
+            "<style>body{font-family:system-ui,-apple-system,sans-serif;padding:2rem;max-width:40rem;" +
+            "margin:auto;color:#222}h1{margin-top:0}code{background:#f5f5f5;padding:2px 6px;border-radius:4px}</style>" +
+            "</head><body>" + body + "</body></html>";
+        return ctx.Response.WriteAsync(page);
+    }
+
+    private static string HtmlEncode(string s) => System.Net.WebUtility.HtmlEncode(s ?? "");
 }

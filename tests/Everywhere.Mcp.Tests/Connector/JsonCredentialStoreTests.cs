@@ -117,4 +117,52 @@ public class JsonCredentialStoreTests
         var cred = chain.Resolve("resend");
         Assert.That(cred!["apiKey"]!.GetValue<string>(), Is.EqualTo("store-only"));
     }
+
+    [Test]
+    public void OAuthClient_RoundTrip()
+    {
+        var store = new JsonCredentialStore(_storePath);
+        store.SetOAuthClient("github", "client-abc", "secret-xyz", "http://127.0.0.1:7878/api/oauth/callback");
+        var summaries = store.ListOAuthClients();
+        Assert.That(summaries.Count, Is.EqualTo(1));
+        var s = summaries[0];
+        Assert.That(s.Service, Is.EqualTo("github"));
+        Assert.That(s.ClientId, Is.EqualTo("client-abc"));
+        Assert.That(s.HasSecret, Is.True);
+        // Secret must never appear on the summary DTO.
+        Assert.That(typeof(OAuthClientSummary).GetProperties().Any(p => p.Name.Contains("Secret", StringComparison.OrdinalIgnoreCase) && p.Name != "HasSecret"),
+            Is.False);
+    }
+
+    [Test]
+    public void OAuthPending_TakeConsumesAndReapsStale()
+    {
+        var store = new JsonCredentialStore(_storePath);
+        store.PutOAuthPending("state-1", "github", codeVerifier: null);
+        var (svc, verifier) = store.TakeOAuthPending("state-1");
+        Assert.That(svc, Is.EqualTo("github"));
+        Assert.That(verifier, Is.EqualTo(""));
+        // Second take on the same state should return null — one-shot.
+        var (svc2, _) = store.TakeOAuthPending("state-1");
+        Assert.That(svc2, Is.Null);
+    }
+
+    [Test]
+    public void SetOAuth2Credential_ResolvesAsOAuthShape()
+    {
+        var store = new JsonCredentialStore(_storePath);
+        store.SetOAuth2Credential(
+            service: "linear",
+            accessToken: "tok-xyz",
+            tokenType: "Bearer",
+            refreshToken: "refresh-1",
+            expiresAt: DateTimeOffset.UtcNow.AddHours(1).ToString("O"),
+            grantedScopes: new[] { "read", "write" },
+            displayName: "Linear OAuth");
+        var cred = store.Resolve("linear");
+        Assert.That(cred, Is.Not.Null);
+        Assert.That(cred!["authType"]!.GetValue<string>(), Is.EqualTo("oauth2"));
+        Assert.That(cred["accessToken"]!.GetValue<string>(), Is.EqualTo("tok-xyz"));
+        Assert.That(cred["refreshToken"]!.GetValue<string>(), Is.EqualTo("refresh-1"));
+    }
 }
