@@ -41,6 +41,8 @@ public class ToolCatalogParityTests
         "web_search", "web_fetch_url",
         // opencli surface
         "opencli_list", "opencli_describe", "opencli_run",
+        // open-connector surface (docs/specs/everywhere-connector.md)
+        "connector_list", "connector_describe", "connector_run",
         // self-expanding platform (docs/specs/everywhere-self-expanding.md)
         // Phase 1 observation
         "capture_start", "capture_stop", "capture_current", "capture_export",
