@@ -243,12 +243,15 @@ public sealed class EverywhereMcpHttpHost : IHostedService, IAsyncDisposable
         if (openCliRuntime is not null) builder.Services.AddSingleton(openCliRuntime);
         builder.Services.AddSingleton<Tools.OpenCliTools>();
         // ConnectorTools mirrors the OpenCLI DI wiring — forward runtime +
-        // credential resolver from the parent container so the inner SDK
-        // ctor injection resolves both. SPEC everywhere-connector.md §3.1.
+        // credential resolver + writer store from the parent container so
+        // the inner SDK ctor injection resolves them all.
+        // SPEC everywhere-connector.md §3.1.
         var connectorRuntime = _parentServices.GetService<Connector.ConnectorRuntime>();
         if (connectorRuntime is not null) builder.Services.AddSingleton(connectorRuntime);
         var credentialResolver = _parentServices.GetService<Connector.ICredentialResolver>();
         if (credentialResolver is not null) builder.Services.AddSingleton(credentialResolver);
+        var credentialStore = _parentServices.GetService<Connector.JsonCredentialStore>();
+        if (credentialStore is not null) builder.Services.AddSingleton(credentialStore);
         builder.Services.AddSingleton<Tools.ConnectorTools>();
         // SPEC docs/specs/everywhere-self-expanding.md Phase 1 — CaptureSession
         // store + observation tools. Store forwarded from parent so it's a

@@ -97,9 +97,16 @@ public static class EverywhereMcpServiceExtensions
         services.TryAddSingleton<Tools.OpenCliTools>();
 
         // SPEC docs/specs/everywhere-connector.md — open-connector provider
-        // runtime. Separate V8 isolate from OpenCLI (§3.1). Phase 1 uses
-        // environment variables for credentials; Phase 2 swaps to SQLite.
-        services.TryAddSingleton<Connector.ICredentialResolver, Connector.EnvironmentCredentialResolver>();
+        // runtime. Separate V8 isolate from OpenCLI (§3.1). Phase 2:
+        // env-var override chained over a JSON store under
+        // ~/.everywhere/connector/connections.json. The store is exposed
+        // as its concrete type so ConnectorTools' write/list ops can
+        // reach it without a separate interface.
+        services.TryAddSingleton<Connector.JsonCredentialStore>(sp => new Connector.JsonCredentialStore());
+        services.TryAddSingleton<Connector.ICredentialResolver>(sp =>
+            new Connector.ChainedCredentialResolver(
+                new Connector.EnvironmentCredentialResolver(),
+                sp.GetRequiredService<Connector.JsonCredentialStore>()));
         services.TryAddSingleton<Connector.ConnectorRuntime>(sp =>
         {
             var baseDir = AppContext.BaseDirectory;

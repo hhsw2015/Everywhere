@@ -16,10 +16,12 @@ namespace Everywhere.Mcp.Tools;
 public sealed class ConnectorTools
 {
     private readonly ConnectorRuntime _runtime;
+    private readonly JsonCredentialStore _store;
 
-    public ConnectorTools(ConnectorRuntime runtime)
+    public ConnectorTools(ConnectorRuntime runtime, JsonCredentialStore store)
     {
         _runtime = runtime;
+        _store = store;
     }
 
     private static string Envelope(bool ok, string? service, string? name, string? error, string? code, JsonNode? data = null)
@@ -234,6 +236,93 @@ public sealed class ConnectorTools
         catch (Exception ex)
         {
             return Envelope(false, service, name, ex.Message, "RUNTIME_HOST_ERROR");
+        }
+    }
+
+    [McpServerTool(Name = "connector_connect")]
+    [Description(
+        "Store an api_key credential for a provider (auth_type=api_key only in Phase 2). " +
+        "Overwrites any existing connection. Persists to " +
+        "~/.everywhere/connector/connections.json. OAuth2 lands in Phase 3.")]
+    public string ConnectorConnect(
+        [Description("Service id (e.g. \"github\", \"openai\").")] string service,
+        [Description("API key value (personal access token, api key, etc.).")] string api_key,
+        [Description("Optional friendly label shown to the user.")] string? display_name = null)
+    {
+        try
+        {
+            _store.SetApiKey(service, api_key, display_name);
+            var summary = _store.List().FirstOrDefault(c => string.Equals(c.Service, service, StringComparison.OrdinalIgnoreCase));
+            return new JsonObject
+            {
+                ["schema_version"] = "1",
+                ["ok"] = true,
+                ["service"] = service,
+                ["auth_type"] = "api_key",
+                ["display_name"] = summary?.DisplayName,
+            }.ToJsonString();
+        }
+        catch (ArgumentException ex)
+        {
+            return Envelope(false, service, null, ex.Message, "invalid_input");
+        }
+        catch (Exception ex)
+        {
+            return Envelope(false, service, null, ex.Message, "RUNTIME_HOST_ERROR");
+        }
+    }
+
+    [McpServerTool(Name = "connector_disconnect")]
+    [Description("Delete a stored credential for a provider. Idempotent.")]
+    public string ConnectorDisconnect(
+        [Description("Service id whose stored credential should be removed.")] string service)
+    {
+        try
+        {
+            var removed = _store.Delete(service);
+            return new JsonObject
+            {
+                ["schema_version"] = "1",
+                ["ok"] = true,
+                ["service"] = service,
+                ["removed"] = removed,
+            }.ToJsonString();
+        }
+        catch (Exception ex)
+        {
+            return Envelope(false, service, null, ex.Message, "RUNTIME_HOST_ERROR");
+        }
+    }
+
+    [McpServerTool(Name = "connector_list_connections")]
+    [Description("List provider connections currently configured on this daemon. Values are never returned — only labels + auth types.")]
+    public string ConnectorListConnections()
+    {
+        try
+        {
+            var conns = _store.List();
+            var arr = new JsonArray();
+            foreach (var c in conns)
+            {
+                arr.Add(new JsonObject
+                {
+                    ["service"] = c.Service,
+                    ["auth_type"] = c.AuthType,
+                    ["display_name"] = c.DisplayName,
+                    ["account_id"] = c.AccountId,
+                });
+            }
+            return new JsonObject
+            {
+                ["schema_version"] = "1",
+                ["ok"] = true,
+                ["connections"] = arr,
+                ["total"] = conns.Count,
+            }.ToJsonString();
+        }
+        catch (Exception ex)
+        {
+            return Envelope(false, null, null, ex.Message, "RUNTIME_HOST_ERROR");
         }
     }
 }

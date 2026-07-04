@@ -41,9 +41,19 @@ const REPO = resolve(__dirname, '..');
 const SRC = resolve(arg('src', join(REPO, '3rd/open-connector')));
 const OUT = resolve(arg('out', join(SRC, 'dist')));
 
-// Phase 1 allowlist. Every provider listed must have both
-// `src/providers/<name>/definition.ts` and `.../executors.ts`.
-const PROVIDERS = ['github'];
+// Phase 2 allowlist. Every provider listed must have both
+// `src/providers/<name>/definition.ts` and `.../executors.ts`, and no
+// runtime node:* imports outside what's aliased below (Buffer only).
+const PROVIDERS = [
+  'github',
+  'hackernews',
+  'openai',
+  'anthropic',
+  'resend',
+  'linear',
+  'serpapi',
+  'perplexity',
+];
 
 async function loadEsbuild() {
   // Prefer a project-local esbuild; else use `npx --yes esbuild@0.24.0`,
@@ -133,7 +143,9 @@ async function main() {
     ]),
     "const providers = {};",
     ...PROVIDERS.map((s, i) => (
-      `providers[${JSON.stringify(s)}] = { definition: def${i}, executors: exe${i}.executors, credentialValidators: exe${i}.credentialValidators };`
+      // credentialValidators is optional (no_auth providers omit it).
+      // Access via bracket lookup to keep esbuild static-analysis happy.
+      `providers[${JSON.stringify(s)}] = { definition: def${i}, executors: exe${i}.executors, credentialValidators: exe${i}["credentialValidators"] };`
     )),
     "globalThis.__connectorProviders = providers;",
   ];
@@ -155,6 +167,9 @@ async function main() {
     platform: 'browser',
     target: 'es2022',
     logLevel: 'warning',
+    // no_auth providers legitimately don't export credentialValidators;
+    // suppress esbuild's static-shape warning for them.
+    logOverride: { 'import-is-undefined': 'silent' },
     banner: { js: RESPONSE_BRIDGE },
     alias: {
       // Redirect Node's node:buffer to our polyfill. atob is a V8 built-in
