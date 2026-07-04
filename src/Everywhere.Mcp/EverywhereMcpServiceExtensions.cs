@@ -145,12 +145,17 @@ public static class EverywhereMcpServiceExtensions
 
         // OAuth flow service (Phase 3.5). Uses its own HttpClient — token
         // exchange endpoints are all provider-controlled URLs, no shared
-        // pool needed.
-        services.TryAddSingleton<Connector.OAuthFlowService>(sp => new Connector.OAuthFlowService(
-            sp.GetRequiredService<Connector.ConnectorRuntime>(),
-            sp.GetRequiredService<Connector.JsonCredentialStore>(),
-            new HttpClient(),
-            sp.GetService<Microsoft.Extensions.Logging.ILogger<Connector.OAuthFlowService>>()));
+        // pool needed. Phase 6 wires the refresher into ConnectorRuntime.
+        services.TryAddSingleton<Connector.OAuthFlowService>(sp =>
+        {
+            var flow = new Connector.OAuthFlowService(
+                sp.GetRequiredService<Connector.ConnectorRuntime>(),
+                sp.GetRequiredService<Connector.JsonCredentialStore>(),
+                new HttpClient(),
+                sp.GetService<Microsoft.Extensions.Logging.ILogger<Connector.OAuthFlowService>>());
+            sp.GetRequiredService<Connector.ConnectorRuntime>().OAuthRefresher = flow;
+            return flow;
+        });
         // SPEC docs/specs/everywhere-self-expanding.md Phase 1 — capture session store
         // plus the observation MCP tools. Store is singleton (in-memory,
         // server-restart invalidates per spec).

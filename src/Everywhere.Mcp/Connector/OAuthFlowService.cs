@@ -25,7 +25,7 @@ namespace Everywhere.Mcp.Connector;
 /// EverywhereMcpHttpHost.LoopbackOnly, so a hostile external process
 /// can't feed us fake callbacks.
 /// </summary>
-public sealed class OAuthFlowService
+public sealed class OAuthFlowService : IOAuthRefresher
 {
     private readonly ConnectorRuntime _runtime;
     private readonly JsonCredentialStore _store;
@@ -215,6 +215,133 @@ public sealed class OAuthFlowService
         return new CallbackResult(service, tokenType, scopes);
     }
 
+    /// <summary>Refresh an OAuth access token using the stored refresh_token.
+    /// Called opportunistically by ConnectorRuntime.InvokeAsync before
+    /// handing the credential to a JS executor. Returns true when the
+    /// token was refreshed, false when refresh is unavailable/failed —
+    /// caller then lets the executor hit the provider with the possibly-
+    /// expired token so upstream returns a real 401 to the agent.</summary>
+    public async Task<bool> TryRefreshAsync(string service, CancellationToken ct = default)
+    {
+        var cred = _store.Resolve(service);
+        if (cred is null) return false;
+        if (cred["authType"]?.GetValue<string>() != "oauth2") return false;
+        var refreshToken = cred["refreshToken"]?.GetValue<string>();
+        if (string.IsNullOrEmpty(refreshToken)) return false;
+
+        var manifest = _runtime.ListManifest();
+        var svc = manifest.Services.FirstOrDefault(s => string.Equals(s.Service, service, StringComparison.OrdinalIgnoreCase));
+        if (svc is null) return false;
+        var authDef = LoadAuthDefinition(service, "oauth2");
+        if (authDef is null) return false;
+
+        var client = _store.GetOAuthClient(service);
+        if (client is null) return false;
+
+        var tokenUrl = authDef["refreshTokenUrl"]?.GetValue<string>()
+                       ?? authDef["tokenUrl"]?.GetValue<string>();
+        if (string.IsNullOrEmpty(tokenUrl)) return false;
+
+        var body = new Dictionary<string, string>
+        {
+            ["grant_type"] = "refresh_token",
+            ["refresh_token"] = refreshToken,
+        };
+        var authMethod = authDef["tokenEndpointAuthMethod"]?.GetValue<string>() ?? "client_secret_post";
+        var clientId = client["clientId"]?.GetValue<string>() ?? "";
+        var clientSecret = client["clientSecret"]?.GetValue<string>() ?? "";
+        if (authMethod == "client_secret_post")
+        {
+            body["client_id"] = clientId;
+            body["client_secret"] = clientSecret;
+        }
+
+        using var req = new HttpRequestMessage(HttpMethod.Post, tokenUrl)
+        {
+            Content = new FormUrlEncodedContent(body),
+        };
+        req.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        if (authMethod == "client_secret_basic")
+        {
+            var basic = Convert.ToBase64String(Encoding.ASCII.GetBytes($"{clientId}:{clientSecret}"));
+            req.Headers.Authorization = new AuthenticationHeaderValue("Basic", basic);
+        }
+
+        try
+        {
+            using var resp = await _http.SendAsync(req, ct).ConfigureAwait(false);
+            var raw = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+            if (!resp.IsSuccessStatusCode)
+            {
+                _log?.LogWarning("connector oauth refresh: service={Service} status={Status} body={Body}",
+                    service, (int)resp.StatusCode, Truncate(raw, 200));
+                return false;
+            }
+            JsonObject tokenObj;
+            try { tokenObj = JsonNode.Parse(raw) as JsonObject ?? ParseFormEncoded(raw); }
+            catch (JsonException) { tokenObj = ParseFormEncoded(raw); }
+            if (authDef["tokenResponseEnvelope"] is JsonObject envelope
+                && envelope["dataField"]?.GetValue<string>() is string dataField
+                && tokenObj[dataField] is JsonObject inner)
+            {
+                tokenObj = inner;
+            }
+            var accessToken = tokenObj["access_token"]?.GetValue<string>();
+            if (string.IsNullOrEmpty(accessToken)) return false;
+            var tokenType = tokenObj["token_type"]?.GetValue<string>() ?? "Bearer";
+            // Some providers rotate the refresh token; keep the old one
+            // if not present in the response.
+            var newRefresh = tokenObj["refresh_token"]?.GetValue<string>() ?? refreshToken;
+            var expiresIn = tokenObj["expires_in"]?.GetValue<double?>();
+            string? expiresAt = expiresIn is > 0
+                ? DateTimeOffset.UtcNow.AddSeconds(expiresIn.Value).ToString("O")
+                : null;
+            var scopeString = tokenObj["scope"]?.GetValue<string>();
+            var scopes = string.IsNullOrEmpty(scopeString)
+                ? (cred["profile"]?["grantedScopes"] as JsonArray)?.Select(n => n?.GetValue<string>() ?? "").ToArray()
+                  ?? Array.Empty<string>()
+                : scopeString.Split(new[] { ' ', ',' }, StringSplitOptions.RemoveEmptyEntries);
+            _store.SetOAuth2Credential(
+                service: service,
+                accessToken: accessToken,
+                tokenType: tokenType,
+                refreshToken: newRefresh,
+                expiresAt: expiresAt,
+                grantedScopes: scopes,
+                displayName: cred["profile"]?["displayName"]?.GetValue<string>(),
+                metadata: tokenObj);
+            _log?.LogInformation("connector oauth refresh: service={Service} ok expiresAt={ExpiresAt}", service, expiresAt);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _log?.LogWarning(ex, "connector oauth refresh failed: {Service}", service);
+            return false;
+        }
+    }
+
+    /// <summary>Return true when the stored credential has an expiresAt
+    /// less than <paramref name="marginSeconds"/> from now — the runtime
+    /// uses this to decide whether to preemptively refresh before an
+    /// executor call.</summary>
+    public bool NeedsRefresh(string service, int marginSeconds = 60)
+    {
+        var cred = _store.Resolve(service);
+        if (cred is null) return false;
+        if (cred["authType"]?.GetValue<string>() != "oauth2") return false;
+        var expiresAt = cred["expiresAt"]?.GetValue<string>();
+        if (string.IsNullOrEmpty(expiresAt)) return false;
+        if (!DateTimeOffset.TryParse(expiresAt, out var ts)) return false;
+        return ts - DateTimeOffset.UtcNow < TimeSpan.FromSeconds(marginSeconds);
+    }
+
+    private static string Truncate(string s, int max) => s.Length <= max ? s : s.Substring(0, max) + "...";
+
+    // SPEC §7 Phase 3 + Phase 6 — curated OAuth provider definitions.
+    // Keys must match the provider service name so `LoadAuthDefinition`
+    // can resolve them directly. Extend as more OAuth providers land in
+    // the bundle. Each entry mirrors the shape open-connector's
+    // definition.ts describes.
     private JsonObject? LoadAuthDefinition(string service, string authType)
     {
         // The manifest stores full ActionDefinitions but not the top-level
@@ -243,6 +370,54 @@ public sealed class OAuthFlowService
                 ["authorizationUrl"] = "https://linear.app/oauth/authorize",
                 ["tokenUrl"] = "https://api.linear.app/oauth/token",
                 ["scopes"] = new JsonArray("read", "write"),
+                ["tokenEndpointAuthMethod"] = "client_secret_post",
+            },
+            // Google OAuth: covers Drive/Gmail/Calendar/etc. — user
+            // narrows via authorization_params if needed. `offline`
+            // access_type is required to receive a refresh_token.
+            ["google"] = new JsonObject
+            {
+                ["type"] = "oauth2",
+                ["authorizationUrl"] = "https://accounts.google.com/o/oauth2/v2/auth",
+                ["tokenUrl"] = "https://oauth2.googleapis.com/token",
+                ["scopes"] = new JsonArray("openid", "email", "profile"),
+                ["tokenEndpointAuthMethod"] = "client_secret_post",
+                ["authorizationParams"] = new JsonObject
+                {
+                    ["access_type"] = "offline",
+                    ["prompt"] = "consent",
+                },
+            },
+            ["slack"] = new JsonObject
+            {
+                ["type"] = "oauth2",
+                ["authorizationUrl"] = "https://slack.com/oauth/v2/authorize",
+                ["tokenUrl"] = "https://slack.com/api/oauth.v2.access",
+                ["scopes"] = new JsonArray("chat:write", "channels:read", "users:read"),
+                ["tokenEndpointAuthMethod"] = "client_secret_post",
+                // Slack wraps the token payload in { ok: true, authed_user, ... }
+                // — but access_token sits at the top level. No envelope
+                // needed for the app token; user-scoped tokens live under
+                // authed_user{}.
+            },
+            ["notion"] = new JsonObject
+            {
+                ["type"] = "oauth2",
+                ["authorizationUrl"] = "https://api.notion.com/v1/oauth/authorize",
+                ["tokenUrl"] = "https://api.notion.com/v1/oauth/token",
+                ["scopes"] = new JsonArray(),
+                ["tokenEndpointAuthMethod"] = "client_secret_basic",
+                ["authorizationParams"] = new JsonObject
+                {
+                    ["owner"] = "user",
+                },
+            },
+            ["hubspot"] = new JsonObject
+            {
+                ["type"] = "oauth2",
+                ["authorizationUrl"] = "https://app.hubspot.com/oauth/authorize",
+                ["tokenUrl"] = "https://api.hubapi.com/oauth/v1/token",
+                ["scopes"] = new JsonArray("crm.objects.contacts.read", "crm.objects.contacts.write"),
                 ["tokenEndpointAuthMethod"] = "client_secret_post",
             },
         };

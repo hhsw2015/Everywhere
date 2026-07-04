@@ -58,6 +58,26 @@ const PROVIDERS = [
   'ngrok',
   'jobnimbus',
   'oncehub',
+  // Phase 6 — bulk expansion (all pass no-node-imports scan or use shims).
+  'airtable',
+  'algolia',
+  'alchemy',
+  'alpha_vantage',
+  'amap',
+  'ambee',
+  'ambient_weather',
+  'apollo',
+  'asana',
+  'brave_search',
+  'calendly',
+  'clickup',
+  'discord',
+  'dropbox',
+  'figma',
+  'firecrawl',
+  'freshdesk',
+  'gemini',
+  'gitlab',
 ];
 
 async function loadEsbuild() {

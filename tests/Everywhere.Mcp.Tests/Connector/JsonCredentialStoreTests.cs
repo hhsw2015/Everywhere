@@ -165,4 +165,43 @@ public class JsonCredentialStoreTests
         Assert.That(cred["accessToken"]!.GetValue<string>(), Is.EqualTo("tok-xyz"));
         Assert.That(cred["refreshToken"]!.GetValue<string>(), Is.EqualTo("refresh-1"));
     }
+
+    [Test]
+    public void SecretsAtRest_AreEncrypted()
+    {
+        var store = new JsonCredentialStore(_storePath);
+        store.SetApiKey("github", "github_pat_super_secret_XYZ", "GH");
+
+        // Raw file must NOT contain the plaintext secret.
+        var raw = File.ReadAllText(_storePath);
+        Assert.That(raw, Does.Not.Contain("github_pat_super_secret_XYZ"),
+            "plaintext api key leaked into on-disk connections.json");
+        Assert.That(raw, Does.Contain("enc:v1:"),
+            "encrypted secret marker missing");
+
+        // Roundtrip via a fresh store instance (same keyring on disk).
+        var store2 = new JsonCredentialStore(_storePath);
+        var cred = store2.Resolve("github");
+        Assert.That(cred!["apiKey"]!.GetValue<string>(), Is.EqualTo("github_pat_super_secret_XYZ"));
+    }
+
+    [Test]
+    public void LegacyPlaintextValues_MigrateOnNextWrite()
+    {
+        // Simulate a Phase-2 (pre-encryption) file on disk.
+        File.WriteAllText(_storePath,
+            "{ \"connections\": { \"github\": { \"authType\": \"api_key\", \"apiKey\": \"legacy_plain\" } } }");
+
+        var store = new JsonCredentialStore(_storePath);
+        var cred = store.Resolve("github");
+        Assert.That(cred!["apiKey"]!.GetValue<string>(), Is.EqualTo("legacy_plain"),
+            "legacy plaintext must be readable transparently");
+
+        // Any write re-encrypts.
+        store.SetApiKey("github", "new_key_after_upgrade");
+        var raw = File.ReadAllText(_storePath);
+        Assert.That(raw, Does.Not.Contain("legacy_plain"));
+        Assert.That(raw, Does.Not.Contain("new_key_after_upgrade"));
+        Assert.That(raw, Does.Contain("enc:v1:"));
+    }
 }

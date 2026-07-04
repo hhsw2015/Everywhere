@@ -54,6 +54,13 @@ public sealed class ConnectorRuntime : IAsyncDisposable
         _log = log;
     }
 
+    /// <summary>Optional OAuth refresher — set post-construction by DI to
+    /// break the ConnectorRuntime ↔ OAuthFlowService cycle
+    /// (OAuthFlowService itself needs a ConnectorRuntime reference to
+    /// resolve provider auth definitions). When set, InvokeAsync
+    /// preemptively refreshes near-expiry OAuth tokens.</summary>
+    public IOAuthRefresher? OAuthRefresher { get; set; }
+
     public string BundleDir => _bundleDir;
     public string UpstreamSha { get; private set; } = "unknown";
 
@@ -133,6 +140,19 @@ public sealed class ConnectorRuntime : IAsyncDisposable
         if (svc is null) return Failure(service, actionName, "RUNTIME_NOT_FOUND", $"service '{service}' not in manifest", sw);
         var act = svc.Actions.FirstOrDefault(a => a.Name == actionName);
         if (act is null) return Failure(service, actionName, "RUNTIME_NOT_FOUND", $"action '{service}.{actionName}' not in manifest", sw);
+
+        // SPEC Phase 6 — opportunistic OAuth refresh. Fire-and-forget on
+        // failure so a broken refresh doesn't take down the whole call
+        // path; upstream will surface a real 401 to the agent and the
+        // user can reconnect. Best-effort only.
+        if (OAuthRefresher is not null && OAuthRefresher.NeedsRefresh(service))
+        {
+            try { await OAuthRefresher.TryRefreshAsync(service, ct).ConfigureAwait(false); }
+            catch (Exception ex)
+            {
+                _log?.LogWarning(ex, "connector refresh: pre-invoke refresh failed for {Service}", service);
+            }
+        }
 
         V8ScriptEngine engine;
         try
@@ -382,6 +402,16 @@ public sealed class ConnectorRuntime : IAsyncDisposable
 }
 
 public sealed record ConnectorManifest(IReadOnlyList<ConnectorService> Services, string UpstreamSha);
+
+/// <summary>SPEC Phase 6 — optional OAuth refresher wired to
+/// <see cref="ConnectorRuntime.OAuthRefresher"/> after DI construction.
+/// Present as an interface so tests can substitute a stub without
+/// pulling in the whole OAuthFlowService dependency tree.</summary>
+public interface IOAuthRefresher
+{
+    bool NeedsRefresh(string service, int marginSeconds = 60);
+    Task<bool> TryRefreshAsync(string service, CancellationToken ct = default);
+}
 
 public sealed record ConnectorService(
     string Service,

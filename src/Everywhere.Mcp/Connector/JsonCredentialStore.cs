@@ -12,19 +12,36 @@ namespace Everywhere.Mcp.Connector;
 /// rename back — safe for the common case (one daemon process). No
 /// concurrent writers.
 ///
-/// Plaintext for now. Phase 2.5 wraps values with DPAPI on Windows /
-/// keychain on macOS / documented plaintext on Linux (matches how
-/// Everywhere already handles LLM API keys).
+/// Phase 6: secret fields (apiKey, clientSecret, accessToken, refreshToken)
+/// are encrypted with AES-256-GCM using a keyring stashed next to
+/// connections.json. Migration is transparent — legacy plaintext values
+/// are decrypted as-is (see <see cref="CredentialEncryptor.Decrypt"/>)
+/// and re-encrypted on next write.
 /// </summary>
 public sealed class JsonCredentialStore : ICredentialResolver
 {
+    // Fields inside the JSON document that hold user-provided secrets.
+    // Any value under one of these keys (anywhere in the object tree) is
+    // wrapped/unwrapped via CredentialEncryptor when serialising to /
+    // deserialising from disk.
+    private static readonly HashSet<string> SecretFields = new(StringComparer.Ordinal)
+    {
+        "apiKey",
+        "clientSecret",
+        "accessToken",
+        "refreshToken",
+    };
+
     private readonly string _filePath;
+    private readonly CredentialEncryptor _encryptor;
     private readonly object _fileLock = new();
 
-    public JsonCredentialStore(string? overridePath = null)
+    public JsonCredentialStore(string? overridePath = null, CredentialEncryptor? encryptor = null)
     {
         _filePath = overridePath ?? DefaultPath();
         Directory.CreateDirectory(Path.GetDirectoryName(_filePath) ?? ".");
+        _encryptor = encryptor ?? CredentialEncryptor.LoadOrCreate(
+            Path.Combine(Path.GetDirectoryName(_filePath) ?? ".", "keyring.bin"));
     }
 
     public static string DefaultPath()
@@ -297,7 +314,13 @@ public sealed class JsonCredentialStore : ICredentialResolver
             try
             {
                 var raw = File.ReadAllText(_filePath);
-                if (JsonNode.Parse(raw) is JsonObject obj) return obj;
+                if (JsonNode.Parse(raw) is JsonObject obj)
+                {
+                    // Walk the tree and decrypt every SecretFields hit
+                    // in-place so callers work with plaintext values.
+                    WalkAndDecrypt(obj);
+                    return obj;
+                }
             }
             catch { /* fall through to fresh doc */ }
             return new JsonObject { ["connections"] = new JsonObject() };
@@ -310,9 +333,13 @@ public sealed class JsonCredentialStore : ICredentialResolver
         {
             var doc = ReadDoc();
             mutator(doc);
+            // Encrypt just before write — the in-memory doc keeps
+            // plaintext so a subsequent ReadDoc/Mutate in the same
+            // process doesn't double-encrypt.
+            var toWrite = doc.DeepClone() as JsonObject ?? new JsonObject();
+            WalkAndEncrypt(toWrite);
             var tmp = _filePath + ".tmp";
-            File.WriteAllText(tmp, doc.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
-            // Atomic rename to protect against half-written files.
+            File.WriteAllText(tmp, toWrite.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
             if (File.Exists(_filePath))
             {
                 File.Replace(tmp, _filePath, destinationBackupFileName: null);
@@ -321,14 +348,65 @@ public sealed class JsonCredentialStore : ICredentialResolver
             {
                 File.Move(tmp, _filePath);
             }
-            // Perms: 0600 on Unix. .NET's File.SetUnixFileMode handles it
-            // gracefully on Windows (no-op).
             try
             {
                 if (!OperatingSystem.IsWindows())
                     File.SetUnixFileMode(_filePath, UnixFileMode.UserRead | UnixFileMode.UserWrite);
             }
             catch { /* best-effort */ }
+        }
+    }
+
+    private void WalkAndDecrypt(JsonNode node)
+    {
+        if (node is JsonObject obj)
+        {
+            foreach (var key in obj.Select(kv => kv.Key).ToArray())
+            {
+                var value = obj[key];
+                if (SecretFields.Contains(key) && value is JsonValue jv && jv.TryGetValue<string>(out var s))
+                {
+                    try { obj[key] = _encryptor.Decrypt(s); }
+                    catch (InvalidOperationException) { obj[key] = ""; }
+                }
+                else if (value is JsonObject or JsonArray)
+                {
+                    WalkAndDecrypt(value);
+                }
+            }
+        }
+        else if (node is JsonArray arr)
+        {
+            foreach (var item in arr)
+            {
+                if (item is not null) WalkAndDecrypt(item);
+            }
+        }
+    }
+
+    private void WalkAndEncrypt(JsonNode node)
+    {
+        if (node is JsonObject obj)
+        {
+            foreach (var key in obj.Select(kv => kv.Key).ToArray())
+            {
+                var value = obj[key];
+                if (SecretFields.Contains(key) && value is JsonValue jv && jv.TryGetValue<string>(out var s))
+                {
+                    if (!_encryptor.IsEncrypted(s)) obj[key] = _encryptor.Encrypt(s);
+                }
+                else if (value is JsonObject or JsonArray)
+                {
+                    WalkAndEncrypt(value);
+                }
+            }
+        }
+        else if (node is JsonArray arr)
+        {
+            foreach (var item in arr)
+            {
+                if (item is not null) WalkAndEncrypt(item);
+            }
         }
     }
 }
