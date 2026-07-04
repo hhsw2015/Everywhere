@@ -30,6 +30,22 @@ public sealed class ConnectorHostShim
     public Task<object> fetchAsync(string url, object? init, CancellationToken ct = default)
         => _fetchShim.fetchAsync(url, init, ct);
 
+    // --- node:crypto bridge (Phase 5) ---------------------------------
+    // These delegate to the same helpers OpenCLI HostShim implements —
+    // avoids a second SHA/HMAC implementation in the tree.
+
+    public string cryptoHash(string algo, string data, bool isText, string encoding)
+        => _fetchShim.cryptoHash(algo, data, isText, encoding);
+
+    public string cryptoHmac(string algo, string key, string data, bool isText, string encoding)
+        => _fetchShim.cryptoHmac(algo, key, data, isText, encoding);
+
+    public string cryptoRandomBytes(int n)
+        => _fetchShim.cryptoRandomBytes(n);
+
+    public string cryptoUuid()
+        => _fetchShim.cryptoUuid();
+
     /// <summary>Return the resolved credential for a service as a plain JS
     /// object shaped like upstream's <c>ResolvedCredential</c>, or
     /// <c>undefined</c> when the service has no configured connection.

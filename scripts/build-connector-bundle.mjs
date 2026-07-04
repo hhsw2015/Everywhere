@@ -53,6 +53,11 @@ const PROVIDERS = [
   'linear',
   'serpapi',
   'perplexity',
+  // Phase 5 — providers using node:crypto via the shim.
+  'bark',
+  'ngrok',
+  'jobnimbus',
+  'oncehub',
 ];
 
 async function loadEsbuild() {
@@ -85,21 +90,238 @@ async function loadEsbuild() {
 }
 
 // Buffer shim as a virtual module esbuild resolves via `alias`.
-// atob is a V8 built-in in the ClearScript engine; if it turns out to be
-// missing at runtime, swap this for a host-side base64 helper.
+// Covers the Buffer.from(str, encoding) uses currently in the vendored
+// tree: base64 (core/cast.ts), utf8 (feishu, chargebee), hex (bark).
 const BUFFER_SHIM_SOURCE = `
-export const Buffer = {
-  from(input, encoding) {
-    if (encoding !== 'base64') {
-      throw new Error("BufferShim: only base64 encoding is supported, got: " + encoding);
+function toBytes(input, encoding) {
+  encoding = (encoding || 'utf8').toLowerCase();
+  if (input instanceof Uint8Array) return input;
+  if (typeof input !== 'string') {
+    // Node's Buffer.from(number/array/arraybuffer) — pass through.
+    if (Array.isArray(input)) return new Uint8Array(input);
+    if (input && input.buffer) return new Uint8Array(input.buffer);
+    throw new TypeError("BufferShim: unsupported input " + typeof input);
+  }
+  if (encoding === 'utf8' || encoding === 'utf-8') {
+    return new TextEncoder().encode(input);
+  }
+  if (encoding === 'base64' || encoding === 'base64url') {
+    let s = input;
+    if (encoding === 'base64url') {
+      s = s.replace(/-/g, '+').replace(/_/g, '/');
+      while (s.length % 4) s += '=';
     }
+    const bin = atob(s);
+    const out = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+    return out;
+  }
+  if (encoding === 'hex') {
+    if (input.length % 2 !== 0) throw new Error("BufferShim: hex string must have even length");
+    const out = new Uint8Array(input.length / 2);
+    for (let i = 0; i < out.length; i++) out[i] = parseInt(input.substr(i * 2, 2), 16);
+    return out;
+  }
+  if (encoding === 'ascii' || encoding === 'latin1' || encoding === 'binary') {
+    const out = new Uint8Array(input.length);
+    for (let i = 0; i < input.length; i++) out[i] = input.charCodeAt(i) & 0xff;
+    return out;
+  }
+  throw new Error("BufferShim: unsupported encoding " + encoding);
+}
+
+function bytesToString(bytes, encoding) {
+  encoding = (encoding || 'utf8').toLowerCase();
+  if (encoding === 'utf8' || encoding === 'utf-8') return new TextDecoder().decode(bytes);
+  if (encoding === 'base64') {
+    let bin = '';
+    for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+    return btoa(bin);
+  }
+  if (encoding === 'base64url') {
+    let bin = '';
+    for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+    return btoa(bin).replace(/\\+/g, '-').replace(/\\//g, '_').replace(/=+$/, '');
+  }
+  if (encoding === 'hex') {
+    let s = '';
+    for (let i = 0; i < bytes.length; i++) s += bytes[i].toString(16).padStart(2, '0');
+    return s;
+  }
+  if (encoding === 'ascii' || encoding === 'latin1' || encoding === 'binary') {
+    let s = '';
+    for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
+    return s;
+  }
+  throw new Error("BufferShim: unsupported encoding " + encoding);
+}
+
+function makeBuffer(bytes) {
+  // Duck-typed Buffer: Uint8Array + toString(encoding). Enough for the
+  // callers we've audited; extend when a provider needs .slice() etc.
+  const b = new Uint8Array(bytes);
+  b.toString = function(encoding) { return bytesToString(this, encoding); };
+  return b;
+}
+
+export const Buffer = {
+  from(input, encoding) { return makeBuffer(toBytes(input, encoding)); },
+  concat(list) {
+    let total = 0;
+    for (const b of list) total += b.length;
+    const out = new Uint8Array(total);
+    let off = 0;
+    for (const b of list) { out.set(b, off); off += b.length; }
+    return makeBuffer(out);
+  },
+  isBuffer(x) { return x && x instanceof Uint8Array; },
+  alloc(n) { return makeBuffer(new Uint8Array(n)); },
+};
+export default { Buffer };
+`;
+
+// node:crypto shim. Only the sync stateful bits providers actually reach
+// for: createHash / createHmac / randomBytes / randomUUID. Uses the
+// host bridge (__connectorHost.crypto*) so we get identical semantics
+// to what OpenCLI already ships (mirrors HostShim.crypto* helpers).
+const CRYPTO_SHIM_SOURCE = `
+function bytesFrom(input, encoding) {
+  if (input instanceof Uint8Array) return input;
+  if (typeof input !== 'string') {
+    if (Array.isArray(input)) return new Uint8Array(input);
+    throw new TypeError("cryptoShim: unsupported input " + typeof input);
+  }
+  encoding = (encoding || 'utf8').toLowerCase();
+  if (encoding === 'utf8' || encoding === 'utf-8') return new TextEncoder().encode(input);
+  if (encoding === 'hex') {
+    const out = new Uint8Array(input.length / 2);
+    for (let i = 0; i < out.length; i++) out[i] = parseInt(input.substr(i * 2, 2), 16);
+    return out;
+  }
+  if (encoding === 'base64') {
     const bin = atob(input);
     const out = new Uint8Array(bin.length);
     for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
     return out;
-  },
-};
-export default { Buffer };
+  }
+  return new TextEncoder().encode(input);
+}
+
+function toBase64(bytes) {
+  let bin = '';
+  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+  return btoa(bin);
+}
+
+function toHex(bytes) {
+  let s = '';
+  for (let i = 0; i < bytes.length; i++) s += bytes[i].toString(16).padStart(2, '0');
+  return s;
+}
+
+function encodeDigest(bytes, encoding) {
+  encoding = (encoding || 'buffer').toLowerCase();
+  if (encoding === 'hex') return toHex(bytes);
+  if (encoding === 'base64') return toBase64(bytes);
+  if (encoding === 'base64url') return toBase64(bytes).replace(/\\+/g, '-').replace(/\\//g, '_').replace(/=+$/, '');
+  // Return the raw bytes when no encoding requested.
+  return bytes;
+}
+
+class Hash {
+  constructor(algorithm) {
+    this._alg = algorithm;
+    this._chunks = [];
+  }
+  update(data, encoding) {
+    this._chunks.push(bytesFrom(data, encoding));
+    return this;
+  }
+  digest(encoding) {
+    const total = this._chunks.reduce((n, b) => n + b.length, 0);
+    const buf = new Uint8Array(total);
+    let off = 0;
+    for (const c of this._chunks) { buf.set(c, off); off += c.length; }
+    // Delegate to host bridge for the actual hash (ClearScript exposes
+    // the same helpers OpenCLI HostShim publishes at __connectorHost).
+    const host = globalThis.__connectorHost;
+    if (!host || typeof host.cryptoHash !== 'function') {
+      throw new Error("cryptoShim: __connectorHost.cryptoHash missing (Phase 5 host bridge not wired)");
+    }
+    // Host expects (algo, data, isText, encoding); pass base64 so binary
+    // stays intact through the marshaller.
+    const hex = host.cryptoHash(this._alg, toBase64(buf), false, 'hex');
+    if (!encoding || encoding === 'buffer') {
+      // Convert hex → bytes for buffer callers.
+      const out = new Uint8Array(hex.length / 2);
+      for (let i = 0; i < out.length; i++) out[i] = parseInt(hex.substr(i * 2, 2), 16);
+      return out;
+    }
+    if (encoding === 'hex') return hex;
+    // Convert hex → bytes → target encoding (via TextEncoder path won't
+    // work for binary; use base64 conversion helper).
+    const bytes = new Uint8Array(hex.length / 2);
+    for (let i = 0; i < bytes.length; i++) bytes[i] = parseInt(hex.substr(i * 2, 2), 16);
+    return encodeDigest(bytes, encoding);
+  }
+}
+
+class Hmac {
+  constructor(algorithm, key) {
+    this._alg = algorithm;
+    this._key = bytesFrom(key);
+    this._chunks = [];
+  }
+  update(data, encoding) {
+    this._chunks.push(bytesFrom(data, encoding));
+    return this;
+  }
+  digest(encoding) {
+    const total = this._chunks.reduce((n, b) => n + b.length, 0);
+    const buf = new Uint8Array(total);
+    let off = 0;
+    for (const c of this._chunks) { buf.set(c, off); off += c.length; }
+    const host = globalThis.__connectorHost;
+    if (!host || typeof host.cryptoHmac !== 'function') {
+      throw new Error("cryptoShim: __connectorHost.cryptoHmac missing");
+    }
+    const keyB64 = toBase64(this._key);
+    const dataB64 = toBase64(buf);
+    const hex = host.cryptoHmac(this._alg, keyB64, dataB64, false, 'hex');
+    if (!encoding || encoding === 'buffer') {
+      const out = new Uint8Array(hex.length / 2);
+      for (let i = 0; i < out.length; i++) out[i] = parseInt(hex.substr(i * 2, 2), 16);
+      return out;
+    }
+    if (encoding === 'hex') return hex;
+    const bytes = new Uint8Array(hex.length / 2);
+    for (let i = 0; i < bytes.length; i++) bytes[i] = parseInt(hex.substr(i * 2, 2), 16);
+    return encodeDigest(bytes, encoding);
+  }
+}
+
+export function createHash(algorithm) { return new Hash(algorithm); }
+export function createHmac(algorithm, key) { return new Hmac(algorithm, key); }
+export function randomBytes(n) {
+  const host = globalThis.__connectorHost;
+  if (host && typeof host.cryptoRandomBytes === 'function') {
+    const b64 = host.cryptoRandomBytes(n);
+    const bin = atob(b64);
+    const out = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+    return out;
+  }
+  // Fallback to WebCrypto — synchronous getRandomValues.
+  const out = new Uint8Array(n);
+  (globalThis.crypto || {}).getRandomValues && globalThis.crypto.getRandomValues(out);
+  return out;
+}
+export function randomUUID() {
+  const host = globalThis.__connectorHost;
+  if (host && typeof host.cryptoUuid === 'function') return host.cryptoUuid();
+  return globalThis.crypto && globalThis.crypto.randomUUID ? globalThis.crypto.randomUUID() : '00000000-0000-0000-0000-000000000000';
+}
+export default { createHash, createHmac, randomBytes, randomUUID };
 `;
 
 // fetch bridge, prepended verbatim to the bundle.
@@ -152,9 +374,11 @@ async function main() {
   const entryPath = join(SRC, '.connector-entry.mjs');
   writeFileSync(entryPath, entryLines.join('\n'), 'utf8');
 
-  // Buffer shim on disk so esbuild can resolve it via `inject`.
+  // Buffer + crypto shims on disk so esbuild can resolve them via `alias`.
   const bufferShimPath = join(SRC, '.buffer-shim.mjs');
+  const cryptoShimPath = join(SRC, '.crypto-shim.mjs');
   writeFileSync(bufferShimPath, BUFFER_SHIM_SOURCE, 'utf8');
+  writeFileSync(cryptoShimPath, CRYPTO_SHIM_SOURCE, 'utf8');
 
   const esbuild = await loadEsbuild();
 
@@ -172,9 +396,11 @@ async function main() {
     logOverride: { 'import-is-undefined': 'silent' },
     banner: { js: RESPONSE_BRIDGE },
     alias: {
-      // Redirect Node's node:buffer to our polyfill. atob is a V8 built-in
-      // in ClearScript, so no host bridge is needed.
+      // Redirect Node built-ins to polyfills. atob is a V8 built-in;
+      // node:crypto is bridged to __connectorHost.crypto* which piggybacks
+      // on OpenCLI's HostShim implementation of the same helpers.
       'node:buffer': bufferShimPath,
+      'node:crypto': cryptoShimPath,
     },
     define: {
       'process.env.NODE_ENV': '"production"',
@@ -207,7 +433,10 @@ async function main() {
     platform: 'browser',
     target: 'es2022',
     logLevel: 'warning',
-    alias: { 'node:buffer': bufferShimPath },
+    alias: {
+      'node:buffer': bufferShimPath,
+      'node:crypto': cryptoShimPath,
+    },
   });
 
   // Load the manifest bundle in a sandbox to extract the service list.
@@ -247,6 +476,7 @@ async function main() {
   rmSync(entryPath, { force: true });
   rmSync(manifestEntry, { force: true });
   rmSync(bufferShimPath, { force: true });
+  rmSync(cryptoShimPath, { force: true });
   rmSync(manifestBundle, { force: true });
 
   const bundleBytes = readFileSync(bundleOut).length;
