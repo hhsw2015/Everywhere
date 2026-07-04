@@ -61,6 +61,14 @@ jobs:
         run: node scripts/build-connector-bundle.mjs
         working-directory: ${{ github.workspace }}
 
+      # SPEC docs/specs/everywhere-connector.md §10.2 — assert the
+      # bundle's runtime provider set matches what the manifest declares.
+      # Catches upstream renames or vendor typos that would otherwise
+      # produce a "list says X but run fails with unknown_action" bug.
+      - name: Verify connector bundle/manifest agreement
+        run: node scripts/verify-connector-bundle.mjs
+        working-directory: ${{ github.workspace }}
+
       # Web Console (React SPA) — vendored under 3rd/open-connector/web,
       # emits into 3rd/open-connector/dist/web which MSBuild copies to
       # Resources/connector/web/ for Kestrel to serve at /connector-ui/.

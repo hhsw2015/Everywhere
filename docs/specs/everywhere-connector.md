@@ -280,37 +280,58 @@ If set, returns:
 ```
 If unset: returns `undefined`, upstream code raises `ProviderRequestError(401, "Configure github API key credentials first.")`, MCP surface returns `{ok: false, code: "authorization_failed"}`.
 
-### Phase 2: SQLite-backed store
+### Phase 2: JSON-backed store
 
-Table `connector_connections`:
-```sql
-CREATE TABLE connector_connections (
-    service       TEXT PRIMARY KEY,
-    auth_type     TEXT NOT NULL,      -- 'api_key' | 'custom_credential' | 'oauth2'
-    values_json   TEXT NOT NULL,      -- encrypted at rest
-    profile_json  TEXT NOT NULL,
-    metadata_json TEXT NOT NULL,
-    created_at    TEXT NOT NULL,
-    updated_at    TEXT NOT NULL
-);
+Implemented as `Connector/JsonCredentialStore.cs` — a single file at
+`~/.everywhere/connector/connections.json` with atomic rename writes and
+0600 perms. SQLite was rejected because it added a runtime dependency
+without buying anything at this scale (one row per service, one writer).
+
+The document holds three top-level maps:
+```json
+{
+  "connections": { "<service>": { authType, apiKey|accessToken|refreshToken, profile, metadata, createdAt } },
+  "oauthClients": { "<service>": { clientId, clientSecret, redirectUri, extra, updatedAt } },
+  "oauthPending": { "<state>": { service, codeVerifier, createdAt } }
+}
 ```
-Encryption: DPAPI on Windows, keychain on macOS, plaintext (documented) on
-Linux — matches how Everywhere already handles LLM API keys today.
 
-### Phase 3: OAuth bridge via extension
+Encryption (Phase 6): AES-256-GCM with a per-install keyring at
+`~/.everywhere/connector/keyring.bin` (0600, generated on first use).
+Every value under any of `apiKey`, `clientSecret`, `accessToken`,
+`refreshToken` is wrapped with an `enc:v1:` prefix. Legacy Phase-2
+plaintext values decrypt as-is (`CredentialEncryptor.Decrypt` no-ops on
+strings without the prefix) and re-encrypt on the next write —
+zero-downtime migration.
 
-The merged OpenDia+Cebian extension is uniquely positioned to receive OAuth
-callbacks: it already runs on `<all_urls>` with `webRequest`. Flow:
-1. Daemon opens the provider consent URL in a new tab.
-2. Extension's `webRequest.onBeforeRedirect` catches redirects to
-   `http://localhost:*/oauth/callback` (upstream convention).
-3. Extension pipes `{code, state}` back to daemon over the existing WS
-   bridge.
-4. Daemon exchanges `code` for tokens using upstream's
-   `oauth-token.ts` port (also vendored under `3rd/open-connector/`).
+Threat model: protects against a stolen `connections.json` when the
+keyring stays behind. Does *not* protect against attacker with full
+home-directory read (they take both files). OS-keychain wrapping is
+future work; matches how Everywhere already handles LLM API keys.
 
-This is the one deep integration between the two subsystems and warrants
-its own design doc when Phase 3 begins. **Do not build it in Phase 1.**
+### Phase 3: OAuth via daemon loopback callback
+
+Implemented directly by the daemon — the extension is not involved.
+Tradeoff: users need one browser tab open on `localhost` during the
+consent flow, but Cebian keeps its "MCP client only" posture and the
+callback gets loopback-only enforcement for free (already applied by
+`EverywhereMcpHttpHost.LoopbackOnly`).
+
+Flow:
+1. Client `POST /api/oauth/authorize/:service` — daemon reads the
+   provider's OAuth definition from the manifest (§8.5), generates
+   `state` + optional PKCE, returns the authorization URL.
+2. Client (usually the connector Web Console at `/connector-ui/`) opens
+   that URL in a browser tab.
+3. Provider redirects to `http://127.0.0.1:PORT/api/oauth/callback?code&state`.
+4. Daemon's callback endpoint validates state, POSTs to the token URL
+   (`OAuthFlowService.HandleCallbackAsync`), stores the resulting oauth2
+   credential, and renders a "connected — you can close this tab"
+   HTML response.
+
+Refresh (Phase 6): `ConnectorRuntime.InvokeAsync` calls
+`IOAuthRefresher.NeedsRefresh(service)` before every provider action
+and refreshes preemptively when `expiresAt < 60s`.
 
 ---
 
@@ -432,11 +453,21 @@ CRUD; two need real work (§9.2).
 `POST /api/oauth/configs` and `POST /api/oauth/authorize` are the hard part
 and land with §7 Phase 3.
 
-### 9.3 Cebian tab
-Cebian sidebar gains a "Connectors" entry that iframes
-`http://localhost:7878/connector-ui`. Later this may be a native React
-page reusing upstream components — deferred until Phase 3 completes and we
-can measure whether the iframe is actually annoying.
+### 9.3 Cebian entry (external link, not iframe)
+
+Original spec called for a `/connectors` route inside Cebian's sidepanel
+that iframes `/connector-ui/`. **Reverted after Phase 4 review** —
+Cebian is an MCP client and shouldn't own provider-config UI. The
+active shape:
+
+- `OpenDiaBridgeSection` inside Cebian settings has one button, "Open
+  Connector Manager", that calls `chrome.tabs.create({url: ".../connector-ui/"})`
+  — no route, no iframe, no in-extension state.
+- Everything else about connector management lives on the daemon side.
+
+If a future user story needs richer in-sidebar interaction, prefer
+adding it as a *native* React page hitting `/api/*` directly, not as an
+iframe.
 
 ---
 
@@ -489,8 +520,13 @@ change **before** we ship it to LLMs whose tool descriptions cache it.
 | **1 — POC** | github only, PAT via env, MCP surface only | `connector_run(github, get_current_user)` returns your login |
 | **2 — Multi-provider + persistent creds** | ~10 hand-picked no-auth + api-key providers, SQLite store | Cebian can save a PAT and it survives daemon restart |
 | **3 — Web Console + OAuth** | static-host upstream web/, 8 REST endpoints, extension OAuth bridge | Google/Slack/Notion connect end-to-end |
-| **4 — Full catalog + Cebian tab** | ~711 providers with no `node:*` imports, Cebian sidebar entry | Random provider picked from the list works first try |
-| **5 — Node-shimmed providers** | ~129 providers using `node:crypto` / `node:buffer` — shim in `HostShim` | Full ~840 catalog reachable |
+| **4 — Cebian external link + Web Console tab** | Cebian settings adds "Open Connector Manager" opening `/connector-ui/` in a new browser tab — no in-extension routes | User can jump from Cebian to daemon UI in one click |
+| **5 — Node-shimmed providers** | node:buffer + node:crypto shims via esbuild alias; TextEncoder/URL/Buffer polyfills in the V8 boot script | Providers using `Buffer.from(base64)` / `createHash("sha256")` execute end-to-end |
+| **6 — Encryption + auto refresh** | AES-256-GCM at rest for secret fields; opportunistic OAuth refresh 60s before expiry | Rotated tokens survive daemon restart; disk-only theft yields ciphertext |
+| **7 — OAuth curated map + bulk providers** | +5 OAuth definitions (Discord/Dropbox/Figma/Calendly/ClickUp), +30 providers | 61 providers, 754 actions in bundle |
+| **8 — Auto-generated OAuth map + transit files + more providers** | Manifest carries every provider's `auth[]`; TransitFileStore + `/v1/files/*` REST | 109 providers, 1239 actions, upload/download works |
+| **9 — Full-catalog scan + polyfills** | Auto-scan allowlist; TextEncoder/URL/Buffer polyfills; 3 skips (flomo/jin10/linux_do) | 828 providers, 8141 actions in a single bundle |
+| **10 — CI drift check + spec alignment** | Bundle-vs-manifest verifier, manifest checked into VCS, spec text ↔ code reconciled | Upstream bumps show manifest diffs; docs match reality |
 
 Counts derived from `grep -RlE "^\s*(import\|require)\s.*node:" 3rd/open-connector/src/providers/ | cut -d/ -f1 | sort -u | wc -l` at pinned SHA. Refresh on every upstream bump.
 

@@ -471,8 +471,13 @@ tools/sync_i18n/i18n_validation_report.json
 # Cargo target dirs (Rust hook)
 tools/everywhere-context-hook/target/
 
-# open-connector generated bundle (rebuilt by scripts/build-connector-bundle.mjs)
-/3rd/open-connector/dist/
+# open-connector generated bundle (rebuilt by scripts/build-connector-bundle.mjs).
+# The bundle itself is huge and re-derivable — ignore it. But the manifest
+# stays in VCS: SPEC everywhere-connector.md §10.3 uses its diff to catch
+# upstream provider/action removals before an LLM ships stale tool descriptions.
+/3rd/open-connector/dist/*
+!/3rd/open-connector/dist/
+!/3rd/open-connector/dist/connector-manifest.json
 # Web console deps — installed by CI, rebuilt every push.
 /3rd/open-connector/web/node_modules/
 # Node tooling deps used by scripts/*.mjs (package-lock.json stays in VCS for
