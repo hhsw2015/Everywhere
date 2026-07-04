@@ -15,12 +15,14 @@ public sealed class ConnectorHostShim
 {
     private readonly HostShim _fetchShim;
     private readonly ICredentialResolver _credentials;
+    private readonly TransitFileStore? _transit;
     private readonly Action<string> _onWarn;
 
-    public ConnectorHostShim(HostShim fetchShim, ICredentialResolver credentials, Action<string> onWarn)
+    public ConnectorHostShim(HostShim fetchShim, ICredentialResolver credentials, Action<string> onWarn, TransitFileStore? transit = null)
     {
         _fetchShim = fetchShim;
         _credentials = credentials;
+        _transit = transit;
         _onWarn = onWarn;
     }
 
@@ -45,6 +47,38 @@ public sealed class ConnectorHostShim
 
     public string cryptoUuid()
         => _fetchShim.cryptoUuid();
+
+    // --- transit files (Phase 8) ---------------------------------
+    // upstream calls context.transitFiles.create(File). File in V8 is
+    // a browser primitive; we accept base64 bytes + name + mimeType from
+    // the JS side (bundle wrapper marshals). Return upstream's
+    // { fileId, downloadUrl, sizeBytes, name, mimeType } shape.
+
+    public int transitMaxBytes() => _transit?.MaxBytes ?? 0;
+
+    public string transitCreate(string base64Bytes, string name, string mimeType)
+    {
+        if (_transit is null) throw new InvalidOperationException("transit files not enabled");
+        var bytes = Convert.FromBase64String(base64Bytes ?? "");
+        return _transit.Create(bytes, name, mimeType).ToJsonString();
+    }
+
+    /// <summary>Return the file bytes as base64 plus its name/mimeType.
+    /// Used by upstream <c>context.transitFiles.read(fileId)</c>.</summary>
+    public string? transitRead(string fileId)
+    {
+        if (_transit is null || !_transit.TryRead(fileId, out var bytes, out var name, out var mime))
+            return null;
+        return new JsonObject
+        {
+            ["base64"] = Convert.ToBase64String(bytes),
+            ["sizeBytes"] = bytes.Length,
+            ["name"] = name,
+            ["mimeType"] = mime,
+        }.ToJsonString();
+    }
+
+    public bool transitDelete(string fileId) => _transit?.Delete(fileId) ?? false;
 
     /// <summary>Return the resolved credential for a service as a plain JS
     /// object shaped like upstream's <c>ResolvedCredential</c>, or

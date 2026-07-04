@@ -343,6 +343,39 @@ internal static class ConnectorHttpEndpoints
             }
         });
 
+        // --- /v1/files (Phase 8) ------------------------------------------
+        // Loopback download endpoint referenced by TransitFileStore's
+        // downloadUrl. Provider actions handing this URL to their upstream
+        // API (send-file-by-URL flows) hit the daemon back and get the
+        // stored bytes.
+        var transit = parentServices.GetService<TransitFileStore>();
+        app.MapGet("/v1/files/{fileId}", async (HttpContext ctx, string fileId) =>
+        {
+            if (transit is null) { await NotConfigured(ctx); return; }
+            if (!transit.TryRead(fileId, out var bytes, out var name, out var mime))
+            {
+                ctx.Response.StatusCode = StatusCodes.Status404NotFound;
+                await WriteJson(ctx, new JsonObject { ["error"] = "file not found", ["code"] = "RUNTIME_NOT_FOUND" });
+                return;
+            }
+            ctx.Response.ContentType = mime;
+            ctx.Response.Headers.ContentDisposition = $"attachment; filename=\"{name.Replace('"', '_')}\"";
+            await ctx.Response.Body.WriteAsync(bytes);
+        });
+
+        app.MapPost("/v1/files", async (HttpContext ctx) =>
+        {
+            if (transit is null) { await NotConfigured(ctx); return; }
+            using var ms = new MemoryStream();
+            await ctx.Request.Body.CopyToAsync(ms);
+            var bytes = ms.ToArray();
+            var name = ctx.Request.Query["name"].ToString();
+            if (string.IsNullOrEmpty(name)) name = "upload.bin";
+            var mime = ctx.Request.ContentType ?? "application/octet-stream";
+            var meta = transit.Create(bytes, name, mime);
+            await WriteJson(ctx, meta);
+        });
+
         // --- /v1/actions/:actionId — mirrors upstream shape ---------------
         app.MapPost("/v1/actions/{actionId}", async (HttpContext ctx, string actionId) =>
         {

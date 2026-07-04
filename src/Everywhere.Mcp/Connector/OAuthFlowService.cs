@@ -337,13 +337,35 @@ public sealed class OAuthFlowService : IOAuthRefresher
 
     private static string Truncate(string s, int max) => s.Length <= max ? s : s.Substring(0, max) + "...";
 
-    // SPEC §7 Phase 3 + Phase 6 — curated OAuth provider definitions.
-    // Keys must match the provider service name so `LoadAuthDefinition`
-    // can resolve them directly. Extend as more OAuth providers land in
-    // the bundle. Each entry mirrors the shape open-connector's
-    // definition.ts describes.
+    // Phase 8 — resolve OAuth definitions primarily from the manifest
+    // (auto-populated from every provider's definition.ts by
+    // scripts/build-connector-bundle.mjs). Curated map below is a
+    // fallback for providers not yet in the manifest — kept for tests
+    // and for cases where upstream definition.ts drifts and we want to
+    // pin behaviour locally without a bundle rebuild.
     private JsonObject? LoadAuthDefinition(string service, string authType)
     {
+        // 1. Manifest-driven — walk the auth[] array shipped in the
+        //    provider bundle; return the first entry matching authType.
+        var manifest = _runtime.ListManifest();
+        var svc = manifest.Services.FirstOrDefault(
+            s => string.Equals(s.Service, service, StringComparison.OrdinalIgnoreCase));
+        if (svc?.Auth is not null)
+        {
+            foreach (var node in svc.Auth)
+            {
+                if (node is JsonObject entry
+                    && string.Equals(entry["type"]?.GetValue<string>(), authType, StringComparison.OrdinalIgnoreCase))
+                {
+                    return entry.DeepClone() as JsonObject;
+                }
+            }
+        }
+
+        // 2. Fallback: hand-curated map.
+        //    Only kept for services whose upstream definition may lag or
+        //    to override provider-specific quirks. Matches the previous
+        //    Phase 3.5/6/7 map so behaviour is unchanged for those keys.
         // The manifest stores full ActionDefinitions but not the top-level
         // provider auth[] array. Read it fresh from the definition file
         // via the runtime's manifest — currently we vendor it in the

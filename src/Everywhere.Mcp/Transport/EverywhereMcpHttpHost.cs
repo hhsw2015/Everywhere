@@ -254,6 +254,8 @@ public sealed class EverywhereMcpHttpHost : IHostedService, IAsyncDisposable
         if (credentialStore is not null) builder.Services.AddSingleton(credentialStore);
         var oauthFlow = _parentServices.GetService<Connector.OAuthFlowService>();
         if (oauthFlow is not null) builder.Services.AddSingleton(oauthFlow);
+        var transitStore = _parentServices.GetService<Connector.TransitFileStore>();
+        if (transitStore is not null) builder.Services.AddSingleton(transitStore);
         builder.Services.AddSingleton<Tools.ConnectorTools>();
         // SPEC docs/specs/everywhere-self-expanding.md Phase 1 — CaptureSession
         // store + observation tools. Store forwarded from parent so it's a

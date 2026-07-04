@@ -42,16 +42,20 @@ public sealed class ConnectorRuntime : IAsyncDisposable
     private ConnectorManifest? _manifest;
     private readonly object _manifestLock = new();
 
+    private readonly TransitFileStore? _transit;
+
     public ConnectorRuntime(
         string bundleDir,
         HttpClient http,
         ICredentialResolver credentials,
-        ILogger<ConnectorRuntime>? log = null)
+        ILogger<ConnectorRuntime>? log = null,
+        TransitFileStore? transit = null)
     {
         _bundleDir = bundleDir;
         _http = http;
         _credentials = credentials;
         _log = log;
+        _transit = transit;
     }
 
     /// <summary>Optional OAuth refresher — set post-construction by DI to
@@ -107,13 +111,18 @@ public sealed class ConnectorRuntime : IAsyncDisposable
                                 OutputSchema: act["outputSchema"]?.DeepClone()));
                         }
                     }
+                    // auth[] carries the AuthDefinition array upstream
+                    // ships. OAuthFlowService reads this so the curated
+                    // map no longer has to be maintained by hand.
+                    var authArr = (svc["auth"] as JsonArray)?.DeepClone() as JsonArray;
                     services.Add(new ConnectorService(
                         Service: svc["service"]?.GetValue<string>() ?? "",
                         DisplayName: svc["displayName"]?.GetValue<string>() ?? "",
                         Categories: (svc["categories"] as JsonArray)?.Select(n => n?.GetValue<string>() ?? "").ToArray() ?? Array.Empty<string>(),
                         AuthTypes: (svc["authTypes"] as JsonArray)?.Select(n => n?.GetValue<string>() ?? "").ToArray() ?? Array.Empty<string>(),
                         HomepageUrl: svc["homepageUrl"]?.GetValue<string>(),
-                        Actions: actions));
+                        Actions: actions,
+                        Auth: authArr));
                 }
                 _manifest = new ConnectorManifest(services, UpstreamSha);
             }
@@ -198,6 +207,38 @@ public sealed class ConnectorRuntime : IAsyncDisposable
                                     try { return JSON.parse(raw); }
                                     catch { return undefined; }
                                 },
+                                // Phase 8 — transitFiles bridge. Upstream
+                                // executors call `.create(File)` (a
+                                // browser File instance) and `.read(fileId)`.
+                                // Adapt to the base64 host bridge.
+                                transitFiles: (globalThis.__connectorHost.transitMaxBytes && globalThis.__connectorHost.transitMaxBytes() > 0) ? {
+                                    maxBytes: globalThis.__connectorHost.transitMaxBytes(),
+                                    async create(file) {
+                                        const buf = new Uint8Array(await file.arrayBuffer());
+                                        let bin = '';
+                                        for (let i = 0; i < buf.length; i++) bin += String.fromCharCode(buf[i]);
+                                        const b64 = btoa(bin);
+                                        const raw = globalThis.__connectorHost.transitCreate(b64, file.name || 'upload', file.type || 'application/octet-stream');
+                                        return JSON.parse(raw);
+                                    },
+                                    async read(fileId) {
+                                        const raw = globalThis.__connectorHost.transitRead(fileId);
+                                        if (!raw) throw new Error('transit file not found: ' + fileId);
+                                        const meta = JSON.parse(raw);
+                                        const bin = atob(meta.base64);
+                                        const buf = new Uint8Array(bin.length);
+                                        for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
+                                        return {
+                                            file: new File([buf], meta.name, { type: meta.mimeType }),
+                                            sizeBytes: meta.sizeBytes,
+                                            name: meta.name,
+                                            mimeType: meta.mimeType,
+                                        };
+                                    },
+                                    async delete(fileId) {
+                                        return globalThis.__connectorHost.transitDelete(fileId);
+                                    },
+                                } : undefined,
                             };
                             const result = await executor(input, executionContext);
                             // Upstream ExecutionResult: { ok, output?, error? }.
@@ -329,7 +370,8 @@ public sealed class ConnectorRuntime : IAsyncDisposable
                 onRegister: (_, _, _) => { },
                 onWarn: m => _log?.LogWarning("connector host: {Message}", m));
             var connectorHost = new ConnectorHostShim(fetchShim, _credentials,
-                m => _log?.LogWarning("connector: {Message}", m));
+                m => _log?.LogWarning("connector: {Message}", m),
+                transit: _transit);
             engine.AddHostObject("__connectorHost", connectorHost);
 
             // Minimal global surface expected by upstream code.
@@ -419,7 +461,8 @@ public sealed record ConnectorService(
     IReadOnlyList<string> Categories,
     IReadOnlyList<string> AuthTypes,
     string? HomepageUrl,
-    IReadOnlyList<ConnectorAction> Actions);
+    IReadOnlyList<ConnectorAction> Actions,
+    JsonArray? Auth = null);
 
 public sealed record ConnectorAction(
     string Id,
