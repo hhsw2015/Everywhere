@@ -47,21 +47,29 @@ try {
     bail('manifest.services missing or not an array');
   }
 
-  // Isolated vm context — keeps our Node globals (fetch/crypto/etc.)
-  // out of reach of the ~800-provider IIFE and prevents bundle globals
-  // from bleeding back into this process. Hostile stubs surface any
-  // accidental host-bridge call at import time as a loud failure.
-  const sandbox = {
+  // Isolated vm context — keeps our Node globals out of reach of the
+  // ~800-provider IIFE and prevents bundle globals from bleeding back
+  // into this process. Hostile stubs surface any accidental host-bridge
+  // call at import time as a loud failure.
+  //
+  // Start from an empty vm.createContext() so the sandbox picks up all
+  // ECMAScript built-ins (WeakMap, Intl, ArrayBuffer, typed arrays,
+  // parseInt, etc.) automatically — hand-rolling a whitelist silently
+  // drops globals the bundle uses at module init
+  // (core/validation.ts references WeakMap top-level; bluesky/actions.ts
+  // references Intl.Segmenter top-level).
+  const sandbox = createContext({});
+  Object.assign(sandbox, {
     console,
-    // TextEncoder / TextDecoder / URL / atob / btoa are Node built-in
-    // globals; expose them so the bundle's fetch/crypto shims can boot.
-    TextEncoder, TextDecoder, URL, URLSearchParams, atob, btoa,
-    setTimeout, clearTimeout, setInterval, clearInterval,
-    Uint8Array, Buffer, Promise, JSON, Object, Array, String, Number, Boolean,
-    Error, TypeError, RangeError, Symbol, Map, Set, Date, Math, RegExp,
-    Reflect, Proxy,
+    // Node-only globals not present in a bare vm context — the bundle's
+    // fetch/crypto/buffer shims need these to boot.
+    TextEncoder, TextDecoder, URL, URLSearchParams, atob, btoa, Buffer,
+    setTimeout, clearTimeout, setInterval, clearInterval, queueMicrotask,
     __connectorHost: {
-      fetchAsync: () => Promise.reject(new Error('verify: host bridge fetchAsync must not be called at module init')),
+      // All host methods throw synchronously — an eager Promise.reject
+      // stashed at module init would surface as unhandledRejection AFTER
+      // this script prints OK, corrupting the pass/fail signal.
+      fetchAsync: () => { throw new Error('verify: host bridge fetchAsync must not be called at module init'); },
       getCredential: () => { throw new Error('verify: host bridge getCredential must not be called at module init'); },
       warn: () => {},
       cryptoHash: () => { throw new Error('verify: host bridge cryptoHash must not be called at module init'); },
@@ -73,9 +81,7 @@ try {
       transitRead: () => { throw new Error('verify: host bridge transitRead must not be called at module init'); },
       transitDelete: () => { throw new Error('verify: host bridge transitDelete must not be called at module init'); },
     },
-  };
-  sandbox.globalThis = sandbox;
-  createContext(sandbox);
+  });
 
   try {
     runInContext(bundleSrc, sandbox);
