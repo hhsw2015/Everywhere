@@ -70,6 +70,26 @@ public class ConnectorRuntimeTests
     }
 
     [Test]
+    public void ManifestCoversCoreProviders()
+    {
+        // Phase 7 sanity — the bundle must include the ~60 providers
+        // pinned in the allowlist. If an upstream file rename or a
+        // scripts/build-connector-bundle.mjs typo drops one, this test
+        // fires before we ship a manifest with a hole in it.
+        var bundleDir = FindBundleDir();
+        using var http = new HttpClient();
+        var runtime = new ConnectorRuntime(bundleDir, http, new NullResolver());
+        var services = runtime.ListManifest().Services.Select(s => s.Service).ToHashSet();
+        foreach (var expected in new[] { "github", "hackernews", "openai", "anthropic",
+                                          "linear", "gitlab", "asana", "airtable",
+                                          "algolia", "discord", "dropbox", "figma",
+                                          "gemini", "firecrawl" })
+        {
+            Assert.That(services, Contains.Item(expected), $"provider '{expected}' missing from bundle");
+        }
+    }
+
+    [Test]
     public async Task InvokeWithoutCredentialsReturnsAuthorizationFailed()
     {
         var bundleDir = FindBundleDir();

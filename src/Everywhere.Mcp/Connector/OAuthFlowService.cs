@@ -420,6 +420,56 @@ public sealed class OAuthFlowService : IOAuthRefresher
                 ["scopes"] = new JsonArray("crm.objects.contacts.read", "crm.objects.contacts.write"),
                 ["tokenEndpointAuthMethod"] = "client_secret_post",
             },
+            // Phase 7 additions — verified against upstream definition.ts.
+            ["discord"] = new JsonObject
+            {
+                ["type"] = "oauth2",
+                ["authorizationUrl"] = "https://discord.com/oauth2/authorize",
+                ["tokenUrl"] = "https://discord.com/api/oauth2/token",
+                ["scopes"] = new JsonArray("identify", "email"),
+                ["tokenEndpointAuthMethod"] = "client_secret_post",
+            },
+            ["dropbox"] = new JsonObject
+            {
+                ["type"] = "oauth2",
+                ["authorizationUrl"] = "https://www.dropbox.com/oauth2/authorize",
+                ["tokenUrl"] = "https://api.dropboxapi.com/oauth2/token",
+                ["scopes"] = new JsonArray("files.metadata.read", "files.content.read"),
+                ["tokenEndpointAuthMethod"] = "client_secret_post",
+                // token_access_type=offline is required to get a
+                // refresh_token — otherwise Dropbox issues a
+                // short-lived access token only.
+                ["authorizationParams"] = new JsonObject
+                {
+                    ["token_access_type"] = "offline",
+                },
+            },
+            ["figma"] = new JsonObject
+            {
+                ["type"] = "oauth2",
+                ["authorizationUrl"] = "https://www.figma.com/oauth",
+                ["tokenUrl"] = "https://api.figma.com/v1/oauth/token",
+                ["scopes"] = new JsonArray("files:read", "file_variables:read", "file_variables:write"),
+                ["tokenEndpointAuthMethod"] = "client_secret_basic",
+            },
+            ["calendly"] = new JsonObject
+            {
+                ["type"] = "oauth2",
+                ["authorizationUrl"] = "https://calendly.com/oauth/authorize",
+                ["tokenUrl"] = "https://calendly.com/oauth/token",
+                ["scopes"] = new JsonArray("default"),
+                ["tokenEndpointAuthMethod"] = "client_secret_post",
+            },
+            ["clickup"] = new JsonObject
+            {
+                ["type"] = "oauth2",
+                // ClickUp's authorization URL is the app root; upstream
+                // definition.ts uses this literal value.
+                ["authorizationUrl"] = "https://app.clickup.com/api",
+                ["tokenUrl"] = "https://api.clickup.com/api/v2/oauth/token",
+                ["scopes"] = new JsonArray(),
+                ["tokenEndpointAuthMethod"] = "client_secret_post",
+            },
         };
         return curated.TryGetValue(service, out var def) ? def : null;
     }
