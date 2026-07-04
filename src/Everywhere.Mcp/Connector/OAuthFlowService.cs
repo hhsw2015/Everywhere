@@ -362,10 +362,10 @@ public sealed class OAuthFlowService : IOAuthRefresher
             }
         }
 
-        // 2. Fallback: hand-curated map.
-        //    Only kept for services whose upstream definition may lag or
-        //    to override provider-specific quirks. Matches the previous
-        //    Phase 3.5/6/7 map so behaviour is unchanged for those keys.
+        // 2. Fallback: hand-curated map. Phase 9 — trimmed to services
+        //    NOT present in the upstream open-connector catalog. Right
+        //    now that means "google" (Drive/Gmail/Calendar via generic
+        //    Google OAuth). Every other OAuth provider is manifest-driven.
         // The manifest stores full ActionDefinitions but not the top-level
         // provider auth[] array. Read it fresh from the definition file
         // via the runtime's manifest — currently we vendor it in the
@@ -378,25 +378,10 @@ public sealed class OAuthFlowService : IOAuthRefresher
         // more OAuth providers land.
         var curated = new Dictionary<string, JsonObject>(StringComparer.OrdinalIgnoreCase)
         {
-            ["github"] = new JsonObject
-            {
-                ["type"] = "oauth2",
-                ["authorizationUrl"] = "https://github.com/login/oauth/authorize",
-                ["tokenUrl"] = "https://github.com/login/oauth/access_token",
-                ["scopes"] = new JsonArray("repo", "read:user", "user:email"),
-                ["tokenEndpointAuthMethod"] = "client_secret_post",
-            },
-            ["linear"] = new JsonObject
-            {
-                ["type"] = "oauth2",
-                ["authorizationUrl"] = "https://linear.app/oauth/authorize",
-                ["tokenUrl"] = "https://api.linear.app/oauth/token",
-                ["scopes"] = new JsonArray("read", "write"),
-                ["tokenEndpointAuthMethod"] = "client_secret_post",
-            },
-            // Google OAuth: covers Drive/Gmail/Calendar/etc. — user
-            // narrows via authorization_params if needed. `offline`
-            // access_type is required to receive a refresh_token.
+            // Google OAuth is not in upstream open-connector (they only
+            // ship googleads/gemini as first-class providers). Users who
+            // want Drive/Gmail/Calendar go through this generic entry.
+            // access_type=offline is required to receive a refresh_token.
             ["google"] = new JsonObject
             {
                 ["type"] = "oauth2",
@@ -409,88 +394,6 @@ public sealed class OAuthFlowService : IOAuthRefresher
                     ["access_type"] = "offline",
                     ["prompt"] = "consent",
                 },
-            },
-            ["slack"] = new JsonObject
-            {
-                ["type"] = "oauth2",
-                ["authorizationUrl"] = "https://slack.com/oauth/v2/authorize",
-                ["tokenUrl"] = "https://slack.com/api/oauth.v2.access",
-                ["scopes"] = new JsonArray("chat:write", "channels:read", "users:read"),
-                ["tokenEndpointAuthMethod"] = "client_secret_post",
-                // Slack wraps the token payload in { ok: true, authed_user, ... }
-                // — but access_token sits at the top level. No envelope
-                // needed for the app token; user-scoped tokens live under
-                // authed_user{}.
-            },
-            ["notion"] = new JsonObject
-            {
-                ["type"] = "oauth2",
-                ["authorizationUrl"] = "https://api.notion.com/v1/oauth/authorize",
-                ["tokenUrl"] = "https://api.notion.com/v1/oauth/token",
-                ["scopes"] = new JsonArray(),
-                ["tokenEndpointAuthMethod"] = "client_secret_basic",
-                ["authorizationParams"] = new JsonObject
-                {
-                    ["owner"] = "user",
-                },
-            },
-            ["hubspot"] = new JsonObject
-            {
-                ["type"] = "oauth2",
-                ["authorizationUrl"] = "https://app.hubspot.com/oauth/authorize",
-                ["tokenUrl"] = "https://api.hubapi.com/oauth/v1/token",
-                ["scopes"] = new JsonArray("crm.objects.contacts.read", "crm.objects.contacts.write"),
-                ["tokenEndpointAuthMethod"] = "client_secret_post",
-            },
-            // Phase 7 additions — verified against upstream definition.ts.
-            ["discord"] = new JsonObject
-            {
-                ["type"] = "oauth2",
-                ["authorizationUrl"] = "https://discord.com/oauth2/authorize",
-                ["tokenUrl"] = "https://discord.com/api/oauth2/token",
-                ["scopes"] = new JsonArray("identify", "email"),
-                ["tokenEndpointAuthMethod"] = "client_secret_post",
-            },
-            ["dropbox"] = new JsonObject
-            {
-                ["type"] = "oauth2",
-                ["authorizationUrl"] = "https://www.dropbox.com/oauth2/authorize",
-                ["tokenUrl"] = "https://api.dropboxapi.com/oauth2/token",
-                ["scopes"] = new JsonArray("files.metadata.read", "files.content.read"),
-                ["tokenEndpointAuthMethod"] = "client_secret_post",
-                // token_access_type=offline is required to get a
-                // refresh_token — otherwise Dropbox issues a
-                // short-lived access token only.
-                ["authorizationParams"] = new JsonObject
-                {
-                    ["token_access_type"] = "offline",
-                },
-            },
-            ["figma"] = new JsonObject
-            {
-                ["type"] = "oauth2",
-                ["authorizationUrl"] = "https://www.figma.com/oauth",
-                ["tokenUrl"] = "https://api.figma.com/v1/oauth/token",
-                ["scopes"] = new JsonArray("files:read", "file_variables:read", "file_variables:write"),
-                ["tokenEndpointAuthMethod"] = "client_secret_basic",
-            },
-            ["calendly"] = new JsonObject
-            {
-                ["type"] = "oauth2",
-                ["authorizationUrl"] = "https://calendly.com/oauth/authorize",
-                ["tokenUrl"] = "https://calendly.com/oauth/token",
-                ["scopes"] = new JsonArray("default"),
-                ["tokenEndpointAuthMethod"] = "client_secret_post",
-            },
-            ["clickup"] = new JsonObject
-            {
-                ["type"] = "oauth2",
-                // ClickUp's authorization URL is the app root; upstream
-                // definition.ts uses this literal value.
-                ["authorizationUrl"] = "https://app.clickup.com/api",
-                ["tokenUrl"] = "https://api.clickup.com/api/v2/oauth/token",
-                ["scopes"] = new JsonArray(),
-                ["tokenEndpointAuthMethod"] = "client_secret_post",
             },
         };
         return curated.TryGetValue(service, out var def) ? def : null;

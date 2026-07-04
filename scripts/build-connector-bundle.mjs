@@ -23,7 +23,7 @@
 // into a web-standard Response (async .text/.json, .headers.get).
 // See §6.
 
-import { mkdirSync, existsSync, writeFileSync, rmSync, readFileSync } from 'node:fs';
+import { mkdirSync, existsSync, writeFileSync, rmSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
@@ -41,126 +41,72 @@ const REPO = resolve(__dirname, '..');
 const SRC = resolve(arg('src', join(REPO, '3rd/open-connector')));
 const OUT = resolve(arg('out', join(SRC, 'dist')));
 
-// Phase 2 allowlist. Every provider listed must have both
-// `src/providers/<name>/definition.ts` and `.../executors.ts`, and no
-// runtime node:* imports outside what's aliased below (Buffer only).
-const PROVIDERS = [
-  'github',
-  'hackernews',
-  'openai',
-  'anthropic',
-  'resend',
-  'linear',
-  'serpapi',
-  'perplexity',
-  // Phase 5 — providers using node:crypto via the shim.
-  'bark',
-  'ngrok',
-  'jobnimbus',
-  'oncehub',
-  // Phase 6 — bulk expansion (all pass no-node-imports scan or use shims).
-  'airtable',
-  'algolia',
-  'alchemy',
-  'alpha_vantage',
-  'amap',
-  'ambee',
-  'ambient_weather',
-  'apollo',
-  'asana',
-  'brave_search',
-  'calendly',
-  'clickup',
-  'discord',
-  'dropbox',
-  'figma',
-  'firecrawl',
-  'freshdesk',
-  'gemini',
-  'gitlab',
-  // Phase 7 round 2 — well-known SaaS + data APIs. All vendored via
-  // scan for no-node-imports (or only node:buffer/node:crypto handled
-  // by shims). Extend as more providers earn a spot.
-  'ably',
-  'abstract',
-  'activecampaign',
-  'adyen',
-  'agora',
-  'ahrefs',
-  'arxiv',
-  'assemblyai',
-  'attio',
-  'auth0_management',
-  'aviationstack',
-  'apify',
-  'appveyor',
-  'bamboohr',
-  'baremetrics',
-  'baserow',
-  'beaconchain',
-  'balldontlie_worldcup',
-  'axiom',
-  'ashby',
-  'autobound',
-  'aliyun_sts',
-  'alpaca',
-  'api_ninjas',
-  'api2pdf',
-  'apiflash',
-  'apipie_ai',
-  'apiverve',
-  'appdrag',
-  'amara',
-  // Phase 8 round 3 — remaining clean providers (a-b range).
-  'a_leads',
-  'ably_control',
-  'abyssale',
-  'acculynx',
-  'addressfinder',
-  'addresszen',
-  'adyntel',
-  'aeroleads',
-  'affinity',
-  'agent_mail',
-  'agentql',
-  'agenty',
-  'agiled',
-  'agility',
-  'aivoov',
-  'algo_docs',
-  'alt_text_ai',
-  'amplemarket',
-  'anchor_browser',
-  'anthropic_admin',
-  'apaleo',
-  'api_bible',
-  'api_sports',
-  'asin_data_api',
-  'avoma',
-  'aws_sts',
-  'ayrshare',
-  'bannerbear',
-  'basin',
-  'beamer',
-  'beehiiv',
-  'beeminder',
-  'benchmark_email',
-  'benzinga',
-  'bestbuy',
-  'better_proposals',
-  'better_stack',
-  'bettercontact',
-  'bidsketch',
-  'big_commerce',
-  'big_data_cloud',
-  'bigpicture_io',
-  'bird',
-  'bitly',
-  'bland_ai',
-  'blaze_meter_functional',
-  'blaze_meter_performance',
-  'blaze_meter_service_virtualization',
-];
+// Phase 9 — allowlist is now derived by scanning the vendored provider
+// tree. A provider ships when:
+//   1. src/providers/<name>/definition.ts AND executors.ts exist.
+//   2. It only imports node:* modules our shims cover (buffer, crypto).
+//   3. Its directory name is a valid identifier segment (letters, digits,
+//      underscores, but must not start with a digit — esbuild's entry
+//      generator emits `import ... as def0` which is safe, but the
+//      manifest keys become object keys; we accept digit-starts by using
+//      bracket notation everywhere).
+// Explicit skip-list handles cases we've reviewed and want to hold back.
+const SKIP_PROVIDERS = new Set([
+  // Providers importing external npm packages we don't bundle:
+  //   flomo, jin10 — @modelcontextprotocol/sdk
+  //   linux_do    — rss-parser
+  // Their executors run in a Node host, not V8. Skip until we ship a
+  // browser-compatible port.
+  'flomo',
+  'jin10',
+  'linux_do',
+]);
+
+const ALLOWED_NODE_SUBSPECIFIERS = new Set(['node:buffer', 'node:crypto']);
+
+function scanProviders(srcDir) {
+  const providersRoot = join(srcDir, 'src/providers');
+  if (!existsSync(providersRoot)) return [];
+  const out = [];
+  for (const entry of readdirSync(providersRoot)) {
+    if (SKIP_PROVIDERS.has(entry)) continue;
+    const dir = join(providersRoot, entry);
+    let s;
+    try { s = statSync(dir); } catch { continue; }
+    if (!s.isDirectory()) continue;
+    if (!existsSync(join(dir, 'definition.ts'))) continue;
+    if (!existsSync(join(dir, 'executors.ts'))) continue;
+    if (hasUnsupportedNodeImport(dir)) continue;
+    out.push(entry);
+  }
+  return out.sort();
+}
+
+function hasUnsupportedNodeImport(dir) {
+  for (const rel of readdirSync(dir)) {
+    if (!rel.endsWith('.ts')) continue;
+    const src = readFileSync(join(dir, rel), 'utf8');
+    // node:*
+    const re = /^\s*import\s.*from\s+["'](node:[^"']+)["']/gm;
+    let m;
+    while ((m = re.exec(src))) {
+      if (!ALLOWED_NODE_SUBSPECIFIERS.has(m[1])) return true;
+    }
+    // Any bare-package import (not relative, not node:*) — we don't
+    // bundle npm packages, so treat as unsupported. Same as SKIP_PROVIDERS
+    // list, but catches new upstream additions automatically.
+    const rePkg = /^\s*import\s.*from\s+["']([^./"'][^"']*)["']/gm;
+    while ((m = rePkg.exec(src))) {
+      if (!m[1].startsWith('node:')) return true;
+    }
+  }
+  return false;
+}
+
+const PROVIDERS = scanProviders(SRC);
+if (PROVIDERS.length === 0) {
+  throw new Error(`[build-connector-bundle] no providers found under ${SRC}/src/providers`);
+}
 
 async function loadEsbuild() {
   // Prefer a project-local esbuild; else use `npx --yes esbuild@0.24.0`,
