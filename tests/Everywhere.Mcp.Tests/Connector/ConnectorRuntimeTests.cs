@@ -101,7 +101,7 @@ public class ConnectorRuntimeTests
         Assert.That(result["ok"]!.GetValue<bool>(), Is.False,
             "no credentials should surface as ok=false");
         Assert.That(result["code"]!.GetValue<string>(), Is.EqualTo("authorization_failed"),
-            "upstream 401 should map to authorization_failed");
+            "upstream 401 should map to authorization_failed. Full envelope: " + result.ToJsonString());
         Assert.That(result["hint"], Is.Not.Null, "authorization_failed should carry a hint");
     }
 
