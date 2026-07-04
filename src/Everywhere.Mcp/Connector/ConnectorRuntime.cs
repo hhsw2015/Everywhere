@@ -376,12 +376,90 @@ public sealed class ConnectorRuntime : IAsyncDisposable
 
             // Minimal global surface expected by upstream code.
             engine.Execute("""
-                // ClearScript V8 ships URL and URLSearchParams via the
-                // V8 isolate — insurance only if a stripped build is
-                // shipped later.
-                globalThis.URL = globalThis.URL || (function () {
-                    throw new Error('connector runtime: URL global missing from V8 build');
-                });
+                // Phase 9 — pragmatic URL/URLSearchParams polyfill.
+                // Upstream providers call `new URL(base, path)`, `url.searchParams.set`,
+                // `url.toString()`, and read pathname/host/origin.
+                // Full WHATWG parser is heavy; this covers what open-connector
+                // executors actually reach for. Falls through to native when
+                // ClearScript exposes it.
+                if (typeof globalThis.URL === 'undefined') {
+                    globalThis.URLSearchParams = class URLSearchParams {
+                        constructor(init) {
+                            this._pairs = [];
+                            if (typeof init === 'string') {
+                                const s = init.replace(/^\?/, '');
+                                if (s) for (const p of s.split('&')) {
+                                    const eq = p.indexOf('=');
+                                    this._pairs.push(eq < 0
+                                        ? [decodeURIComponent(p), '']
+                                        : [decodeURIComponent(p.slice(0, eq)), decodeURIComponent(p.slice(eq + 1).replace(/\+/g, ' '))]);
+                                }
+                            } else if (init && typeof init === 'object') {
+                                for (const k of Object.keys(init)) this._pairs.push([k, String(init[k])]);
+                            }
+                        }
+                        get(k) { for (const [pk, pv] of this._pairs) if (pk === k) return pv; return null; }
+                        set(k, v) { this.delete(k); this._pairs.push([k, String(v)]); }
+                        append(k, v) { this._pairs.push([k, String(v)]); }
+                        has(k) { return this._pairs.some(([pk]) => pk === k); }
+                        delete(k) { this._pairs = this._pairs.filter(([pk]) => pk !== k); }
+                        toString() {
+                            return this._pairs
+                                .map(([k, v]) => encodeURIComponent(k) + '=' + encodeURIComponent(v).replace(/%20/g, '+'))
+                                .join('&');
+                        }
+                        forEach(cb) { for (const [k, v] of this._pairs) cb(v, k, this); }
+                        entries() { return this._pairs[Symbol.iterator](); }
+                        keys() { return this._pairs.map(p => p[0])[Symbol.iterator](); }
+                        values() { return this._pairs.map(p => p[1])[Symbol.iterator](); }
+                        [Symbol.iterator]() { return this.entries(); }
+                    };
+                    globalThis.URL = class URL {
+                        constructor(url, base) {
+                            let full;
+                            if (base && !/^[a-z][a-z0-9+\-.]*:/i.test(url)) {
+                                const baseUrl = new URL(base);
+                                if (url.startsWith('//')) full = baseUrl.protocol + url;
+                                else if (url.startsWith('/')) full = baseUrl.origin + url;
+                                else full = baseUrl.origin + baseUrl.pathname.replace(/[^/]*$/, '') + url;
+                            } else {
+                                full = String(url);
+                            }
+                            const m = /^([a-z][a-z0-9+\-.]*):\/\/([^/?#]+)([^?#]*)(\?[^#]*)?(#.*)?$/i.exec(full);
+                            if (!m) throw new TypeError('Invalid URL: ' + full);
+                            this.protocol = m[1].toLowerCase() + ':';
+                            this.host = m[2];
+                            const at = m[2].indexOf('@');
+                            const auth = at >= 0 ? m[2].slice(0, at) : '';
+                            const hostPort = at >= 0 ? m[2].slice(at + 1) : m[2];
+                            const colon = hostPort.lastIndexOf(':');
+                            this.hostname = colon >= 0 ? hostPort.slice(0, colon) : hostPort;
+                            this.port = colon >= 0 ? hostPort.slice(colon + 1) : '';
+                            this.username = auth.split(':')[0] || '';
+                            this.password = auth.split(':')[1] || '';
+                            this.pathname = m[3] || '/';
+                            this.search = m[4] || '';
+                            this.hash = m[5] || '';
+                            this.origin = this.protocol + '//' + hostPort;
+                            this.searchParams = new URLSearchParams(this.search);
+                            const self = this;
+                            const origSet = this.searchParams.set.bind(this.searchParams);
+                            const origAppend = this.searchParams.append.bind(this.searchParams);
+                            const origDelete = this.searchParams.delete.bind(this.searchParams);
+                            const sync = () => { const s = self.searchParams.toString(); self.search = s ? '?' + s : ''; };
+                            this.searchParams.set = (k, v) => { origSet(k, v); sync(); };
+                            this.searchParams.append = (k, v) => { origAppend(k, v); sync(); };
+                            this.searchParams.delete = (k) => { origDelete(k); sync(); };
+                        }
+                        get href() { return this.toString(); }
+                        toString() {
+                            let out = this.origin + this.pathname;
+                            if (this.search) out += this.search;
+                            if (this.hash) out += this.hash;
+                            return out;
+                        }
+                    };
+                }
                 // Phase 9 — TextEncoder / TextDecoder polyfill. Buffer
                 // and crypto shims lean on TextEncoder to turn strings
                 // into UTF-8 byte arrays. ClearScript's V8 doesn't
