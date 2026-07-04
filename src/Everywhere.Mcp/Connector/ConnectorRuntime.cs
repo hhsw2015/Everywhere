@@ -376,20 +376,120 @@ public sealed class ConnectorRuntime : IAsyncDisposable
 
             // Minimal global surface expected by upstream code.
             engine.Execute("""
-                // V8 isolate doesn't ship URL / URLSearchParams as globals.
-                // Upstream open-connector uses `new URL(...)` heavily for
-                // building request URLs.
+                // ClearScript V8 ships URL and URLSearchParams via the
+                // V8 isolate — insurance only if a stripped build is
+                // shipped later.
                 globalThis.URL = globalThis.URL || (function () {
-                    // ClearScript V8 typically already has URL — this is
-                    // insurance for older builds.
                     throw new Error('connector runtime: URL global missing from V8 build');
                 });
-                globalThis.setTimeout = globalThis.setTimeout || function (fn, ms) {
-                    // Simple sync passthrough — Phase 1 providers only use
-                    // setTimeout inside AbortSignal.timeout, which is
-                    // orthogonal to our 30s host-side fetch cap.
-                    return 0;
-                };
+                // Phase 9 — TextEncoder / TextDecoder polyfill. Buffer
+                // and crypto shims lean on TextEncoder to turn strings
+                // into UTF-8 byte arrays. ClearScript's V8 doesn't
+                // expose either global by default.
+                if (typeof globalThis.TextEncoder === 'undefined') {
+                    globalThis.TextEncoder = class TextEncoder {
+                        get encoding() { return 'utf-8'; }
+                        encode(str) {
+                            str = String(str ?? '');
+                            const out = [];
+                            for (let i = 0; i < str.length; i++) {
+                                let c = str.charCodeAt(i);
+                                if (c < 0x80) { out.push(c); continue; }
+                                if (c < 0x800) {
+                                    out.push(0xc0 | (c >> 6));
+                                    out.push(0x80 | (c & 0x3f));
+                                    continue;
+                                }
+                                if (c >= 0xd800 && c <= 0xdbff && i + 1 < str.length) {
+                                    const c2 = str.charCodeAt(i + 1);
+                                    if (c2 >= 0xdc00 && c2 <= 0xdfff) {
+                                        const cp = 0x10000 + (((c - 0xd800) << 10) | (c2 - 0xdc00));
+                                        i++;
+                                        out.push(0xf0 | (cp >> 18));
+                                        out.push(0x80 | ((cp >> 12) & 0x3f));
+                                        out.push(0x80 | ((cp >> 6) & 0x3f));
+                                        out.push(0x80 | (cp & 0x3f));
+                                        continue;
+                                    }
+                                }
+                                out.push(0xe0 | (c >> 12));
+                                out.push(0x80 | ((c >> 6) & 0x3f));
+                                out.push(0x80 | (c & 0x3f));
+                            }
+                            return new Uint8Array(out);
+                        }
+                    };
+                }
+                if (typeof globalThis.TextDecoder === 'undefined') {
+                    globalThis.TextDecoder = class TextDecoder {
+                        constructor(label) { this._label = (label || 'utf-8').toLowerCase(); }
+                        get encoding() { return this._label; }
+                        decode(buf) {
+                            const bytes = buf instanceof Uint8Array ? buf : new Uint8Array(buf.buffer || buf);
+                            let s = '';
+                            let i = 0;
+                            while (i < bytes.length) {
+                                const b = bytes[i++];
+                                if (b < 0x80) { s += String.fromCharCode(b); continue; }
+                                if ((b & 0xe0) === 0xc0) {
+                                    s += String.fromCharCode(((b & 0x1f) << 6) | (bytes[i++] & 0x3f));
+                                    continue;
+                                }
+                                if ((b & 0xf0) === 0xe0) {
+                                    const c = ((b & 0x0f) << 12) | ((bytes[i++] & 0x3f) << 6) | (bytes[i++] & 0x3f);
+                                    s += String.fromCharCode(c);
+                                    continue;
+                                }
+                                if ((b & 0xf8) === 0xf0) {
+                                    const cp = ((b & 0x07) << 18) | ((bytes[i++] & 0x3f) << 12) | ((bytes[i++] & 0x3f) << 6) | (bytes[i++] & 0x3f);
+                                    const off = cp - 0x10000;
+                                    s += String.fromCharCode(0xd800 | (off >> 10), 0xdc00 | (off & 0x3ff));
+                                    continue;
+                                }
+                            }
+                            return s;
+                        }
+                    };
+                }
+                if (typeof globalThis.atob === 'undefined') {
+                    // ClearScript's V8 sometimes omits atob. Buffer/crypto
+                    // shims need it; provide a minimal implementation.
+                    const B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+                    globalThis.atob = function (str) {
+                        str = String(str ?? '').replace(/=+$/, '');
+                        let s = '';
+                        let bits = 0, buffer = 0;
+                        for (let i = 0; i < str.length; i++) {
+                            const c = B64.indexOf(str[i]);
+                            if (c < 0) continue;
+                            buffer = (buffer << 6) | c;
+                            bits += 6;
+                            if (bits >= 8) {
+                                bits -= 8;
+                                s += String.fromCharCode((buffer >> bits) & 0xff);
+                            }
+                        }
+                        return s;
+                    };
+                }
+                if (typeof globalThis.btoa === 'undefined') {
+                    const B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+                    globalThis.btoa = function (str) {
+                        str = String(str ?? '');
+                        let out = '';
+                        for (let i = 0; i < str.length; i += 3) {
+                            const a = str.charCodeAt(i);
+                            const b = i + 1 < str.length ? str.charCodeAt(i + 1) : 0;
+                            const c = i + 2 < str.length ? str.charCodeAt(i + 2) : 0;
+                            out += B64[a >> 2];
+                            out += B64[((a & 3) << 4) | (b >> 4)];
+                            out += i + 1 < str.length ? B64[((b & 15) << 2) | (c >> 6)] : '=';
+                            out += i + 2 < str.length ? B64[c & 63] : '=';
+                        }
+                        return out;
+                    };
+                }
+                globalThis.setTimeout = globalThis.setTimeout || function (fn, ms) { return 0; };
                 globalThis.clearTimeout = globalThis.clearTimeout || function () {};
             """);
 
