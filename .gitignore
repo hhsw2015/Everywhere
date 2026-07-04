@@ -473,6 +473,8 @@ tools/everywhere-context-hook/target/
 
 # open-connector generated bundle (rebuilt by scripts/build-connector-bundle.mjs)
 /3rd/open-connector/dist/
+# Web console deps — installed by CI, rebuilt every push.
+/3rd/open-connector/web/node_modules/
 # Node tooling deps used by scripts/*.mjs (package-lock.json stays in VCS for
 # reproducible CI builds).
 /node_modules/

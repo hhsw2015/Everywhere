@@ -26,6 +26,20 @@
     <PackageReference Include="Microsoft.ClearScript.V8.Native.osx-x64" />
     <PackageReference Include="Microsoft.ClearScript.V8.Native.linux-x64" />
     <PackageReference Include="Microsoft.ClearScript.V8.Native.win-x64" />
+
+    <!-- SPEC docs/specs/everywhere-connector.md §9 — file providers for
+         the open-connector Web Console static host. StaticFiles /
+         FileExtensionContentTypeProvider live inside
+         Microsoft.AspNetCore.App (pulled in via ModelContextProtocol.AspNetCore
+         → the FrameworkReference below). -->
+    <PackageReference Include="Microsoft.Extensions.FileProviders.Physical" />
+  </ItemGroup>
+
+  <!-- Ensure Microsoft.AspNetCore.App shared framework is referenced so
+       Microsoft.AspNetCore.StaticFiles / FileExtensionContentTypeProvider
+       compile against the in-box types rather than a legacy NuGet. -->
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
 
   <ItemGroup>

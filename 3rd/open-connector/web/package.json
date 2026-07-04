@@ -1,0 +1,30 @@
+{
+  "name": "@oomol/connect-web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "tsc -p tsconfig.json && vite build",
+    "preview": "vite preview",
+    "format": "oxfmt --check .",
+    "format:fix": "oxfmt ."
+  },
+  "dependencies": {
+    "@embra/i18n": "^0.0.10",
+    "@embra/reactivity": "^0.0.8",
+    "@vitejs/plugin-react": "^6.0.1",
+    "foxact": "^0.3.8",
+    "lucide-react": "^1.14.0",
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6",
+    "react-router": "^7.18.1",
+    "vite": "^8.0.12"
+  },
+  "devDependencies": {
+    "@hyrious/configs": "^0.1.6",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "typescript": "^6.0.3"
+  }
+}

@@ -19,6 +19,9 @@
     <_ConnectorDistDir>$(_ConnectorSourceDir)/dist</_ConnectorDistDir>
     <_ConnectorBundleOutput>$(_ConnectorDistDir)/connector.bundle.js</_ConnectorBundleOutput>
     <_ConnectorManifestOutput>$(_ConnectorDistDir)/connector-manifest.json</_ConnectorManifestOutput>
+    <_ConnectorWebDir>$(_ConnectorSourceDir)/web</_ConnectorWebDir>
+    <_ConnectorWebDist>$(_ConnectorDistDir)/web</_ConnectorWebDist>
+    <_ConnectorWebIndex>$(_ConnectorWebDist)/index.html</_ConnectorWebIndex>
   </PropertyGroup>
 
   <!--
@@ -43,6 +46,27 @@
           WorkingDirectory="$(MSBuildThisFileDirectory).." />
   </Target>
 
+  <!-- Vite build for the Web Console. Skipped when the vendored web/
+       tree isn't present (contributor cloning with sparse subtree). CI
+       runs it directly before dotnet so incremental MSBuild treats
+       dist/web/index.html as the check. -->
+  <ItemGroup>
+    <_ConnectorWebInput Include="$(_ConnectorWebDir)/**/*.ts" />
+    <_ConnectorWebInput Include="$(_ConnectorWebDir)/**/*.tsx" />
+    <_ConnectorWebInput Include="$(_ConnectorWebDir)/index.html" />
+    <_ConnectorWebInput Include="$(_ConnectorWebDir)/vite.config.ts" />
+  </ItemGroup>
+
+  <Target Name="BuildConnectorWeb"
+          BeforeTargets="PrepareForBuild"
+          Inputs="@(_ConnectorWebInput)"
+          Outputs="$(_ConnectorWebIndex)"
+          Condition="Exists('$(_ConnectorWebDir)/package.json') and Exists('$(_ConnectorWebDir)/node_modules')">
+    <Message Importance="high" Text="[connector] rebuilding web console from $(_ConnectorWebDir)" />
+    <Exec Command="npx vite build"
+          WorkingDirectory="$(_ConnectorWebDir)" />
+  </Target>
+
   <ItemGroup Condition="Exists('$(_ConnectorDistDir)')">
     <Content Include="$(_ConnectorDistDir)/connector.bundle.js">
       <Link>Resources/connector/connector.bundle.js</Link>
@@ -61,6 +85,17 @@
     </Content>
     <Content Include="$(_ConnectorSourceDir)/UPSTREAM_REF" Condition="Exists('$(_ConnectorSourceDir)/UPSTREAM_REF')">
       <Link>Resources/connector/UPSTREAM_REF</Link>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+  <!-- Web Console static assets. Only pulled in when dist/web has been
+       built (vite build produced index.html). Landing path
+       Resources/connector/web/ is what Kestrel serves at /connector-ui/. -->
+  <ItemGroup Condition="Exists('$(_ConnectorWebIndex)')">
+    <Content Include="$(_ConnectorWebDist)/**/*">
+      <Link>Resources/connector/web/%(RecursiveDir)%(Filename)%(Extension)</Link>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>

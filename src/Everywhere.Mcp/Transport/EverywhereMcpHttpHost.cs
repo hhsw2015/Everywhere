@@ -419,6 +419,12 @@ public sealed class EverywhereMcpHttpHost : IHostedService, IAsyncDisposable
         app.Use(LoopbackOnly(port));
 
         app.MapMcp("/mcp");
+
+        // SPEC docs/specs/everywhere-connector.md §9 — mount the vendored
+        // open-connector Web Console at /connector-ui/ and the REST API
+        // it consumes at /api/* and /v1/actions/*.
+        Connector.ConnectorHttpEndpoints.Map(app, _parentServices);
+
         return app;
     }
 
