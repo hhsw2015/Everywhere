@@ -88,6 +88,32 @@ public sealed class RunLogStore
 public sealed class RuntimeTokenStore
 {
     private readonly ConcurrentDictionary<string, JsonObject> _tokens = new();
+    // Auto-seed a "default" token so the Access page has something to
+    // show out-of-the-box — Everywhere runs loopback-only, so no client
+    // actually needs a bearer token, but users staring at an empty
+    // token list wonder if setup is broken. One-time seed on first
+    // touch. Guarded by _seedOnce so concurrent Ensure calls only
+    // seed once even under a request storm.
+    private int _seedOnce;
+
+    public RuntimeTokenStore()
+    {
+        EnsureDefaultSeed();
+    }
+
+    private void EnsureDefaultSeed()
+    {
+        if (Interlocked.Exchange(ref _seedOnce, 1) != 0) return;
+        var id = "default";
+        _tokens[id] = new JsonObject
+        {
+            ["id"] = id,
+            ["name"] = "default",
+            ["createdAt"] = DateTimeOffset.UtcNow.ToString("O"),
+            ["lastUsedAt"] = null,
+            ["revokedAt"] = null,
+        };
+    }
 
     public JsonArray List()
     {
