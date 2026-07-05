@@ -61,10 +61,9 @@
     <InternalsVisibleTo Include="Everywhere.Mcp.Tests" />
   </ItemGroup>
 
-  <!-- SPEC docs/specs/everywhere-connector.md — copy connector bundle to
-       bin/{cfg}/net10.0/Resources/connector/ so the runtime's dev fallback
-       (walking up to find 3rd/open-connector) is only used when the
-       publish layout isn't populated. Also imported by the platform
-       projects (Mac/Linux/Windows) so the publish output carries it too. -->
-  <Import Project="..\Build.ConnectorBundle.targets" />
+  <!-- Build.ConnectorBundle.targets is imported by the platform
+       projects (Mac/Linux/Windows) that publish. Importing here too
+       would ProjectReference-double-add the same Content and trip
+       NETSDK1152 dedup on dist/web/*. Runtime dev fallback in
+       ConnectorRuntime walks up to 3rd/open-connector for local dev. -->
 </Project>

@@ -162,9 +162,7 @@
   <Import Project="..\Build.Watchdog.targets"/>
   <Import Project="..\Build.ContextHook.targets"/>
   <Import Project="..\Build.OpenCliBundle.targets"/>
-  <!-- Build.ConnectorBundle.targets is imported by Everywhere.Mcp.csproj;
-       ProjectReference propagates Content to this project. Importing
-       here would double-add the same files and trip NETSDK1152 dedup. -->
+  <Import Project="..\Build.ConnectorBundle.targets"/>
 
   <ItemGroup>
     <None Include="..\..\img\Everywhere.ico">
