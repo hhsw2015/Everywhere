@@ -333,3 +333,16 @@ Each phase respects a kill switch:
 ## 10. Success
 
 > Install OpenDia. Open the sidepanel. Type "read the top HN story and summarize it." The LLM calls `browser_get_url` (loopback MCP) → `browser_get_text` → responds; text streams into the sidepanel. Meanwhile a Claude Code window calls `chat_read` and sees the exact same conversation. Claude Code posts an assistant message via `chat_send`; it appears in the sidepanel within 2 seconds. The user sees "OpenDia" — never Cebian, never Everywhere daemon. Three components share one conversation truth.
+
+## 11. Related work — Everywhere Connector integration
+
+The extension is the MCP client; provider-config UI is not its problem.
+Cebian ships a single "Open Connector Manager" button inside
+`OpenDiaBridgeSection` that calls
+`chrome.tabs.create({ url: 'http://127.0.0.1:7878/connector-ui/' })` — no
+iframe, no route. Provider connection setup, OAuth flows, and secret
+storage all live on the daemon side. See
+[docs/specs/everywhere-connector.md](./everywhere-connector.md) §9.3 for the
+full rationale (originally the spec had an iframe path; it was reverted
+in Phase 4 review to keep Cebian purely a client of the MCP + OpenDia
+tool surface).

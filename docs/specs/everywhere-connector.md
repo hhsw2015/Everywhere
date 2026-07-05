@@ -630,8 +630,12 @@ into version control.
   `body.getReader()` is **not** needed for Phase 1 (GitHub only calls
   `response.text()`); `readBoundedResponseBytes` is only used by
   `uploadProviderUrlToTransitFile`, which no Phase-1 action invokes.
-- **Q4.** Do we need `credential-fields.ts` runtime metadata for the Web
-  Console, or is `definition.ts` enough? Answer during Phase 3, not now.
+- **Q4. RESOLVED (Phase 11).** `definition.ts` is enough. Upstream's
+  `web/src/model.ts::credentialFieldsFor` derives every field the console
+  renders — `label` / `placeholder` / `description` / `extraFields` for
+  api_key; the full `fields[]` for custom_credential — from the
+  `AuthDefinition` we already ship in the manifest under `service.auth[]`.
+  `credential-fields.ts` is a build-time helper, not a runtime dependency.
 
 ---
 
