@@ -17,6 +17,11 @@ public sealed class ConnectorHostShim
     private readonly ICredentialResolver _credentials;
     private readonly TransitFileStore? _transit;
     private readonly Action<string> _onWarn;
+    // Per-invoke connection-name hint. Set by ConnectorRuntime.InvokeAsync
+    // before running the JS bundle; cleared afterwards. When set, this
+    // routes the getCredential(service) call to the named connection
+    // rather than the default. SPEC Phase 12.
+    private readonly ThreadLocal<string?> _connectionName = new(() => null);
 
     public ConnectorHostShim(HostShim fetchShim, ICredentialResolver credentials, Action<string> onWarn, TransitFileStore? transit = null)
     {
@@ -24,6 +29,11 @@ public sealed class ConnectorHostShim
         _credentials = credentials;
         _transit = transit;
         _onWarn = onWarn;
+    }
+
+    internal void SetConnectionScope(string? connectionName)
+    {
+        _connectionName.Value = string.IsNullOrEmpty(connectionName) ? null : connectionName;
     }
 
     /// <summary>Bridge to <see cref="HostShim.fetchAsync"/>. The JS bundle's
@@ -89,7 +99,21 @@ public sealed class ConnectorHostShim
     public object? getCredential(string service)
     {
         if (string.IsNullOrWhiteSpace(service)) return null;
-        var cred = _credentials.Resolve(service);
+        // Named-connection routing (Phase 12): if a scope was set for this
+        // invoke and the resolver knows how to resolve by name, use it.
+        // Falls back to the default resolver path when no scope is set,
+        // preserving Phase 6 semantics.
+        var connName = _connectionName.Value;
+        JsonObject? cred = null;
+        if (!string.IsNullOrEmpty(connName) && _credentials is INamedCredentialResolver named)
+        {
+            cred = named.ResolveNamed(service, connName)
+                   ?? named.Resolve(service); // graceful fallback to default
+        }
+        else
+        {
+            cred = _credentials.Resolve(service);
+        }
         if (cred is null) return null;
         // Round-trip via JSON so ClearScript materialises the value as a
         // plain JS object (V8 side) instead of a host-object reference —
@@ -102,10 +126,18 @@ public sealed class ConnectorHostShim
 }
 
 /// <summary>Resolve provider credentials for a given service id. Phase 1
-/// implementation reads env vars; Phase 2 will swap to SQLite.</summary>
+/// implementation reads env vars; Phase 2 uses a JSON store.</summary>
 public interface ICredentialResolver
 {
     JsonObject? Resolve(string service);
+}
+
+/// <summary>Optional secondary contract implemented by resolvers that
+/// can distinguish named connections (SPEC Phase 12). Implementations
+/// return the named entry, or null if no such connection exists.</summary>
+public interface INamedCredentialResolver : ICredentialResolver
+{
+    JsonObject? ResolveNamed(string service, string? connectionName);
 }
 
 /// <summary>SPEC §7 Phase 1 — read <c>EVERYWHERE_CONNECTOR_&lt;SERVICE&gt;_PAT</c>

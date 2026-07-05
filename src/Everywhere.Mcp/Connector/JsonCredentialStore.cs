@@ -18,7 +18,7 @@ namespace Everywhere.Mcp.Connector;
 /// are decrypted as-is (see <see cref="CredentialEncryptor.Decrypt"/>)
 /// and re-encrypted on next write.
 /// </summary>
-public sealed class JsonCredentialStore : ICredentialResolver
+public sealed class JsonCredentialStore : INamedCredentialResolver
 {
     // Fields inside the JSON document that hold user-provided secrets.
     // Any value under one of these keys (anywhere in the object tree) is
@@ -51,17 +51,35 @@ public sealed class JsonCredentialStore : ICredentialResolver
     }
 
     public JsonObject? Resolve(string service)
+        => ResolveNamed(service, connectionName: null);
+
+    /// <summary>Resolve a specific connection by name. Passing null or
+    /// empty resolves the default connection (bare `service` key).
+    /// SPEC Phase 12 — multiple named connections per service.</summary>
+    public JsonObject? ResolveNamed(string service, string? connectionName)
     {
         if (string.IsNullOrWhiteSpace(service)) return null;
         var doc = ReadDoc();
         var conns = doc["connections"] as JsonObject;
         if (conns is null) return null;
-        var entry = conns[service] as JsonObject;
+        var key = MakeKey(service, connectionName);
+        var entry = conns[key] as JsonObject;
         if (entry is null) return null;
-        // Return a deep clone — caller may mutate, and doc is our
-        // single-writer state.
         return entry.DeepClone() as JsonObject;
     }
+
+    /// <summary>Split a stored key back into (service, connectionName?).
+    /// Bare `service` returns (service, null); `service:name` returns
+    /// (service, name).</summary>
+    public static (string Service, string? ConnectionName) SplitKey(string key)
+    {
+        var colon = key.IndexOf(':');
+        if (colon <= 0) return (key, null);
+        return (key.Substring(0, colon), key.Substring(colon + 1));
+    }
+
+    private static string MakeKey(string service, string? connectionName)
+        => string.IsNullOrEmpty(connectionName) ? service : $"{service}:{connectionName}";
 
     public IReadOnlyList<ConnectionSummary> List()
     {
@@ -69,24 +87,26 @@ public sealed class JsonCredentialStore : ICredentialResolver
         var conns = doc["connections"] as JsonObject;
         if (conns is null) return Array.Empty<ConnectionSummary>();
         var list = new List<ConnectionSummary>();
-        foreach (var (svc, node) in conns)
+        foreach (var (key, node) in conns)
         {
             if (node is not JsonObject entry) continue;
             var authType = entry["authType"]?.GetValue<string>() ?? "unknown";
             var profile = entry["profile"] as JsonObject;
+            var (svc, connName) = SplitKey(key);
             list.Add(new ConnectionSummary(
                 Service: svc,
                 AuthType: authType,
-                DisplayName: profile?["displayName"]?.GetValue<string>() ?? svc,
-                AccountId: profile?["accountId"]?.GetValue<string>() ?? ""));
+                DisplayName: profile?["displayName"]?.GetValue<string>() ?? key,
+                AccountId: profile?["accountId"]?.GetValue<string>() ?? "",
+                ConnectionName: connName));
         }
         return list;
     }
 
     /// <summary>Store an api_key credential. Overwrites any existing
-    /// connection for the same service. Profile is optional — falls
-    /// back to a generic label when missing.</summary>
-    public void SetApiKey(string service, string apiKey, string? displayName = null)
+    /// connection for the same (service, connectionName) tuple.
+    /// connectionName defaults to the service's default connection.</summary>
+    public void SetApiKey(string service, string apiKey, string? displayName = null, string? connectionName = null)
     {
         if (string.IsNullOrWhiteSpace(service)) throw new ArgumentException("service is required", nameof(service));
         if (string.IsNullOrWhiteSpace(apiKey)) throw new ArgumentException("apiKey is required", nameof(apiKey));
@@ -99,12 +119,15 @@ public sealed class JsonCredentialStore : ICredentialResolver
             ["profile"] = new JsonObject
             {
                 ["accountId"] = "user",
-                ["displayName"] = displayName ?? $"{service} api key",
+                ["displayName"] = displayName ?? (string.IsNullOrEmpty(connectionName)
+                    ? $"{service} api key"
+                    : $"{service}:{connectionName} api key"),
                 ["grantedScopes"] = new JsonArray(),
             },
             ["metadata"] = new JsonObject(),
             ["createdAt"] = DateTimeOffset.UtcNow.ToString("O"),
         };
+        var storeKey = MakeKey(service, connectionName);
         Mutate(doc =>
         {
             var conns = doc["connections"] as JsonObject;
@@ -113,20 +136,23 @@ public sealed class JsonCredentialStore : ICredentialResolver
                 conns = new JsonObject();
                 doc["connections"] = conns;
             }
-            conns[service] = entry;
+            conns[storeKey] = entry;
         });
     }
 
-    public bool Delete(string service)
+    public bool Delete(string service) => DeleteNamed(service, connectionName: null);
+
+    public bool DeleteNamed(string service, string? connectionName)
     {
         if (string.IsNullOrWhiteSpace(service)) return false;
+        var storeKey = MakeKey(service, connectionName);
         var removed = false;
         Mutate(doc =>
         {
             var conns = doc["connections"] as JsonObject;
-            if (conns is not null && conns.ContainsKey(service))
+            if (conns is not null && conns.ContainsKey(storeKey))
             {
-                conns.Remove(service);
+                conns.Remove(storeKey);
                 removed = true;
             }
         });
@@ -414,7 +440,7 @@ public sealed class JsonCredentialStore : ICredentialResolver
 /// <summary>SPEC §7 — chain multiple credential resolvers. First non-null
 /// wins. Used to layer env vars over the JSON store: env for CI/dev
 /// override, JSON for daily use.</summary>
-public sealed class ChainedCredentialResolver : ICredentialResolver
+public sealed class ChainedCredentialResolver : INamedCredentialResolver
 {
     private readonly IReadOnlyList<ICredentialResolver> _links;
 
@@ -432,13 +458,31 @@ public sealed class ChainedCredentialResolver : ICredentialResolver
         }
         return null;
     }
+
+    public JsonObject? ResolveNamed(string service, string? connectionName)
+    {
+        if (string.IsNullOrEmpty(connectionName)) return Resolve(service);
+        foreach (var link in _links)
+        {
+            if (link is INamedCredentialResolver named)
+            {
+                var hit = named.ResolveNamed(service, connectionName);
+                if (hit is not null) return hit;
+            }
+            // Non-named links (env vars) don't support alternate connections;
+            // skip them for named lookups so a stray env var can't shadow
+            // a specifically-named store connection.
+        }
+        return null;
+    }
 }
 
 public sealed record ConnectionSummary(
     string Service,
     string AuthType,
     string DisplayName,
-    string AccountId);
+    string AccountId,
+    string? ConnectionName = null);
 
 public sealed record OAuthClientSummary(
     string Service,

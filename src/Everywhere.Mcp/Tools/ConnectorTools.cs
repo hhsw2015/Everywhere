@@ -197,13 +197,16 @@ public sealed class ConnectorTools
     [McpServerTool(Name = "connector_run")]
     [Description(
         "Execute one provider action. Credentials must be configured " +
-        "(Phase 1: env var EVERYWHERE_CONNECTOR_<SERVICE>_PAT). " +
+        "(env var EVERYWHERE_CONNECTOR_<SERVICE>_PAT or via connector_connect). " +
         "arguments_json is a JSON object matching the action's inputSchema — " +
-        "call connector_describe first if unsure.")]
+        "call connector_describe first if unsure. " +
+        "connection routes to a named connection (e.g. \"work\" → github:work); " +
+        "omit for the default connection.")]
     public async Task<string> ConnectorRun(
         [Description("Service id (from connector_list).")] string service,
         [Description("Action name (from connector_list).")] string name,
         [Description("JSON object of arguments, as a string. Use \"{}\" if no args.")] string arguments_json,
+        [Description("Optional named connection (Phase 12). Empty = default connection.")] string? connection = null,
         CancellationToken ct = default)
     {
         JsonObject argsObj;
@@ -229,7 +232,7 @@ public sealed class ConnectorTools
 
         try
         {
-            var result = await _runtime.InvokeAsync(service, name, argsObj, ct).ConfigureAwait(false);
+            var result = await _runtime.InvokeAsync(service, name, argsObj, connectionName: connection, ct: ct).ConfigureAwait(false);
             return result.ToJsonString();
         }
         catch (OperationCanceledException) { throw; }
@@ -241,23 +244,29 @@ public sealed class ConnectorTools
 
     [McpServerTool(Name = "connector_connect")]
     [Description(
-        "Store an api_key credential for a provider (auth_type=api_key only in Phase 2). " +
-        "Overwrites any existing connection. Persists to " +
-        "~/.everywhere/connector/connections.json. OAuth2 lands in Phase 3.")]
+        "Store an api_key credential for a provider (auth_type=api_key). " +
+        "Overwrites any existing connection with the same (service, connection) tuple. " +
+        "Persists to ~/.everywhere/connector/connections.json (encrypted at rest). " +
+        "connection lets you keep multiple accounts per service — e.g. github + \"work\" " +
+        "for a work PAT alongside the personal one. Empty = default connection.")]
     public string ConnectorConnect(
         [Description("Service id (e.g. \"github\", \"openai\").")] string service,
         [Description("API key value (personal access token, api key, etc.).")] string api_key,
-        [Description("Optional friendly label shown to the user.")] string? display_name = null)
+        [Description("Optional friendly label shown to the user.")] string? display_name = null,
+        [Description("Optional connection name. Empty = default connection (Phase 12).")] string? connection = null)
     {
         try
         {
-            _store.SetApiKey(service, api_key, display_name);
-            var summary = _store.List().FirstOrDefault(c => string.Equals(c.Service, service, StringComparison.OrdinalIgnoreCase));
+            _store.SetApiKey(service, api_key, display_name, connectionName: connection);
+            var summary = _store.List().FirstOrDefault(c =>
+                string.Equals(c.Service, service, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(c.ConnectionName ?? "", connection ?? "", StringComparison.OrdinalIgnoreCase));
             return new JsonObject
             {
                 ["schema_version"] = "1",
                 ["ok"] = true,
                 ["service"] = service,
+                ["connection"] = connection,
                 ["auth_type"] = "api_key",
                 ["display_name"] = summary?.DisplayName,
             }.ToJsonString();
@@ -273,18 +282,20 @@ public sealed class ConnectorTools
     }
 
     [McpServerTool(Name = "connector_disconnect")]
-    [Description("Delete a stored credential for a provider. Idempotent.")]
+    [Description("Delete a stored credential for a provider. Idempotent. connection empty = default.")]
     public string ConnectorDisconnect(
-        [Description("Service id whose stored credential should be removed.")] string service)
+        [Description("Service id whose stored credential should be removed.")] string service,
+        [Description("Optional connection name (Phase 12). Empty = default connection.")] string? connection = null)
     {
         try
         {
-            var removed = _store.Delete(service);
+            var removed = _store.DeleteNamed(service, connection);
             return new JsonObject
             {
                 ["schema_version"] = "1",
                 ["ok"] = true,
                 ["service"] = service,
+                ["connection"] = connection,
                 ["removed"] = removed,
             }.ToJsonString();
         }
@@ -307,6 +318,7 @@ public sealed class ConnectorTools
                 arr.Add(new JsonObject
                 {
                     ["service"] = c.Service,
+                    ["connection"] = c.ConnectionName,
                     ["auth_type"] = c.AuthType,
                     ["display_name"] = c.DisplayName,
                     ["account_id"] = c.AccountId,

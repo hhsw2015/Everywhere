@@ -148,6 +148,57 @@ public class JsonCredentialStoreTests
     }
 
     [Test]
+    public void NamedConnections_KeepDefaultAndNamedIndependent()
+    {
+        var store = new JsonCredentialStore(_storePath);
+        store.SetApiKey("github", "personal-pat");
+        store.SetApiKey("github", "work-pat", displayName: "GH Work", connectionName: "work");
+
+        // Default connection unchanged.
+        var def = store.Resolve("github");
+        Assert.That(def!["apiKey"]!.GetValue<string>(), Is.EqualTo("personal-pat"));
+
+        // Named connection resolved separately.
+        var work = store.ResolveNamed("github", "work");
+        Assert.That(work!["apiKey"]!.GetValue<string>(), Is.EqualTo("work-pat"));
+
+        // Listing surfaces both, with connection name where set.
+        var list = store.List();
+        Assert.That(list.Count, Is.EqualTo(2));
+        var workRow = list.First(r => r.ConnectionName == "work");
+        Assert.That(workRow.Service, Is.EqualTo("github"));
+        Assert.That(workRow.DisplayName, Is.EqualTo("GH Work"));
+
+        // Named delete only removes that entry; default survives.
+        Assert.That(store.DeleteNamed("github", "work"), Is.True);
+        Assert.That(store.ResolveNamed("github", "work"), Is.Null);
+        Assert.That(store.Resolve("github"), Is.Not.Null);
+    }
+
+    [Test]
+    public void ChainedResolver_NamedLookupSkipsEnv()
+    {
+        // A named lookup must not pick up env-var credentials — env
+        // resolvers only serve the default connection.
+        var envKey = "EVERYWHERE_CONNECTOR_GITHUB_PAT";
+        Environment.SetEnvironmentVariable(envKey, "env-value");
+        try
+        {
+            var store = new JsonCredentialStore(_storePath);
+            store.SetApiKey("github", "work-only", connectionName: "work");
+            var chain = new ChainedCredentialResolver(new EnvironmentCredentialResolver(), store);
+            var work = chain.ResolveNamed("github", "work");
+            Assert.That(work!["apiKey"]!.GetValue<string>(), Is.EqualTo("work-only"));
+            var def = chain.Resolve("github");
+            Assert.That(def!["apiKey"]!.GetValue<string>(), Is.EqualTo("env-value"));
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(envKey, null);
+        }
+    }
+
+    [Test]
     public void SetOAuth2Credential_ResolvesAsOAuthShape()
     {
         var store = new JsonCredentialStore(_storePath);

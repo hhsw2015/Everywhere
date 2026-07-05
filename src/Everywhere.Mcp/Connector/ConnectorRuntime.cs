@@ -37,6 +37,9 @@ public sealed class ConnectorRuntime : IAsyncDisposable
     private readonly SemaphoreSlim _invokeGate = new(1, 1);
     private readonly CancellationTokenSource _disposeCts = new();
     private V8ScriptEngine? _engineInstance;
+    // Cached during BootEngineAsync so InvokeAsync can set the per-call
+    // connection scope without walking the ClearScript engine.Script bag.
+    private ConnectorHostShim? _hostShim;
 
     // Manifest read once, kept in memory. Refreshed on next process boot.
     private ConnectorManifest? _manifest;
@@ -137,8 +140,14 @@ public sealed class ConnectorRuntime : IAsyncDisposable
 
     /// <summary>SPEC §8.3 — execute one provider action inside the V8
     /// isolate. Envelope adaptation (upstream ExecutionResult → shared
-    /// envelope) happens here so callers only handle one shape.</summary>
-    public async Task<JsonObject> InvokeAsync(string service, string actionName, JsonObject input, CancellationToken ct = default)
+    /// envelope) happens here so callers only handle one shape.
+    /// SPEC Phase 12 — <paramref name="connectionName"/> routes credential
+    /// lookup to a named connection ("work" → github:work); null uses
+    /// the default connection.</summary>
+    public Task<JsonObject> InvokeAsync(string service, string actionName, JsonObject input, CancellationToken ct = default)
+        => InvokeAsync(service, actionName, input, connectionName: null, ct: ct);
+
+    public async Task<JsonObject> InvokeAsync(string service, string actionName, JsonObject input, string? connectionName, CancellationToken ct = default)
     {
         var sw = Stopwatch.StartNew();
         if (string.IsNullOrWhiteSpace(service)) return Failure(service, actionName, "invalid_input", "service is required", sw);
@@ -177,6 +186,7 @@ public sealed class ConnectorRuntime : IAsyncDisposable
         await _invokeGate.WaitAsync(linked.Token).ConfigureAwait(false);
         try
         {
+            _hostShim?.SetConnectionScope(connectionName);
             try
             {
                 engine.Script.__connectorActionId = act.Id;
@@ -289,6 +299,7 @@ public sealed class ConnectorRuntime : IAsyncDisposable
             }
             finally
             {
+                _hostShim?.SetConnectionScope(null);
                 try
                 {
                     engine.Script.__connectorInputJson = null;
@@ -372,6 +383,7 @@ public sealed class ConnectorRuntime : IAsyncDisposable
             var connectorHost = new ConnectorHostShim(fetchShim, _credentials,
                 m => _log?.LogWarning("connector: {Message}", m),
                 transit: _transit);
+            _hostShim = connectorHost;
             engine.AddHostObject("__connectorHost", connectorHost);
 
             // Minimal global surface expected by upstream code.

@@ -52,17 +52,22 @@ const OUT = resolve(arg('out', join(SRC, 'dist')));
 //      bracket notation everywhere).
 // Explicit skip-list handles cases we've reviewed and want to hold back.
 const SKIP_PROVIDERS = new Set([
-  // Providers importing external npm packages we don't bundle:
-  //   flomo, jin10 — @modelcontextprotocol/sdk
-  //   linux_do    — rss-parser
-  // Their executors run in a Node host, not V8. Skip until we ship a
-  // browser-compatible port.
+  // flomo + jin10 embed a full MCP client (@modelcontextprotocol/sdk +
+  // StreamableHTTPClientTransport) — they act as MCP-to-MCP proxies to
+  // remote flomo/jin10 MCP servers. Porting the SDK into V8 would drag
+  // in real transport/protocol machinery (SSE, session lifecycle,
+  // schema validators). For now the daemon can already call those
+  // remote MCP endpoints directly; we skip them here to avoid a
+  // parallel implementation.
   'flomo',
   'jin10',
-  'linux_do',
+  // linux_do IS wired via the bundle's rss-parser alias below.
 ]);
 
 const ALLOWED_NODE_SUBSPECIFIERS = new Set(['node:buffer', 'node:crypto']);
+// npm-package imports the bundle covers via esbuild alias. Every entry
+// must have a matching alias in the esbuild config below.
+const ALLOWED_EXTERNAL_PACKAGES = new Set(['rss-parser']);
 
 function scanProviders(srcDir) {
   const providersRoot = join(srcDir, 'src/providers');
@@ -92,12 +97,13 @@ function hasUnsupportedNodeImport(dir) {
     while ((m = re.exec(src))) {
       if (!ALLOWED_NODE_SUBSPECIFIERS.has(m[1])) return true;
     }
-    // Any bare-package import (not relative, not node:*) — we don't
-    // bundle npm packages, so treat as unsupported. Same as SKIP_PROVIDERS
-    // list, but catches new upstream additions automatically.
+    // Bare-package imports (not relative, not node:*): rejected unless
+    // the package name is in ALLOWED_EXTERNAL_PACKAGES (which the bundle
+    // covers via a matching esbuild alias).
     const rePkg = /^\s*import\s.*from\s+["']([^./"'][^"']*)["']/gm;
     while ((m = rePkg.exec(src))) {
-      if (!m[1].startsWith('node:')) return true;
+      if (m[1].startsWith('node:')) continue;
+      if (!ALLOWED_EXTERNAL_PACKAGES.has(m[1])) return true;
     }
   }
   return false;
@@ -226,6 +232,104 @@ export const Buffer = {
   alloc(n) { return makeBuffer(new Uint8Array(n)); },
 };
 export default { Buffer };
+`;
+
+// rss-parser shim. Only linux_do currently reaches for it. Upstream API:
+//   const p = new Parser({ customFields: { item: [[xmlKey, jsKey]] } });
+//   const feed = await p.parseString(xml);  // { title, link, description, items[] }
+// We implement RSS 2.0 (linux_do only serves that shape). Enough surface
+// for `feed.title/link/description`, `item.title/link/description/pubDate/
+// creator/content/contentSnippet/guid`, and any customFields the caller
+// registered.
+const RSS_PARSER_SHIM_SOURCE = `
+function stripCData(s) {
+  if (typeof s !== 'string') return s;
+  const m = s.match(/^\\s*<!\\[CDATA\\[([\\s\\S]*)\\]\\]>\\s*$/);
+  return m ? m[1] : s;
+}
+function decodeEntities(s) {
+  if (typeof s !== 'string') return s;
+  return s
+    .replace(/&#(\\d+);/g, (_, n) => String.fromCharCode(+n))
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, n) => String.fromCharCode(parseInt(n, 16)))
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&amp;/g, '&');
+}
+function extractTag(xml, tag) {
+  // Non-greedy match on named tag; returns first inner text or null.
+  // Escape colons for XML-namespaced tags (dc:creator).
+  const escaped = tag.replace(/[.*+?^\${}()|[\\]\\\\]/g, '\\\\$&');
+  const re = new RegExp('<' + escaped + '(?:\\\\s[^>]*)?>([\\\\s\\\\S]*?)<\\\\/' + escaped + '>');
+  const m = xml.match(re);
+  return m ? decodeEntities(stripCData(m[1])) : null;
+}
+function extractAllItems(xml) {
+  const items = [];
+  const re = /<item(?:\\s[^>]*)?>([\\s\\S]*?)<\\/item>/g;
+  let m;
+  while ((m = re.exec(xml))) items.push(m[1]);
+  return items;
+}
+class Parser {
+  constructor(opts) {
+    this._itemFields = ((opts && opts.customFields && opts.customFields.item) || []).map((entry) => {
+      // Upstream accepts either a bare string or a [xmlKey, jsKey, meta?] tuple.
+      if (Array.isArray(entry)) return { xml: entry[0], js: entry[1] || entry[0] };
+      return { xml: entry, js: entry };
+    });
+    this._feedFields = ((opts && opts.customFields && opts.customFields.feed) || []).map((entry) => {
+      if (Array.isArray(entry)) return { xml: entry[0], js: entry[1] || entry[0] };
+      return { xml: entry, js: entry };
+    });
+  }
+  async parseString(xml) {
+    if (typeof xml !== 'string') xml = String(xml ?? '');
+    // Feed-level: title / link / description sit inside <channel>...</channel>.
+    const channelMatch = xml.match(/<channel(?:\\s[^>]*)?>([\\s\\S]*?)<\\/channel>/);
+    const channel = channelMatch ? channelMatch[1] : xml;
+    const feed = {
+      title: extractTag(channel, 'title'),
+      link: extractTag(channel, 'link'),
+      description: extractTag(channel, 'description'),
+      items: [],
+    };
+    for (const f of this._feedFields) {
+      feed[f.js] = extractTag(channel, f.xml);
+    }
+    for (const raw of extractAllItems(xml)) {
+      const item = {
+        title: extractTag(raw, 'title'),
+        link: extractTag(raw, 'link'),
+        description: extractTag(raw, 'description'),
+        pubDate: extractTag(raw, 'pubDate'),
+        guid: extractTag(raw, 'guid'),
+        creator: extractTag(raw, 'dc:creator') || extractTag(raw, 'author'),
+        content: extractTag(raw, 'content:encoded') || extractTag(raw, 'description'),
+        contentSnippet: null,
+        categories: [],
+      };
+      // categories — collect all <category>.
+      const catRe = /<category(?:\\s[^>]*)?>([\\s\\S]*?)<\\/category>/g;
+      let cm;
+      while ((cm = catRe.exec(raw))) item.categories.push(decodeEntities(stripCData(cm[1])));
+      // contentSnippet: strip HTML from content, cap at 500 chars.
+      if (typeof item.content === 'string') {
+        item.contentSnippet = item.content.replace(/<[^>]+>/g, '').replace(/\\s+/g, ' ').trim().slice(0, 500);
+      }
+      // customFields.item — extract each requested tag into the JS key.
+      for (const f of this._itemFields) {
+        item[f.js] = extractTag(raw, f.xml);
+      }
+      feed.items.push(item);
+    }
+    return feed;
+  }
+}
+export default Parser;
+export { Parser };
 `;
 
 // node:crypto shim. Only the sync stateful bits providers actually reach
@@ -422,11 +526,13 @@ async function main() {
   const entryPath = join(SRC, '.connector-entry.mjs');
   writeFileSync(entryPath, entryLines.join('\n'), 'utf8');
 
-  // Buffer + crypto shims on disk so esbuild can resolve them via `alias`.
+  // Buffer + crypto + rss-parser shims on disk so esbuild can resolve them via `alias`.
   const bufferShimPath = join(SRC, '.buffer-shim.mjs');
   const cryptoShimPath = join(SRC, '.crypto-shim.mjs');
+  const rssShimPath = join(SRC, '.rss-parser-shim.mjs');
   writeFileSync(bufferShimPath, BUFFER_SHIM_SOURCE, 'utf8');
   writeFileSync(cryptoShimPath, CRYPTO_SHIM_SOURCE, 'utf8');
+  writeFileSync(rssShimPath, RSS_PARSER_SHIM_SOURCE, 'utf8');
 
   const esbuild = await loadEsbuild();
 
@@ -449,6 +555,7 @@ async function main() {
       // on OpenCLI's HostShim implementation of the same helpers.
       'node:buffer': bufferShimPath,
       'node:crypto': cryptoShimPath,
+      'rss-parser': rssShimPath,
     },
     define: {
       'process.env.NODE_ENV': '"production"',
@@ -484,6 +591,7 @@ async function main() {
     alias: {
       'node:buffer': bufferShimPath,
       'node:crypto': cryptoShimPath,
+      'rss-parser': rssShimPath,
     },
   });
 
@@ -530,6 +638,7 @@ async function main() {
   rmSync(manifestEntry, { force: true });
   rmSync(bufferShimPath, { force: true });
   rmSync(cryptoShimPath, { force: true });
+  rmSync(rssShimPath, { force: true });
   rmSync(manifestBundle, { force: true });
 
   const bundleBytes = readFileSync(bundleOut).length;
