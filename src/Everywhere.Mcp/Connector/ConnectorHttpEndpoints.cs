@@ -42,34 +42,50 @@ internal static class ConnectorHttpEndpoints
         var webRoot = ResolveWebRoot(env);
         if (webRoot is not null)
         {
-            var provider = new PhysicalFileProvider(webRoot);
-            // Wire /connector-ui → dist. Includes default files (index.html).
-            app.UseDefaultFiles(new DefaultFilesOptions
-            {
-                FileProvider = provider,
-                RequestPath = "/connector-ui",
-                DefaultFileNames = new[] { "index.html" },
-            });
-            app.UseStaticFiles(new StaticFileOptions
-            {
-                FileProvider = provider,
-                RequestPath = "/connector-ui",
-                ContentTypeProvider = new FileExtensionContentTypeProvider(),
-            });
-            // Client-side router fallback — any /connector-ui/* path that
-            // doesn't map to a real file returns index.html so react-router
-            // handles it in the browser.
-            app.MapFallback("/connector-ui/{*rest}", async ctx =>
-            {
-                var indexPath = Path.Combine(webRoot, "index.html");
-                if (!File.Exists(indexPath))
+            // Handle every /connector-ui/* request in-line here as a
+            // terminal middleware so it never falls through to the
+            // MCP endpoint routing (which would otherwise catch asset
+            // requests via MapFallback and return index.html with
+            // Content-Type text/html — breaking the SPA). Static files
+            // and the SPA client-side-router fallback both live here.
+            app.MapWhen(
+                ctx => ctx.Request.Path.StartsWithSegments("/connector-ui"),
+                branch =>
                 {
-                    ctx.Response.StatusCode = StatusCodes.Status404NotFound;
-                    return;
-                }
-                ctx.Response.ContentType = "text/html; charset=utf-8";
-                await ctx.Response.SendFileAsync(indexPath);
-            });
+                    var provider = new PhysicalFileProvider(webRoot);
+                    branch.UseDefaultFiles(new DefaultFilesOptions
+                    {
+                        FileProvider = provider,
+                        RequestPath = "/connector-ui",
+                        DefaultFileNames = new[] { "index.html" },
+                    });
+                    branch.UseStaticFiles(new StaticFileOptions
+                    {
+                        FileProvider = provider,
+                        RequestPath = "/connector-ui",
+                        ContentTypeProvider = new FileExtensionContentTypeProvider(),
+                    });
+                    // Terminal fallback for any unmatched extensionless
+                    // path inside /connector-ui/ — SPA client-side router
+                    // takes over from index.html.
+                    branch.Run(async ctx =>
+                    {
+                        var path = ctx.Request.Path.Value ?? "";
+                        if (Path.HasExtension(path))
+                        {
+                            ctx.Response.StatusCode = StatusCodes.Status404NotFound;
+                            return;
+                        }
+                        var indexPath = Path.Combine(webRoot, "index.html");
+                        if (!File.Exists(indexPath))
+                        {
+                            ctx.Response.StatusCode = StatusCodes.Status404NotFound;
+                            return;
+                        }
+                        ctx.Response.ContentType = "text/html; charset=utf-8";
+                        await ctx.Response.SendFileAsync(indexPath);
+                    });
+                });
             log?.LogInformation("connector: web console mounted at /connector-ui/ from {Root}", webRoot);
         }
         else
