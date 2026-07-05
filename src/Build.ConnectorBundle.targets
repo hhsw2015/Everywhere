@@ -111,16 +111,21 @@
   <Target Name="_CollectConnectorWebAssets"
           AfterTargets="BuildConnectorWeb"
           BeforeTargets="AssignTargetPaths;_HandlePackageFileConflicts"
-          Condition="Exists('$(_ConnectorWebIndex)')">
+          Condition="Exists('$(_ConnectorWebIndex)') and '$(_ConnectorWebAssetsCollected)' != 'true'">
+    <PropertyGroup>
+      <!-- Guard so the target's ItemGroup only runs once even if MSBuild
+           schedules the target on multiple entry points (AssignTargetPaths
+           can be called several times during a publish). Without this
+           guard the same 3 files land in Content 3-4 times → NETSDK1152. -->
+      <_ConnectorWebAssetsCollected>true</_ConnectorWebAssetsCollected>
+    </PropertyGroup>
     <ItemGroup>
       <Content Include="$(_ConnectorWebDist)/**/*">
         <Link>Resources/connector/web/%(RecursiveDir)%(Filename)%(Extension)</Link>
         <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
         <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
         <!-- macOS Xamarin bundler needs an explicit PublishFolderType so
-             the file lands under Contents/Resources/. Without this the
-             publisher warns "does not specify PublishFolderType" and
-             skips the file entirely. -->
+             the file lands under Contents/Resources/. -->
         <PublishFolderType>Resource</PublishFolderType>
       </Content>
     </ItemGroup>
