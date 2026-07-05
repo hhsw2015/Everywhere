@@ -14,14 +14,19 @@
     only if the dist/ output already exists on disk from a prior build.
   -->
   <PropertyGroup>
-    <_ConnectorSourceDir>$(MSBuildThisFileDirectory)../3rd/open-connector</_ConnectorSourceDir>
-    <_ConnectorBundleScript>$(MSBuildThisFileDirectory)../scripts/build-connector-bundle.mjs</_ConnectorBundleScript>
-    <_ConnectorDistDir>$(_ConnectorSourceDir)/dist</_ConnectorDistDir>
-    <_ConnectorBundleOutput>$(_ConnectorDistDir)/connector.bundle.js</_ConnectorBundleOutput>
-    <_ConnectorManifestOutput>$(_ConnectorDistDir)/connector-manifest.json</_ConnectorManifestOutput>
-    <_ConnectorWebDir>$(_ConnectorSourceDir)/web</_ConnectorWebDir>
-    <_ConnectorWebDist>$(_ConnectorDistDir)/web</_ConnectorWebDist>
-    <_ConnectorWebIndex>$(_ConnectorWebDist)/index.html</_ConnectorWebIndex>
+    <!-- Normalize every path so MSBuild sees a single canonical spelling.
+         Previously "src/../3rd/..." and "3rd/..." both matched the same
+         physical files but MSBuild's dedup treats them as distinct,
+         producing NETSDK1152 "multiple publish output files with the
+         same relative path". -->
+    <_ConnectorSourceDir>$([MSBuild]::NormalizeDirectory('$(MSBuildThisFileDirectory)../3rd/open-connector'))</_ConnectorSourceDir>
+    <_ConnectorBundleScript>$([MSBuild]::NormalizePath('$(MSBuildThisFileDirectory)../scripts/build-connector-bundle.mjs'))</_ConnectorBundleScript>
+    <_ConnectorDistDir>$([MSBuild]::NormalizeDirectory('$(_ConnectorSourceDir)/dist'))</_ConnectorDistDir>
+    <_ConnectorBundleOutput>$([MSBuild]::NormalizePath('$(_ConnectorDistDir)/connector.bundle.js'))</_ConnectorBundleOutput>
+    <_ConnectorManifestOutput>$([MSBuild]::NormalizePath('$(_ConnectorDistDir)/connector-manifest.json'))</_ConnectorManifestOutput>
+    <_ConnectorWebDir>$([MSBuild]::NormalizeDirectory('$(_ConnectorSourceDir)/web'))</_ConnectorWebDir>
+    <_ConnectorWebDist>$([MSBuild]::NormalizeDirectory('$(_ConnectorDistDir)/web'))</_ConnectorWebDist>
+    <_ConnectorWebIndex>$([MSBuild]::NormalizePath('$(_ConnectorWebDist)/index.html'))</_ConnectorWebIndex>
   </PropertyGroup>
 
   <!--
