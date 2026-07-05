@@ -48,5 +48,6 @@
 
   <Import Project="..\Build.Watchdog.targets" />
   <Import Project="..\Build.OpenCliBundle.targets" />
-  <Import Project="..\Build.ConnectorBundle.targets" />
+  <!-- ConnectorBundle.targets: see Everywhere.Mcp.csproj for the sole
+       import point (ProjectReference propagates Content here). -->
 </Project>
