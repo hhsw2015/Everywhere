@@ -248,21 +248,7 @@ public sealed class ConnectorTools
         }
     }
 
-    // Whitespace-only connection names silently produce phantom keys
-    // (`service: `) that users can't list/disconnect from the tool
-    // description's "Empty = default" contract. Normalize once, use
-    // symmetrically across run/connect/disconnect. Rejects colon so a
-    // stray `work:prod` doesn't collide with the storage key separator
-    // — see JsonCredentialStore.MakeKey.
-    private static string? NormalizeConnection(string? raw)
-    {
-        if (string.IsNullOrWhiteSpace(raw)) return null;
-        var trimmed = raw.Trim();
-        if (trimmed.Length == 0) return null;
-        if (trimmed.Contains(':'))
-            throw new ArgumentException("connection name cannot contain ':' — reserved as the storage-key separator");
-        return trimmed;
-    }
+    [McpServerTool(Name = "connector_connect")]
     [Description(
         "Store an api_key credential for a provider (auth_type=api_key). " +
         "Overwrites any existing connection with the same (service, connection) tuple. " +
@@ -363,5 +349,21 @@ public sealed class ConnectorTools
         {
             return Envelope(false, null, null, ex.Message, "RUNTIME_HOST_ERROR");
         }
+    }
+
+    // Whitespace-only connection names silently produce phantom keys
+    // (`service: `) that users can't list/disconnect from the tool
+    // description's "Empty = default" contract. Normalize once, use
+    // symmetrically across run/connect/disconnect. Rejects colon so a
+    // stray `work:prod` doesn't collide with the storage key separator
+    // — see JsonCredentialStore.MakeKey.
+    private static string? NormalizeConnection(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return null;
+        var trimmed = raw.Trim();
+        if (trimmed.Length == 0) return null;
+        if (trimmed.Contains(':'))
+            throw new ArgumentException("connection name cannot contain ':' — reserved as the storage-key separator");
+        return trimmed;
     }
 }
