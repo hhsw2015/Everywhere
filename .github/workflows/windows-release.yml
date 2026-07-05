@@ -46,11 +46,15 @@ jobs:
       shell: pwsh
       run: npm install --no-audit --no-fund
 
-    # Web Console SPA. BuildConnectorWeb MSBuild target is gated on
-    # 3rd/open-connector/web/node_modules existing.
+    # Web Console SPA — must be built BEFORE .NET project evaluation.
     - name: Install Web Console deps
       shell: pwsh
       run: npm install --no-audit --no-fund
+      working-directory: 3rd/open-connector/web
+
+    - name: Build Web Console
+      shell: pwsh
+      run: npx vite build
       working-directory: 3rd/open-connector/web
 
     - name: Setup .NET

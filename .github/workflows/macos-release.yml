@@ -60,12 +60,16 @@ jobs:
     - name: Install Node tooling deps (esbuild etc.)
       run: npm install --no-audit --no-fund
 
-    # Web Console SPA. BuildConnectorWeb MSBuild target is gated on
-    # 3rd/open-connector/web/node_modules existing — install here or
-    # the target skips silently and the release .app ships no
-    # /connector-ui/ static assets.
+    # Web Console SPA. dist/web/index.html MUST exist before .NET
+    # loads the projects — otherwise the file-scope Content ItemGroup
+    # in Build.ConnectorBundle.targets is empty, and Resources/connector/web/
+    # never lands in the .app.
     - name: Install Web Console deps
       run: npm install --no-audit --no-fund
+      working-directory: 3rd/open-connector/web
+
+    - name: Build Web Console
+      run: npx vite build
       working-directory: 3rd/open-connector/web
 
     - name: Setup .NET

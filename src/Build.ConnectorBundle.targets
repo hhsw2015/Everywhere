@@ -108,23 +108,19 @@
        duplicated LogicalName values (e.g. an opencli adapter's path
        leaking into connector/web/*). Two-step "Include then Update
        TargetPath" keeps every item's TargetPath deterministic. -->
-  <Target Name="_CollectConnectorWebAssets"
-          AfterTargets="BuildConnectorWeb"
-          BeforeTargets="AssignTargetPaths;_HandlePackageFileConflicts"
-          Condition="Exists('$(_ConnectorWebIndex)')">
-    <ItemGroup>
-      <!-- Remove any prior additions before re-adding so a re-run of
-           this target (AssignTargetPaths can be scheduled multiple
-           times during publish) doesn't accumulate duplicates. -->
-      <Content Remove="$(_ConnectorWebDist)**\*" />
-      <Content Include="$(_ConnectorWebDist)**\*">
-        <Link>Resources/connector/web/%(RecursiveDir)%(Filename)%(Extension)</Link>
-        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
-        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-        <!-- macOS Xamarin bundler needs an explicit PublishFolderType so
-             the file lands under Contents/Resources/. -->
-        <PublishFolderType>Resource</PublishFolderType>
-      </Content>
-    </ItemGroup>
-  </Target>
+  <!-- File-scope Content: MSBuild evaluates at project load. Requires
+       vite build to have run BEFORE dotnet publish (CI does this via
+       an explicit "Build Web Console" step; local dev builds run
+       vite via BuildConnectorWeb which fires BeforeTargets=PrepareForBuild
+       — early enough for evaluation of subsequent target-loaded
+       ItemGroups but too late for a file-scope one, hence the CI-
+       driven pre-build). -->
+  <ItemGroup Condition="Exists('$(_ConnectorWebIndex)')">
+    <Content Include="$(_ConnectorWebDist)**\*">
+      <Link>Resources/connector/web/%(RecursiveDir)%(Filename)%(Extension)</Link>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <PublishFolderType>Resource</PublishFolderType>
+    </Content>
+  </ItemGroup>
 </Project>
