@@ -90,22 +90,30 @@
     </Content>
   </ItemGroup>
 
-  <!-- Web Console static assets. MUST be inside a target so the file
-       enumeration happens AFTER BuildConnectorWeb runs — a top-level
-       <ItemGroup> is evaluated at MSBuild load time, which is before
-       vite writes dist/web/index.html on first build, and would leave
-       the ItemGroup empty forever. Landing path
-       Resources/connector/web/ is what Kestrel serves at /connector-ui/. -->
+  <!-- Web Console static assets. Enumerate + inject into ContentWithTargetPath
+       INSIDE a target so the file discovery happens AFTER BuildConnectorWeb
+       runs. A file-scope <ItemGroup> is evaluated at MSBuild load time,
+       which is before vite writes dist/web/index.html; it would leave
+       the collection empty forever.
+
+       Uses ContentWithTargetPath (not Content) with a computed
+       TargetPath to avoid a metadata-batching corner case where
+       %(RecursiveDir)%(Filename)%(Extension) inside an in-target
+       ItemGroup could be resolved against the wrong anchor and produce
+       duplicated LogicalName values (e.g. an opencli adapter's path
+       leaking into connector/web/*). Two-step "Include then Update
+       TargetPath" keeps every item's TargetPath deterministic. -->
   <Target Name="_CollectConnectorWebAssets"
           AfterTargets="BuildConnectorWeb"
           BeforeTargets="AssignTargetPaths;_HandlePackageFileConflicts"
           Condition="Exists('$(_ConnectorWebIndex)')">
     <ItemGroup>
-      <Content Include="$(_ConnectorWebDist)/**/*">
-        <Link>Resources/connector/web/%(RecursiveDir)%(Filename)%(Extension)</Link>
+      <_ConnectorWebFile Include="$(_ConnectorWebDist)/**/*" />
+      <ContentWithTargetPath Include="@(_ConnectorWebFile)">
+        <TargetPath>Resources/connector/web/$([System.String]::Copy('%(RecursiveDir)%(Filename)%(Extension)'))</TargetPath>
         <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
         <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      </Content>
+      </ContentWithTargetPath>
     </ItemGroup>
   </Target>
 </Project>
