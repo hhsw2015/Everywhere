@@ -101,7 +101,7 @@ public sealed class ChatWindowNotificationService : IChatWindowNotificationServi
         var deprecationDate = new DirectLocaleKey(availability.DeprecationDate?.ToString("D") ?? string.Empty);
         return availability.Kind switch
         {
-            ModelAvailabilityKind.Unavailable => new FormattedDynamicLocaleKey(
+            ModelAvailabilityKind.Unavailable => new DynamicLocaleKey(
                 LocaleKey.ChatWindow_ModelWarning_Unavailable),
             ModelAvailabilityKind.Deprecated => new FormattedDynamicLocaleKey(
                 LocaleKey.ChatWindow_ModelWarning_Deprecated,
@@ -116,8 +116,7 @@ public sealed class ChatWindowNotificationService : IChatWindowNotificationServi
     private static void OpenAssistantSettings(Guid assistantId)
     {
         WeakReferenceMessenger.Default.Send<ApplicationMessage>(
-            new ShowWindowMessage(ShowWindowMessage.MainWindow, "CustomAssistantPage"));
-        WeakReferenceMessenger.Default.Send(new SelectCustomAssistantMessage(assistantId)); // TODO
+            new ShowWindowMessage(ShowWindowMessage.MainWindow, MainViewNavigateMessage.ToCustomAssistant(assistantId)));
     }
 
     public void Dispose()

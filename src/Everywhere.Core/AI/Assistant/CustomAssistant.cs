@@ -13,7 +13,7 @@ namespace Everywhere.AI;
 /// Allowing users to define and manage their own custom AI assistants.
 /// </summary>
 [GeneratedSettingsItems]
-public sealed partial class CustomAssistant : Assistant, ISystemPromptProvider
+public sealed partial class CustomAssistant : Assistant
 {
     [SettingsItemIgnore]
     public Guid Id { get; set; } = Guid.CreateVersion7();
@@ -44,12 +44,27 @@ public sealed partial class CustomAssistant : Assistant, ISystemPromptProvider
             CustomAssistant = this
         });
 
+    /// <summary>
+    /// Settings UI for selecting and previewing this assistant's Prompt Manager prompt.
+    /// </summary>
+    /// <remarks>
+    /// This object is UI-only. The persisted value remains <see cref="SystemPromptId"/> so existing
+    /// migration, runtime resolution, and settings JSON shape stay unchanged.
+    /// </remarks>
+    [JsonIgnore]
+    [DynamicLocaleKey(LocaleKey.AssistantPromptSettings_Header, LocaleKey.AssistantPromptSettings_Description)]
+    [SettingsItems(IsExpanded = false)]
+    public AssistantPromptSettings PromptSettings => new(this);
+
+    /// <summary>
+    /// Prompt Manager prompt used as this assistant's active system prompt.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="Guid.Empty"/> means "use the built-in default prompt". Non-empty IDs point at
+    /// rows in <c>prompt.db</c>; the prompt body is intentionally no longer
+    /// stored inline with assistant settings.
+    /// </remarks>
     [ObservableProperty]
-    [DynamicLocaleKey(
-        LocaleKey.CustomAssistant_SystemPrompt_Header,
-        LocaleKey.CustomAssistant_SystemPrompt_Description)]
-    [SettingsItem(Classes = ["Ghost"])]
-    [SettingsStringItem(IsMultiline = true, MaxLength = 40960, Watermark = Prompts.DefaultSystemPrompt)]
-    [DefaultValue(null)]
-    public partial string? SystemPrompt { get; set; }
+    [SettingsItemIgnore]
+    public partial Guid SystemPromptId { get; set; } = Guid.Empty;
 }

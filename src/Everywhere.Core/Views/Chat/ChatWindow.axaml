@@ -790,7 +790,7 @@
                   <TextBlock.Text>
                     <I18N Key="{x:Static LocaleKey.ChatWindow_TodoList_Header}">
                       <Binding
-                        Converter="{x:Static vc:ChatPluginTodoItemsValueConverters.ToCompletedCount}"
+                        Converter="{x:Static vc:ChatPluginTodoItemsConverters.ToCompletedCount}"
                         Path="ChatContextManager.Current.UserInterfaceBroker.TodoItems" TargetNullValue="0"/>
                       <Binding
                         Path="ChatContextManager.Current.UserInterfaceBroker.TodoItems?.Count" TargetNullValue="0"/>
@@ -918,15 +918,15 @@
               LeadingContent="{Binding SelectedStrategy, Mode=TwoWay}"
               MaxChatAttachmentCount="{Binding PersistentState.MaxChatAttachmentCount}"
               MaxLength="{Binding ChatInputAreaTextMaxLength}"
+              PlaceholderText="{Binding ChatInputAreaWatermarkKey^, FallbackValue={x:Null}}"
               RemoveAttachmentCommand="{Binding RemoveAttachmentCommand}"
               SelectedCustomAssistant="{Binding Settings.Model.SelectedCustomAssistant, Mode=TwoWay}"
               SoftwareUpdater="{Binding SoftwareUpdater, Mode=OneTime}"
-              Text="{Binding ChatInputAreaText, Mode=TwoWay}"
-              Watermark="{Binding ChatInputAreaWatermarkKey^, FallbackValue={x:Null}}">
+              Text="{Binding ChatInputAreaText, Mode=TwoWay}">
               <v:ChatInputArea.Transitions>
                 <Transitions>
                   <shadui:StringTransition
-                    Easing="CubicEaseInOut" Property="Watermark"
+                    Easing="CubicEaseInOut" Property="PlaceholderText"
                     Duration="0:0:0.2"/>
                 </Transitions>
               </v:ChatInputArea.Transitions>

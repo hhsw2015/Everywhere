@@ -19,7 +19,7 @@ public sealed partial class KnownApp : ObservableObject
 }
 
 [GeneratedSettingsItems]
-public sealed partial class McpServerSettings : SettingsBase, ISettingsCategory
+public sealed partial class McpServerSettings(IServiceProvider serviceProvider) : SettingsBase(serviceProvider), ISettingsCategory
 {
     [SettingsItemIgnore]
     public int Index => 9;
@@ -79,7 +79,7 @@ public sealed partial class McpServerSettings : SettingsBase, ISettingsCategory
     [DynamicLocaleKey(
         LocaleKey.McpServerSettings_AgentAppId_Header,
         LocaleKey.McpServerSettings_AgentAppId_Description)]
-    [SettingsStringItem(Watermark = "com.github.cmux")]
+    [SettingsStringItem(PlaceholderText = "com.github.cmux")]
     public partial string AgentAppId { get; set; } = string.Empty;
 
     /// <summary>
@@ -93,7 +93,7 @@ public sealed partial class McpServerSettings : SettingsBase, ISettingsCategory
     [DynamicLocaleKey(
         LocaleKey.McpServerSettings_LaunchPhrase_Header,
         LocaleKey.McpServerSettings_LaunchPhrase_Description)]
-    [SettingsStringItem(Watermark = "take a look")]
+    [SettingsStringItem(PlaceholderText = "take a look")]
     public partial string LaunchPhrase { get; set; } = string.Empty;
 
     /// <summary>

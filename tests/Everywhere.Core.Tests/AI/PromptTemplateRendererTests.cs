@@ -1,5 +1,6 @@
 using Everywhere.AI;
-using Everywhere.Chat;
+using Everywhere.AI.Prompts;
+using PromptTemplateRenderer = Everywhere.AI.Prompts.PromptTemplateRenderer;
 
 namespace Everywhere.Core.Tests.AI;
 
@@ -21,15 +22,15 @@ public class PromptTemplateRendererTests
         return dict;
     }
 
-    // Resolver mimicking ChatContext.GetPromptVariables() + the new DefaultSystemPrompt variable.
+    // Resolver mimicking the shared prompt placeholder provider.
     private static Func<string, string?> DefaultPromptResolver() => Resolver(Map(
-        ("DefaultSystemPrompt", Prompts.DefaultSystemPrompt),
+        ("DefaultSystemPrompt", DefaultPrompts.DefaultSystemPrompt),
         ("OS", "Windows"),
         ("Date", "Monday"),
         ("SystemLanguage", "English"),
         ("WorkingDirectory", "C:/wd")));
 
-    private static string ResolvedDefault() => Prompts.DefaultSystemPrompt
+    private static string ResolvedDefault() => DefaultPrompts.DefaultSystemPrompt
         .Replace("{OS}", "Windows")
         .Replace("{Date}", "Monday")
         .Replace("{SystemLanguage}", "English")
@@ -136,7 +137,7 @@ public class PromptTemplateRendererTests
         // The title generation resolver only knows {UserMessage}/{SystemLanguage}; a user-typed {Date}
         // inside the message must stay literal even under recursion (returns null -> left as-is).
         var resolver = Resolver(Map(("UserMessage", "hi {Date}"), ("SystemLanguage", "English")));
-        var result = PromptTemplateRenderer.Render(Prompts.TitleGeneratorUserPrompt, resolver);
+        var result = PromptTemplateRenderer.Render(DefaultPrompts.TitleGeneratorUserPrompt, resolver);
         Assert.Multiple(() =>
         {
             Assert.That(result, Does.Contain("hi {Date}"));   // inner unknown placeholder preserved
@@ -147,13 +148,23 @@ public class PromptTemplateRendererTests
     }
 
     [Test]
-    public void Render_ResolvedValueWithKnownPlaceholder_ExpandsRecursively()
+    public void Render_CompositeSource_ExpandsStrategyVariablesBeforeSystemFallback()
     {
-        // Documents the deliberate behavior delta: when a resolved value itself contains a placeholder
-        // the resolver knows, recursion expands it (e.g. a strategy {Argument} containing {OS}).
-        var resolver = Resolver(Map(("Argument", "open {OS} now"), ("OS", "Windows")));
-        var result = PromptTemplateRenderer.Render("Do {Argument}", resolver);
-        Assert.That(result, Is.EqualTo("Do open Windows now"));
+        var source = new CompositePromptPlaceholderSource(
+            [
+                StrategyPromptPlaceholderSource.Instance,
+                SystemPromptPlaceholderSource.Instance
+            ]);
+        var context = new PromptPlaceholderContext(
+            SkillsPromptResolver: () => "Skill prompt",
+            Argument: "open {SystemLanguage} now",
+            Variables: new Dictionary<string, string> { ["SystemLanguage"] = "Strategy language" });
+
+        var result = PromptTemplateRenderer.Render(
+            "Do {Argument}. {SkillsPrompt}",
+            key => source.TryResolve(key, context, out var value) ? value : null);
+
+        Assert.That(result, Is.EqualTo("Do open Strategy language now. Skill prompt"));
     }
 
     [Test]

@@ -1,4 +1,7 @@
-﻿using Everywhere.AI;
+﻿using System.Runtime.Versioning;
+using Everywhere.AI;
+using Everywhere.AI.Prompts;
+using Everywhere.AI.Prompts.Database;
 using Everywhere.Chat;
 using Everywhere.Chat.Plugins;
 using Everywhere.Chat.Plugins.BuiltIn;
@@ -6,7 +9,9 @@ using Everywhere.Chat.Plugins.Mcp;
 using Everywhere.Common;
 using Everywhere.Common.Notification;
 using Everywhere.Configuration;
+using Everywhere.Configuration.Engine;
 using Everywhere.Database;
+using Everywhere.Initialization;
 using Everywhere.Skills;
 using Everywhere.Statistics;
 using Everywhere.Statistics.Database;
@@ -34,6 +39,26 @@ public static class ServiceExtensions
                 .AddSerilog(dispose: true)
                 .AddFilter<SerilogLoggerProvider>("Microsoft.EntityFrameworkCore", LogLevel.Warning));
 
+
+#if WINDOWS
+        [SupportedOSPlatform("windows")]
+#endif
+        public IServiceCollection AddSettings() =>
+            services
+                .AddSingleton<Settings>()
+                .AddTransient<IAsyncInitializer, SettingsEngine>()
+                .AddTransient<SoftwareUpdateControl>()
+#if WINDOWS
+                .AddTransient<RestartAsAdministratorControl>()
+#endif
+                .AddTransient<OpenWebBrowserControl>()
+                .AddTransient<DebugFeaturesControl>()
+                .AddSingleton<PersistentKeyValueStorage>()
+                .AddSingleton<IKeyValueStorage>(xx => xx.GetRequiredService<PersistentKeyValueStorage>())
+                .AddTransient<IAsyncInitializer>(xx => xx.GetRequiredService<PersistentKeyValueStorage>())
+                .AddSingleton<PersistentState>()
+                .AddTransient<IAsyncInitializer, CustomAssistantInitializer>();
+
         public IServiceCollection AddAvaloniaBasicServices()
         {
             return services.AddDialogManagerAndToastManager();
@@ -48,6 +73,10 @@ public static class ServiceExtensions
                 .AddSingleton<IMainViewNavigationItem, HomePage>()
                 .AddSingleton<CustomAssistantPageViewModel>()
                 .AddSingleton<IMainViewNavigationItem, CustomAssistantPage>()
+                .AddSingleton<PromptPageViewModel>()
+                .AddSingleton<IMainViewNavigationItem, PromptPage>()
+                .AddTransient<PromptEditorViewModel>()
+                .AddTransient<PromptEditorPage>()
                 .AddSingleton<ChatPluginPageViewModel>()
                 .AddSingleton<IMainViewNavigationItem, ChatPluginPage>()
                 .AddSingleton<SkillPageViewModel>()
@@ -71,11 +100,22 @@ public static class ServiceExtensions
                     var dbPath = RuntimeConstants.GetDatabasePath("chat.db");
                     options.UseSqlite($"Data Source={dbPath}");
                 })
+                // Prompt Manager owns an isolated database. The built-in default prompt is virtual
+                // and is provided by IDefaultPromptProvider rather than inserted into this database.
+                .AddDbContextFactory<PromptDbContext>((_, options) =>
+                {
+                    var dbPath = RuntimeConstants.GetDatabasePath("prompt.db");
+                    options.UseSqlite($"Data Source={dbPath}");
+                })
                 .AddDbContextFactory<StatisticsDbContext>((_, options) =>
                 {
                     var dbPath = RuntimeConstants.GetDatabasePath("statistics.db");
                     options.UseSqlite($"Data Source={dbPath}");
                 })
+                .AddSingleton<IDefaultPromptProvider, DefaultPromptProvider>()
+                .AddSingleton<IPromptService, PromptService>()
+                .AddSingleton<IAssistantPromptResolver, AssistantPromptResolver>()
+                .AddSingleton<IAssistantPromptReferenceService, AssistantPromptReferenceService>()
                 .AddSingleton<IBlobStorage, BlobStorage>()
                 .AddSingleton<IChatContextStorage, ChatContextStorage>()
                 .AddSingleton<NotificationCenter>()
@@ -84,6 +124,7 @@ public static class ServiceExtensions
                 .AddSingleton<IStatisticsRecorder, StatisticsRecorder>()
                 .AddSingleton<IStatisticsService, StatisticsService>()
                 .AddTransient<IAsyncInitializer, ChatDbInitializer>()
+                .AddTransient<IAsyncInitializer, PromptDbInitializer>()
                 .AddTransient<IAsyncInitializer, StatisticsDbInitializer>()
                 .AddTransient<IAsyncInitializer, StatisticsBackfiller>();
 

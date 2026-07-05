@@ -1,6 +1,7 @@
 ﻿using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Windows.Input;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Templates;
 using Avalonia.Data;
@@ -14,9 +15,9 @@ namespace Everywhere.Configuration;
 /// </summary>
 public abstract class SettingsItem : AvaloniaObject, INotifyDataErrorInfo
 {
-    public DynamicLocaleKey? HeaderKey { get; set; }
+    public IDynamicLocaleKey? HeaderKey { get; set; }
 
-    public DynamicLocaleKey? DescriptionKey { get; set; }
+    public IDynamicLocaleKey? DescriptionKey { get; set; }
 
     public Classes Classes { get; } = [];
 
@@ -86,9 +87,9 @@ public abstract class SettingsItem : AvaloniaObject, INotifyDataErrorInfo
     {
         base.OnPropertyChanged(change);
 
-        if (change.Property == IsExpandableProperty)
+        if (change.Property == IsExpandableProperty && change.NewValue is false)
         {
-            IsExpanded = change.NewValue is true;
+            IsExpanded = false;
         }
     }
 
@@ -136,15 +137,17 @@ public class SettingsBooleanItem : SettingsItem
 
 public class SettingsStringItem : SettingsItem
 {
-    public static readonly StyledProperty<string?> WatermarkProperty = AvaloniaProperty.Register<SettingsStringItem, string?>(nameof(Watermark));
+    public static readonly StyledProperty<string?> PlaceholderTextProperty =
+        AvaloniaProperty.Register<SettingsStringItem, string?>(nameof(PlaceholderText));
 
-    public string? Watermark
+    public string? PlaceholderText
     {
-        get => GetValue(WatermarkProperty);
-        set => SetValue(WatermarkProperty, value);
+        get => GetValue(PlaceholderTextProperty);
+        set => SetValue(PlaceholderTextProperty, value);
     }
 
-    public static readonly StyledProperty<int> MaxLengthProperty = AvaloniaProperty.Register<SettingsStringItem, int>(nameof(MaxLength));
+    public static readonly StyledProperty<int> MaxLengthProperty =
+        AvaloniaProperty.Register<SettingsStringItem, int>(nameof(MaxLength));
 
     public int MaxLength
     {
@@ -411,12 +414,16 @@ public class SettingsSelectionItem : SettingsItem
     }
 }
 
-public class SettingsCustomizableItem(SettingsItem customValueItem) : SettingsItem
+/// <summary>
+/// A settings item that holds a default value and allows resetting to that value.
+/// </summary>
+/// <param name="defaultValueItem"></param>
+public class SettingsDefaultValueItem(SettingsItem defaultValueItem) : SettingsItem
 {
-    public SettingsItem CustomValueItem => customValueItem;
+    public SettingsItem CustomValueItem => defaultValueItem;
 
     public static readonly StyledProperty<ICommand?> ResetCommandProperty =
-        AvaloniaProperty.Register<SettingsCustomizableItem, ICommand?>(nameof(ResetCommand));
+        AvaloniaProperty.Register<SettingsDefaultValueItem, ICommand?>(nameof(ResetCommand));
 
     public ICommand? ResetCommand
     {
@@ -471,12 +478,12 @@ public sealed class SettingsTemplatedItem<TType>(IDataTemplate? dataTemplate) : 
 /// A settings item that contains a custom control.
 /// </summary>
 /// <param name="controlFactory"></param>
-public sealed class SettingsControlItem(Func<Control> controlFactory) : SettingsItem
+public sealed class SettingsControlItem(Func<IServiceProvider, Control> controlFactory) : SettingsItem
 {
     /// <summary>
     /// Use lazy control creation to avoid unnecessary instantiation and potential UI thread issues.
     /// </summary>
-    public Control Control => controlFactory();
+    public Control CreateControl(IServiceProvider serviceProvider) => controlFactory(serviceProvider);
 }
 
 /// <summary>
