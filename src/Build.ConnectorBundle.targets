@@ -111,16 +111,13 @@
   <Target Name="_CollectConnectorWebAssets"
           AfterTargets="BuildConnectorWeb"
           BeforeTargets="AssignTargetPaths;_HandlePackageFileConflicts"
-          Condition="Exists('$(_ConnectorWebIndex)') and '$(_ConnectorWebAssetsCollected)' != 'true'">
-    <PropertyGroup>
-      <!-- Guard so the target's ItemGroup only runs once even if MSBuild
-           schedules the target on multiple entry points (AssignTargetPaths
-           can be called several times during a publish). Without this
-           guard the same 3 files land in Content 3-4 times → NETSDK1152. -->
-      <_ConnectorWebAssetsCollected>true</_ConnectorWebAssetsCollected>
-    </PropertyGroup>
+          Condition="Exists('$(_ConnectorWebIndex)')">
     <ItemGroup>
-      <Content Include="$(_ConnectorWebDist)/**/*">
+      <!-- Remove any prior additions before re-adding so a re-run of
+           this target (AssignTargetPaths can be scheduled multiple
+           times during publish) doesn't accumulate duplicates. -->
+      <Content Remove="$(_ConnectorWebDist)**\*" />
+      <Content Include="$(_ConnectorWebDist)**\*">
         <Link>Resources/connector/web/%(RecursiveDir)%(Filename)%(Extension)</Link>
         <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
         <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
