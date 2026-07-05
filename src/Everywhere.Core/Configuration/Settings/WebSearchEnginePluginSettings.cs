@@ -179,7 +179,7 @@ public sealed partial class GoogleWebSearchEngineProvider() : ThirdPartyWebSearc
     [SettingsItemIgnore]
     [JsonInclude]
     [JsonPropertyName("ExtraApiKeyIds")]
-    internal List<Guid>? LegacyExtraIds { get; set; }
+    public List<Guid>? LegacyExtraIds { get; set; }
 
     [JsonIgnore]
     [DynamicLocaleKey(
@@ -253,7 +253,7 @@ public sealed partial class ApiKeyWebSearchEngineProvider(
     [SettingsItemIgnore]
     [JsonInclude]
     [JsonPropertyName("ExtraApiKeyIds")]
-    internal List<Guid>? LegacyExtraIds { get; set; }
+    public List<Guid>? LegacyExtraIds { get; set; }
 
     [JsonIgnore]
     [DynamicLocaleKey(
@@ -306,7 +306,7 @@ public sealed partial class OptionalApiKeyWebSearchEngineProvider(
     [SettingsItemIgnore]
     [JsonInclude]
     [JsonPropertyName("ExtraApiKeyIds")]
-    internal List<Guid>? LegacyExtraIds { get; set; }
+    public List<Guid>? LegacyExtraIds { get; set; }
 
     [JsonIgnore]
     [DynamicLocaleKey(
