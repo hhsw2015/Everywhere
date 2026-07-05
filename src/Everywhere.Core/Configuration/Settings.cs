@@ -41,4 +41,5 @@ public sealed partial class Settings(IServiceProvider serviceProvider) : Setting
 
 [JsonSourceGenerationOptions(WriteIndented = true, GenerationMode = JsonSourceGenerationMode.Metadata)]
 [JsonSerializable(typeof(Settings))]
+[JsonSerializable(typeof(List<Guid>))]
 public partial class SettingsJsonSerializerContext : JsonSerializerContext;
