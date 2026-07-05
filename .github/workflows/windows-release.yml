@@ -40,6 +40,12 @@ jobs:
       shell: pwsh
       run: node scripts/resolve-release-tag.mjs "$env:GITHUB_REF_NAME"
 
+    # Connector bundle build target needs esbuild — install repo tooling
+    # deps before dotnet publish invokes the MSBuild target.
+    - name: Install Node tooling deps (esbuild etc.)
+      shell: pwsh
+      run: npm install --no-audit --no-fund
+
     - name: Setup .NET
       uses: actions/setup-dotnet@v5
       with:

@@ -46,6 +46,12 @@ jobs:
     - name: Resolve version
       run: node scripts/resolve-release-tag.mjs "$GITHUB_REF_NAME"
 
+    # Connector bundle build (Build.ConnectorBundle.targets) shells out
+    # to node scripts/build-connector-bundle.mjs which requires esbuild.
+    # Install repo-level tooling deps before .NET build kicks off.
+    - name: Install Node tooling deps (esbuild etc.)
+      run: npm install --no-audit --no-fund
+
     - name: Setup .NET
       uses: actions/setup-dotnet@v5.2.0
       with:
