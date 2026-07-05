@@ -108,12 +108,16 @@
           BeforeTargets="AssignTargetPaths;_HandlePackageFileConflicts"
           Condition="Exists('$(_ConnectorWebIndex)')">
     <ItemGroup>
-      <_ConnectorWebFile Include="$(_ConnectorWebDist)/**/*" />
-      <ContentWithTargetPath Include="@(_ConnectorWebFile)">
-        <TargetPath>Resources/connector/web/$([System.String]::Copy('%(RecursiveDir)%(Filename)%(Extension)'))</TargetPath>
+      <Content Include="$(_ConnectorWebDist)/**/*">
+        <Link>Resources/connector/web/%(RecursiveDir)%(Filename)%(Extension)</Link>
         <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
         <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      </ContentWithTargetPath>
+        <!-- macOS Xamarin bundler needs an explicit PublishFolderType so
+             the file lands under Contents/Resources/. Without this the
+             publisher warns "does not specify PublishFolderType" and
+             skips the file entirely. -->
+        <PublishFolderType>Resource</PublishFolderType>
+      </Content>
     </ItemGroup>
   </Target>
 </Project>
