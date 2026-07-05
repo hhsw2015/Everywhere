@@ -99,11 +99,34 @@ function hasUnsupportedNodeImport(dir) {
     }
     // Bare-package imports (not relative, not node:*): rejected unless
     // the package name is in ALLOWED_EXTERNAL_PACKAGES (which the bundle
-    // covers via a matching esbuild alias).
-    const rePkg = /^\s*import\s.*from\s+["']([^./"'][^"']*)["']/gm;
-    while ((m = rePkg.exec(src))) {
-      if (m[1].startsWith('node:')) continue;
-      if (!ALLOWED_EXTERNAL_PACKAGES.has(m[1])) return true;
+    // covers via a matching esbuild alias). Handles all four import
+    // shapes we've seen upstream:
+    //   import x from 'pkg';               // named default
+    //   import 'pkg';                       // side-effect only
+    //   import('pkg')                       // dynamic
+    //   const x = require('pkg');           // legacy CJS (rare here)
+    // For scoped names (@scope/pkg) or subpath (pkg/lib/foo) the alias
+    // key is the top-level package (@scope/pkg or pkg), so we compare
+    // against that.
+    const patterns = [
+      /^\s*import\s+[^;]*from\s+["']([^"']+)["']/gm,   // import x from 'pkg'
+      /^\s*import\s+["']([^"']+)["']/gm,                // import 'pkg'
+      /\bimport\s*\(\s*["']([^"']+)["']\s*\)/g,         // dynamic import()
+      /\brequire\s*\(\s*["']([^"']+)["']\s*\)/g,        // require('pkg')
+    ];
+    for (const re of patterns) {
+      let hit;
+      while ((hit = re.exec(src))) {
+        const spec = hit[1];
+        if (spec.startsWith('.') || spec.startsWith('/')) continue; // relative
+        if (spec.startsWith('node:')) continue; // handled above
+        // scoped @foo/bar — top-level is @foo/bar (2 slashes-in),
+        // else non-scoped 'pkg' or 'pkg/sub' → 'pkg'.
+        const top = spec.startsWith('@')
+          ? spec.split('/').slice(0, 2).join('/')
+          : spec.split('/')[0];
+        if (!ALLOWED_EXTERNAL_PACKAGES.has(top)) return true;
+      }
     }
   }
   return false;
@@ -315,9 +338,19 @@ class Parser {
       const catRe = /<category(?:\\s[^>]*)?>([\\s\\S]*?)<\\/category>/g;
       let cm;
       while ((cm = catRe.exec(raw))) item.categories.push(decodeEntities(stripCData(cm[1])));
-      // contentSnippet: strip HTML from content, cap at 500 chars.
+      // contentSnippet: strip HTML from content. No length cap —
+      // matches real rss-parser (upstream linux_do reads .contentSnippet
+      // for excerpt fields and expects the full text).
       if (typeof item.content === 'string') {
-        item.contentSnippet = item.content.replace(/<[^>]+>/g, '').replace(/\\s+/g, ' ').trim().slice(0, 500);
+        item.contentSnippet = item.content.replace(/<[^>]+>/g, '').replace(/\\s+/g, ' ').trim();
+      }
+      // isoDate: real rss-parser normalises pubDate to ISO-8601. linux_do
+      // reads item.isoDate to populate LinuxDoTopicSummary.pubDate.
+      if (typeof item.pubDate === 'string' && item.pubDate) {
+        const t = Date.parse(item.pubDate);
+        item.isoDate = Number.isFinite(t) ? new Date(t).toISOString() : null;
+      } else {
+        item.isoDate = null;
       }
       // customFields.item — extract each requested tag into the JS key.
       for (const f of this._itemFields) {
@@ -524,12 +557,14 @@ async function main() {
     "globalThis.__connectorProviders = providers;",
   ];
   const entryPath = join(SRC, '.connector-entry.mjs');
-  writeFileSync(entryPath, entryLines.join('\n'), 'utf8');
-
-  // Buffer + crypto + rss-parser shims on disk so esbuild can resolve them via `alias`.
   const bufferShimPath = join(SRC, '.buffer-shim.mjs');
   const cryptoShimPath = join(SRC, '.crypto-shim.mjs');
   const rssShimPath = join(SRC, '.rss-parser-shim.mjs');
+  const manifestEntry = join(SRC, '.manifest-entry.mjs');
+  const manifestBundle = join(OUT, '.manifest.tmp.js');
+  const tempFiles = [entryPath, bufferShimPath, cryptoShimPath, rssShimPath, manifestEntry, manifestBundle];
+
+  writeFileSync(entryPath, entryLines.join('\n'), 'utf8');
   writeFileSync(bufferShimPath, BUFFER_SHIM_SOURCE, 'utf8');
   writeFileSync(cryptoShimPath, CRYPTO_SHIM_SOURCE, 'utf8');
   writeFileSync(rssShimPath, RSS_PARSER_SHIM_SOURCE, 'utf8');
@@ -537,6 +572,7 @@ async function main() {
   const esbuild = await loadEsbuild();
 
   const bundleOut = join(OUT, 'connector.bundle.js');
+  try {
   await esbuild.build({
     entryPoints: [entryPath],
     outfile: bundleOut,
@@ -567,7 +603,6 @@ async function main() {
   //
   // We can't import TS at the CLI level. Solution: run a second esbuild
   // build that produces a tiny "manifest emit" JS to stdout, then eval.
-  const manifestEntry = join(SRC, '.manifest-entry.mjs');
   writeFileSync(
     manifestEntry,
     [
@@ -579,7 +614,6 @@ async function main() {
     ].join('\n'),
     'utf8',
   );
-  const manifestBundle = join(OUT, '.manifest.tmp.js');
   await esbuild.build({
     entryPoints: [manifestEntry],
     outfile: manifestBundle,
@@ -633,19 +667,18 @@ async function main() {
     'utf8',
   );
 
-  // Clean up temp files.
-  rmSync(entryPath, { force: true });
-  rmSync(manifestEntry, { force: true });
-  rmSync(bufferShimPath, { force: true });
-  rmSync(cryptoShimPath, { force: true });
-  rmSync(rssShimPath, { force: true });
-  rmSync(manifestBundle, { force: true });
-
   const bundleBytes = readFileSync(bundleOut).length;
   const actionCount = services.reduce((n, s) => n + (s.actions?.length || 0), 0);
   console.error(
     `[build-connector-bundle] bundle=${bundleBytes} bytes  providers=${services.length}  actions=${actionCount}  out=${OUT}`,
   );
+  } finally {
+    // Always drop temp files even when esbuild throws mid-build — keeps
+    // the vendored source tree clean for git status / next-run replays.
+    for (const f of tempFiles) {
+      try { rmSync(f, { force: true }); } catch { /* best-effort */ }
+    }
+  }
 }
 
 main().catch((err) => {

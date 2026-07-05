@@ -79,7 +79,16 @@ public sealed class JsonCredentialStore : INamedCredentialResolver
     }
 
     private static string MakeKey(string service, string? connectionName)
-        => string.IsNullOrEmpty(connectionName) ? service : $"{service}:{connectionName}";
+    {
+        if (string.IsNullOrEmpty(connectionName)) return service;
+        // The stored key uses ':' as service/connection separator; a
+        // colon inside connectionName would break SplitKey. Reject at
+        // the store boundary — MCP tools already normalize+reject too,
+        // but defense in depth.
+        if (connectionName.Contains(':'))
+            throw new ArgumentException("connectionName cannot contain ':' (reserved key separator)", nameof(connectionName));
+        return $"{service}:{connectionName}";
+    }
 
     public IReadOnlyList<ConnectionSummary> List()
     {
@@ -93,10 +102,17 @@ public sealed class JsonCredentialStore : INamedCredentialResolver
             var authType = entry["authType"]?.GetValue<string>() ?? "unknown";
             var profile = entry["profile"] as JsonObject;
             var (svc, connName) = SplitKey(key);
+            // Fallback DisplayName: keep the composite key out of the
+            // user-facing label so a caller listing connections gets
+            // "github" for the default and the ConnectionName field to
+            // differentiate — not a leaky "github:work" string mashed
+            // into DisplayName. Callers rendering a summary can format
+            // service + connectionName themselves.
+            var fallbackLabel = string.IsNullOrEmpty(connName) ? svc : $"{svc} ({connName})";
             list.Add(new ConnectionSummary(
                 Service: svc,
                 AuthType: authType,
-                DisplayName: profile?["displayName"]?.GetValue<string>() ?? key,
+                DisplayName: profile?["displayName"]?.GetValue<string>() ?? fallbackLabel,
                 AccountId: profile?["accountId"]?.GetValue<string>() ?? "",
                 ConnectionName: connName));
         }
@@ -473,7 +489,11 @@ public sealed class ChainedCredentialResolver : INamedCredentialResolver
             // skip them for named lookups so a stray env var can't shadow
             // a specifically-named store connection.
         }
-        return null;
+        // Fallback to the default connection when no chain link had the
+        // named entry — matches ConnectorHostShim.getCredential's
+        // graceful-fallback behaviour so both call paths (through the
+        // shim and direct) agree.
+        return Resolve(service);
     }
 }
 

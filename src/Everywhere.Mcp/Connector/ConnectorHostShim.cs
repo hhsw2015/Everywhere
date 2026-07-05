@@ -21,7 +21,15 @@ public sealed class ConnectorHostShim
     // before running the JS bundle; cleared afterwards. When set, this
     // routes the getCredential(service) call to the named connection
     // rather than the default. SPEC Phase 12.
-    private readonly ThreadLocal<string?> _connectionName = new(() => null);
+    //
+    // AsyncLocal (not ThreadLocal / plain field) because ClearScript's
+    // V8 execution can resume on a different ThreadPool thread after an
+    // await inside the JS executor (fetchAsync yield). AsyncLocal flows
+    // with the async continuation so getCredential() sees the same scope
+    // regardless of which pool thread the microtask lands on. Even
+    // though _invokeGate serializes invocations end-to-end today, the
+    // gate doesn't pin the thread across awaits.
+    private readonly AsyncLocal<string?> _connectionName = new();
 
     public ConnectorHostShim(HostShim fetchShim, ICredentialResolver credentials, Action<string> onWarn, TransitFileStore? transit = null)
     {
@@ -101,14 +109,14 @@ public sealed class ConnectorHostShim
         if (string.IsNullOrWhiteSpace(service)) return null;
         // Named-connection routing (Phase 12): if a scope was set for this
         // invoke and the resolver knows how to resolve by name, use it.
-        // Falls back to the default resolver path when no scope is set,
-        // preserving Phase 6 semantics.
+        // ResolveNamed itself falls back to the default connection when
+        // the named entry is absent — see ChainedCredentialResolver /
+        // JsonCredentialStore. No local fallback needed here.
         var connName = _connectionName.Value;
-        JsonObject? cred = null;
+        JsonObject? cred;
         if (!string.IsNullOrEmpty(connName) && _credentials is INamedCredentialResolver named)
         {
-            cred = named.ResolveNamed(service, connName)
-                   ?? named.Resolve(service); // graceful fallback to default
+            cred = named.ResolveNamed(service, connName);
         }
         else
         {

@@ -92,7 +92,11 @@ public class JsonCredentialStoreTests
     public void ChainedResolver_EnvBeatsStore()
     {
         // Env resolver takes precedence over the JSON store.
-        var envKey = "EVERYWHERE_CONNECTOR_ANTHROPIC_PAT";
+        // Snapshot/restore so a developer running this locally with a
+        // real EVERYWHERE_CONNECTOR_ANTHROPIC_PAT exported doesn't lose
+        // it when the test cleans up.
+        const string envKey = "EVERYWHERE_CONNECTOR_ANTHROPIC_PAT";
+        var prior = Environment.GetEnvironmentVariable(envKey);
         Environment.SetEnvironmentVariable(envKey, "env-value");
         try
         {
@@ -104,7 +108,7 @@ public class JsonCredentialStoreTests
         }
         finally
         {
-            Environment.SetEnvironmentVariable(envKey, null);
+            Environment.SetEnvironmentVariable(envKey, prior);
         }
     }
 
@@ -180,22 +184,66 @@ public class JsonCredentialStoreTests
     {
         // A named lookup must not pick up env-var credentials — env
         // resolvers only serve the default connection.
-        var envKey = "EVERYWHERE_CONNECTOR_GITHUB_PAT";
+        // Uses an ACME service name to avoid colliding with real
+        // EVERYWHERE_CONNECTOR_GITHUB_PAT / smoke-test env vars a
+        // developer or CI runner may have set. Snapshot + restore in
+        // finally so we never leak a value into the process.
+        const string envKey = "EVERYWHERE_CONNECTOR_ACME_PAT";
+        var prior = Environment.GetEnvironmentVariable(envKey);
         Environment.SetEnvironmentVariable(envKey, "env-value");
         try
         {
             var store = new JsonCredentialStore(_storePath);
-            store.SetApiKey("github", "work-only", connectionName: "work");
+            store.SetApiKey("acme", "work-only", connectionName: "work");
             var chain = new ChainedCredentialResolver(new EnvironmentCredentialResolver(), store);
-            var work = chain.ResolveNamed("github", "work");
+            var work = chain.ResolveNamed("acme", "work");
             Assert.That(work!["apiKey"]!.GetValue<string>(), Is.EqualTo("work-only"));
-            var def = chain.Resolve("github");
+            var def = chain.Resolve("acme");
             Assert.That(def!["apiKey"]!.GetValue<string>(), Is.EqualTo("env-value"));
         }
         finally
         {
-            Environment.SetEnvironmentVariable(envKey, null);
+            Environment.SetEnvironmentVariable(envKey, prior);
         }
+    }
+
+    [Test]
+    public void ChainedResolver_NamedMiss_FallsBackToDefault()
+    {
+        // A resolver.ResolveNamed(service, "nonexistent") should still
+        // hand back the default connection so the two call paths (via
+        // ConnectorHostShim.getCredential and direct) agree.
+        var store = new JsonCredentialStore(_storePath);
+        store.SetApiKey("acme", "default-only");
+        var chain = new ChainedCredentialResolver(store);
+        var hit = chain.ResolveNamed("acme", "no-such-name");
+        Assert.That(hit, Is.Not.Null,
+            "named miss must fall back to default so shim + direct agree");
+        Assert.That(hit!["apiKey"]!.GetValue<string>(), Is.EqualTo("default-only"));
+    }
+
+    [Test]
+    public void ConnectionName_WithColon_IsRejected()
+    {
+        var store = new JsonCredentialStore(_storePath);
+        Assert.Throws<ArgumentException>(
+            () => store.SetApiKey("github", "pat", connectionName: "work:prod"),
+            "':' inside connectionName would collide with the service:connection separator");
+    }
+
+    [Test]
+    public void List_FallbackDisplayName_UsesReadableFormat()
+    {
+        // On a legacy row without a stored profile.displayName the
+        // fallback must format as "service (connectionName)" instead of
+        // leaking the raw storage key ("service:connectionName").
+        var store = new JsonCredentialStore(_storePath);
+        var raw = "{ \"connections\": { \"github:work\": { \"authType\": \"api_key\", \"apiKey\": \"legacy_no_profile\" } } }";
+        File.WriteAllText(_storePath, raw);
+        var list = store.List();
+        Assert.That(list.Count, Is.EqualTo(1));
+        Assert.That(list[0].DisplayName, Is.EqualTo("github (work)"));
+        Assert.That(list[0].DisplayName, Does.Not.Contain(":"));
     }
 
     [Test]

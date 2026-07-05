@@ -230,9 +230,15 @@ public sealed class ConnectorTools
             }
         }
 
+        string? normalizedConnection;
+        try { normalizedConnection = NormalizeConnection(connection); }
+        catch (ArgumentException ex)
+        {
+            return Envelope(false, service, name, ex.Message, "invalid_input");
+        }
         try
         {
-            var result = await _runtime.InvokeAsync(service, name, argsObj, connectionName: connection, ct: ct).ConfigureAwait(false);
+            var result = await _runtime.InvokeAsync(service, name, argsObj, connectionName: normalizedConnection, ct: ct).ConfigureAwait(false);
             return result.ToJsonString();
         }
         catch (OperationCanceledException) { throw; }
@@ -242,7 +248,21 @@ public sealed class ConnectorTools
         }
     }
 
-    [McpServerTool(Name = "connector_connect")]
+    // Whitespace-only connection names silently produce phantom keys
+    // (`service: `) that users can't list/disconnect from the tool
+    // description's "Empty = default" contract. Normalize once, use
+    // symmetrically across run/connect/disconnect. Rejects colon so a
+    // stray `work:prod` doesn't collide with the storage key separator
+    // — see JsonCredentialStore.MakeKey.
+    private static string? NormalizeConnection(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return null;
+        var trimmed = raw.Trim();
+        if (trimmed.Length == 0) return null;
+        if (trimmed.Contains(':'))
+            throw new ArgumentException("connection name cannot contain ':' — reserved as the storage-key separator");
+        return trimmed;
+    }
     [Description(
         "Store an api_key credential for a provider (auth_type=api_key). " +
         "Overwrites any existing connection with the same (service, connection) tuple. " +
@@ -257,10 +277,11 @@ public sealed class ConnectorTools
     {
         try
         {
-            _store.SetApiKey(service, api_key, display_name, connectionName: connection);
+            var normalizedConnection = NormalizeConnection(connection);
+            _store.SetApiKey(service, api_key, display_name, connectionName: normalizedConnection);
             var summary = _store.List().FirstOrDefault(c =>
                 string.Equals(c.Service, service, StringComparison.OrdinalIgnoreCase)
-                && string.Equals(c.ConnectionName ?? "", connection ?? "", StringComparison.OrdinalIgnoreCase));
+                && string.Equals(c.ConnectionName ?? "", normalizedConnection ?? "", StringComparison.OrdinalIgnoreCase));
             return new JsonObject
             {
                 ["schema_version"] = "1",
@@ -289,13 +310,19 @@ public sealed class ConnectorTools
     {
         try
         {
-            var removed = _store.DeleteNamed(service, connection);
+            string? normalizedConnection;
+            try { normalizedConnection = NormalizeConnection(connection); }
+            catch (ArgumentException ex)
+            {
+                return Envelope(false, service, null, ex.Message, "invalid_input");
+            }
+            var removed = _store.DeleteNamed(service, normalizedConnection);
             return new JsonObject
             {
                 ["schema_version"] = "1",
                 ["ok"] = true,
                 ["service"] = service,
-                ["connection"] = connection,
+                ["connection"] = normalizedConnection,
                 ["removed"] = removed,
             }.ToJsonString();
         }
