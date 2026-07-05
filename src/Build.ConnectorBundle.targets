@@ -90,14 +90,22 @@
     </Content>
   </ItemGroup>
 
-  <!-- Web Console static assets. Only pulled in when dist/web has been
-       built (vite build produced index.html). Landing path
+  <!-- Web Console static assets. MUST be inside a target so the file
+       enumeration happens AFTER BuildConnectorWeb runs — a top-level
+       <ItemGroup> is evaluated at MSBuild load time, which is before
+       vite writes dist/web/index.html on first build, and would leave
+       the ItemGroup empty forever. Landing path
        Resources/connector/web/ is what Kestrel serves at /connector-ui/. -->
-  <ItemGroup Condition="Exists('$(_ConnectorWebIndex)')">
-    <Content Include="$(_ConnectorWebDist)/**/*">
-      <Link>Resources/connector/web/%(RecursiveDir)%(Filename)%(Extension)</Link>
-      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-  </ItemGroup>
+  <Target Name="_CollectConnectorWebAssets"
+          AfterTargets="BuildConnectorWeb"
+          BeforeTargets="AssignTargetPaths;_HandlePackageFileConflicts"
+          Condition="Exists('$(_ConnectorWebIndex)')">
+    <ItemGroup>
+      <Content Include="$(_ConnectorWebDist)/**/*">
+        <Link>Resources/connector/web/%(RecursiveDir)%(Filename)%(Extension)</Link>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      </Content>
+    </ItemGroup>
+  </Target>
 </Project>
