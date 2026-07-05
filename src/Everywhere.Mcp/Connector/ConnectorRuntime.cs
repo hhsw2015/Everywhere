@@ -68,6 +68,15 @@ public sealed class ConnectorRuntime : IAsyncDisposable
     /// preemptively refreshes near-expiry OAuth tokens.</summary>
     public IOAuthRefresher? OAuthRefresher { get; set; }
 
+    /// <summary>Optional run-log sink. Set by DI so /api/runs and any
+    /// future audit consumer can see recent invocations.</summary>
+    public RunLogStore? RunLog { get; set; }
+
+    /// <summary>Caller tag stamped into the run log. Set from web layer
+    /// per request via a AsyncLocal; MCP invocations default to "mcp".</summary>
+    private readonly AsyncLocal<string?> _callerScope = new();
+    public void SetCallerScope(string? caller) => _callerScope.Value = string.IsNullOrEmpty(caller) ? null : caller;
+
     public string BundleDir => _bundleDir;
     public string UpstreamSha { get; private set; } = "unknown";
 
@@ -149,6 +158,7 @@ public sealed class ConnectorRuntime : IAsyncDisposable
 
     public async Task<JsonObject> InvokeAsync(string service, string actionName, JsonObject input, string? connectionName, CancellationToken ct = default)
     {
+        var startedAt = DateTimeOffset.UtcNow;
         var sw = Stopwatch.StartNew();
         if (string.IsNullOrWhiteSpace(service)) return Failure(service, actionName, "invalid_input", "service is required", sw);
         if (string.IsNullOrWhiteSpace(actionName)) return Failure(service, actionName, "invalid_input", "action name is required", sw);
@@ -282,6 +292,7 @@ public sealed class ConnectorRuntime : IAsyncDisposable
                 var ok = upstreamResult["ok"]?.GetValue<bool>() ?? false;
                 if (ok)
                 {
+                    RecordRun(service, actionName, input, startedAt, ok: true, code: null, message: null);
                     return new JsonObject
                     {
                         ["schema_version"] = "1",
@@ -295,6 +306,7 @@ public sealed class ConnectorRuntime : IAsyncDisposable
                 var upstreamErr = upstreamResult["error"] as JsonObject;
                 var errCode = upstreamErr?["code"]?.GetValue<string>() ?? "provider_error";
                 var errMsg = upstreamErr?["message"]?.GetValue<string>() ?? "provider action failed";
+                RecordRun(service, actionName, input, startedAt, ok: false, code: errCode, message: errMsg);
                 return Failure(service, actionName, errCode, errMsg, sw);
             }
             finally
@@ -322,6 +334,36 @@ public sealed class ConnectorRuntime : IAsyncDisposable
         finally
         {
             _invokeGate.Release();
+        }
+    }
+
+    private void RecordRun(string? service, string? name, JsonObject? input, DateTimeOffset startedAt, bool ok, string? code, string? message)
+    {
+        if (RunLog is null || service is null || name is null) return;
+        try
+        {
+            // input summary: just top-level keys, no values (avoids leaking secrets).
+            JsonNode? summary = null;
+            if (input is not null)
+            {
+                var arr = new JsonArray();
+                foreach (var (k, _) in input) arr.Add(k);
+                summary = arr;
+            }
+            var caller = _callerScope.Value ?? "mcp";
+            RunLog.Record(
+                actionId: $"{service}.{name}",
+                caller: caller,
+                startedAt: startedAt,
+                completedAt: DateTimeOffset.UtcNow,
+                ok: ok,
+                errorCode: code,
+                errorMessage: message,
+                inputSummary: summary);
+        }
+        catch (Exception ex)
+        {
+            _log?.LogDebug(ex, "connector: RunLog record failed for {Service}.{Name}", service, name);
         }
     }
 

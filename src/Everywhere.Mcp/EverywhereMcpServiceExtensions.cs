@@ -103,6 +103,8 @@ public static class EverywhereMcpServiceExtensions
         // as its concrete type so ConnectorTools' write/list ops can
         // reach it without a separate interface.
         services.TryAddSingleton<Connector.JsonCredentialStore>(sp => new Connector.JsonCredentialStore());
+        services.TryAddSingleton<Connector.RunLogStore>();
+        services.TryAddSingleton<Connector.RuntimeTokenStore>();
         // Phase 8 — transit file store used by provider actions that
         // upload/download binary payloads. Base URL is derived at
         // request time from the request Host header.
@@ -141,12 +143,14 @@ public static class EverywhereMcpServiceExtensions
             }
             bundleDir ??= Path.Combine(baseDir, "Resources", "connector");
             var creds = sp.GetRequiredService<Connector.ICredentialResolver>();
-            return new Connector.ConnectorRuntime(
+            var rt = new Connector.ConnectorRuntime(
                 bundleDir,
                 new HttpClient(),
                 creds,
                 sp.GetService<Microsoft.Extensions.Logging.ILogger<Connector.ConnectorRuntime>>(),
                 sp.GetService<Connector.TransitFileStore>());
+            rt.RunLog = sp.GetService<Connector.RunLogStore>();
+            return rt;
         });
         services.TryAddSingleton<Tools.ConnectorTools>();
 

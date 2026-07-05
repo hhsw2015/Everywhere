@@ -97,7 +97,72 @@ internal static class ConnectorHttpEndpoints
         var runtime = parentServices.GetService<ConnectorRuntime>();
         var store = parentServices.GetService<JsonCredentialStore>();
 
+        // --- /api/auth/* -----------------------------------------------
+        // Stub endpoints matching upstream open-connector's Web Console
+        // expectations. Everywhere daemon runs loopback-only and gates
+        // requests via LoopbackOnly middleware, so admin auth is
+        // permanently satisfied. Reporting {adminAuthConfigured:false,
+        // authenticated:true} tells the SPA to skip the login gate.
+        app.MapGet("/api/auth/session", (HttpContext ctx) =>
+            WriteJson(ctx, new JsonObject
+            {
+                ["adminAuthConfigured"] = false,
+                ["authenticated"] = true,
+            }));
+        app.MapPost("/api/auth/logout", (HttpContext ctx) =>
+            WriteJson(ctx, new JsonObject
+            {
+                ["adminAuthConfigured"] = false,
+                ["authenticated"] = true,
+            }));
+
+        // --- /api/runtime-tokens ---------------------------------------
+        // Loopback-only daemon so tokens are ceremonial, but the console
+        // page needs a working create/list/delete surface. In-memory
+        // store; process restart clears the list.
+        var tokenStore = parentServices.GetService<RuntimeTokenStore>();
+        app.MapGet("/api/runtime-tokens", (HttpContext ctx) =>
+        {
+            if (tokenStore is null) return NotConfigured(ctx);
+            return WriteJson(ctx, tokenStore.List());
+        });
+        app.MapPost("/api/runtime-tokens", async (HttpContext ctx) =>
+        {
+            if (tokenStore is null) { await NotConfigured(ctx); return; }
+            var body = await ReadJsonBody(ctx);
+            var name = body?["name"]?.GetValue<string>();
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                ctx.Response.StatusCode = StatusCodes.Status400BadRequest;
+                await WriteJson(ctx, new JsonObject { ["error"] = "name required", ["code"] = "invalid_input" });
+                return;
+            }
+            await WriteJson(ctx, tokenStore.Create(name));
+        });
+        app.MapDelete("/api/runtime-tokens/{id}", async (HttpContext ctx, string id) =>
+        {
+            if (tokenStore is null) { await NotConfigured(ctx); return; }
+            var ok = tokenStore.Revoke(id);
+            await WriteJson(ctx, new JsonObject { ["ok"] = ok });
+        });
+
+        // --- /api/runs -------------------------------------------------
+        // In-memory ring buffer populated by ConnectorRuntime.InvokeAsync.
+        // Web Console reads {items, nextCursor}. We don't paginate yet —
+        // buffer holds last 500 entries which is enough for the SPA.
+        var runLog = parentServices.GetService<RunLogStore>();
+        app.MapGet("/api/runs", (HttpContext ctx) =>
+        {
+            if (runLog is null) return NotConfigured(ctx);
+            return WriteJson(ctx, new JsonObject
+            {
+                ["items"] = runLog.Snapshot(),
+            });
+        });
+
         // --- /api/providers ------------------------------------------------
+        // Web Console expects a flat ProviderDefinition[] with full auth[]
+        // and actions[]. See 3rd/open-connector/web/src/model.ts.
         app.MapGet("/api/providers", (HttpContext ctx) =>
         {
             if (runtime is null) return NotConfigured(ctx);
@@ -105,22 +170,33 @@ internal static class ConnectorHttpEndpoints
             var arr = new JsonArray();
             foreach (var svc in manifest.Services)
             {
+                var actions = new JsonArray();
+                foreach (var a in svc.Actions)
+                {
+                    actions.Add(new JsonObject
+                    {
+                        ["id"] = a.Id,
+                        ["service"] = a.Service,
+                        ["name"] = a.Name,
+                        ["description"] = a.Description,
+                        ["requiredScopes"] = ToJsonArray(a.RequiredScopes),
+                        ["providerPermissions"] = new JsonArray(),
+                        ["inputSchema"] = a.InputSchema?.DeepClone() ?? new JsonObject(),
+                        ["outputSchema"] = a.OutputSchema?.DeepClone() ?? new JsonObject(),
+                    });
+                }
                 arr.Add(new JsonObject
                 {
                     ["service"] = svc.Service,
                     ["displayName"] = svc.DisplayName,
                     ["categories"] = ToJsonArray(svc.Categories),
                     ["authTypes"] = ToJsonArray(svc.AuthTypes),
+                    ["auth"] = svc.Auth?.DeepClone() ?? new JsonArray(),
                     ["homepageUrl"] = svc.HomepageUrl,
-                    ["actionCount"] = svc.Actions.Count,
+                    ["actions"] = actions,
                 });
             }
-            return WriteJson(ctx, new JsonObject
-            {
-                ["schemaVersion"] = "1",
-                ["upstreamSha"] = manifest.UpstreamSha,
-                ["providers"] = arr,
-            });
+            return WriteJson(ctx, arr);
         });
 
         app.MapGet("/api/providers/{service}", (HttpContext ctx, string service) =>
@@ -164,6 +240,7 @@ internal static class ConnectorHttpEndpoints
         });
 
         // --- /api/connections ---------------------------------------------
+        // Flat ConnectionRecord[] per Web Console model.ts.
         app.MapGet("/api/connections", (HttpContext ctx) =>
         {
             if (store is null) return NotConfigured(ctx);
@@ -174,15 +251,15 @@ internal static class ConnectorHttpEndpoints
                 {
                     ["service"] = c.Service,
                     ["authType"] = c.AuthType,
-                    ["displayName"] = c.DisplayName,
-                    ["accountId"] = c.AccountId,
+                    ["metadata"] = new JsonObject
+                    {
+                        ["displayName"] = c.DisplayName,
+                        ["accountId"] = c.AccountId,
+                        ["connection"] = c.ConnectionName,
+                    },
                 });
             }
-            return WriteJson(ctx, new JsonObject
-            {
-                ["schemaVersion"] = "1",
-                ["connections"] = arr,
-            });
+            return WriteJson(ctx, arr);
         });
 
         app.MapMethods("/api/connections/{service}", new[] { "PUT" }, async (HttpContext ctx, string service) =>
@@ -236,25 +313,33 @@ internal static class ConnectorHttpEndpoints
         });
 
         // --- /api/oauth/configs (Phase 3.5) ------------------------------
+        // Flat OAuthConfig[] per Web Console model.ts. `configured` is true
+        // when both clientId and clientSecret are stored. Includes every
+        // service that supports OAuth even if not configured yet, so the
+        // console can render "not configured" cards.
         app.MapGet("/api/oauth/configs", (HttpContext ctx) =>
         {
             if (store is null) return NotConfigured(ctx);
+            var configured = store.ListOAuthClients().ToDictionary(c => c.Service, c => c, StringComparer.OrdinalIgnoreCase);
             var arr = new JsonArray();
-            foreach (var c in store.ListOAuthClients())
+            var services = runtime?.ListManifest().Services ?? Array.Empty<ConnectorService>();
+            foreach (var svc in services)
             {
+                if (!svc.AuthTypes.Any(a => string.Equals(a, "oauth2", StringComparison.OrdinalIgnoreCase)))
+                    continue;
+                var oauthDef = svc.Auth?.OfType<JsonObject>()
+                    .FirstOrDefault(a => string.Equals(a["type"]?.GetValue<string>(), "oauth2", StringComparison.OrdinalIgnoreCase));
+                configured.TryGetValue(svc.Service, out var stored);
                 arr.Add(new JsonObject
                 {
-                    ["service"] = c.Service,
-                    ["clientId"] = c.ClientId,
-                    ["hasSecret"] = c.HasSecret,
-                    ["redirectUri"] = c.RedirectUri,
+                    ["service"] = svc.Service,
+                    ["configured"] = stored is not null,
+                    ["clientId"] = stored?.ClientId,
+                    ["expectedRedirectUri"] = stored?.RedirectUri ?? DefaultRedirectUri(ctx),
+                    ["auth"] = oauthDef?.DeepClone(),
                 });
             }
-            return WriteJson(ctx, new JsonObject
-            {
-                ["schemaVersion"] = "1",
-                ["oauthClients"] = arr,
-            });
+            return WriteJson(ctx, arr);
         });
 
         app.MapPost("/api/oauth/configs/{service}", async (HttpContext ctx, string service) =>
@@ -412,7 +497,10 @@ internal static class ConnectorHttpEndpoints
             }
             var service = actionId[..dot];
             var name = actionId[(dot + 1)..];
-            var envelope = await runtime.InvokeAsync(service, name, input, ctx.RequestAborted);
+            runtime.SetCallerScope("web");
+            JsonObject envelope;
+            try { envelope = await runtime.InvokeAsync(service, name, input, ctx.RequestAborted); }
+            finally { runtime.SetCallerScope(null); }
             var okNode = envelope["ok"];
             var ok = okNode is not null && okNode.GetValue<bool>();
             ctx.Response.StatusCode = ok ? StatusCodes.Status200OK : StatusCodes.Status400BadRequest;
