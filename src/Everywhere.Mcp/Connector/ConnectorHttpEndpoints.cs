@@ -297,37 +297,49 @@ internal static class ConnectorHttpEndpoints
         {
             if (store is null) { await NotConfigured(ctx); return; }
             var body = await ReadJsonBody(ctx);
-            var authType = body?["authType"]?.GetValue<string>();
-            if (!string.Equals(authType, "api_key", StringComparison.OrdinalIgnoreCase))
+            var authType = (body?["authType"] as JsonValue)?.GetValue<string>()?.ToLowerInvariant();
+            if (authType == "no_auth")
             {
-                ctx.Response.StatusCode = StatusCodes.Status400BadRequest;
-                await WriteJson(ctx, new JsonObject
-                {
-                    ["error"] = "Phase 3 only supports authType=api_key. OAuth lands in Phase 3.5.",
-                    ["code"] = "invalid_input",
-                });
+                // Marker connection so the UI shows "connected" for a
+                // no_auth provider. Nothing to store beyond the flag.
+                store.SetApiKey(service, apiKey: "_no_auth_", displayName: $"{service} (no auth)");
+                await WriteJson(ctx, new JsonObject { ["service"] = service, ["authType"] = "no_auth" });
                 return;
             }
-            var apiKey = body?["values"]?["apiKey"]?.GetValue<string>()
-                         ?? body?["apiKey"]?.GetValue<string>();
-            if (string.IsNullOrWhiteSpace(apiKey))
+            if (authType == "api_key")
             {
-                ctx.Response.StatusCode = StatusCodes.Status400BadRequest;
-                await WriteJson(ctx, new JsonObject
+                var apiKey = (body?["values"]?["apiKey"] as JsonValue)?.GetValue<string>()
+                             ?? (body?["apiKey"] as JsonValue)?.GetValue<string>();
+                if (string.IsNullOrWhiteSpace(apiKey))
                 {
-                    ["error"] = "values.apiKey (or top-level apiKey) is required",
-                    ["code"] = "invalid_input",
-                });
+                    ctx.Response.StatusCode = StatusCodes.Status400BadRequest;
+                    await WriteJson(ctx, new JsonObject
+                    {
+                        ["error"] = "values.apiKey is required",
+                        ["code"] = "invalid_input",
+                    });
+                    return;
+                }
+                var displayName = (body?["profile"]?["displayName"] as JsonValue)?.GetValue<string>();
+                store.SetApiKey(service, apiKey, displayName);
+                await WriteJson(ctx, new JsonObject { ["service"] = service, ["authType"] = "api_key" });
                 return;
             }
-            var displayName = body?["profile"]?["displayName"]?.GetValue<string>()
-                              ?? body?["displayName"]?.GetValue<string>();
-            store.SetApiKey(service, apiKey, displayName);
+            if (authType == "custom_credential")
+            {
+                // Store the whole values map under a synthesized apiKey
+                // slot for now (JsonCredentialStore only has SetApiKey).
+                // Serialize as a JSON string so the JS bridge can unpack.
+                var values = body?["values"] as JsonObject ?? new JsonObject();
+                store.SetApiKey(service, values.ToJsonString(), displayName: $"{service} custom");
+                await WriteJson(ctx, new JsonObject { ["service"] = service, ["authType"] = "custom_credential" });
+                return;
+            }
+            ctx.Response.StatusCode = StatusCodes.Status400BadRequest;
             await WriteJson(ctx, new JsonObject
             {
-                ["schemaVersion"] = "1",
-                ["service"] = service,
-                ["authType"] = "api_key",
+                ["error"] = "unsupported authType (expected no_auth | api_key | custom_credential)",
+                ["code"] = "invalid_input",
             });
         });
 
@@ -373,13 +385,15 @@ internal static class ConnectorHttpEndpoints
             return WriteJson(ctx, arr);
         });
 
-        app.MapPost("/api/oauth/configs/{service}", async (HttpContext ctx, string service) =>
+        // SPA uses PUT (upstream convention). Accept both PUT + POST so
+        // MCP callers that follow the earlier docs still work.
+        app.MapMethods("/api/oauth/configs/{service}", new[] { "PUT", "POST" }, async (HttpContext ctx, string service) =>
         {
             if (store is null) { await NotConfigured(ctx); return; }
             var body = await ReadJsonBody(ctx);
-            var clientId = body?["clientId"]?.GetValue<string>();
-            var clientSecret = body?["clientSecret"]?.GetValue<string>();
-            var redirectUri = body?["redirectUri"]?.GetValue<string>()
+            var clientId = (body?["clientId"] as JsonValue)?.GetValue<string>();
+            var clientSecret = (body?["clientSecret"] as JsonValue)?.GetValue<string>();
+            var redirectUri = (body?["redirectUri"] as JsonValue)?.GetValue<string>()
                               ?? DefaultRedirectUri(ctx);
             if (string.IsNullOrWhiteSpace(clientId))
             {
@@ -390,9 +404,10 @@ internal static class ConnectorHttpEndpoints
             store.SetOAuthClient(service, clientId, clientSecret, redirectUri, body?["extra"] as JsonObject);
             await WriteJson(ctx, new JsonObject
             {
-                ["schemaVersion"] = "1",
                 ["service"] = service,
-                ["redirectUri"] = redirectUri,
+                ["configured"] = true,
+                ["clientId"] = clientId,
+                ["expectedRedirectUri"] = redirectUri,
             });
         });
 
@@ -408,9 +423,13 @@ internal static class ConnectorHttpEndpoints
             });
         });
 
-        // --- /api/oauth/authorize/:service --------------------------------
+        // --- OAuth authorization start ---------------------------------
+        // SPA uses POST /api/oauth/authorizations with {service} in body
+        // and reads {authorizationUrl} from the response. Keep the
+        // path-scoped POST /api/oauth/authorize/{service} for MCP-style
+        // callers.
         var oauth = parentServices.GetService<OAuthFlowService>();
-        app.MapPost("/api/oauth/authorize/{service}", async (HttpContext ctx, string service) =>
+        async Task StartOAuth(HttpContext ctx, string service)
         {
             if (oauth is null) { await NotConfigured(ctx); return; }
             try
@@ -418,8 +437,8 @@ internal static class ConnectorHttpEndpoints
                 var result = oauth.Authorize(service);
                 await WriteJson(ctx, new JsonObject
                 {
-                    ["schemaVersion"] = "1",
                     ["service"] = result.Service,
+                    ["authorizationUrl"] = result.Url,
                     ["url"] = result.Url,
                     ["state"] = result.State,
                     ["redirectUri"] = result.RedirectUri,
@@ -430,6 +449,19 @@ internal static class ConnectorHttpEndpoints
                 ctx.Response.StatusCode = StatusCodes.Status400BadRequest;
                 await WriteJson(ctx, new JsonObject { ["error"] = ex.Message, ["code"] = ex.Code });
             }
+        }
+        app.MapPost("/api/oauth/authorize/{service}", (HttpContext ctx, string service) => StartOAuth(ctx, service));
+        app.MapPost("/api/oauth/authorizations", async (HttpContext ctx) =>
+        {
+            var body = await ReadJsonBody(ctx);
+            var svc = (body?["service"] as JsonValue)?.GetValue<string>();
+            if (string.IsNullOrWhiteSpace(svc))
+            {
+                ctx.Response.StatusCode = StatusCodes.Status400BadRequest;
+                await WriteJson(ctx, new JsonObject { ["error"] = "service required", ["code"] = "invalid_input" });
+                return;
+            }
+            await StartOAuth(ctx, svc);
         });
 
         // --- /api/oauth/callback ------------------------------------------
