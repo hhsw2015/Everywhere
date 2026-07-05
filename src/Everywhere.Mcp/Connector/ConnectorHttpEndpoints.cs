@@ -130,11 +130,15 @@ internal static class ConnectorHttpEndpoints
         {
             if (tokenStore is null) { await NotConfigured(ctx); return; }
             var body = await ReadJsonBody(ctx);
-            var name = body?["name"]?.GetValue<string>();
+            // Defensive extraction — GetValue<string>() on a non-string
+            // JsonNode throws, which would surface as HTTP 500 for a
+            // caller sending {"name": 123}. Only accept string values.
+            string? name = null;
+            if (body?["name"] is JsonValue nv) nv.TryGetValue(out name);
             if (string.IsNullOrWhiteSpace(name))
             {
                 ctx.Response.StatusCode = StatusCodes.Status400BadRequest;
-                await WriteJson(ctx, new JsonObject { ["error"] = "name required", ["code"] = "invalid_input" });
+                await WriteJson(ctx, new JsonObject { ["error"] = "name required (string)", ["code"] = "invalid_input" });
                 return;
             }
             await WriteJson(ctx, tokenStore.Create(name));
@@ -143,6 +147,10 @@ internal static class ConnectorHttpEndpoints
         {
             if (tokenStore is null) { await NotConfigured(ctx); return; }
             var ok = tokenStore.Revoke(id);
+            // 404 when the id was never registered — matches REST
+            // convention and lets callers distinguish "already revoked
+            // / missing" from a fresh revoke.
+            if (!ok) ctx.Response.StatusCode = StatusCodes.Status404NotFound;
             await WriteJson(ctx, new JsonObject { ["ok"] = ok });
         });
 
@@ -154,9 +162,14 @@ internal static class ConnectorHttpEndpoints
         app.MapGet("/api/runs", (HttpContext ctx) =>
         {
             if (runLog is null) return NotConfigured(ctx);
+            // Web Console's RunLogPage type destructures {items, nextCursor}.
+            // Return an explicit null cursor so the SPA sees the property
+            // rather than `undefined` for the "no more pages" state —
+            // matches the documented contract.
             return WriteJson(ctx, new JsonObject
             {
                 ["items"] = runLog.Snapshot(),
+                ["nextCursor"] = null,
             });
         });
 

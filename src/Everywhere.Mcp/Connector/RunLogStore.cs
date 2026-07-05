@@ -16,6 +16,10 @@ public sealed class RunLogStore
 {
     private readonly int _capacity;
     private readonly ConcurrentQueue<JsonObject> _entries = new();
+    // Guards Enqueue+Trim so concurrent Record calls can't race the
+    // eviction: without the lock two threads observing Count > capacity
+    // can both TryDequeue and trim below capacity.
+    private readonly object _writeLock = new();
 
     public RunLogStore(int capacity = 500)
     {
@@ -37,17 +41,24 @@ public sealed class RunLogStore
             ["errorCode"] = errorCode,
             ["errorMessage"] = errorMessage,
         };
-        _entries.Enqueue(entry);
-        while (_entries.Count > _capacity && _entries.TryDequeue(out _)) { }
+        lock (_writeLock)
+        {
+            _entries.Enqueue(entry);
+            while (_entries.Count > _capacity && _entries.TryDequeue(out _)) { }
+        }
     }
 
     public JsonArray Snapshot()
     {
+        // Newest first. DeepClone each entry because a JsonObject can
+        // only have one parent — putting the queued object into the
+        // returned JsonArray would re-parent it out of the queue and
+        // break the next Snapshot() call. The clone is unavoidable.
         var arr = new JsonArray();
-        // Newest first — SPA renders most recent at top.
-        foreach (var e in _entries.ToArray().Reverse())
+        var snapshot = _entries.ToArray();
+        for (var i = snapshot.Length - 1; i >= 0; i--)
         {
-            arr.Add(e.DeepClone());
+            arr.Add(snapshot[i].DeepClone());
         }
         return arr;
     }
@@ -55,9 +66,24 @@ public sealed class RunLogStore
 
 /// <summary>
 /// In-memory runtime token registry. Everywhere daemon runs loopback-only
-/// so this is largely ceremonial — the console can create/list/delete
-/// tokens for parity with upstream open-connector, but they aren't used
-/// for auth here.
+/// so tokens serve no auth role today — LoopbackOnly middleware already
+/// gates every request. This store exists purely so the vendored
+/// upstream Web Console's Access page has a working create/list/revoke
+/// surface for parity.
+///
+/// <para>NOT a security boundary:</para>
+/// <list type="bullet">
+///   <item>Create returns a plaintext token that is never persisted or hashed.
+///         There is no Validate(token) method because no request path
+///         checks tokens today.</item>
+///   <item>lastUsedAt is intentionally always null — no code path updates it.</item>
+///   <item>List returns revoked entries alongside active ones; revocation is
+///         a display flag, not enforcement.</item>
+/// </list>
+/// If a future maintainer wires this to real auth, do NOT extend this
+/// class in place — it would silently accept the plaintext token as
+/// valid because Create doesn't hash it. Rewrite with hash-on-create +
+/// constant-time Validate first, or move to a proper auth store.
 /// </summary>
 public sealed class RuntimeTokenStore
 {

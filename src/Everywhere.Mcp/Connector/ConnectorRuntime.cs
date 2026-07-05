@@ -158,6 +158,36 @@ public sealed class ConnectorRuntime : IAsyncDisposable
 
     public async Task<JsonObject> InvokeAsync(string service, string actionName, JsonObject input, string? connectionName, CancellationToken ct = default)
     {
+        // Record every invocation to RunLog once — success, provider
+        // error, invalid input, missing manifest, boot failure, script
+        // exception, host exception. The inner method returns the final
+        // envelope; we inspect ok/code/error and call RecordRun with the
+        // captured startedAt exactly once here.
+        var startedAt = DateTimeOffset.UtcNow;
+        JsonObject envelope;
+        try
+        {
+            envelope = await InvokeInnerAsync(service, actionName, input, connectionName, ct).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            RecordRun(service, actionName, input, startedAt, ok: false, code: "canceled", message: "invocation canceled");
+            throw;
+        }
+        catch (Exception ex)
+        {
+            RecordRun(service, actionName, input, startedAt, ok: false, code: "RUNTIME_HOST_ERROR", message: ex.Message);
+            throw;
+        }
+        var ok = envelope["ok"]?.GetValue<bool>() ?? false;
+        var code = envelope["code"]?.GetValue<string>();
+        var errMsg = envelope["error"]?.GetValue<string>();
+        RecordRun(service, actionName, input, startedAt, ok, code, errMsg);
+        return envelope;
+    }
+
+    private async Task<JsonObject> InvokeInnerAsync(string service, string actionName, JsonObject input, string? connectionName, CancellationToken ct = default)
+    {
         var startedAt = DateTimeOffset.UtcNow;
         var sw = Stopwatch.StartNew();
         if (string.IsNullOrWhiteSpace(service)) return Failure(service, actionName, "invalid_input", "service is required", sw);
@@ -292,7 +322,6 @@ public sealed class ConnectorRuntime : IAsyncDisposable
                 var ok = upstreamResult["ok"]?.GetValue<bool>() ?? false;
                 if (ok)
                 {
-                    RecordRun(service, actionName, input, startedAt, ok: true, code: null, message: null);
                     return new JsonObject
                     {
                         ["schema_version"] = "1",
@@ -306,7 +335,6 @@ public sealed class ConnectorRuntime : IAsyncDisposable
                 var upstreamErr = upstreamResult["error"] as JsonObject;
                 var errCode = upstreamErr?["code"]?.GetValue<string>() ?? "provider_error";
                 var errMsg = upstreamErr?["message"]?.GetValue<string>() ?? "provider action failed";
-                RecordRun(service, actionName, input, startedAt, ok: false, code: errCode, message: errMsg);
                 return Failure(service, actionName, errCode, errMsg, sw);
             }
             finally
