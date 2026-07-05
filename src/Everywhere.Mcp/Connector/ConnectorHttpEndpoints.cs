@@ -407,11 +407,19 @@ internal static class ConnectorHttpEndpoints
     private static string? ResolveWebRoot(IWebHostEnvironment? env)
     {
         // Publish layout: {baseDir}/Resources/connector/web/
+        // On macOS `.app` bundles baseDir is Contents/MonoBundle/, and the
+        // Xamarin publisher moves everything Linked as "Resources/..."
+        // one level up to Contents/Resources/. Because our Link prefix
+        // is already "Resources/connector/web/", the final path becomes
+        // Contents/Resources/Resources/connector/web/ — hence the
+        // ../Resources/Resources probe. Same probe pattern OpenCliRuntime
+        // uses for its clis dir.
         var baseDir = AppContext.BaseDirectory;
         foreach (var probe in new[]
                  {
                      Path.Combine(baseDir, "Resources", "connector", "web"),
                      Path.Combine(baseDir, "..", "Resources", "connector", "web"),
+                     Path.Combine(baseDir, "..", "Resources", "Resources", "connector", "web"),
                  })
         {
             var canon = Path.GetFullPath(probe);
