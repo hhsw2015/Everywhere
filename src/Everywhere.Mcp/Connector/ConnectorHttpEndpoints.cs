@@ -183,6 +183,16 @@ internal static class ConnectorHttpEndpoints
             var arr = new JsonArray();
             foreach (var svc in manifest.Services)
             {
+                // Web Console's ActionDefinition.execution — SPA filters
+                // and badges rely on these flags. Everywhere ships all
+                // actions as locally executable (we run them in-process
+                // via V8), so locallyExecutable=true and catalogOnly=false.
+                // requiredAuthTypes/noAuthRunnable/needsCredential are
+                // derived from the provider's authTypes.
+                var noAuthRunnable = svc.AuthTypes.Any(a => string.Equals(a, "no_auth", StringComparison.OrdinalIgnoreCase));
+                var needsCredential = !noAuthRunnable;
+                var reqAuthArr = new JsonArray();
+                foreach (var at in svc.AuthTypes) reqAuthArr.Add(at);
                 var actions = new JsonArray();
                 foreach (var a in svc.Actions)
                 {
@@ -196,6 +206,14 @@ internal static class ConnectorHttpEndpoints
                         ["providerPermissions"] = new JsonArray(),
                         ["inputSchema"] = a.InputSchema?.DeepClone() ?? new JsonObject(),
                         ["outputSchema"] = a.OutputSchema?.DeepClone() ?? new JsonObject(),
+                        ["execution"] = new JsonObject
+                        {
+                            ["locallyExecutable"] = true,
+                            ["catalogOnly"] = false,
+                            ["requiredAuthTypes"] = new JsonArray(svc.AuthTypes.Select(t => (JsonNode)JsonValue.Create(t)!).ToArray()),
+                            ["noAuthRunnable"] = noAuthRunnable,
+                            ["needsCredential"] = needsCredential,
+                        },
                     });
                 }
                 arr.Add(new JsonObject
