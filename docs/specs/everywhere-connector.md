@@ -527,6 +527,8 @@ change **before** we ship it to LLMs whose tool descriptions cache it.
 | **8 — Auto-generated OAuth map + transit files + more providers** | Manifest carries every provider's `auth[]`; TransitFileStore + `/v1/files/*` REST | 109 providers, 1239 actions, upload/download works |
 | **9 — Full-catalog scan + polyfills** | Auto-scan allowlist; TextEncoder/URL/Buffer polyfills; 3 skips (flomo/jin10/linux_do) | 828 providers, 8141 actions in a single bundle |
 | **10 — CI drift check + spec alignment** | Bundle-vs-manifest verifier, manifest checked into VCS, spec text ↔ code reconciled | Upstream bumps show manifest diffs; docs match reality |
+| **11 — transit files + §14 Q4 closed + docs cross-link** | TransitFileStore end-to-end tests; §14 Q4 (credential-fields metadata) resolved; opendia-cebian-merge.md links back here | Q1-Q4 all RESOLVED |
+| **12 — rss-parser shim + named connections + Web Console REST + skill doc** | linux_do unshimmed (829/8154); JsonCredentialStore adds `service:name` keying; /api/{providers,connections,oauth/configs,runtime-tokens,runs,auth/*} all implemented against upstream web SPA contract; runtime + web console verified via Chrome DevTools; `docs/skills/saas-connect/SKILL.md` published so Agent CLIs auto-discover the surface | Web Console + MCP + Cebian all consume the same connector runtime end-to-end |
 
 Counts derived from `grep -RlE "^\s*(import\|require)\s.*node:" 3rd/open-connector/src/providers/ | cut -d/ -f1 | sort -u | wc -l` at pinned SHA. Refresh on every upstream bump.
 

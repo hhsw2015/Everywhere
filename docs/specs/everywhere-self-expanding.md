@@ -744,7 +744,8 @@ Author read-only OpenCLI adapters from real user browsing. Loop: capture → ana
 
 **No install step**: Claude Code / Cursor auto-discover skills at
 `docs/skills/*/SKILL.md` when opened in this repo (same as existing
-`docs/skills/opencli-search/` and `docs/skills/everywhere-computer-use/`).
+`docs/skills/opencli-search/`, `docs/skills/saas-connect/`, and
+`docs/skills/everywhere-computer-use/`).
 User does not need to run any command.
 
 **New MCP tools**:
